@@ -529,6 +529,18 @@ export async function inferPdfPageCount(file: File) {
   if (!buffer.length) return 0;
 
   const text = buffer.toString('latin1');
-  const matches = text.match(/\/Type\s*\/Page\b/g);
-  return matches ? matches.length : 0;
+  const typePageMatches = text.match(/\/Type\s*\/Page\b/g);
+  if (typePageMatches && typePageMatches.length > 0) {
+    return typePageMatches.length;
+  }
+
+  // Fallback heuristic for PDFs where page objects are compressed:
+  // use the largest `/Count N` value from page tree nodes.
+  const countMatches = Array.from(text.matchAll(/\/Count\s+(\d{1,5})\b/g));
+  const candidates = countMatches
+    .map((match) => Number.parseInt(match[1], 10))
+    .filter((value) => Number.isFinite(value) && value > 0 && value <= 1000);
+
+  if (candidates.length === 0) return 0;
+  return Math.max(...candidates);
 }
