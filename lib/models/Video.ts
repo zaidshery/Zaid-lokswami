@@ -1,4 +1,7 @@
 import mongoose from 'mongoose';
+import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
+
+const VIDEO_CATEGORY_ENUM = NEWS_CATEGORIES.map((category) => category.nameEn);
 
 export interface IVideo {
   _id?: string;
@@ -22,7 +25,7 @@ const VideoSchema = new mongoose.Schema<IVideo>({
   thumbnail: { type: String, required: true },
   videoUrl: { type: String, required: true },
   duration: { type: Number, required: true },
-  category: { type: String, required: true, enum: ['National', 'International', 'Sports', 'Entertainment', 'Tech', 'Business'] },
+  category: { type: String, required: true, enum: VIDEO_CATEGORY_ENUM },
   isShort: { type: Boolean, default: false },
   isPublished: { type: Boolean, default: true },
   shortsRank: { type: Number, default: 0 },

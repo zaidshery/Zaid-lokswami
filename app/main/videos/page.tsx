@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { Clock3, Film, Play, Smartphone, TrendingUp } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import { videos as mockVideos } from '@/lib/mock/data';
+import { resolveNewsCategory } from '@/lib/constants/newsCategories';
 import ArticleMetaRow from '@/app/components/content/ArticleMetaRow';
 import VideoShortsFeed, { type ShortsVideoItem } from '@/app/components/content/VideoShortsFeed';
 
@@ -47,8 +48,9 @@ function safeString(value: unknown, fallback = '') {
 }
 
 function getCategoryLabel(category: string, language: 'hi' | 'en') {
-  const normalized = normalizeCategory(category);
-  return categoryLabels[normalized]?.[language] ?? category;
+  const resolved = resolveNewsCategory(category);
+  if (!resolved) return category;
+  return language === 'hi' ? resolved.name : resolved.nameEn;
 }
 
 function isPdfThumbnail(value: string) {
