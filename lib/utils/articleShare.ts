@@ -1,5 +1,3 @@
-import { COMPANY_INFO } from '@/lib/constants/company';
-
 type BuildArticleWhatsAppShareInput = {
   title: string;
   articleUrl: string;
@@ -35,18 +33,6 @@ function getPreferredOrigin(origin: string) {
   return runtimeOrigin;
 }
 
-function socialHandle(url: string) {
-  try {
-    const parsed = new URL(url);
-    const parts = parsed.pathname.split('/').filter(Boolean);
-    const last = parts[parts.length - 1] || '';
-    if (!last) return parsed.hostname;
-    return last.startsWith('@') ? last : `@${last}`;
-  } catch {
-    return url;
-  }
-}
-
 export function toAbsoluteShareUrl(value: string, origin: string) {
   const trimmed = cleanUrl(value);
   if (!trimmed) return '';
@@ -58,35 +44,13 @@ export function toAbsoluteShareUrl(value: string, origin: string) {
 export function buildArticleWhatsAppShareText({
   title,
   articleUrl,
-  imageUrl,
 }: BuildArticleWhatsAppShareInput) {
-  const lines: string[] = [
-    title.trim(),
-  ];
+  const lines: string[] = [title.trim()];
 
-  // Keep only article URL in share body so WhatsApp renders article link preview card
-  // (including thumbnail from OG tags) instead of showing raw image URLs in text.
+  // Keep exactly one URL in the message body for maximum preview reliability
+  // across WhatsApp mobile, tablet, and desktop clients.
   const cleanArticleUrl = cleanUrl(articleUrl);
   lines.push(cleanArticleUrl);
-  lines.push('');
-  lines.push('Follow Lokswami:');
-  const localShareContext =
-    isLocalOrigin(cleanArticleUrl) || (imageUrl ? isLocalOrigin(cleanUrl(imageUrl)) : false);
-
-  if (localShareContext) {
-    // Keep handles + full URL visible in local share context.
-    lines.push(`Facebook: ${socialHandle(COMPANY_INFO.social.facebook)} | ${COMPANY_INFO.social.facebook}`);
-    lines.push(`Instagram: ${socialHandle(COMPANY_INFO.social.instagram)} | ${COMPANY_INFO.social.instagram}`);
-    lines.push(`YouTube: ${socialHandle(COMPANY_INFO.social.youtube)} | ${COMPANY_INFO.social.youtube}`);
-    lines.push(`X: ${socialHandle(COMPANY_INFO.social.twitter)} | ${COMPANY_INFO.social.twitter}`);
-    lines.push(`WhatsApp Channel: ${socialHandle(COMPANY_INFO.social.whatsapp)} | ${COMPANY_INFO.social.whatsapp}`);
-  } else {
-    lines.push(`Facebook: ${COMPANY_INFO.social.facebook}`);
-    lines.push(`Instagram: ${COMPANY_INFO.social.instagram}`);
-    lines.push(`YouTube: ${COMPANY_INFO.social.youtube}`);
-    lines.push(`X: ${COMPANY_INFO.social.twitter}`);
-    lines.push(`WhatsApp Channel: ${COMPANY_INFO.social.whatsapp}`);
-  }
 
   return lines.join('\n');
 }
