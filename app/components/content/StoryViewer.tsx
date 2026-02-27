@@ -266,7 +266,9 @@ export default function StoryViewer({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[90] bg-black"
+          className={`fixed inset-0 z-[90] ${
+            variant === 'reel' ? 'bg-gradient-to-b from-black via-zinc-950 to-black' : 'bg-black'
+          }`}
         >
           <div
             className="relative h-full w-full touch-pan-y overflow-hidden"
@@ -303,32 +305,58 @@ export default function StoryViewer({
                   onError={onMediaError}
                 />
               )}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/20 to-black/75" />
+              <div
+                className={`absolute inset-0 ${
+                  variant === 'reel'
+                    ? 'bg-gradient-to-b from-black/75 via-black/35 to-black/85'
+                    : 'bg-gradient-to-b from-black/70 via-black/20 to-black/75'
+                }`}
+              />
             </div>
 
             <div className="relative z-10 flex h-full flex-col">
-              <div className="px-3 pb-2 pt-3 sm:px-4 sm:pt-4">
-                <div className="flex gap-1">
+              <div
+                className={`${
+                  variant === 'reel'
+                    ? 'px-3 pb-2 pt-[max(0.6rem,env(safe-area-inset-top))] sm:px-4'
+                    : 'px-3 pb-2 pt-3 sm:px-4 sm:pt-4'
+                }`}
+              >
+                <div
+                  className={`${
+                    variant === 'reel'
+                      ? 'rounded-xl border border-white/15 bg-black/35 px-2 py-1.5 backdrop-blur'
+                      : ''
+                  }`}
+                >
+                  <div className="flex gap-1">
                   {stories.map((story, index) => {
                     const width =
                       index < activeIndex ? 100 : index === activeIndex ? progress * 100 : 0;
                     return (
                       <div
                         key={`story-progress-${story.id}`}
-                        className="h-1 flex-1 overflow-hidden rounded-full bg-white/25"
+                        className={`flex-1 overflow-hidden rounded-full ${
+                          variant === 'reel' ? 'h-1.5 bg-white/20' : 'h-1 bg-white/25'
+                        }`}
                       >
                         <div
-                          className="h-full rounded-full bg-white transition-[width] duration-100"
+                          className={`h-full rounded-full transition-[width] duration-100 ${
+                            index === activeIndex && variant === 'reel'
+                              ? 'bg-gradient-to-r from-pink-400 via-orange-300 to-yellow-300'
+                              : 'bg-white'
+                          }`}
                           style={{ width: `${width}%` }}
                         />
                       </div>
                     );
                   })}
                 </div>
+                </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3 text-white">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
+                    <p className={`truncate font-semibold ${variant === 'reel' ? 'text-base' : 'text-sm'}`}>
                       {activeStory.category || 'Visual Story'}
                     </p>
                     <p className="truncate text-xs text-white/80">
@@ -342,24 +370,28 @@ export default function StoryViewer({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {activeStory.mediaType === 'video' ? (
-                      <button
-                        type="button"
-                        onClick={() => setIsMuted((prev) => !prev)}
-                        className="rounded-full border border-white/40 bg-black/35 p-2 text-white transition hover:bg-black/55"
-                        aria-label={isMuted ? 'Unmute' : 'Mute'}
-                      >
-                        {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                      </button>
+                    {variant !== 'reel' ? (
+                      <>
+                        {activeStory.mediaType === 'video' ? (
+                          <button
+                            type="button"
+                            onClick={() => setIsMuted((prev) => !prev)}
+                            className="rounded-full border border-white/40 bg-black/35 p-2 text-white transition hover:bg-black/55"
+                            aria-label={isMuted ? 'Unmute' : 'Mute'}
+                          >
+                            {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setIsPaused((prev) => !prev)}
+                          className="rounded-full border border-white/40 bg-black/35 p-2 text-white transition hover:bg-black/55"
+                          aria-label={isPaused ? 'Resume story' : 'Pause story'}
+                        >
+                          {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                        </button>
+                      </>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setIsPaused((prev) => !prev)}
-                      className="rounded-full border border-white/40 bg-black/35 p-2 text-white transition hover:bg-black/55"
-                      aria-label={isPaused ? 'Resume story' : 'Pause story'}
-                    >
-                      {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                    </button>
                     <button
                       type="button"
                       onClick={onClose}
@@ -391,46 +423,113 @@ export default function StoryViewer({
                 />
               </div>
 
-              <div className="relative z-20 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6">
-                <h2 className="max-w-3xl text-xl font-black leading-tight text-white sm:text-2xl">
-                  {activeStory.title}
-                </h2>
-                {activeStory.caption ? (
-                  <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/85 sm:text-base">
-                    {activeStory.caption}
-                  </p>
-                ) : null}
+              <div
+                className={`relative z-20 ${
+                  variant === 'reel'
+                    ? 'px-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] pt-3 sm:px-4'
+                    : 'px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6'
+                }`}
+              >
+                <div
+                  className={`${
+                    variant === 'reel'
+                      ? 'max-w-[calc(100%-4.8rem)] rounded-2xl border border-white/15 bg-black/45 px-3 py-3 backdrop-blur-sm'
+                      : ''
+                  }`}
+                >
+                  {variant === 'reel' ? (
+                    <p className="mb-1.5 inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white/90">
+                      @{(activeStory.author || 'desk').replace(/\s+/g, '').toLowerCase()}
+                    </p>
+                  ) : null}
+                  <h2 className={`max-w-3xl font-black leading-tight text-white ${variant === 'reel' ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>
+                    {activeStory.title}
+                  </h2>
+                  {activeStory.caption ? (
+                    <p className={`mt-2 max-w-3xl leading-relaxed text-white/85 ${variant === 'reel' ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
+                      {activeStory.caption}
+                    </p>
+                  ) : null}
 
-                {hasStoryHref ? (
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    {isExternalHref(storyHref) ? (
-                      <a
-                        href={storyHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={onClose}
-                        className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"
-                      >
-                        {ctaLabel}
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    ) : (
-                      <Link
-                        href={storyHref}
-                        onClick={onClose}
-                        className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"
-                      >
-                        {ctaLabel}
-                        <ExternalLink className="h-4 w-4" />
-                      </Link>
-                    )}
-                  </div>
-                ) : null}
+                  {hasStoryHref ? (
+                    <div className={`mt-3 flex flex-wrap items-center gap-3 ${variant === 'reel' ? '' : 'mt-4'}`}>
+                      {isExternalHref(storyHref) ? (
+                        <a
+                          href={storyHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={onClose}
+                          className={`inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/15 font-semibold text-white backdrop-blur transition hover:bg-white/25 ${
+                            variant === 'reel' ? 'px-4 py-2 text-xs' : 'px-5 py-2.5 text-sm'
+                          }`}
+                        >
+                          {ctaLabel}
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      ) : (
+                        <Link
+                          href={storyHref}
+                          onClick={onClose}
+                          className={`inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/15 font-semibold text-white backdrop-blur transition hover:bg-white/25 ${
+                            variant === 'reel' ? 'px-4 py-2 text-xs' : 'px-5 py-2.5 text-sm'
+                          }`}
+                        >
+                          {ctaLabel}
+                          <ExternalLink className="h-4 w-4" />
+                        </Link>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
             {variant === 'reel' ? (
               <>
+                <div className="absolute bottom-[max(5rem,env(safe-area-inset-bottom)+3.6rem)] right-3 z-20 flex flex-col items-center gap-2.5">
+                  {activeStory.mediaType === 'video' ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsMuted((prev) => !prev)}
+                      className="rounded-full border border-white/40 bg-black/35 p-2.5 text-white backdrop-blur transition hover:bg-black/55"
+                      aria-label={isMuted ? 'Unmute' : 'Mute'}
+                    >
+                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setIsPaused((prev) => !prev)}
+                    className="rounded-full border border-white/40 bg-black/35 p-2.5 text-white backdrop-blur transition hover:bg-black/55"
+                    aria-label={isPaused ? 'Resume story' : 'Pause story'}
+                  >
+                    {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                  </button>
+                  {hasStoryHref ? (
+                    isExternalHref(storyHref) ? (
+                      <a
+                        href={storyHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={onClose}
+                        className="inline-flex items-center gap-1 rounded-full border border-white/35 bg-white/15 px-2.5 py-1.5 text-[11px] font-semibold text-white backdrop-blur hover:bg-white/25"
+                      >
+                        Open
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    ) : (
+                      <Link
+                        href={storyHref}
+                        onClick={onClose}
+                        className="inline-flex items-center gap-1 rounded-full border border-white/35 bg-white/15 px-2.5 py-1.5 text-[11px] font-semibold text-white backdrop-blur hover:bg-white/25"
+                      >
+                        Open
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                    )
+                  ) : null}
+                </div>
+
                 <button
                   type="button"
                   onClick={goPrev}

@@ -20,14 +20,6 @@ const USE_REMOTE_DEMO_MEDIA =
   process.env.NEXT_PUBLIC_USE_REMOTE_DEMO_MEDIA === 'true';
 const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
 
-const categoryLabels: Record<string, { hi: string; en: string }> = {
-  national: { hi: 'राष्ट्रीय', en: 'National' },
-  international: { hi: 'अंतरराष्ट्रीय', en: 'International' },
-  sports: { hi: 'खेल', en: 'Sports' },
-  entertainment: { hi: 'मनोरंजन', en: 'Entertainment' },
-  tech: { hi: 'टेक', en: 'Tech' },
-  business: { hi: 'बिजनेस', en: 'Business' },
-};
 
 interface VideoItem extends ShortsVideoItem {
   isShort: boolean;

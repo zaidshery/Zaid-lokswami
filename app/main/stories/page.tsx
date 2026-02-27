@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import StoryViewer from '@/app/components/content/StoryViewer';
 import { fetchMergedLiveArticles } from '@/lib/content/liveArticles';
@@ -21,7 +21,7 @@ function resolveSafeFrom(value: string | null) {
   return from;
 }
 
-export default function MojoStoriesPage() {
+function MojoStoriesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const setImmersiveVideoMode = useAppStore((state) => state.setImmersiveVideoMode);
@@ -116,3 +116,16 @@ export default function MojoStoriesPage() {
   );
 }
 
+export default function MojoStoriesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-black text-sm font-medium text-white/80">
+          Loading stories...
+        </div>
+      }
+    >
+      <MojoStoriesPageContent />
+    </Suspense>
+  );
+}
