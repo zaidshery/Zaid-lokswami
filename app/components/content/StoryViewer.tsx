@@ -12,8 +12,7 @@ import {
   ExternalLink,
   Pause,
   Play,
-  RotateCcw,
-  RotateCw,
+  Share2,
   Volume2,
   VolumeX,
   X,
@@ -32,14 +31,6 @@ interface StoryViewerProps {
 function normalizeDurationSeconds(value: number | undefined) {
   if (!Number.isFinite(value)) return 6;
   return Math.max(2, Math.min(30, Number(value)));
-}
-
-function formatTimeLabel(ms: number) {
-  const safeMs = Number.isFinite(ms) ? Math.max(0, ms) : 0;
-  const totalSeconds = Math.floor(safeMs / 1000);
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 function isExternalHref(value: string) {
@@ -106,7 +97,6 @@ export default function StoryViewer({
   const [isMuted, setIsMuted] = useState(false);
   const [mediaErrors, setMediaErrors] = useState<Record<string, boolean>>({});
   const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
-  const [videoCurrentMs, setVideoCurrentMs] = useState(0);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const wheelLockUntilRef = useRef(0);
@@ -143,7 +133,6 @@ export default function StoryViewer({
     }
     return fallback;
   }, [activeStory?.durationSeconds, activeStory?.mediaType, isYouTubeStory, videoDurationMs]);
-  const durationLabelMs = videoDurationMs && videoDurationMs > 0 ? videoDurationMs : durationMs;
 
   const goToIndex = useCallback(
     (index: number) => {
@@ -152,7 +141,6 @@ export default function StoryViewer({
       setActiveIndex(bounded);
       setProgress(0);
       setVideoDurationMs(null);
-      setVideoCurrentMs(0);
     },
     [stories.length]
   );
@@ -343,25 +331,60 @@ export default function StoryViewer({
   const onVideoTimeUpdate = () => {
     const video = videoRef.current;
     if (!video) return;
-    const current = Number.isFinite(video.currentTime) ? video.currentTime * 1000 : 0;
     const duration = Number.isFinite(video.duration) ? video.duration * 1000 : 0;
-    setVideoCurrentMs(current);
     if (duration > 0) {
+      const current = Number.isFinite(video.currentTime) ? video.currentTime * 1000 : 0;
       setProgress(Math.min(1, current / duration));
     }
   };
 
-  const jumpVideoBy = (seconds: number) => {
+  const onSeekProgress = (value: number) => {
+    const ratio = Math.max(0, Math.min(1, value));
     const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = Math.max(0, video.currentTime + seconds);
+    if (canUseNativeVideo && video && Number.isFinite(video.duration) && video.duration > 0) {
+      video.currentTime = video.duration * ratio;
+      return;
+    }
+    setProgress(ratio);
   };
 
-  const onSeekVideo = (value: number) => {
-    const video = videoRef.current;
-    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
-    const ratio = Math.max(0, Math.min(1, value));
-    video.currentTime = video.duration * ratio;
+  const onShare = useCallback(async () => {
+    if (!activeStory) return;
+
+    const fallbackUrl = `${window.location.origin}/main/stories?story=${encodeURIComponent(activeStory.id)}`;
+    const targetUrl = storyHref ? new URL(storyHref, window.location.origin).toString() : fallbackUrl;
+    const shareData = {
+      title: activeStory.title,
+      text: activeStory.caption || activeStory.title,
+      url: targetUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(targetUrl);
+        return;
+      }
+    } catch {
+      // Ignore clipboard errors and use prompt fallback.
+    }
+
+    window.prompt('Copy link', targetUrl);
+  }, [activeStory, storyHref]);
+
+  const canMuteStory = activeStory.mediaType === 'video';
+  const togglePlayPause = () => setIsPaused((prev) => !prev);
+  const toggleMuted = () => {
+    if (!canMuteStory) return;
+    setIsMuted((prev) => !prev);
   };
 
   return (
@@ -450,37 +473,25 @@ export default function StoryViewer({
                     : 'px-3 pb-2 pt-3 sm:px-4 sm:pt-4'
                 }`}
               >
-                <div
-                  className={`${
-                    variant === 'reel'
-                      ? 'rounded-xl border border-white/15 bg-black/35 px-2 py-1.5 backdrop-blur'
-                      : ''
-                  }`}
-                >
+                {variant !== 'reel' ? (
                   <div className="flex gap-1">
-                  {stories.map((story, index) => {
-                    const width =
-                      index < activeIndex ? 100 : index === activeIndex ? progress * 100 : 0;
-                    return (
-                      <div
-                        key={`story-progress-${story.id}`}
-                        className={`flex-1 overflow-hidden rounded-full ${
-                          variant === 'reel' ? 'h-1.5 bg-white/20' : 'h-1 bg-white/25'
-                        }`}
-                      >
+                    {stories.map((story, index) => {
+                      const width =
+                        index < activeIndex ? 100 : index === activeIndex ? progress * 100 : 0;
+                      return (
                         <div
-                          className={`h-full rounded-full transition-[width] duration-100 ${
-                            index === activeIndex && variant === 'reel'
-                              ? 'bg-gradient-to-r from-pink-400 via-orange-300 to-yellow-300'
-                              : 'bg-white'
-                          }`}
-                          style={{ width: `${width}%` }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                </div>
+                          key={`story-progress-${story.id}`}
+                          className="h-1 flex-1 overflow-hidden rounded-full bg-white/25"
+                        >
+                          <div
+                            className="h-full rounded-full bg-white transition-[width] duration-100"
+                            style={{ width: `${width}%` }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
 
                 {variant === 'reel' ? (
                   <div className="mt-3 flex justify-end text-white">
@@ -538,7 +549,7 @@ export default function StoryViewer({
 
               <div
                 className={`grid flex-1 ${
-                  variant === 'reel' ? 'grid-cols-1 grid-rows-2' : 'grid-cols-2'
+                  variant === 'reel' ? 'grid-cols-3' : 'grid-cols-2'
                 }`}
               >
                 <button
@@ -547,43 +558,43 @@ export default function StoryViewer({
                   onClick={goPrev}
                   aria-label="Previous story"
                 />
-                <button
-                  type="button"
-                  className="h-full w-full bg-transparent"
-                  onClick={goNext}
-                  aria-label="Next story"
-                />
+                {variant === 'reel' ? (
+                  <>
+                    <button
+                      type="button"
+                      className="h-full w-full bg-transparent"
+                      onClick={togglePlayPause}
+                      aria-label={isPaused ? 'Resume story' : 'Pause story'}
+                    />
+                    <button
+                      type="button"
+                      className="h-full w-full bg-transparent"
+                      onClick={goNext}
+                      aria-label="Next story"
+                    />
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="h-full w-full bg-transparent"
+                    onClick={goNext}
+                    aria-label="Next story"
+                  />
+                )}
               </div>
 
-              <div
-                className={`relative z-20 ${
-                  variant === 'reel'
-                    ? 'px-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] pt-3 sm:px-4'
-                    : 'px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6'
-                }`}
-              >
-                <div
-                  className={`${
-                    variant === 'reel'
-                      ? 'max-w-[calc(100%-4.8rem)] rounded-2xl border border-white/15 bg-black/45 px-3 py-3 backdrop-blur-sm'
-                      : ''
-                  }`}
-                >
-                  {variant === 'reel' ? (
-                    <p className="mb-1.5 inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white/90">
-                      @{(activeStory.author || 'desk').replace(/\s+/g, '').toLowerCase()}
-                    </p>
-                  ) : null}
-                  <h2 className={`max-w-3xl font-black leading-tight text-white ${variant === 'reel' ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>
+              {variant !== 'reel' ? (
+                <div className="relative z-20 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6">
+                  <h2 className="max-w-3xl text-xl font-black leading-tight text-white sm:text-2xl">
                     {activeStory.title}
                   </h2>
                   {activeStory.caption ? (
-                    <p className={`mt-2 max-w-3xl leading-relaxed text-white/85 ${variant === 'reel' ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
+                    <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/85 sm:text-base">
                       {activeStory.caption}
                     </p>
                   ) : null}
 
-                  {variant !== 'reel' && hasStoryHref ? (
+                  {hasStoryHref ? (
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       {isExternalHref(storyHref) ? (
                         <a
@@ -608,66 +619,43 @@ export default function StoryViewer({
                       )}
                     </div>
                   ) : null}
-
-                  {variant === 'reel' && canUseNativeVideo ? (
-                    <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-white/90">
-                      <span className="w-10 text-left">{formatTimeLabel(videoCurrentMs)}</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={1000}
-                        value={Math.round(progress * 1000)}
-                        onChange={(event) => onSeekVideo(Number(event.target.value) / 1000)}
-                        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/30 accent-white"
-                        aria-label="Seek story video"
-                      />
-                      <span className="w-10 text-right">{formatTimeLabel(durationLabelMs)}</span>
-                    </div>
-                  ) : null}
                 </div>
-              </div>
+              ) : null}
             </div>
 
             {variant === 'reel' ? (
               <>
-                {canUseNativeVideo ? (
-                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-                    <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-white/25 bg-black/35 px-3 py-2 backdrop-blur">
-                      <button
-                        type="button"
-                        onClick={() => setIsMuted((prev) => !prev)}
-                        className="rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
-                        aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-                      >
-                        {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => jumpVideoBy(-5)}
-                        className="rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
-                        aria-label="Rewind 5 seconds"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsPaused((prev) => !prev)}
-                        className="rounded-full bg-white/20 p-3 text-white hover:bg-white/30"
-                        aria-label={isPaused ? 'Play video' : 'Pause video'}
-                      >
-                        {isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => jumpVideoBy(5)}
-                        className="rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
-                        aria-label="Forward 5 seconds"
-                      >
-                        <RotateCw className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
+                <div className="absolute bottom-[max(0.9rem,env(safe-area-inset-bottom))] left-3 right-20 z-30 sm:left-4 sm:right-24">
+                  <input
+                    type="range"
+                    min={0}
+                    max={1000}
+                    value={Math.round(progress * 1000)}
+                    onChange={(event) => onSeekProgress(Number(event.target.value) / 1000)}
+                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/35 accent-white"
+                    aria-label="Story timeline"
+                  />
+                </div>
+
+                <div className="absolute right-3 bottom-[max(0.7rem,env(safe-area-inset-bottom))] z-30 flex flex-col gap-2 sm:right-4">
+                  <button
+                    type="button"
+                    onClick={onShare}
+                    className="rounded-full border border-white/40 bg-black/35 p-2 text-white backdrop-blur transition hover:bg-black/55"
+                    aria-label="Share story"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleMuted}
+                    disabled={!canMuteStory}
+                    className="rounded-full border border-white/40 bg-black/35 p-2 text-white backdrop-blur transition hover:bg-black/55 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+                  >
+                    {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  </button>
+                </div>
 
                 <button
                   type="button"
