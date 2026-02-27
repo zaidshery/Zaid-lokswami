@@ -1,3 +1,5 @@
+import { COMPANY_INFO } from '@/lib/constants/company';
+
 type BuildArticleWhatsAppShareInput = {
   title: string;
   articleUrl: string;
@@ -47,10 +49,16 @@ export function buildArticleWhatsAppShareText({
 }: BuildArticleWhatsAppShareInput) {
   const lines: string[] = [title.trim()];
 
-  // Keep exactly one URL in the message body for maximum preview reliability
-  // across WhatsApp mobile, tablet, and desktop clients.
+  // Keep article URL first so WhatsApp can build the preview card reliably.
   const cleanArticleUrl = cleanUrl(articleUrl);
   lines.push(cleanArticleUrl);
+  lines.push('');
+  lines.push('Follow Lokswami:');
+  lines.push(`Facebook: ${COMPANY_INFO.social.facebook}`);
+  lines.push(`Instagram: ${COMPANY_INFO.social.instagram}`);
+  lines.push(`YouTube: ${COMPANY_INFO.social.youtube}`);
+  lines.push(`X: ${COMPANY_INFO.social.twitter}`);
+  lines.push(`WhatsApp Channel: ${COMPANY_INFO.social.whatsapp}`);
 
   return lines.join('\n');
 }
