@@ -181,8 +181,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         return NextResponse.json(
           {
             success: false,
-            error:
-              'coverImagePath must be an upload path under /uploads/epapers or an http(s) URL',
+            error: 'coverImagePath must be a valid legacy upload path or an http(s) URL',
           },
           { status: 400 }
         );

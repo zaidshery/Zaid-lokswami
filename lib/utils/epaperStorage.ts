@@ -1,5 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
+import {
+  deleteCloudinaryAssetByUrl,
+  uploadBufferToCloudinary,
+} from '@/lib/utils/cloudinary';
 
 export const EPAPER_PDF_MAX_BYTES = 25 * 1024 * 1024;
 export const EPAPER_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
@@ -244,18 +248,15 @@ export async function saveUpload(file: File, targetDir: string, targetName: stri
   }
   validateByTargetName(file, safeName, buffer);
 
-  const config = await getEpaperStorageConfig();
-  const relativePath = safeDir ? `${safeDir}/${safeName}` : safeName;
-  const absolutePath = path.resolve(config.fsBaseDir, ...relativePath.split('/'));
+  const extension = path.extname(safeName).toLowerCase();
+  const folder = safeDir ? `lokswami/epapers/${safeDir}` : 'lokswami/epapers';
+  const uploaded = await uploadBufferToCloudinary(buffer, {
+    folder,
+    resourceType: extension === '.pdf' ? 'raw' : 'image',
+    originalFilename: safeName,
+  });
 
-  if (!isInsideBaseDir(config.fsBaseDir, absolutePath)) {
-    throw new Error('Invalid target path');
-  }
-
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-  await fs.writeFile(absolutePath, buffer);
-
-  return `${config.publicPathPrefix}/${relativePath}`.replace(/\\/g, '/');
+  return uploaded.secureUrl;
 }
 
 export type ResolvedEpaperAssetPath = {
@@ -310,6 +311,15 @@ export function resolveEpaperAssetPath(assetPath: string): ResolvedEpaperAssetPa
   };
 }
 
+function isLikelyHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function isSafeRelativeAssetPath(relativePath: string) {
   if (!relativePath) return false;
 
@@ -321,6 +331,7 @@ function isSafeRelativeAssetPath(relativePath: string) {
 }
 
 export function isAllowedAssetPath(assetPath: string) {
+  if (isLikelyHttpUrl(assetPath.trim())) return true;
   return Boolean(resolveEpaperAssetPath(assetPath));
 }
 
@@ -330,6 +341,11 @@ export function normalizeAssetPath(assetPath: string) {
 }
 
 export async function deleteAssetFile(assetPath: string) {
+  if (isLikelyHttpUrl(assetPath.trim())) {
+    await deleteCloudinaryAssetByUrl(assetPath).catch(() => undefined);
+    return;
+  }
+
   const relativePath = normalizeAssetPath(assetPath);
   if (!relativePath) return;
 
@@ -369,6 +385,11 @@ export async function deleteEpaperDirectory(citySlug: string, publishDateFolder:
 }
 
 export async function deleteEpaperDirectoryByAssetPath(assetPath: string) {
+  if (isLikelyHttpUrl(assetPath.trim())) {
+    await deleteCloudinaryAssetByUrl(assetPath).catch(() => undefined);
+    return;
+  }
+
   const resolved = resolveEpaperAssetPath(assetPath);
   if (!resolved) return;
 

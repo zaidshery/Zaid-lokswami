@@ -1,110 +1,108 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminToken } from '@/lib/auth/adminToken';
-import fs from 'fs/promises';
-import path from 'path';
-import crypto from 'crypto';
+import { uploadBufferToCloudinary } from '@/lib/utils/cloudinary';
 
-type UploadPurpose = 'image' | 'epaper-thumbnail' | 'epaper-paper' | 'video-thumbnail';
+type UploadPurpose =
+  | 'image'
+  | 'story-thumbnail'
+  | 'video-thumbnail'
+  | 'epaper-thumbnail'
+  | 'epaper-paper';
+
+type UploadRule = {
+  maxSizeBytes: number;
+  errorType: string;
+  errorSize: string;
+  folder: string;
+  resourceType: 'image' | 'raw';
+  isAllowed: (file: File) => boolean;
+};
 
 function parseUploadPurpose(value: FormDataEntryValue | null): UploadPurpose {
+  if (value === 'story-thumbnail') return 'story-thumbnail';
+  if (value === 'video-thumbnail') return 'video-thumbnail';
   if (value === 'epaper-thumbnail') return 'epaper-thumbnail';
   if (value === 'epaper-paper') return 'epaper-paper';
-  if (value === 'video-thumbnail') return 'video-thumbnail';
   return 'image';
 }
 
-function bytesToMb(mb: number) {
+function bytesFromMb(mb: number) {
   return mb * 1024 * 1024;
 }
 
-function getUploadSubdir(purpose: UploadPurpose) {
-  if (purpose === 'epaper-thumbnail') return 'uploads/epapers/thumbnails';
-  if (purpose === 'epaper-paper') return 'uploads/epapers/papers';
-  if (purpose === 'video-thumbnail') return 'uploads/videos/thumbnails';
-  return 'uploads/images';
+function isPdf(file: File) {
+  const mime = file.type.trim().toLowerCase();
+  const name = file.name.trim().toLowerCase();
+  return mime === 'application/pdf' || name.endsWith('.pdf');
 }
 
-function getFileExtension(file: File, purpose: UploadPurpose) {
-  if (purpose === 'epaper-paper') return 'pdf';
-
-  const mime = file.type.toLowerCase();
-  if (mime === 'image/jpeg' || mime === 'image/jpg') return 'jpg';
-  if (mime === 'image/png') return 'png';
-  if (mime === 'application/pdf') return 'pdf';
-
-  const fromName = path.extname(file.name || '').toLowerCase().replace('.', '');
-  if (fromName) return fromName;
-
-  return purpose === 'image' ? 'jpg' : 'bin';
+function isImage(file: File) {
+  const mime = file.type.trim().toLowerCase();
+  const name = file.name.trim().toLowerCase();
+  return (
+    mime === 'image/jpeg' ||
+    mime === 'image/jpg' ||
+    mime === 'image/png' ||
+    mime === 'image/webp' ||
+    name.endsWith('.jpg') ||
+    name.endsWith('.jpeg') ||
+    name.endsWith('.png') ||
+    name.endsWith('.webp')
+  );
 }
 
-function getFileRules(purpose: UploadPurpose) {
-  if (purpose === 'video-thumbnail') {
+function getUploadRule(purpose: UploadPurpose): UploadRule {
+  if (purpose === 'epaper-paper') {
     return {
-      maxSize: bytesToMb(10),
-      typeMessage: 'Video thumbnail must be JPG, JPEG, PNG, or PDF',
-      sizeMessage: 'Video thumbnail size must be less than 10MB',
-      isAllowed: (file: File) => {
-        const mime = file.type.toLowerCase();
-        const name = file.name.toLowerCase();
-        return (
-          mime === 'image/jpeg' ||
-          mime === 'image/jpg' ||
-          mime === 'image/png' ||
-          mime === 'application/pdf' ||
-          name.endsWith('.jpg') ||
-          name.endsWith('.jpeg') ||
-          name.endsWith('.png') ||
-          name.endsWith('.pdf')
-        );
-      },
+      maxSizeBytes: bytesFromMb(25),
+      errorType: 'E-paper file must be a PDF',
+      errorSize: 'E-paper PDF size must be less than 25MB',
+      folder: 'lokswami/epapers/papers',
+      resourceType: 'raw',
+      isAllowed: isPdf,
     };
   }
 
   if (purpose === 'epaper-thumbnail') {
     return {
-      maxSize: bytesToMb(10),
-      typeMessage: 'Thumbnail must be JPG, PNG, or PDF',
-      sizeMessage: 'Thumbnail size must be less than 10MB',
-      isAllowed: (file: File) => {
-        const mime = file.type.toLowerCase();
-        const name = file.name.toLowerCase();
-        return (
-          mime === 'image/jpeg' ||
-          mime === 'image/jpg' ||
-          mime === 'image/png' ||
-          mime === 'application/pdf' ||
-          name.endsWith('.jpg') ||
-          name.endsWith('.jpeg') ||
-          name.endsWith('.png') ||
-          name.endsWith('.pdf')
-        );
-      },
+      maxSizeBytes: bytesFromMb(10),
+      errorType: 'Thumbnail must be JPG, JPEG, PNG, or WEBP',
+      errorSize: 'Thumbnail size must be less than 10MB',
+      folder: 'lokswami/epapers/thumbnails',
+      resourceType: 'image',
+      isAllowed: isImage,
     };
   }
 
-  if (purpose === 'epaper-paper') {
+  if (purpose === 'video-thumbnail') {
     return {
-      maxSize: bytesToMb(25),
-      typeMessage: 'E-paper file must be PDF',
-      sizeMessage: 'E-paper PDF size must be less than 25MB',
-      isAllowed: (file: File) => {
-        const mime = file.type.toLowerCase();
-        const name = file.name.toLowerCase();
-        return mime === 'application/pdf' || name.endsWith('.pdf');
-      },
+      maxSizeBytes: bytesFromMb(10),
+      errorType: 'Video thumbnail must be JPG, JPEG, PNG, or WEBP',
+      errorSize: 'Video thumbnail size must be less than 10MB',
+      folder: 'lokswami/videos/thumbnails',
+      resourceType: 'image',
+      isAllowed: isImage,
+    };
+  }
+
+  if (purpose === 'story-thumbnail') {
+    return {
+      maxSizeBytes: bytesFromMb(10),
+      errorType: 'Story thumbnail must be JPG, JPEG, PNG, or WEBP',
+      errorSize: 'Story thumbnail size must be less than 10MB',
+      folder: 'lokswami/stories/thumbnails',
+      resourceType: 'image',
+      isAllowed: isImage,
     };
   }
 
   return {
-    maxSize: bytesToMb(5),
-    typeMessage: 'Only image files are allowed',
-    sizeMessage: 'Image size must be less than 5MB',
-    isAllowed: (file: File) => {
-      const mime = file.type.toLowerCase();
-      const name = file.name.toLowerCase();
-      return mime.startsWith('image/') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
-    },
+    maxSizeBytes: bytesFromMb(5),
+    errorType: 'Only JPG, JPEG, PNG, or WEBP image files are allowed',
+    errorSize: 'Image size must be less than 5MB',
+    folder: 'lokswami/images',
+    resourceType: 'image',
+    isAllowed: isImage,
   };
 }
 
@@ -112,58 +110,43 @@ export async function POST(req: NextRequest) {
   try {
     const user = verifyAdminToken(req);
     if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file');
     const purpose = parseUploadPurpose(formData.get('purpose'));
 
-    if (!file) {
-      return NextResponse.json(
-        { success: false, error: 'No file provided' },
-        { status: 400 }
-      );
+    if (!(file instanceof File)) {
+      return NextResponse.json({ success: false, error: 'No file provided' }, { status: 400 });
     }
 
-    const rules = getFileRules(purpose);
-
-    if (!rules.isAllowed(file)) {
-      return NextResponse.json(
-        { success: false, error: rules.typeMessage },
-        { status: 400 }
-      );
+    const rule = getUploadRule(purpose);
+    if (!rule.isAllowed(file)) {
+      return NextResponse.json({ success: false, error: rule.errorType }, { status: 400 });
     }
-
-    if (file.size > rules.maxSize) {
-      return NextResponse.json(
-        { success: false, error: rules.sizeMessage },
-        { status: 400 }
-      );
+    if (file.size > rule.maxSizeBytes) {
+      return NextResponse.json({ success: false, error: rule.errorSize }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const extension = getFileExtension(file, purpose);
-    const subdir = getUploadSubdir(purpose);
-    const uploadRoot = path.join(process.cwd(), 'public', ...subdir.split('/'));
-    const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${extension}`;
-    const outputPath = path.join(uploadRoot, filename);
-    const url = `/${subdir}/${filename}`;
-
-    await fs.mkdir(uploadRoot, { recursive: true });
-    await fs.writeFile(outputPath, buffer);
+    const uploaded = await uploadBufferToCloudinary(buffer, {
+      folder: rule.folder,
+      resourceType: rule.resourceType,
+      originalFilename: file.name || undefined,
+    });
 
     return NextResponse.json(
       {
         success: true,
         message: 'File uploaded successfully',
         data: {
-          url,
-          filename,
-          size: file.size,
+          url: uploaded.secureUrl,
+          secureUrl: uploaded.secureUrl,
+          publicId: uploaded.publicId,
+          resourceType: uploaded.resourceType,
+          filename: file.name,
+          size: uploaded.bytes || file.size,
           type: file.type,
         },
       },
@@ -171,9 +154,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     console.error('Error uploading file:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to upload file' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Failed to upload file' }, { status: 500 });
   }
 }

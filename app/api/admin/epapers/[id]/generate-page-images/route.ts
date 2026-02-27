@@ -49,6 +49,17 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
+    if (/^https?:\/\//i.test(String(epaper.pdfPath || ''))) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Automatic server-side page-image generation is not available for cloud-hosted PDFs. Upload page images manually.',
+        },
+        { status: 400 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
     const requestedPageCount = Number.parseInt(String(source.pageCount ?? ''), 10);

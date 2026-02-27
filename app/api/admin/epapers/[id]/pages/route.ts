@@ -4,12 +4,16 @@ import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import { verifyAdminToken } from '@/lib/auth/adminToken';
 import {
+  EPAPER_IMAGE_MAX_BYTES,
   formatPublishDateFolder,
   getImageDimensions,
   isAllowedAssetPath,
   resolveImageTargetName,
-  saveUpload,
 } from '@/lib/utils/epaperStorage';
+import {
+  deleteCloudinaryAssetByUrl,
+  uploadBufferToCloudinary,
+} from '@/lib/utils/cloudinary';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -29,6 +33,21 @@ function parseOptionalDimension(value: unknown) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return undefined;
   return Math.floor(parsed);
+}
+
+function isImageFile(file: File) {
+  const mime = file.type.trim().toLowerCase();
+  const name = file.name.trim().toLowerCase();
+  return (
+    mime === 'image/jpeg' ||
+    mime === 'image/jpg' ||
+    mime === 'image/png' ||
+    mime === 'image/webp' ||
+    name.endsWith('.jpg') ||
+    name.endsWith('.jpeg') ||
+    name.endsWith('.png') ||
+    name.endsWith('.webp')
+  );
 }
 
 function mapPages(
@@ -73,34 +92,25 @@ export async function PUT(req: NextRequest, context: RouteContext) {
   try {
     const admin = verifyAdminToken(req);
     if (!admin) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     await connectDB();
     const { id } = await context.params;
 
     if (!Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid e-paper ID' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Invalid e-paper ID' }, { status: 400 });
     }
 
     const epaper = await EPaper.findById(id).lean();
     if (!epaper) {
-      return NextResponse.json(
-        { success: false, error: 'E-paper not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'E-paper not found' }, { status: 404 });
     }
 
     const contentType = req.headers.get('content-type') || '';
     const publishDate = new Date(epaper.publishDate);
     const publishDateFolder = formatPublishDateFolder(publishDate);
-    const basePageDir = `${epaper.citySlug}/${publishDateFolder}/pages`;
+    const basePageFolder = `lokswami/epapers/${epaper.citySlug}/${publishDateFolder}/pages`;
 
     if (contentType.includes('multipart/form-data')) {
       const form = await req.formData();
@@ -109,10 +119,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       const imageFile = form.get('image');
 
       if (!pageNumber) {
-        return NextResponse.json(
-          { success: false, error: 'pageNumber is required' },
-          { status: 400 }
-        );
+        return NextResponse.json({ success: false, error: 'pageNumber is required' }, { status: 400 });
       }
       if (pageNumber > 1000) {
         return NextResponse.json(
@@ -126,11 +133,26 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       let height = parseOptionalDimension(form.get('height'));
 
       if (isFile(imageFile) && imageFile.size > 0) {
-        imagePath = await saveUpload(
-          imageFile,
-          basePageDir,
-          resolveImageTargetName('page', imageFile, pageNumber)
-        );
+        if (!isImageFile(imageFile)) {
+          return NextResponse.json(
+            { success: false, error: 'Page image must be JPG, PNG, or WEBP' },
+            { status: 400 }
+          );
+        }
+        if (imageFile.size > EPAPER_IMAGE_MAX_BYTES) {
+          return NextResponse.json(
+            { success: false, error: 'Page image must be under 10MB' },
+            { status: 400 }
+          );
+        }
+
+        const uploaded = await uploadBufferToCloudinary(Buffer.from(await imageFile.arrayBuffer()), {
+          folder: basePageFolder,
+          resourceType: 'image',
+          originalFilename: resolveImageTargetName('page', imageFile, pageNumber),
+        });
+        imagePath = uploaded.secureUrl;
+
         const dimensions = await getImageDimensions(imageFile);
         if (!width) width = dimensions?.width;
         if (!height) height = dimensions?.height;
@@ -150,10 +172,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       }
 
       const nextPageCount = Math.max(pageNumber, Number(epaper.pageCount || 0), 1);
-      let pages = mapPages(
-        Array.isArray(epaper.pages) ? epaper.pages : [],
-        nextPageCount
-      );
+      let pages = mapPages(Array.isArray(epaper.pages) ? epaper.pages : [], nextPageCount);
+      const previous = pages.find((item) => item.pageNumber === pageNumber)?.imagePath || '';
       pages = updateSinglePage(pages, pageNumber, { imagePath, width, height });
 
       const updated = await EPaper.findByIdAndUpdate(
@@ -164,6 +184,10 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         },
         { new: true, runValidators: true }
       ).lean();
+
+      if (previous && previous !== imagePath) {
+        await deleteCloudinaryAssetByUrl(previous).catch(() => undefined);
+      }
 
       return NextResponse.json({
         success: true,
@@ -177,10 +201,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const updates = Array.isArray(source.pages) ? source.pages : [];
 
     if (updates.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'pages[] is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'pages[] is required' }, { status: 400 });
     }
 
     let nextPageCount = Number(epaper.pageCount || 0);

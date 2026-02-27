@@ -5,9 +5,7 @@ import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import { verifyAdminToken } from '@/lib/auth/adminToken';
 import {
-  formatPublishDateFolder,
-  deleteEpaperDirectoryByAssetPath,
-  deleteEpaperDirectory,
+  deleteAssetFile,
   parsePublishDate,
 } from '@/lib/utils/epaperStorage';
 import {
@@ -346,15 +344,27 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       EPaperArticle.deleteMany({ epaperId: id }),
     ]);
 
-    const publishDate = new Date(epaper.publishDate);
-    if (!Number.isNaN(publishDate.getTime())) {
-      await deleteEpaperDirectory(String(epaper.citySlug || ''), formatPublishDateFolder(publishDate));
-    }
-    await deleteEpaperDirectoryByAssetPath(String(epaper.pdfPath || ''));
+    const pageImagePaths = Array.isArray(epaper.pages)
+      ? epaper.pages
+          .map((entry) =>
+            typeof entry === 'object' && entry !== null && 'imagePath' in entry
+              ? String((entry as { imagePath?: unknown }).imagePath || '')
+              : ''
+          )
+          .filter(Boolean)
+      : [];
+
+    await Promise.all(
+      [
+        String(epaper.pdfPath || ''),
+        String(epaper.thumbnailPath || ''),
+        ...pageImagePaths,
+      ].map((assetPath) => deleteAssetFile(assetPath).catch(() => undefined))
+    );
 
     return NextResponse.json({
       success: true,
-      message: 'E-paper and associated files deleted',
+      message: 'E-paper and associated assets deleted',
     });
   } catch (error) {
     console.error('Failed to delete e-paper:', error);

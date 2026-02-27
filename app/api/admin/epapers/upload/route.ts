@@ -9,14 +9,17 @@ import {
   normalizeCitySlug,
 } from '@/lib/constants/epaperCities';
 import {
-  deleteEpaperDirectory,
-  formatPublishDateFolder,
+  EPAPER_IMAGE_MAX_BYTES,
+  EPAPER_PDF_MAX_BYTES,
   getImageDimensions,
   inferPdfPageCount,
   parsePublishDate,
   resolveImageTargetName,
-  saveUpload,
 } from '@/lib/utils/epaperStorage';
+import {
+  deleteCloudinaryAssetByPublicId,
+  uploadBufferToCloudinary,
+} from '@/lib/utils/cloudinary';
 
 function resolveCityName(citySlug: string, rawCityName: string) {
   const normalizedInputName = normalizeCityName(rawCityName);
@@ -38,6 +41,34 @@ function isFile(value: FormDataEntryValue | null): value is File {
   return Boolean(value && typeof value === 'object' && 'arrayBuffer' in value);
 }
 
+function isPdfFile(file: File) {
+  const mime = file.type.trim().toLowerCase();
+  const name = file.name.trim().toLowerCase();
+  return mime === 'application/pdf' || name.endsWith('.pdf');
+}
+
+function isImageFile(file: File) {
+  const mime = file.type.trim().toLowerCase();
+  const name = file.name.trim().toLowerCase();
+  return (
+    mime === 'image/jpeg' ||
+    mime === 'image/jpg' ||
+    mime === 'image/png' ||
+    mime === 'image/webp' ||
+    name.endsWith('.jpg') ||
+    name.endsWith('.jpeg') ||
+    name.endsWith('.png') ||
+    name.endsWith('.webp')
+  );
+}
+
+function formatPublishDateFolder(value: Date) {
+  const year = value.getUTCFullYear();
+  const month = `${value.getUTCMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getUTCDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function mapEpaper(epaper: unknown) {
   const source =
     typeof epaper === 'object' && epaper !== null ? (epaper as Record<string, unknown>) : {};
@@ -47,9 +78,7 @@ function mapEpaper(epaper: unknown) {
     citySlug: String(source.citySlug || ''),
     cityName: String(source.cityName || ''),
     title: String(source.title || ''),
-    publishDate: Number.isNaN(publishDate.getTime())
-      ? ''
-      : publishDate.toISOString().slice(0, 10),
+    publishDate: Number.isNaN(publishDate.getTime()) ? '' : publishDate.toISOString().slice(0, 10),
     pdfPath: String(source.pdfPath || ''),
     thumbnailPath: String(source.thumbnailPath || ''),
     pageCount: Number(source.pageCount || 0),
@@ -61,16 +90,12 @@ function mapEpaper(epaper: unknown) {
 }
 
 export async function POST(req: NextRequest) {
-  let cleanupCitySlug = '';
-  let cleanupPublishDateFolder = '';
+  const uploadedAssetRefs: Array<{ publicId: string; resourceType: 'image' | 'raw' }> = [];
 
   try {
     const admin = verifyAdminToken(req);
     if (!admin) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     await connectDB();
@@ -100,10 +125,7 @@ export async function POST(req: NextRequest) {
       );
     }
     if (!title) {
-      return NextResponse.json(
-        { success: false, error: 'title is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'title is required' }, { status: 400 });
     }
     if (!publishDateInput) {
       return NextResponse.json(
@@ -122,6 +144,44 @@ export async function POST(req: NextRequest) {
         { success: false, error: 'Thumbnail file is required' },
         { status: 400 }
       );
+    }
+    if (!isPdfFile(pdf)) {
+      return NextResponse.json(
+        { success: false, error: 'E-paper file must be PDF' },
+        { status: 400 }
+      );
+    }
+    if (pdf.size > EPAPER_PDF_MAX_BYTES) {
+      return NextResponse.json(
+        { success: false, error: 'E-paper PDF size must be less than 25MB' },
+        { status: 400 }
+      );
+    }
+    if (!isImageFile(thumbnail)) {
+      return NextResponse.json(
+        { success: false, error: 'Thumbnail must be JPG, PNG, or WEBP' },
+        { status: 400 }
+      );
+    }
+    if (thumbnail.size > EPAPER_IMAGE_MAX_BYTES) {
+      return NextResponse.json(
+        { success: false, error: 'Thumbnail size must be less than 10MB' },
+        { status: 400 }
+      );
+    }
+    for (const pageImage of pageImageFiles) {
+      if (!isImageFile(pageImage)) {
+        return NextResponse.json(
+          { success: false, error: 'Page images must be JPG, PNG, or WEBP' },
+          { status: 400 }
+        );
+      }
+      if (pageImage.size > EPAPER_IMAGE_MAX_BYTES) {
+        return NextResponse.json(
+          { success: false, error: 'Each page image must be less than 10MB' },
+          { status: 400 }
+        );
+      }
     }
 
     const publishDate = parsePublishDate(publishDateInput);
@@ -163,9 +223,7 @@ export async function POST(req: NextRequest) {
     }
 
     const publishDateFolder = formatPublishDateFolder(publishDate);
-    const targetDir = `${citySlug}/${publishDateFolder}`;
-    cleanupCitySlug = citySlug;
-    cleanupPublishDateFolder = publishDateFolder;
+    const baseFolder = `lokswami/epapers/${citySlug}/${publishDateFolder}`;
 
     const inferredPageCount = await inferPdfPageCount(pdf);
     const pageCount = Math.max(
@@ -178,8 +236,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Could not infer PDF page count. Please upload page images or provide pageCount.',
+          error: 'Could not infer PDF page count. Please upload page images or provide pageCount.',
         },
         { status: 400 }
       );
@@ -191,12 +248,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const pdfPath = await saveUpload(pdf, targetDir, 'epaper.pdf');
-    const thumbnailPath = await saveUpload(
-      thumbnail,
-      targetDir,
-      resolveImageTargetName('thumbnail', thumbnail)
+    const pdfUpload = await uploadBufferToCloudinary(Buffer.from(await pdf.arrayBuffer()), {
+      folder: baseFolder,
+      resourceType: 'raw',
+      originalFilename: pdf.name || 'epaper.pdf',
+    });
+    uploadedAssetRefs.push({ publicId: pdfUpload.publicId, resourceType: 'raw' });
+
+    const thumbnailUpload = await uploadBufferToCloudinary(
+      Buffer.from(await thumbnail.arrayBuffer()),
+      {
+        folder: baseFolder,
+        resourceType: 'image',
+        originalFilename: resolveImageTargetName('thumbnail', thumbnail),
+      }
     );
+    uploadedAssetRefs.push({ publicId: thumbnailUpload.publicId, resourceType: 'image' });
 
     const pages: Array<{
       pageNumber: number;
@@ -208,18 +275,19 @@ export async function POST(req: NextRequest) {
     }));
 
     for (let index = 0; index < pageImageFiles.length; index += 1) {
-      const pageNumber = index + 1;
       const file = pageImageFiles[index];
-      const imagePath = await saveUpload(
-        file,
-        `${targetDir}/pages`,
-        resolveImageTargetName('page', file, pageNumber)
-      );
-      const dimensions = await getImageDimensions(file);
+      const pageNumber = index + 1;
+      const uploadedPage = await uploadBufferToCloudinary(Buffer.from(await file.arrayBuffer()), {
+        folder: `${baseFolder}/pages`,
+        resourceType: 'image',
+        originalFilename: resolveImageTargetName('page', file, pageNumber),
+      });
+      uploadedAssetRefs.push({ publicId: uploadedPage.publicId, resourceType: 'image' });
 
+      const dimensions = await getImageDimensions(file);
       pages[index] = {
         pageNumber,
-        imagePath,
+        imagePath: uploadedPage.secureUrl,
         width: dimensions?.width,
         height: dimensions?.height,
       };
@@ -230,8 +298,8 @@ export async function POST(req: NextRequest) {
       cityName,
       title,
       publishDate,
-      pdfPath,
-      thumbnailPath,
+      pdfPath: pdfUpload.secureUrl,
+      thumbnailPath: thumbnailUpload.secureUrl,
       pageCount,
       pages,
       status: statusInput === 'published' ? 'published' : 'draft',
@@ -241,46 +309,17 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         message: 'E-paper uploaded successfully',
-        warning:
-          pageImageFiles.length === 0
-            ? 'Add page images to enable hotspot drawing'
-            : null,
+        warning: pageImageFiles.length === 0 ? 'Add page images to enable hotspot drawing' : null,
         data: mapEpaper(epaper.toObject()),
       },
       { status: 201 }
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '';
-    if (message.includes('Only PDF files are allowed') || message.includes('PDF size exceeds')) {
-      return NextResponse.json(
-        { success: false, error: 'PDF file must be valid and under 25MB' },
-        { status: 400 }
-      );
-    }
-    if (message.includes('PDF file signature is invalid')) {
-      return NextResponse.json(
-        { success: false, error: 'Uploaded PDF is invalid or corrupted' },
-        { status: 400 }
-      );
-    }
-    if (
-      message.includes('Only JPG, PNG, or WEBP images are allowed') ||
-      message.includes('Image size exceeds 10MB')
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Thumbnail/page images must be JPG, PNG, or WEBP and under 10MB',
-        },
-        { status: 400 }
-      );
-    }
-    if (message.includes('Image signature is invalid')) {
-      return NextResponse.json(
-        { success: false, error: 'One or more image files are invalid or corrupted' },
-        { status: 400 }
-      );
-    }
+    await Promise.all(
+      uploadedAssetRefs.map((asset) =>
+        deleteCloudinaryAssetByPublicId(asset.publicId, asset.resourceType).catch(() => undefined)
+      )
+    );
 
     const duplicateCode =
       typeof error === 'object' &&
@@ -294,32 +333,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (
-      /No writable e-paper storage directory available|EACCES|EPERM|EROFS|ENOSPC/i.test(
-        message
-      )
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            'Server storage is not writable. Set EPAPER_STORAGE_UPLOADS_BASE_DIR to a writable directory and retry.',
-        },
-        { status: 500 }
-      );
-    }
-
-    if (cleanupCitySlug && cleanupPublishDateFolder) {
-      await deleteEpaperDirectory(cleanupCitySlug, cleanupPublishDateFolder);
-    }
-
     console.error('Failed to upload e-paper:', error);
     return NextResponse.json(
       {
         success: false,
         error:
-          message && process.env.NODE_ENV !== 'production'
-            ? `Failed to upload e-paper: ${message}`
+          error instanceof Error && error.message.trim() && process.env.NODE_ENV !== 'production'
+            ? `Failed to upload e-paper: ${error.message}`
             : 'Failed to upload e-paper',
       },
       { status: 500 }
