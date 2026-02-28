@@ -7,8 +7,49 @@ const USE_REMOTE_DEMO_MEDIA =
 const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
 const LOCAL_STORY_FALLBACK = '/placeholders/story-9x16.svg';
 
+function extractYouTubeId(value: string) {
+  const raw = value.trim();
+  if (!raw) return '';
+
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+
+    if (host === 'youtu.be') {
+      return (parsed.pathname.split('/').filter(Boolean)[0] || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    }
+
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (parsed.pathname === '/watch') {
+        return (parsed.searchParams.get('v') || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      }
+      if (parsed.pathname.startsWith('/shorts/') || parsed.pathname.startsWith('/embed/')) {
+        return (parsed.pathname.split('/')[2] || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      }
+    }
+
+    if (host === 'img.youtube.com' || host.endsWith('.ytimg.com') || host === 'ytimg.com') {
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      const viIndex = segments.findIndex((segment) => segment === 'vi' || segment === 'vi_webp');
+      if (viIndex !== -1) {
+        return (segments[viIndex + 1] || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      }
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+function toStableYouTubeThumbnail(value: string) {
+  const id = extractYouTubeId(value);
+  if (!id) return value.trim();
+  return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+}
+
 function normalizeStoryMedia(value: string) {
-  const media = value.trim();
+  const media = toStableYouTubeThumbnail(value);
   if (!media) return '';
   if (!USE_REMOTE_DEMO_MEDIA && UNSPLASH_IMAGE_HOST.test(media)) {
     return LOCAL_STORY_FALLBACK;
@@ -163,9 +204,10 @@ export function mapLiveStoriesToVisualStories(
     .map((row, index) => {
       const id = row._id || row.id || `live-story-${index}`;
       const title = (row.title || '').trim();
-      const thumbnail = normalizeStoryMedia(row.thumbnail || '');
       const linkUrl = (row.linkUrl || '').trim();
       const rawMediaUrl = (row.mediaUrl || '').trim();
+      const inferredThumb = toStableYouTubeThumbnail(rawMediaUrl || linkUrl);
+      const thumbnail = normalizeStoryMedia(row.thumbnail || '') || normalizeStoryMedia(inferredThumb);
       const mediaType = normalizeMediaType(row.mediaType, rawMediaUrl, linkUrl);
       const mediaSource =
         mediaType === 'video' ? rawMediaUrl || linkUrl : rawMediaUrl;

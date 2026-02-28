@@ -4,6 +4,12 @@ const defaultImageHosts = [
   'images.unsplash.com',
   'via.placeholder.com',
   'img.youtube.com',
+  '**.ytimg.com',
+  'i.ytimg.com',
+  'i1.ytimg.com',
+  'i2.ytimg.com',
+  'i3.ytimg.com',
+  'i4.ytimg.com',
   'api.dicebear.com',
   'res.cloudinary.com',
 ];
