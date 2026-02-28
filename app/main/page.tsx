@@ -270,7 +270,7 @@ export default function HomePage() {
       <section className="relative mt-[var(--section-gap)] cnp-surface px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-5 md:px-6">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-black tracking-tight text-zinc-900 dark:text-zinc-100 md:text-2xl">
-            Visual Stories
+            Mojo Stories
           </h2>
           <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-400 sm:text-xs">
             <Flame className="h-4 w-4" />
