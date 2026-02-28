@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAppStore } from '@/lib/store/appStore';
 import Header from '../components/layout/Header';
 import BottomNav from '../components/layout/BottomNav';
@@ -30,6 +31,7 @@ export default function MainLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   const {
     setIsMobile,
     setIsTablet,
@@ -38,6 +40,8 @@ export default function MainLayout({
     setMobileMenuOpen,
     isImmersiveVideoMode,
   } = useAppStore();
+  const isVideosRoute = pathname?.startsWith('/main/videos') ?? false;
+  const showBottomNav = !isImmersiveVideoMode || isVideosRoute;
 
 
   useEffect(() => {
@@ -98,7 +102,7 @@ export default function MainLayout({
       {!isImmersiveVideoMode ? <LokswamiAIBot /> : null}
 
       {/* Bottom Navigation - Mobile + Tablet (below 1280px) */}
-      {!isImmersiveVideoMode ? (
+      {showBottomNav ? (
         <BottomNav onMenuClick={toggleMobileMenu} isMenuOpen={isMobileMenuOpen} />
       ) : null}
     </div>

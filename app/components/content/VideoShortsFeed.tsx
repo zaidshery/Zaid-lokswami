@@ -15,7 +15,7 @@ import {
 import formatNumber from '@/lib/utils/formatNumber';
 
 const VIEWPORT_HEIGHT_CLASS = 'h-[calc(100dvh-12.9rem)] md:h-[calc(100dvh-13.4rem)]';
-const IMMERSIVE_VIEWPORT_HEIGHT_CLASS = 'h-[calc(100dvh-4rem-env(safe-area-inset-bottom))]';
+const IMMERSIVE_VIEWPORT_HEIGHT_CLASS = 'h-dvh';
 
 export interface ShortsVideoItem {
   id: string;
@@ -63,6 +63,25 @@ function getYouTubeId(urlString: string) {
   return null;
 }
 
+function formatPlaybackTime(totalSeconds: number) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return '00:00';
+  }
+
+  const safeTotalSeconds = Math.floor(totalSeconds);
+  const hours = Math.floor(safeTotalSeconds / 3600);
+  const minutes = Math.floor((safeTotalSeconds % 3600) / 60);
+  const seconds = safeTotalSeconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(
+      seconds
+    ).padStart(2, '0')}`;
+  }
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 export default function VideoShortsFeed({
   videos,
   language,
@@ -82,6 +101,8 @@ export default function VideoShortsFeed({
   const [isPaused, setIsPaused] = useState(false);
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
   const [isHydrated, setIsHydrated] = useState(false);
+  const [currentTimeById, setCurrentTimeById] = useState<Record<string, number>>({});
+  const [durationById, setDurationById] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setIsHydrated(true);
@@ -123,18 +144,25 @@ export default function VideoShortsFeed({
     if (!activeVideo) return '/main/videos';
     return `/main/search?q=${encodeURIComponent(activeVideo.title)}`;
   }, [activeVideo]);
+  const activePlaybackTime = activeVideo ? currentTimeById[activeVideo.id] ?? 0 : 0;
+  const activePlaybackDuration = activeVideo
+    ? durationById[activeVideo.id] ?? Math.max(0, activeVideo.duration || 0)
+    : 0;
+  const activePlaybackLabel = `${formatPlaybackTime(activePlaybackTime)} / ${formatPlaybackTime(
+    activePlaybackDuration
+  )}`;
 
   const viewportHeightClass = immersiveMode
     ? IMMERSIVE_VIEWPORT_HEIGHT_CLASS
     : VIEWPORT_HEIGHT_CLASS;
   const actionRailPositionClass = immersiveMode
-    ? 'right-2 bottom-[calc(4rem+env(safe-area-inset-bottom)+0.9rem)] md:right-3 md:bottom-5'
+    ? 'right-3 top-1/2 -translate-y-1/2 md:right-6'
     : 'right-3 top-1/2 -translate-y-1/2';
   const shellClass = immersiveMode
-    ? 'mx-auto w-full max-w-none'
+    ? 'h-dvh w-full'
     : 'mx-auto w-full max-w-none lg:max-w-[480px]';
   const feedClass = immersiveMode
-    ? `scrollbar-hide ${viewportHeightClass} snap-y snap-mandatory overflow-y-auto overscroll-y-contain rounded-none border-0 bg-zinc-950 shadow-none`
+    ? `scrollbar-hide ${viewportHeightClass} w-full snap-y snap-mandatory overflow-y-auto overscroll-y-contain rounded-none border-0 bg-black shadow-none touch-pan-y`
     : `scrollbar-hide ${viewportHeightClass} snap-y snap-mandatory overflow-y-auto overscroll-y-contain rounded-none border-0 bg-zinc-950 shadow-none lg:rounded-[28px] lg:border lg:border-zinc-800 lg:shadow-[0_34px_80px_rgba(0,0,0,0.55)]`;
 
   const sendYouTubeCommand = (
@@ -404,6 +432,57 @@ export default function VideoShortsFeed({
     }
   };
 
+  const handleVideoLoadedMetadata = (videoId: string, fallbackDuration: number, event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const element = event.currentTarget;
+    const resolvedDuration =
+      Number.isFinite(element.duration) && element.duration > 0 ? element.duration : fallbackDuration;
+
+    setDurationById((prev) => {
+      if (prev[videoId] === resolvedDuration) return prev;
+      return { ...prev, [videoId]: resolvedDuration };
+    });
+  };
+
+  const handleVideoDurationChange = (videoId: string, fallbackDuration: number, event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const element = event.currentTarget;
+    const resolvedDuration =
+      Number.isFinite(element.duration) && element.duration > 0 ? element.duration : fallbackDuration;
+
+    setDurationById((prev) => {
+      if (prev[videoId] === resolvedDuration) return prev;
+      return { ...prev, [videoId]: resolvedDuration };
+    });
+  };
+
+  const handleVideoTimeUpdate = (videoId: string, index: number, event: React.SyntheticEvent<HTMLVideoElement>) => {
+    if (index !== activeIndex) return;
+    const element = event.currentTarget;
+    const nextCurrentTime = Number.isFinite(element.currentTime) ? element.currentTime : 0;
+
+    setCurrentTimeById((prev) => {
+      if (Math.abs((prev[videoId] ?? 0) - nextCurrentTime) < 0.25) return prev;
+      return { ...prev, [videoId]: nextCurrentTime };
+    });
+  };
+
+  const handleVideoPause = (index: number) => {
+    if (index !== activeIndex) return;
+    setIsPaused(true);
+  };
+
+  const handleVideoPlay = (videoId: string, index: number, event: React.SyntheticEvent<HTMLVideoElement>) => {
+    if (index !== activeIndex) return;
+    const element = event.currentTarget;
+    const nextCurrentTime = Number.isFinite(element.currentTime) ? element.currentTime : 0;
+    const nextDuration = Number.isFinite(element.duration) && element.duration > 0 ? element.duration : 0;
+
+    setCurrentTimeById((prev) => ({ ...prev, [videoId]: nextCurrentTime }));
+    if (nextDuration > 0) {
+      setDurationById((prev) => ({ ...prev, [videoId]: nextDuration }));
+    }
+    setIsPaused(false);
+  };
+
   if (!videos.length) {
     return (
       <div className="mx-auto max-w-[470px] rounded-3xl border border-zinc-200 bg-white px-6 py-14 text-center shadow-[0_20px_55px_rgba(0,0,0,0.08)] dark:border-zinc-800 dark:bg-zinc-900">
@@ -414,8 +493,12 @@ export default function VideoShortsFeed({
     );
   }
 
+  const sectionClass = immersiveMode
+    ? 'fixed inset-0 z-40 h-dvh w-full overflow-hidden bg-black'
+    : 'relative';
+
   return (
-    <section className="relative">
+    <section className={sectionClass} data-swipe-ignore={immersiveMode ? 'true' : undefined}>
       <div className={shellClass}>
         <div
           ref={feedRef}
@@ -479,6 +562,15 @@ export default function VideoShortsFeed({
                       playsInline
                       preload={index <= activeIndex + 1 ? 'metadata' : 'none'}
                       autoPlay={index === activeIndex}
+                      onLoadedMetadata={(event) =>
+                        handleVideoLoadedMetadata(video.id, video.duration, event)
+                      }
+                      onDurationChange={(event) =>
+                        handleVideoDurationChange(video.id, video.duration, event)
+                      }
+                      onTimeUpdate={(event) => handleVideoTimeUpdate(video.id, index, event)}
+                      onPause={() => handleVideoPause(index)}
+                      onPlay={(event) => handleVideoPlay(video.id, index, event)}
                     />
                   )}
                 </div>
@@ -498,6 +590,16 @@ export default function VideoShortsFeed({
                   <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
                     <div className="rounded-full bg-black/55 p-4 text-white backdrop-blur">
                       <Play className="h-8 w-8 fill-current" />
+                    </div>
+                  </div>
+                ) : null}
+
+                {immersiveMode && index === activeIndex && isPaused ? (
+                  <div className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2 md:top-6">
+                    <div className="animate-[fadeIn_180ms_ease-out] rounded-full border border-white/20 bg-black/55 text-sm text-white backdrop-blur-sm md:text-base">
+                      <span className="inline-flex px-3 py-1 md:px-4 md:py-2">
+                        {activePlaybackLabel}
+                      </span>
                     </div>
                   </div>
                 ) : null}
@@ -549,7 +651,7 @@ export default function VideoShortsFeed({
 
         {activeVideo ? (
           <div className={`pointer-events-none absolute z-20 ${actionRailPositionClass}`}>
-            <div className="pointer-events-auto flex flex-col items-center gap-2 rounded-2xl border border-white/15 bg-black/40 p-2 backdrop-blur">
+            <div className="pointer-events-auto flex flex-col items-center gap-2 rounded-2xl border border-white/15 bg-black/40 p-2 backdrop-blur md:p-2.5">
               <button
                 type="button"
                 onClick={handleLike}
@@ -588,6 +690,16 @@ export default function VideoShortsFeed({
               >
                 <ArrowUpRight className="h-5 w-5" />
               </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {immersiveMode && activeVideo ? (
+          <div className="pointer-events-none absolute bottom-16 left-0 right-0 z-20 px-4 pb-[env(safe-area-inset-bottom)] md:bottom-20 md:px-8">
+            <div className="overflow-hidden whitespace-nowrap pr-16 md:pr-24">
+              <p className="truncate text-sm font-medium text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.65)] md:text-base lg:text-lg">
+                {activeVideo.title}
+              </p>
             </div>
           </div>
         ) : null}
