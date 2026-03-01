@@ -185,7 +185,8 @@ export default function VideoShortsFeed({
         const parsed = JSON.parse(saved) as unknown;
         const next = normalizeShortsSettings(parsed);
         setSettings(next);
-        setIsMuted(next.muteByDefault);
+        // Always start muted to satisfy mobile autoplay policies.
+        setIsMuted(true);
       }
     } catch {
       // Ignore invalid persisted settings.
@@ -224,9 +225,9 @@ export default function VideoShortsFeed({
   }, [isSettingsOpen]);
 
   useEffect(() => {
-    if (!settings.muteByDefault || isMuted) return;
+    if (!settings.muteByDefault) return;
     setIsMuted(true);
-  }, [isMuted, settings.muteByDefault]);
+  }, [settings.muteByDefault]);
 
   const updateSettings = useCallback(
     (updater: (previous: ShortsSettings) => ShortsSettings) => {
@@ -280,6 +281,7 @@ export default function VideoShortsFeed({
   const activePlaybackLabel = `${formatPlaybackTime(activePlaybackTime)} / ${formatPlaybackTime(
     activePlaybackDuration
   )}`;
+  const effectiveMuted = isMuted || !hasUnlockedAudioRef.current;
 
   const viewportHeightClass = immersiveMode
     ? IMMERSIVE_VIEWPORT_HEIGHT_CLASS
@@ -309,8 +311,6 @@ export default function VideoShortsFeed({
   };
 
   const unlockActiveAudio = () => {
-    if (!isMuted) return;
-
     hasUnlockedAudioRef.current = true;
     setIsMuted(false);
 
@@ -323,21 +323,19 @@ export default function VideoShortsFeed({
       if (!iframe) return;
 
       sendYouTubeCommand(iframe, 'unMute');
-      if (isPaused) {
-        sendYouTubeCommand(iframe, 'playVideo');
-        setIsPaused(false);
-      }
+      sendYouTubeCommand(iframe, 'playVideo');
+      setIsPaused(false);
       return;
     }
 
     const video = videoRefs.current[activeIndex];
     if (!video) return;
 
+    // User tap unlock: unmute and explicitly re-play for mobile browsers.
     applyNativeVideoPreferences(video, false);
-    if (isPaused) {
-      void video.play().catch(() => undefined);
-      setIsPaused(false);
-    }
+    video.muted = false;
+    void video.play().catch(() => undefined);
+    setIsPaused(false);
   };
 
   const toggleActivePlayback = () => {
@@ -351,7 +349,7 @@ export default function VideoShortsFeed({
 
       if (isPaused) {
         sendYouTubeCommand(iframe, 'playVideo');
-        sendYouTubeCommand(iframe, isMuted ? 'mute' : 'unMute');
+        sendYouTubeCommand(iframe, effectiveMuted ? 'mute' : 'unMute');
         setIsPaused(false);
         return;
       }
@@ -365,7 +363,7 @@ export default function VideoShortsFeed({
     if (!video) return;
 
     if (isPaused) {
-      applyNativeVideoPreferences(video, isMuted);
+      applyNativeVideoPreferences(video, effectiveMuted);
       void video.play().catch(() => undefined);
       setIsPaused(false);
       return;
@@ -459,7 +457,7 @@ export default function VideoShortsFeed({
     videoRefs.current.forEach((video, index) => {
       if (!video) return;
       if (index === activeIndex) {
-        applyNativeVideoPreferences(video, isMuted);
+        applyNativeVideoPreferences(video, effectiveMuted);
         if (isPaused) {
           video.pause();
           return;
@@ -479,7 +477,7 @@ export default function VideoShortsFeed({
       if (index === activeIndex) {
         sendYouTubeCommand(iframe, isPaused ? 'pauseVideo' : 'playVideo');
         if (!isPaused) {
-          sendYouTubeCommand(iframe, isMuted ? 'mute' : 'unMute');
+          sendYouTubeCommand(iframe, effectiveMuted ? 'mute' : 'unMute');
         }
         return;
       }
@@ -487,7 +485,7 @@ export default function VideoShortsFeed({
       sendYouTubeCommand(iframe, 'mute');
       sendYouTubeCommand(iframe, 'pauseVideo');
     });
-  }, [activeIndex, applyNativeVideoPreferences, isMuted, isPaused, videos.length]);
+  }, [activeIndex, applyNativeVideoPreferences, effectiveMuted, isPaused, videos.length]);
 
   const handleTouchStart = (event: React.TouchEvent) => {
     const touch = event.touches[0];
@@ -564,7 +562,7 @@ export default function VideoShortsFeed({
 
   const handleVideoLoadedMetadata = (videoId: string, fallbackDuration: number, event: React.SyntheticEvent<HTMLVideoElement>) => {
     const element = event.currentTarget;
-    applyNativeVideoPreferences(element, isMuted);
+    applyNativeVideoPreferences(element, effectiveMuted);
     const resolvedDuration =
       Number.isFinite(element.duration) && element.duration > 0 ? element.duration : fallbackDuration;
 
@@ -576,7 +574,7 @@ export default function VideoShortsFeed({
 
   const handleVideoDurationChange = (videoId: string, fallbackDuration: number, event: React.SyntheticEvent<HTMLVideoElement>) => {
     const element = event.currentTarget;
-    applyNativeVideoPreferences(element, isMuted);
+    applyNativeVideoPreferences(element, effectiveMuted);
     const resolvedDuration =
       Number.isFinite(element.duration) && element.duration > 0 ? element.duration : fallbackDuration;
 
@@ -614,7 +612,7 @@ export default function VideoShortsFeed({
   const handleVideoPlay = (videoId: string, index: number, event: React.SyntheticEvent<HTMLVideoElement>) => {
     if (index !== activeIndex) return;
     const element = event.currentTarget;
-    applyNativeVideoPreferences(element, isMuted);
+    applyNativeVideoPreferences(element, effectiveMuted);
     const nextCurrentTime = Number.isFinite(element.currentTime) ? element.currentTime : 0;
     const nextDuration = Number.isFinite(element.duration) && element.duration > 0 ? element.duration : 0;
 
@@ -713,7 +711,7 @@ export default function VideoShortsFeed({
                             isPaused ? 'pauseVideo' : 'playVideo'
                           );
                           if (!isPaused) {
-                            sendYouTubeCommand(iframe, isMuted ? 'mute' : 'unMute');
+                            sendYouTubeCommand(iframe, effectiveMuted ? 'mute' : 'unMute');
                           }
                           return;
                         }
@@ -736,7 +734,8 @@ export default function VideoShortsFeed({
                       poster={video.thumbnail}
                       className="absolute inset-0 h-full w-full object-cover"
                       loop={!settings.autoAdvance}
-                      muted={isMuted}
+                      muted={effectiveMuted}
+                      defaultMuted
                       playsInline
                       preload={index <= activeIndex + 1 ? 'metadata' : 'none'}
                       autoPlay={index === activeIndex}

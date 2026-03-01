@@ -82,8 +82,10 @@ export default function StoriesRail({ stories, showHeader = true }: StoriesRailP
 
   const getRingClass = (viewed?: boolean) => (viewed ? 'bg-orange-600/35' : 'bg-orange-600');
 
+  const compactRailSpacing = !showHeader;
+
   return (
-    <div className="group/rail py-2">
+    <div className={`group/rail ${compactRailSpacing ? 'py-1 sm:py-1.5' : 'py-2'}`}>
       {showHeader ? (
         <div className="mb-4 flex items-center justify-between px-1">
           <h2 className="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white">
@@ -122,7 +124,9 @@ export default function StoriesRail({ stories, showHeader = true }: StoriesRailP
         <div
           ref={scrollRef}
           onScroll={checkScroll}
-          className="scrollbar-hide flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 pl-1 pr-5 sm:gap-4 sm:pr-6"
+          className={`scrollbar-hide flex snap-x snap-mandatory gap-3 overflow-x-auto ${
+            compactRailSpacing ? 'py-1 sm:py-1.5' : 'py-2'
+          } pl-1 pr-5 sm:gap-4 sm:pr-6`}
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {visualStories.map((story, index) => (

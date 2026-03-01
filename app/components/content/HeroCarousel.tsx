@@ -153,22 +153,22 @@ export default function HeroCarousel({
               onClick={goPrev}
                 className={`pointer-events-auto flex items-center justify-center cnp-motion ${
                 variant === 'editorial'
-                  ? 'hidden h-9 w-9 rounded-full border border-white/40 bg-black/35 text-white/90 backdrop-blur-sm sm:flex sm:opacity-0 sm:group-hover:opacity-100'
-                  : 'w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/20 hover:bg-black/40 text-white/90 backdrop-blur-md opacity-90 sm:opacity-0 sm:group-hover:opacity-100 -translate-x-0 sm:-translate-x-4 sm:group-hover:translate-x-0'
+                  ? 'h-9 w-9 rounded-full border border-white/40 bg-black/35 text-white/90 backdrop-blur-sm opacity-100 sm:h-10 sm:w-10 sm:opacity-0 lg:h-11 lg:w-11 sm:group-hover:opacity-100'
+                  : 'h-9 w-9 sm:h-10 sm:w-10 lg:h-11 lg:w-11 rounded-full bg-black/20 hover:bg-black/40 text-white/90 backdrop-blur-md opacity-90 sm:opacity-0 sm:group-hover:opacity-100 -translate-x-0 sm:-translate-x-4 sm:group-hover:translate-x-0'
               }`}
             >
-              <ChevronLeft className="w-6 h-6" />
+              <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
             <button
               aria-label="Next slide"
               onClick={goNext}
                 className={`pointer-events-auto flex items-center justify-center cnp-motion ${
                 variant === 'editorial'
-                  ? 'hidden h-9 w-9 rounded-full border border-white/40 bg-black/35 text-white/90 backdrop-blur-sm sm:flex sm:opacity-0 sm:group-hover:opacity-100'
-                  : 'w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/20 hover:bg-black/40 text-white/90 backdrop-blur-md opacity-90 sm:opacity-0 sm:group-hover:opacity-100 translate-x-0 sm:translate-x-4 sm:group-hover:translate-x-0'
+                  ? 'h-9 w-9 rounded-full border border-white/40 bg-black/35 text-white/90 backdrop-blur-sm opacity-100 sm:h-10 sm:w-10 sm:opacity-0 lg:h-11 lg:w-11 sm:group-hover:opacity-100'
+                  : 'h-9 w-9 sm:h-10 sm:w-10 lg:h-11 lg:w-11 rounded-full bg-black/20 hover:bg-black/40 text-white/90 backdrop-blur-md opacity-90 sm:opacity-0 sm:group-hover:opacity-100 translate-x-0 sm:translate-x-4 sm:group-hover:translate-x-0'
               }`}
             >
-              <ChevronRight className="w-6 h-6" />
+              <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           </div>
         </div>

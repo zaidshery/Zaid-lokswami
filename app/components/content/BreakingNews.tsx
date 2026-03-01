@@ -620,7 +620,7 @@ export default function BreakingNews({
       }
     >
       <Container>
-        <div className="flex h-10 items-center gap-2 md:h-12 md:gap-3">
+        <div className="flex h-9 items-center gap-2 md:h-11 md:gap-3">
           <div className="flex h-full items-center">
             <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-white px-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-red-600 ring-1 ring-white/30 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.15)] md:h-8 md:gap-2 md:px-2.5 md:text-xs">
               <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.22)] md:h-3 md:w-3" />

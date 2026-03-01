@@ -74,7 +74,7 @@ export default function MainLayout({
           className={
             isImmersiveVideoMode
               ? 'pb-0 pt-0'
-              : 'pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)] pt-[8rem] md:pt-[9.5rem] xl:pb-4'
+              : 'pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)] pt-[7.25rem] sm:pt-[8rem] md:pt-[8.75rem] xl:pb-4'
           }
         >
           <Container

@@ -267,12 +267,12 @@ export default function HomePage() {
 
       </motion.section>
 
-      <section className="relative mt-[var(--section-gap)] cnp-surface px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-5 md:px-6">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-black tracking-tight text-zinc-900 dark:text-zinc-100 md:text-2xl">
+      <section className="relative mt-[var(--section-gap)] cnp-surface px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-3.5 md:px-6 md:py-4 lg:py-[1.1rem] xl:py-[1.2rem]">
+        <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-2 sm:gap-2.5 md:mb-2 md:gap-3">
+          <h2 className="text-base font-black tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-[1.05rem] md:text-[1.25rem] lg:text-[1.35rem] xl:text-[1.4rem]">
             Mojo Stories
           </h2>
-          <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-400 sm:text-xs">
+          <div className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-400 sm:gap-1.5 sm:text-xs">
             <Flame className="h-4 w-4" />
             Swipe to Explore
           </div>

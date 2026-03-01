@@ -83,6 +83,7 @@ function getYouTubeEmbedUrl(value: string, muted: boolean) {
   if (!safeId) return '';
 
   const params = new URLSearchParams({
+    enablejsapi: '1',
     autoplay: '1',
     mute: muted ? '1' : '0',
     controls: '0',
@@ -114,7 +115,9 @@ export default function StoryViewer({
   const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wheelLockUntilRef = useRef(0);
+  const hasUnlockedAudioRef = useRef(false);
 
   const boundedInitialIndex = Math.min(
     Math.max(initialIndex, 0),
@@ -125,9 +128,10 @@ export default function StoryViewer({
   const storyHref = (activeStory?.href || activeStory?.linkUrl || '').trim();
   const hasStoryHref = Boolean(storyHref);
   const ctaLabel = (activeStory?.linkLabel || '').trim() || 'Read Full Story';
+  const effectiveMuted = variant === 'reel' ? (isMuted || !hasUnlockedAudioRef.current) : isMuted;
   const youtubeEmbedUrl = useMemo(
-    () => getYouTubeEmbedUrl(activeStory?.mediaUrl || '', isMuted),
-    [activeStory?.mediaUrl, isMuted]
+    () => getYouTubeEmbedUrl(activeStory?.mediaUrl || '', effectiveMuted),
+    [activeStory?.mediaUrl, effectiveMuted]
   );
   const isYouTubeStory = Boolean(youtubeEmbedUrl);
   const canUseNativeVideo =
@@ -179,7 +183,25 @@ export default function StoryViewer({
     if (!isOpen) return;
     goToIndex(boundedInitialIndex);
     setIsPaused(false);
-  }, [boundedInitialIndex, goToIndex, isOpen]);
+    if (variant === 'reel') {
+      hasUnlockedAudioRef.current = false;
+      setIsMuted(true);
+    }
+  }, [boundedInitialIndex, goToIndex, isOpen, variant]);
+
+  const sendYouTubeCommand = useCallback(
+    (command: 'playVideo' | 'pauseVideo' | 'mute' | 'unMute') => {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({
+          event: 'command',
+          func: command,
+          args: [],
+        }),
+        '*'
+      );
+    },
+    []
+  );
 
   useEffect(() => {
     if (!isOpen || !activeStory) return;
@@ -283,6 +305,7 @@ export default function StoryViewer({
     if (!isOpen || activeStory?.mediaType !== 'video' || isYouTubeStory) return;
     const video = videoRef.current;
     if (!video) return;
+    video.muted = effectiveMuted;
 
     if (isPaused) {
       video.pause();
@@ -292,7 +315,25 @@ export default function StoryViewer({
         setIsPaused(true);
       });
     }
-  }, [activeStory?.id, activeStory?.mediaType, isOpen, isPaused, isYouTubeStory]);
+  }, [activeStory?.id, activeStory?.mediaType, effectiveMuted, isOpen, isPaused, isYouTubeStory]);
+
+  useEffect(() => {
+    if (!isOpen || activeStory?.mediaType !== 'video' || !isYouTubeStory) return;
+    if (isPaused) {
+      sendYouTubeCommand('pauseVideo');
+      return;
+    }
+    sendYouTubeCommand(effectiveMuted ? 'mute' : 'unMute');
+    sendYouTubeCommand('playVideo');
+  }, [
+    activeStory?.id,
+    activeStory?.mediaType,
+    effectiveMuted,
+    isOpen,
+    isPaused,
+    isYouTubeStory,
+    sendYouTubeCommand,
+  ]);
 
   const onTouchStart = (event: TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0];
@@ -391,7 +432,31 @@ export default function StoryViewer({
   const togglePlayPause = () => setIsPaused((prev) => !prev);
   const toggleMuted = () => {
     if (!canMuteStory) return;
-    setIsMuted((prev) => !prev);
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+
+    if (nextMuted) {
+      if (isYouTubeStory) {
+        sendYouTubeCommand('mute');
+      } else if (videoRef.current) {
+        videoRef.current.muted = true;
+      }
+      return;
+    }
+
+    hasUnlockedAudioRef.current = true;
+    if (isYouTubeStory) {
+      sendYouTubeCommand('unMute');
+      sendYouTubeCommand('playVideo');
+      setIsPaused(false);
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = false;
+    void video.play().catch(() => undefined);
+    setIsPaused(false);
   };
 
   return (
@@ -417,9 +482,18 @@ export default function StoryViewer({
               isYouTubeStory ? (
                 <iframe
                   key={`${activeStory.id}-youtube`}
+                  ref={iframeRef}
                   src={youtubeEmbedUrl}
                   className="h-full w-full"
                   title={activeStory.title}
+                  onLoad={() => {
+                    if (isPaused) {
+                      sendYouTubeCommand('pauseVideo');
+                      return;
+                    }
+                    sendYouTubeCommand(effectiveMuted ? 'mute' : 'unMute');
+                    sendYouTubeCommand('playVideo');
+                  }}
                   allow="autoplay; encrypted-media; picture-in-picture"
                   allowFullScreen={false}
                 />
@@ -432,7 +506,8 @@ export default function StoryViewer({
                   preload="metadata"
                   playsInline
                   autoPlay
-                  muted={isMuted}
+                  muted={effectiveMuted}
+                  defaultMuted={variant === 'reel'}
                   onEnded={goNext}
                   onError={onMediaError}
                   onLoadedMetadata={onVideoMetadata}

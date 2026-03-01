@@ -82,19 +82,6 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
             }`}
           />
 
-          <motion.span
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.15 }}
-            className={`absolute z-20 inline-flex w-fit items-center rounded-full text-white transition-all ${
-              variant === 'editorial'
-                ? 'left-2 top-2 max-w-[6.4rem] truncate rounded-full bg-red-500/90 px-1.5 py-0.5 text-[9px] font-semibold shadow-sm shadow-red-900/20 max-[360px]:left-1.5 max-[360px]:top-1.5 max-[360px]:max-w-[5.6rem] max-[360px]:px-1 max-[360px]:text-[8px] sm:left-3 sm:top-3 sm:max-w-[7.5rem] sm:px-2 sm:text-[10px]'
-                : 'left-4 top-4 bg-lokswami-red px-4 py-1.5 text-sm font-bold md:text-xs group-hover:shadow-lg group-hover:shadow-lokswami-red/50'
-            }`}
-          >
-            {article.category}
-          </motion.span>
-
           {variant === 'modern' ? (
             <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 lg:p-10">
               <h1 className="hi-heading mb-4 text-2xl font-extrabold text-white transition-colors group-hover:text-gray-100 sm:text-3xl md:text-4xl lg:text-5xl md:line-clamp-3">

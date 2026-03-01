@@ -19,9 +19,9 @@ export default function Header() {
   if (!mounted) return null;
 
   return (
-    <header className="fixed left-0 right-0 top-10 z-50 border-b border-zinc-200/85 bg-white/95 shadow-[var(--shadow-soft)] backdrop-blur-md transition-all duration-500 dark:border-zinc-800 dark:bg-zinc-950/95 md:top-12">
+    <header className="fixed left-0 right-0 top-9 z-50 border-b border-zinc-200/85 bg-white/95 shadow-[var(--shadow-soft)] backdrop-blur-md transition-all duration-500 dark:border-zinc-800 dark:bg-zinc-950/95 md:top-11">
       <div className="w-full px-2 sm:px-5 md:px-8">
-        <div className="flex h-12 items-center justify-between gap-1.5 sm:h-[3.7rem] sm:gap-3">
+        <div className="flex h-11 items-center justify-between gap-1.5 sm:h-[3.45rem] sm:gap-3">
           <div className="flex min-w-0 items-center">
             <div className="min-w-0 sm:hidden">
               <Logo size="sm" href="/main" />
@@ -127,7 +127,7 @@ export default function Header() {
       </div>
 
       <div className="border-t border-zinc-200/80 dark:border-zinc-800">
-        <div className="scrollbar-hide flex h-10 items-center overflow-x-auto touch-pan-x px-2 sm:px-4 md:h-11 md:px-8 lg:justify-center">
+        <div className="scrollbar-hide flex h-9 items-center overflow-x-auto touch-pan-x px-2 sm:px-4 md:h-10 md:px-8 lg:justify-center">
           <DesktopNav className="min-w-max py-0" />
         </div>
       </div>
