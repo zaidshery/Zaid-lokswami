@@ -54,7 +54,7 @@ export default function StoriesManagementPage() {
       setIsLoading(true);
       setError('');
       try {
-        const response = await fetch('/api/admin/stories?limit=300', {
+        const response = await fetch('/api/admin/stories?limit=all', {
           headers: {
             ...getAuthHeader(),
           },

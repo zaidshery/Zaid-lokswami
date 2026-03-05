@@ -65,7 +65,7 @@ export default function VideosManagementPage() {
       setIsLoading(true);
       setError('');
       try {
-        const response = await fetch('/api/admin/videos?limit=300', {
+        const response = await fetch('/api/admin/videos?limit=all', {
           headers: {
             ...getAuthHeader(),
           },

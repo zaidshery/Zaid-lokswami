@@ -41,7 +41,7 @@ export default function AdminEPaperListPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/admin/epapers?limit=300', {
+      const response = await fetch('/api/admin/epapers?limit=all', {
         headers: {
           ...getAuthHeader(),
         },

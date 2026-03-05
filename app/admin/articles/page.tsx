@@ -37,7 +37,7 @@ export default function ArticlesManagement() {
   const fetchArticles = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/articles?limit=100');
+      const response = await fetch('/api/admin/articles?limit=all');
       const data = await response.json();
       
       if (data.success) {

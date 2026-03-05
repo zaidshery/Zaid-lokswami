@@ -12,8 +12,17 @@ type EpaperPage = {
   height: number | undefined;
 };
 
-function parsePositiveInt(value: string | null, fallback: number, max: number) {
+function parsePageParam(value: string | null, fallback: number, max: number) {
   const parsed = Number.parseInt(value || '', 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, max);
+}
+
+function parseListLimit(value: string | null, fallback: number, max: number) {
+  const normalized = (value || '').trim().toLowerCase();
+  if (normalized === 'all') return null;
+
+  const parsed = Number.parseInt(normalized, 10);
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
   return Math.min(parsed, max);
 }
@@ -79,8 +88,11 @@ export async function GET(req: NextRequest) {
     const citySlug = (searchParams.get('citySlug') || '').trim().toLowerCase();
     const status = (searchParams.get('status') || '').trim().toLowerCase();
     const date = (searchParams.get('date') || '').trim();
-    const limit = parsePositiveInt(searchParams.get('limit'), 20, 200);
-    const page = parsePositiveInt(searchParams.get('page'), 1, 500);
+    const limit = parseListLimit(searchParams.get('limit'), 20, 200);
+    const page = parsePageParam(searchParams.get('page'), 1, 500);
+    const isUnbounded = limit === null;
+    const effectivePage = isUnbounded ? 1 : page;
+    const effectiveLimit = isUnbounded ? 0 : limit;
 
     const query: Record<string, unknown> = {};
 
@@ -118,10 +130,14 @@ export async function GET(req: NextRequest) {
       query.publishDate = { $gte: parsedDate, $lt: next };
     }
 
-    const skip = (page - 1) * limit;
+    const skip = (effectivePage - 1) * effectiveLimit;
+    let recordsQuery = EPaper.find(query).sort({ publishDate: -1, createdAt: -1 }).skip(skip);
+    if (!isUnbounded) {
+      recordsQuery = recordsQuery.limit(effectiveLimit);
+    }
 
     const [records, total] = await Promise.all([
-      EPaper.find(query).sort({ publishDate: -1, createdAt: -1 }).skip(skip).limit(limit).lean(),
+      recordsQuery.lean(),
       EPaper.countDocuments(query),
     ]);
 
@@ -156,9 +172,9 @@ export async function GET(req: NextRequest) {
       data,
       pagination: {
         total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
+        page: effectivePage,
+        limit: isUnbounded ? total : effectiveLimit,
+        pages: isUnbounded ? 1 : Math.ceil(total / effectiveLimit),
       },
     });
   } catch (error) {

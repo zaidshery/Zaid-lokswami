@@ -7,6 +7,7 @@ import {
   listStoredArticles,
 } from '@/lib/storage/articlesFile';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
+const FILE_STORE_UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
 
 type NormalizedSeo = {
   metaTitle: string;
@@ -17,6 +18,15 @@ type NormalizedSeo = {
 
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number.parseInt(value || '', 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return parsed;
+}
+
+function parseListLimit(value: string | null, fallback: number) {
+  const normalized = (value || '').trim().toLowerCase();
+  if (normalized === 'all') return null;
+
+  const parsed = Number.parseInt(normalized, 10);
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
   return parsed;
 }
@@ -123,19 +133,26 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get('category');
-    const limit = parsePositiveInt(searchParams.get('limit'), 10);
+    const limit = parseListLimit(searchParams.get('limit'), 10);
     const page = parsePositiveInt(searchParams.get('page'), 1);
+    const isUnbounded = limit === null;
+    const effectivePage = isUnbounded ? 1 : page;
+    const effectiveLimit = isUnbounded ? FILE_STORE_UNBOUNDED_LIMIT : limit;
 
     if (await shouldUseFileStore()) {
-      const { data, total } = await listStoredArticles({ category, limit, page });
+      const { data, total } = await listStoredArticles({
+        category,
+        limit: effectiveLimit,
+        page: effectivePage,
+      });
       return NextResponse.json({
         success: true,
         data,
         pagination: {
           total,
-          page,
-          limit,
-          pages: Math.ceil(total / limit),
+          page: effectivePage,
+          limit: isUnbounded ? total : effectiveLimit,
+          pages: isUnbounded ? 1 : Math.ceil(total / effectiveLimit),
         },
       });
     }
@@ -145,12 +162,12 @@ export async function GET(req: NextRequest) {
       query.category = category;
     }
 
-    const skip = (page - 1) * limit;
-    const articles = await Article.find(query)
-      .sort({ publishedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    const skip = (effectivePage - 1) * effectiveLimit;
+    let articlesQuery = Article.find(query).sort({ publishedAt: -1 }).skip(skip);
+    if (!isUnbounded) {
+      articlesQuery = articlesQuery.limit(effectiveLimit);
+    }
+    const articles = await articlesQuery.lean();
 
     const total = await Article.countDocuments(query);
 
@@ -159,9 +176,9 @@ export async function GET(req: NextRequest) {
       data: articles,
       pagination: {
         total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
+        page: effectivePage,
+        limit: isUnbounded ? total : effectiveLimit,
+        pages: isUnbounded ? 1 : Math.ceil(total / effectiveLimit),
       },
     });
   } catch (error) {

@@ -9,9 +9,19 @@ import {
 } from '@/lib/storage/videosFile';
 
 const VIDEO_CATEGORIES = NEWS_CATEGORIES.map((category) => category.nameEn);
+const FILE_STORE_UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
 
 function parsePositiveInt(value: string | null, fallback: number, max = 100) {
   const parsed = Number.parseInt(value || '', 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, max);
+}
+
+function parseListLimit(value: string | null, fallback: number, max = 200) {
+  const normalized = (value || '').trim().toLowerCase();
+  if (normalized === 'all') return null;
+
+  const parsed = Number.parseInt(normalized, 10);
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
   return Math.min(parsed, max);
 }
@@ -112,8 +122,11 @@ export async function GET(req: NextRequest) {
     const publishedParam = parseBooleanParam(searchParams.get('published'));
     const effectivePublished =
       typeof publishedParam === 'boolean' ? publishedParam : isAdmin ? undefined : true;
-    const limit = parsePositiveInt(searchParams.get('limit'), 20, 200);
+    const limit = parseListLimit(searchParams.get('limit'), 20, 200);
     const page = parsePositiveInt(searchParams.get('page'), 1, 100000);
+    const isUnbounded = limit === null;
+    const effectivePage = isUnbounded ? 1 : page;
+    const effectiveLimit = isUnbounded ? FILE_STORE_UNBOUNDED_LIMIT : limit;
 
     if (await shouldUseFileStore()) {
       const { data, total } = await listStoredVideos({
@@ -122,8 +135,8 @@ export async function GET(req: NextRequest) {
         published: effectivePublished,
         search,
         sort,
-        limit,
-        page,
+        limit: effectiveLimit,
+        page: effectivePage,
       });
 
       return NextResponse.json({
@@ -131,9 +144,9 @@ export async function GET(req: NextRequest) {
         data,
         pagination: {
           total,
-          page,
-          limit,
-          pages: Math.ceil(total / limit),
+          page: effectivePage,
+          limit: isUnbounded ? total : effectiveLimit,
+          pages: isUnbounded ? 1 : Math.ceil(total / effectiveLimit),
         },
       });
     }
@@ -168,12 +181,13 @@ export async function GET(req: NextRequest) {
       sortQuery = { shortsRank: -1, publishedAt: -1 };
     }
 
-    const skip = (page - 1) * limit;
-    const videos = await Video.find(query)
-      .sort(sortQuery)
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    const skip = (effectivePage - 1) * effectiveLimit;
+    let videosQuery = Video.find(query).sort(sortQuery).skip(skip);
+    if (!isUnbounded) {
+      videosQuery = videosQuery.limit(effectiveLimit);
+    }
+
+    const videos = await videosQuery.lean();
 
     const total = await Video.countDocuments(query);
 
@@ -182,9 +196,9 @@ export async function GET(req: NextRequest) {
       data: videos,
       pagination: {
         total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
+        page: effectivePage,
+        limit: isUnbounded ? total : effectiveLimit,
+        pages: isUnbounded ? 1 : Math.ceil(total / effectiveLimit),
       },
     });
   } catch (error) {
