@@ -31,6 +31,14 @@ function asObject(value: unknown) {
     : {};
 }
 
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
 function toIsoDate(value: unknown) {
   const parsed = new Date(
     value instanceof Date || typeof value === 'string' || typeof value === 'number'
@@ -86,8 +94,8 @@ function mapMongoItem(raw: Record<string, unknown>): PublicEPaperItem | null {
     cityName: String(raw.cityName || ''),
     title: String(raw.title || ''),
     publishDate,
-    thumbnailPath: String(raw.thumbnailPath || ''),
-    pdfPath: String(raw.pdfPath || ''),
+    thumbnailPath: firstNonEmptyString(raw.thumbnailPath, raw.thumbnail),
+    pdfPath: firstNonEmptyString(raw.pdfPath, raw.pdfUrl),
     status: 'published',
     pageCount,
     pagesWithImage: pages.filter((page) => Boolean(page.imagePath.trim())).length,
@@ -112,8 +120,8 @@ function mapFileItem(raw: Record<string, unknown>): PublicEPaperItem | null {
     cityName,
     title: String(raw.title || ''),
     publishDate,
-    thumbnailPath: String(raw.thumbnail || ''),
-    pdfPath: String(raw.pdfUrl || ''),
+    thumbnailPath: firstNonEmptyString(raw.thumbnailPath, raw.thumbnail),
+    pdfPath: firstNonEmptyString(raw.pdfPath, raw.pdfUrl),
     status: 'published',
     pageCount: Math.max(toPositiveInt(raw.pages), 1),
     pagesWithImage: 0,
@@ -214,7 +222,7 @@ export async function GET(req: NextRequest) {
       model: EPaper,
       mongoFilter: filters.query,
       mongoProjection:
-        '_id citySlug cityName title publishDate thumbnailPath pdfPath status pageCount pages createdAt',
+        '_id citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl status pageCount pages createdAt',
       limit,
       // Logical dateField for e-paper cursoring is editionDate.
       dateField: 'editionDate',

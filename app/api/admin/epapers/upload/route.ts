@@ -69,6 +69,15 @@ function formatPublishDateFolder(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function resolvePdfFormat(fileName: string, uploadFormat: string) {
+  const fromUpload = uploadFormat.trim().toLowerCase();
+  if (fromUpload) return fromUpload;
+
+  const name = fileName.trim().toLowerCase();
+  if (name.endsWith('.pdf')) return 'pdf';
+  return 'pdf';
+}
+
 function mapEpaper(epaper: unknown) {
   const source =
     typeof epaper === 'object' && epaper !== null ? (epaper as Record<string, unknown>) : {};
@@ -80,6 +89,8 @@ function mapEpaper(epaper: unknown) {
     title: String(source.title || ''),
     publishDate: Number.isNaN(publishDate.getTime()) ? '' : publishDate.toISOString().slice(0, 10),
     pdfPath: String(source.pdfPath || ''),
+    pdfPublicId: String(source.pdfPublicId || ''),
+    pdfFormat: String(source.pdfFormat || ''),
     thumbnailPath: String(source.thumbnailPath || ''),
     pageCount: Number(source.pageCount || 0),
     pages: Array.isArray(source.pages) ? source.pages : [],
@@ -299,6 +310,8 @@ export async function POST(req: NextRequest) {
       title,
       publishDate,
       pdfPath: pdfUpload.secureUrl,
+      pdfPublicId: pdfUpload.publicId,
+      pdfFormat: resolvePdfFormat(pdf.name || 'epaper.pdf', String(pdfUpload.format || '')),
       thumbnailPath: thumbnailUpload.secureUrl,
       pageCount,
       pages,

@@ -16,7 +16,12 @@ export interface IEPaper {
   title: string;
   publishDate: Date;
   pdfPath: string;
+  pdfPublicId?: string;
+  pdfFormat?: string;
   thumbnailPath: string;
+  // Legacy compatibility fields from older schema revisions.
+  pdfUrl?: string;
+  thumbnail?: string;
   pageCount: number;
   pages: IEPaperPage[];
   status: EPaperStatus;
@@ -41,7 +46,11 @@ const EPaperSchema = new mongoose.Schema<IEPaper>(
     title: { type: String, required: true, trim: true, maxlength: 220 },
     publishDate: { type: Date, required: true },
     pdfPath: { type: String, required: true, trim: true, maxlength: 500 },
+    pdfPublicId: { type: String, trim: true, maxlength: 500, default: '' },
+    pdfFormat: { type: String, trim: true, maxlength: 30, default: 'pdf' },
     thumbnailPath: { type: String, required: true, trim: true, maxlength: 500 },
+    pdfUrl: { type: String, trim: true, maxlength: 500, default: '' },
+    thumbnail: { type: String, trim: true, maxlength: 500, default: '' },
     pageCount: { type: Number, required: true, min: 1, max: 1000 },
     pages: { type: [EPaperPageSchema], default: [] },
     status: { type: String, enum: ['draft', 'published'], default: 'draft' },

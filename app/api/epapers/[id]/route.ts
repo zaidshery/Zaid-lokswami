@@ -21,6 +21,14 @@ function asObject(value: unknown) {
     : {};
 }
 
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
 function toPositiveInt(value: unknown) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return 0;
@@ -165,8 +173,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
           cityName: String(stored.city || ''),
           title: String(stored.title || ''),
           publishDate: toDateLabel(stored.publishDate),
-          pdfPath: String(stored.pdfUrl || ''),
-          thumbnailPath: String(stored.thumbnail || ''),
+          pdfPath: firstNonEmptyString(stored.pdfPath, stored.pdfUrl),
+          thumbnailPath: firstNonEmptyString(stored.thumbnailPath, stored.thumbnail),
           pageCount,
           pages,
           status: 'published',
@@ -211,6 +219,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       .sort({ pageNumber: 1, createdAt: 1 })
       .lean();
     const pages = normalizePages(epaper.pages);
+    const epaperSource = asObject(epaper);
 
     return NextResponse.json({
       success: true,
@@ -220,9 +229,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
         cityName: String(epaper.cityName || ''),
         title: String(epaper.title || ''),
         publishDate: toDateLabel(epaper.publishDate),
-        pdfPath: String(epaper.pdfPath || ''),
-        thumbnailPath: String(epaper.thumbnailPath || ''),
-        pageCount: Math.max(toPositiveInt(epaper.pageCount), pages.length),
+        pdfPath: firstNonEmptyString(epaperSource.pdfPath, epaperSource.pdfUrl),
+        thumbnailPath: firstNonEmptyString(epaperSource.thumbnailPath, epaperSource.thumbnail),
+        pageCount: Math.max(toPositiveInt(epaperSource.pageCount), pages.length),
         pages,
         status: 'published',
         articles: articles.map(mapArticle),

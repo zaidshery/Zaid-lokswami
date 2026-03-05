@@ -272,7 +272,7 @@ export default function AdminEPaperDetailPage() {
         </Link>
 
         <a
-          href={epaper.pdfPath}
+          href={`/api/public/epapers/${encodeURIComponent(String(epaper._id || ''))}/pdf`}
           target="_blank"
           rel="noreferrer"
           className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"

@@ -31,6 +31,14 @@ function asObject(value: unknown) {
     : {};
 }
 
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
 function toPositiveInt(value: unknown) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return 0;
@@ -72,8 +80,8 @@ function mapEpaper(epaper: unknown) {
     cityName: String(source.cityName || ''),
     title: String(source.title || ''),
     publishDate: Number.isNaN(publishDate.getTime()) ? '' : publishDate.toISOString().slice(0, 10),
-    pdfPath: String(source.pdfPath || ''),
-    thumbnailPath: String(source.thumbnailPath || ''),
+    pdfPath: firstNonEmptyString(source.pdfPath, source.pdfUrl),
+    thumbnailPath: firstNonEmptyString(source.thumbnailPath, source.thumbnail),
     pageCount: Math.max(toPositiveInt(source.pageCount), pages.length),
     pages,
     status: source.status === 'published' ? 'published' : 'draft',
@@ -353,11 +361,12 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
           )
           .filter(Boolean)
       : [];
+    const epaperSource = asObject(epaper);
 
     await Promise.all(
       [
-        String(epaper.pdfPath || ''),
-        String(epaper.thumbnailPath || ''),
+        firstNonEmptyString(epaperSource.pdfPath, epaperSource.pdfUrl),
+        firstNonEmptyString(epaperSource.thumbnailPath, epaperSource.thumbnail),
         ...pageImagePaths,
       ].map((assetPath) => deleteAssetFile(assetPath).catch(() => undefined))
     );

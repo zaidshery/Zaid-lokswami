@@ -26,6 +26,11 @@ type ParsedCloudinaryAsset = {
   resourceType: Exclude<CloudinaryResourceType, 'auto'>;
 };
 
+type SignedRawUploadUrlOptions = {
+  publicId: string;
+  format?: string;
+};
+
 let cloudinaryConfigured = false;
 
 function ensureCloudinaryConfigured() {
@@ -190,4 +195,28 @@ export async function deleteCloudinaryAssetByUrl(value: string) {
   const parsed = parseCloudinaryAssetFromUrl(value);
   if (!parsed) return;
   await deleteCloudinaryAssetByPublicId(parsed.publicId, parsed.resourceType);
+}
+
+function normalizeDeliveryFormat(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return '';
+  return trimmed.replace(/[^a-z0-9]/g, '');
+}
+
+export function buildSignedCloudinaryRawUploadUrl(options: SignedRawUploadUrlOptions) {
+  const publicId = normalizePublicId(options.publicId || '');
+  if (!publicId) {
+    throw new Error('Invalid Cloudinary public ID');
+  }
+
+  const format = normalizeDeliveryFormat(options.format || '');
+  ensureCloudinaryConfigured();
+
+  return cloudinary.url(publicId, {
+    resource_type: 'raw',
+    type: 'upload',
+    sign_url: true,
+    secure: true,
+    ...(format ? { format } : {}),
+  });
 }

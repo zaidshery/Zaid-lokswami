@@ -151,14 +151,10 @@ function isAbortError(error: unknown) {
   return false;
 }
 
-function resolvePublicUrl(value: string, origin: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  try {
-    return new URL(trimmed, origin).toString();
-  } catch {
-    return '';
-  }
+function buildEpaperPdfProxyUrl(epaperId: string) {
+  const id = epaperId.trim();
+  if (!id) return '';
+  return `/api/public/epapers/${encodeURIComponent(id)}/pdf`;
 }
 
 function readSavedPagesFromStorage() {
@@ -474,11 +470,11 @@ export default function EPaperPageClient({
   const previewIsDataUrl = previewSrc.startsWith('data:');
   const previewWidth = activePageMeta?.width || 1200;
   const previewHeight = activePageMeta?.height || 1600;
-  const resolvedPdfUrl = useMemo(() => {
+  const pdfProxyUrl = useMemo(() => {
     if (!activePaper) return '';
-    if (typeof window === 'undefined') return activePaper.pdfPath || '';
-    return resolvePublicUrl(String(activePaper.pdfPath || ''), window.location.origin);
+    return buildEpaperPdfProxyUrl(String(activePaper._id || ''));
   }, [activePaper]);
+  const pdfUrlForOpen = pdfProxyUrl;
 
   useEffect(() => {
     let cancelled = false;
@@ -494,7 +490,10 @@ export default function EPaperPageClient({
       setLoadingFallback(true);
       setFallbackError('');
       try {
-        const rendered = await renderPdfPagePreviewFromUrl(activePaper.pdfPath, {
+        if (!pdfProxyUrl) {
+          throw new Error('PDF URL is missing');
+        }
+        const rendered = await renderPdfPagePreviewFromUrl(pdfProxyUrl, {
           page: activePage,
           targetWidth: 1600,
         });
@@ -513,7 +512,7 @@ export default function EPaperPageClient({
     return () => {
       cancelled = true;
     };
-  }, [activePaper, activePage, activePageImage]);
+  }, [activePaper, activePage, activePageImage, pdfProxyUrl]);
 
   useEffect(() => {
     if (!activePaper) return;
@@ -545,10 +544,10 @@ export default function EPaperPageClient({
   }, [activePaper]);
 
   const openPdfInNewTab = () => {
-    if (!resolvedPdfUrl) return;
-    const opened = window.open(resolvedPdfUrl, '_blank', 'noopener,noreferrer');
+    if (!pdfUrlForOpen) return;
+    const opened = window.open(pdfUrlForOpen, '_blank', 'noopener,noreferrer');
     if (!opened) {
-      window.location.href = resolvedPdfUrl;
+      window.location.href = pdfUrlForOpen;
     }
   };
 
@@ -840,7 +839,7 @@ export default function EPaperPageClient({
                   <button
                     type="button"
                     onClick={openPdfInNewTab}
-                    disabled={!resolvedPdfUrl}
+                    disabled={!pdfUrlForOpen}
                     className="inline-flex h-8 items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
                   >
                     <span className="hidden sm:inline">{t.openPdf}</span>

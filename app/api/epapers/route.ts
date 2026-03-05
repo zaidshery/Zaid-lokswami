@@ -33,6 +33,14 @@ function asObject(value: unknown) {
     : {};
 }
 
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
 function toPositiveInt(value: unknown) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return 0;
@@ -88,8 +96,8 @@ function mapStoredRecord(record: Record<string, unknown>) {
     cityName,
     title: String(record.title || ''),
     publishDate: toDateLabel(record.publishDate),
-    thumbnailPath: String(record.thumbnail || ''),
-    pdfPath: String(record.pdfUrl || ''),
+    thumbnailPath: firstNonEmptyString(record.thumbnailPath, record.thumbnail),
+    pdfPath: firstNonEmptyString(record.pdfPath, record.pdfUrl),
     status: 'published' as const,
     pageCount,
     pagesWithImage: 0,
@@ -189,8 +197,8 @@ export async function GET(req: NextRequest) {
         cityName: String(item.cityName || ''),
         title: String(item.title || ''),
         publishDate: toDateLabel(item.publishDate),
-        thumbnailPath: String(item.thumbnailPath || ''),
-        pdfPath: String(item.pdfPath || ''),
+        thumbnailPath: firstNonEmptyString(item.thumbnailPath, item.thumbnail),
+        pdfPath: firstNonEmptyString(item.pdfPath, item.pdfUrl),
         status: 'published',
         pageCount,
         pagesWithImage,

@@ -39,6 +39,14 @@ function asObject(value: unknown) {
     : {};
 }
 
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
 function toPositiveInt(value: unknown) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return 0;
@@ -155,8 +163,8 @@ export async function GET(req: NextRequest) {
         cityName: String(item.cityName || ''),
         title: String(item.title || ''),
         publishDate: toIsoDate(item.publishDate),
-        pdfPath: String(item.pdfPath || ''),
-        thumbnailPath: String(item.thumbnailPath || ''),
+        pdfPath: firstNonEmptyString(item.pdfPath, item.pdfUrl),
+        thumbnailPath: firstNonEmptyString(item.thumbnailPath, item.thumbnail),
         pageCount,
         pages,
         status: item.status === 'published' ? 'published' : 'draft',
