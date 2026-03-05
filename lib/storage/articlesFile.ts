@@ -251,6 +251,10 @@ export async function listStoredArticles(params: {
   return { data, total: filtered.length };
 }
 
+export async function listAllStoredArticles() {
+  return readAllArticles();
+}
+
 export async function getStoredArticleById(id: string) {
   const all = await readAllArticles();
   return all.find((item) => item._id === id) || null;

@@ -109,6 +109,10 @@ export async function listStoredStories(params: {
   return { data, total: filtered.length };
 }
 
+export async function listAllStoredStories() {
+  return readAllStories();
+}
+
 export async function getStoredStoryById(id: string) {
   const all = await readAllStories();
   return all.find((item) => item._id === id) || null;

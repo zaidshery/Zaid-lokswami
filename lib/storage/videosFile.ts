@@ -14,6 +14,7 @@ export interface StoredVideo {
   isPublished: boolean;
   shortsRank: number;
   views: number;
+  createdAt: string;
   publishedAt: string;
   updatedAt: string;
 }
@@ -29,6 +30,7 @@ export interface CreateVideoInput {
   isPublished?: boolean;
   shortsRank?: number;
   views?: number;
+  createdAt?: string;
   publishedAt?: string;
 }
 
@@ -111,6 +113,14 @@ export async function listStoredVideos(params: {
   return { data, total: filtered.length };
 }
 
+export async function listAllStoredVideos() {
+  const all = await readAllVideos();
+  return all.map((item) => ({
+    ...item,
+    createdAt: item.createdAt || item.publishedAt || new Date().toISOString(),
+  }));
+}
+
 export async function getStoredVideoById(id: string) {
   const all = await readAllVideos();
   return all.find((item) => item._id === id) || null;
@@ -135,6 +145,7 @@ export async function createStoredVideo(input: CreateVideoInput) {
     isPublished: input.isPublished === false ? false : true,
     shortsRank: Number.isFinite(input.shortsRank) ? Number(input.shortsRank) : 0,
     views: Number.isFinite(input.views) ? Number(input.views) : 0,
+    createdAt: input.createdAt || input.publishedAt || now,
     publishedAt: input.publishedAt || now,
     updatedAt: now,
   };

@@ -51,6 +51,8 @@ const EPaperSchema = new mongoose.Schema<IEPaper>(
 
 EPaperSchema.index({ citySlug: 1, publishDate: 1 }, { unique: true });
 EPaperSchema.index({ status: 1, publishDate: -1 });
+// Cursor pagination maps logical editionDate to publishDate in this schema.
+EPaperSchema.index({ publishDate: -1, _id: -1 });
 
 const EPaper =
   (mongoose.models.EPaper as mongoose.Model<IEPaper> | undefined) ||

@@ -49,17 +49,25 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+const HOME_LATEST_INITIAL_COUNT = 8;
+const HOME_LATEST_PAGE_STEP = 8;
+
 export default function HomePage() {
   const { language } = useAppStore();
   const topStoriesVariant: 'editorial' | 'modern' = 'editorial';
   const categoryScrollerRef = useRef<HTMLDivElement | null>(null);
   const [feedArticles, setFeedArticles] = useState<Article[]>(mockArticles);
   const [cmsStories, setCmsStories] = useState<VisualStory[]>([]);
+  const [visibleLatestNewsCount, setVisibleLatestNewsCount] = useState(
+    HOME_LATEST_INITIAL_COUNT
+  );
   const heroArticles = feedArticles.slice(0, 5);
   const trendingArticles = feedArticles.filter((article) => article.isTrending);
   const spotlightDesktop = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 4);
   const spotlightTablet = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 3);
-  const latestNews = (feedArticles.length > 7 ? feedArticles.slice(5, 12) : feedArticles.slice(0, 12));
+  const latestNews = feedArticles.slice(5);
+  const visibleLatestNews = latestNews.slice(0, visibleLatestNewsCount);
+  const hasMoreLatestNews = visibleLatestNewsCount < latestNews.length;
   const featuredSidebar: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 5);
   const visualStories = useMemo(
     () =>
@@ -146,6 +154,10 @@ export default function HomePage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setVisibleLatestNewsCount(HOME_LATEST_INITIAL_COUNT);
+  }, [feedArticles.length]);
 
   return (
     <div className="relative pb-3 [--section-gap:1rem] sm:[--section-gap:1.25rem] lg:[--section-gap:1.5rem]">
@@ -287,13 +299,16 @@ export default function HomePage() {
               <span className="h-5 w-1 rounded-full bg-orange-500 sm:h-6 sm:w-1.5"></span>
               Latest News
             </h2>
-            <button className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-600 transition-colors hover:text-orange-500 sm:text-sm">
+            <Link
+              href="/main/latest"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-600 transition-colors hover:text-orange-500 sm:text-sm"
+            >
               View All <ArrowRight className="w-4 h-4" />
-            </button>
+            </Link>
           </div>
 
           <div className="space-y-2.5 sm:space-y-3">
-            {latestNews.map((article, index) => (
+            {visibleLatestNews.map((article, index) => (
               <NewsCard 
                 key={article.id} 
                 article={article} 
@@ -303,11 +318,21 @@ export default function HomePage() {
             ))}
           </div>
 
-          <div className="flex justify-center pt-3.5 sm:pt-5">
-            <button className="rounded-full border border-zinc-300 bg-white px-6 py-2 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:px-8 sm:py-3 sm:text-sm">
-              Load More Stories
-            </button>
-          </div>
+          {hasMoreLatestNews ? (
+            <div className="flex justify-center pt-3.5 sm:pt-5">
+              <button
+                type="button"
+                onClick={() =>
+                  setVisibleLatestNewsCount((current) =>
+                    Math.min(current + HOME_LATEST_PAGE_STEP, latestNews.length)
+                  )
+                }
+                className="rounded-full border border-zinc-300 bg-white px-6 py-2 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:px-8 sm:py-3 sm:text-sm"
+              >
+                Load More Stories
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <aside className="space-y-3 lg:col-span-4 lg:sticky lg:top-24 lg:self-start lg:space-y-4">

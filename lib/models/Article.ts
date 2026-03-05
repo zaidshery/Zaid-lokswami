@@ -81,5 +81,7 @@ const ArticleSchema = new mongoose.Schema<IArticle>({
   revisions: { type: [RevisionSchema], default: [] },
 });
 
+ArticleSchema.index({ publishedAt: -1, _id: -1 });
+
 export default mongoose.models.Article || mongoose.model('Article', ArticleSchema);
 

@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Eye,
   Heart,
@@ -12,17 +15,22 @@ import {
   Share2,
   Volume2,
   VolumeX,
-  X,
 } from 'lucide-react';
 import formatNumber from '@/lib/utils/formatNumber';
-import { useAppStore } from '@/lib/store/appStore';
 
 const VIEWPORT_HEIGHT_CLASS = 'h-[calc(100dvh-12.9rem)] md:h-[calc(100dvh-13.4rem)]';
 const IMMERSIVE_VIEWPORT_HEIGHT_CLASS = 'h-vh-dvh h-dvh';
 const SHORTS_SETTINGS_KEY = 'lokswami.shorts.settings.v1';
 const PLAYBACK_SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+const QUALITY_OPTIONS = [
+  { id: 'auto-360p', label: 'Auto (360p)' },
+  { id: '720p', label: '720p' },
+  { id: '1080p', label: '1080p' },
+] as const;
 
 type PlaybackSpeed = (typeof PLAYBACK_SPEED_OPTIONS)[number];
+type QualityOption = (typeof QUALITY_OPTIONS)[number]['id'];
+type SettingsPanelView = 'main' | 'playback-speed' | 'quality';
 
 type ShortsSettings = {
   autoAdvance: boolean;
@@ -30,6 +38,7 @@ type ShortsSettings = {
   defaultVolume: number;
   muteByDefault: boolean;
   playbackSpeed: PlaybackSpeed;
+  quality: QualityOption;
   dataSaver: boolean;
 };
 
@@ -50,6 +59,7 @@ interface VideoShortsFeedProps {
   videos: ShortsVideoItem[];
   language: 'hi' | 'en';
   immersiveMode?: boolean;
+  onReachEnd?: () => void;
 }
 
 function getYouTubeId(urlString: string) {
@@ -111,6 +121,23 @@ function normalizePlaybackSpeed(value: unknown): PlaybackSpeed {
   return 1;
 }
 
+function normalizeQualityOption(value: unknown): QualityOption {
+  const candidate = String(value || '').trim();
+  if (QUALITY_OPTIONS.some((option) => option.id === candidate)) {
+    return candidate as QualityOption;
+  }
+  return 'auto-360p';
+}
+
+function formatPlaybackSpeedLabel(speed: PlaybackSpeed) {
+  if (speed === 1) return '1x / Normal';
+  return `${speed}x`;
+}
+
+function formatQualityLabel(quality: QualityOption) {
+  return QUALITY_OPTIONS.find((option) => option.id === quality)?.label || 'Auto (360p)';
+}
+
 function normalizeShortsSettings(source: unknown): ShortsSettings {
   if (!source || typeof source !== 'object') {
     return {
@@ -119,6 +146,7 @@ function normalizeShortsSettings(source: unknown): ShortsSettings {
       defaultVolume: 70,
       muteByDefault: true,
       playbackSpeed: 1,
+      quality: 'auto-360p',
       dataSaver: false,
     };
   }
@@ -131,6 +159,7 @@ function normalizeShortsSettings(source: unknown): ShortsSettings {
     defaultVolume: clampVolume(Number(raw.defaultVolume)),
     muteByDefault: raw.muteByDefault !== false,
     playbackSpeed: normalizePlaybackSpeed(raw.playbackSpeed),
+    quality: normalizeQualityOption(raw.quality),
     dataSaver: raw.dataSaver === true,
   };
 }
@@ -139,24 +168,28 @@ export default function VideoShortsFeed({
   videos,
   language,
   immersiveMode = false,
+  onReachEnd,
 }: VideoShortsFeedProps) {
-  const toggleLanguage = useAppStore((state) => state.toggleLanguage);
   const feedRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Array<HTMLElement | null>>([]);
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
   const iframeRefs = useRef<Array<HTMLIFrameElement | null>>([]);
+  const actionPillRef = useRef<HTMLDivElement | null>(null);
+  const settingsPanelRef = useRef<HTMLDivElement | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-  const settingsTouchStartYRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
   const isAnimatingRef = useRef(false);
   const hasUnlockedAudioRef = useRef(false);
   const hasHydratedSettingsRef = useRef(false);
+  const lastAutoReachEndLengthRef = useRef(-1);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsPanelView, setSettingsPanelView] = useState<SettingsPanelView>('main');
+  const [isVolumeExpanded, setIsVolumeExpanded] = useState(false);
   const [settings, setSettings] = useState<ShortsSettings>(() =>
     normalizeShortsSettings(null)
   );
@@ -172,6 +205,15 @@ export default function VideoShortsFeed({
     if (activeIndex <= videos.length - 1) return;
     setActiveIndex(Math.max(0, videos.length - 1));
   }, [videos.length, activeIndex]);
+
+  useEffect(() => {
+    if (!onReachEnd || videos.length === 0) return;
+    if (activeIndex < Math.max(0, videos.length - 2)) return;
+    if (lastAutoReachEndLengthRef.current === videos.length) return;
+
+    lastAutoReachEndLengthRef.current = videos.length;
+    onReachEnd();
+  }, [activeIndex, onReachEnd, videos.length]);
 
   useEffect(() => {
     setIsPaused(false);
@@ -217,10 +259,21 @@ export default function VideoShortsFeed({
 
   useEffect(() => {
     if (!isSettingsOpen || typeof document === 'undefined') return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (settingsPanelRef.current?.contains(target)) return;
+      if (actionPillRef.current?.contains(target)) return;
+      setIsSettingsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown, { passive: true });
+
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
     };
   }, [isSettingsOpen]);
 
@@ -286,15 +339,18 @@ export default function VideoShortsFeed({
   const viewportHeightClass = immersiveMode
     ? IMMERSIVE_VIEWPORT_HEIGHT_CLASS
     : VIEWPORT_HEIGHT_CLASS;
-  const actionRailPositionClass = 'right-3 top-1/2 -translate-y-1/2 md:right-6';
-  const settingsButtonPositionClass =
-    'right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] md:right-6 md:top-[calc(env(safe-area-inset-top)+1rem)]';
+  const actionPillPositionClass = 'right-3 md:right-6 bottom-[92px] md:bottom-[120px]';
+  const settingsPanelPositionClass = 'right-[60px] md:right-[84px] bottom-[92px] md:bottom-[120px]';
   const shellClass = immersiveMode
     ? 'h-vh-dvh w-full'
     : 'mx-auto w-full max-w-none lg:max-w-[480px]';
   const feedClass = immersiveMode
     ? `scrollbar-hide ${viewportHeightClass} w-full snap-y snap-mandatory overflow-y-auto overscroll-y-contain rounded-none border-0 bg-black shadow-none touch-pan-y`
     : `scrollbar-hide ${viewportHeightClass} snap-y snap-mandatory overflow-y-auto overscroll-y-contain rounded-none border-0 bg-zinc-950 shadow-none lg:rounded-[28px] lg:border lg:border-zinc-800 lg:shadow-[0_34px_80px_rgba(0,0,0,0.55)]`;
+  const actionIconButtonClass =
+    'inline-flex h-10 w-10 items-center justify-center text-white/90 opacity-80 transition-opacity duration-200 hover:opacity-100 active:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black md:h-12 md:w-12';
+  const settingsRowClass =
+    'flex h-12 w-full items-center justify-between rounded-xl px-3 text-left transition-colors hover:bg-white/5 active:bg-white/10 md:h-14 md:px-4';
 
   const sendYouTubeCommand = (
     iframe: HTMLIFrameElement | null,
@@ -374,6 +430,11 @@ export default function VideoShortsFeed({
   };
 
   const scrollToIndex = useCallback((index: number) => {
+    if (!videos.length) return;
+    if (index > videos.length - 1) {
+      onReachEnd?.();
+    }
+
     const bounded = Math.max(0, Math.min(index, videos.length - 1));
     const target = cardRefs.current[bounded];
     const container = feedRef.current;
@@ -402,7 +463,7 @@ export default function VideoShortsFeed({
     };
 
     requestAnimationFrame(step);
-  }, [videos.length]);
+  }, [onReachEnd, videos.length]);
 
   useEffect(() => {
     const root = feedRef.current;
@@ -623,23 +684,16 @@ export default function VideoShortsFeed({
     setIsPaused(false);
   };
 
-  const handleSettingsSheetTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    const touch = event.touches[0];
-    settingsTouchStartYRef.current = touch ? touch.clientY : null;
+  const openSettingsPanel = () => {
+    setIsVolumeExpanded(false);
+    setSettingsPanelView('main');
+    setIsSettingsOpen(true);
   };
 
-  const handleSettingsSheetTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (settingsTouchStartYRef.current === null) return;
-    const touch = event.changedTouches[0];
-    const deltaY = touch ? touch.clientY - settingsTouchStartYRef.current : 0;
-    settingsTouchStartYRef.current = null;
-    if (deltaY > 60) {
-      setIsSettingsOpen(false);
-    }
-  };
-
-  const handleLanguageQuickToggle = () => {
-    toggleLanguage();
+  const closeSettingsPanel = () => {
+    setIsSettingsOpen(false);
+    setIsVolumeExpanded(false);
+    setSettingsPanelView('main');
   };
 
   useEffect(() => {
@@ -832,31 +886,21 @@ export default function VideoShortsFeed({
         </div>
 
         {activeVideo ? (
-          <button
-            type="button"
-            onClick={() => setIsSettingsOpen(true)}
-            className={`absolute z-30 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/90 shadow-[0_10px_24px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:bg-black/50 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black md:h-11 md:w-11 ${settingsButtonPositionClass}`}
-            aria-label="Settings"
+          <div
+            ref={actionPillRef}
+            className={`absolute z-30 pointer-events-auto ${actionPillPositionClass}`}
             data-swipe-ignore="true"
           >
-            <SlidersHorizontal className="h-5 w-5 md:h-6 md:w-6" />
-          </button>
-        ) : null}
-
-        {activeVideo ? (
-          <div className={`pointer-events-none absolute z-20 ${actionRailPositionClass}`}>
-            <div className="pointer-events-auto flex flex-col items-center gap-3 rounded-full border border-white/10 bg-black/35 p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-md md:p-2.5">
+            <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/40 p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-md md:gap-4 md:p-3">
               <button
                 type="button"
                 onClick={handleLike}
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-full text-white/90 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black md:h-11 md:w-11 ${
-                  likedIds[activeVideo.id] ? 'opacity-100 text-red-400' : 'opacity-80'
-                }`}
+                className={`${actionIconButtonClass} ${likedIds[activeVideo.id] ? 'opacity-100 text-red-400' : ''}`}
                 aria-label={language === 'hi' ? '\u0932\u093e\u0907\u0915' : 'Like'}
                 data-swipe-ignore="true"
               >
                 <Heart
-                  className={`h-[22px] w-[22px] md:h-[25px] md:w-[25px] ${
+                  className={`h-[22px] w-[22px] md:h-[26px] md:w-[26px] ${
                     likedIds[activeVideo.id] ? 'fill-current' : ''
                   }`}
                 />
@@ -865,206 +909,265 @@ export default function VideoShortsFeed({
               <button
                 type="button"
                 onClick={handleMuteToggle}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white/90 opacity-80 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black md:h-11 md:w-11"
+                className={actionIconButtonClass}
                 aria-label={isMuted ? 'Unmute video' : 'Mute video'}
                 data-swipe-ignore="true"
               >
                 {isMuted ? (
-                  <VolumeX className="h-[22px] w-[22px] md:h-[25px] md:w-[25px]" />
+                  <VolumeX className="h-[22px] w-[22px] md:h-[26px] md:w-[26px]" />
                 ) : (
-                  <Volume2 className="h-[22px] w-[22px] md:h-[25px] md:w-[25px]" />
+                  <Volume2 className="h-[22px] w-[22px] md:h-[26px] md:w-[26px]" />
                 )}
               </button>
 
               <button
                 type="button"
                 onClick={handleShare}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white/90 opacity-80 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black md:h-11 md:w-11"
+                className={actionIconButtonClass}
                 aria-label={language === 'hi' ? '\u0936\u0947\u092f\u0930 \u0915\u0930\u0947\u0902' : 'Share'}
                 data-swipe-ignore="true"
               >
-                <Share2 className="h-[22px] w-[22px] md:h-[25px] md:w-[25px]" />
+                <Share2 className="h-[22px] w-[22px] md:h-[26px] md:w-[26px]" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSettingsOpen) {
+                    closeSettingsPanel();
+                    return;
+                  }
+                  openSettingsPanel();
+                }}
+                className={actionIconButtonClass}
+                aria-label={language === 'hi' ? '\u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938' : 'Settings'}
+                data-swipe-ignore="true"
+              >
+                <SlidersHorizontal className="h-[22px] w-[22px] md:h-[26px] md:w-[26px]" />
               </button>
             </div>
           </div>
         ) : null}
 
-        {isSettingsOpen ? (
-          <div className="fixed inset-0 z-40" data-swipe-ignore="true">
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(false)}
-              className="absolute inset-0 bg-black/65 animate-[fadeIn_180ms_ease-out]"
-              aria-label={language === 'hi' ? '\u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938 \u092c\u0902\u0926 \u0915\u0930\u0947\u0902' : 'Close settings'}
-            />
+        {isSettingsOpen && activeVideo ? (
+          <div
+            ref={settingsPanelRef}
+            role="dialog"
+            aria-modal="false"
+            aria-label={language === 'hi' ? '\u0935\u0940\u0921\u093f\u092f\u094b \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938' : 'Video settings'}
+            className={`absolute z-40 w-[280px] max-w-[calc(100vw-4.5rem)] rounded-2xl border border-white/10 bg-black/70 p-2 shadow-lg backdrop-blur-md md:w-[340px] md:max-w-[calc(100vw-8rem)] ${settingsPanelPositionClass}`}
+            data-swipe-ignore="true"
+          >
+            <div className="max-h-[280px] overflow-y-auto md:max-h-[340px]">
+              <div key={settingsPanelView} className="origin-bottom-right space-y-1 transition-all duration-200 ease-out">
+                {settingsPanelView === 'main' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings((prev) => ({ ...prev, autoAdvance: !prev.autoAdvance }))
+                      }
+                      className={settingsRowClass}
+                    >
+                      <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
+                        <Clock3 className="h-5 w-5 md:h-6 md:w-6" />
+                        {language === 'hi' ? '\u0911\u091f\u094b \u090f\u0921\u0935\u093e\u0902\u0938' : 'Auto-advance'}
+                      </span>
+                      <span
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                          settings.autoAdvance ? 'bg-red-500' : 'bg-zinc-700'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                            settings.autoAdvance ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </span>
+                    </button>
 
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={language === 'hi' ? '\u0935\u0940\u0921\u093f\u092f\u094b \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938' : 'Video settings'}
-              onTouchStart={handleSettingsSheetTouchStart}
-              onTouchEnd={handleSettingsSheetTouchEnd}
-              className="absolute inset-x-0 bottom-0 max-h-[78dvh] rounded-t-3xl border border-white/10 bg-zinc-950/95 shadow-[0_-24px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-[fadeIn_220ms_ease-out] md:inset-auto md:right-6 md:top-[calc(env(safe-area-inset-top)+4.25rem)] md:w-[360px] md:max-h-[calc(100dvh-env(safe-area-inset-top)-5rem)] md:rounded-2xl"
-            >
-              <div className="flex items-center justify-between border-b border-white/10 px-4 pb-3 pt-3 md:pt-4">
-                <div className="mx-auto h-1.5 w-12 rounded-full bg-white/20 md:hidden" />
-                <h3 className="text-sm font-semibold text-white md:text-base">
-                  {language === 'hi' ? '\u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938' : 'Settings'}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/90 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
-                  aria-label={language === 'hi' ? '\u092a\u0948\u0928\u0932 \u092c\u0902\u0926 \u0915\u0930\u0947\u0902' : 'Close panel'}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings((prev) => ({ ...prev, captions: !prev.captions }))
+                      }
+                      className={settingsRowClass}
+                    >
+                      <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
+                        <Eye className="h-5 w-5 md:h-6 md:w-6" />
+                        {language === 'hi' ? '\u0915\u0948\u092a\u094d\u0936\u0928' : 'Captions'}
+                      </span>
+                      <span
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                          settings.captions ? 'bg-red-500' : 'bg-zinc-700'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                            settings.captions ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </span>
+                    </button>
 
-              <div className="max-h-[calc(78dvh-3.75rem)] space-y-3 overflow-y-auto px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:max-h-[calc(100dvh-env(safe-area-inset-top)-10rem)] md:space-y-3.5 md:px-5 md:py-4">
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
-                  <div>
-                    <p className="text-sm font-medium text-white">
-                      {language === 'hi' ? '\u0911\u091f\u094b \u090f\u0921\u0935\u093e\u0902\u0938' : 'Auto-advance'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => updateSettings((prev) => ({ ...prev, autoAdvance: !prev.autoAdvance }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                      settings.autoAdvance ? 'bg-red-500' : 'bg-zinc-700'
-                    }`}
-                    aria-label={language === 'hi' ? '\u0911\u091f\u094b \u090f\u0921\u0935\u093e\u0902\u0938 \u091f\u0949\u0917\u0932' : 'Toggle auto-advance'}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                        settings.autoAdvance ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsVolumeExpanded((prev) => !prev)}
+                      className={settingsRowClass}
+                    >
+                      <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
+                        <Volume2 className="h-5 w-5 md:h-6 md:w-6" />
+                        {language === 'hi' ? '\u0921\u093f\u092b\u0949\u0932\u094d\u091f \u0935\u0949\u0932\u094d\u092f\u0942\u092e' : 'Default volume'}
+                      </span>
+                      <span className="inline-flex items-center gap-2 text-xs text-white/60 md:text-sm">
+                        {settings.defaultVolume}%
+                        <ChevronRight className="h-4 w-4" />
+                      </span>
+                    </button>
 
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
-                  <p className="text-sm font-medium text-white">
-                    {language === 'hi' ? '\u0915\u0948\u092a\u094d\u0936\u0928' : 'Captions'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => updateSettings((prev) => ({ ...prev, captions: !prev.captions }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                      settings.captions ? 'bg-red-500' : 'bg-zinc-700'
-                    }`}
-                    aria-label={language === 'hi' ? '\u0915\u0948\u092a\u094d\u0936\u0928 \u091f\u0949\u0917\u0932' : 'Toggle captions'}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                        settings.captions ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
+                    {isVolumeExpanded ? (
+                      <div className="rounded-xl px-3 pb-2 pt-1 md:px-4">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={settings.defaultVolume}
+                          onChange={(event) => {
+                            const nextVolume = clampVolume(Number(event.target.value));
+                            updateSettings((prev) => ({ ...prev, defaultVolume: nextVolume }));
+                          }}
+                          className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/20 accent-red-500"
+                          aria-label={language === 'hi' ? '\u0921\u093f\u092b\u0949\u0932\u094d\u091f \u0935\u0949\u0932\u094d\u092f\u0942\u092e' : 'Default volume'}
+                        />
+                      </div>
+                    ) : null}
 
-                <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-medium text-white">
-                      {language === 'hi' ? '\u0921\u093f\u092b\u0949\u0932\u094d\u091f \u0935\u0949\u0932\u094d\u092f\u0942\u092e' : 'Default volume'}
-                    </p>
-                    <span className="text-xs font-medium text-zinc-300">{settings.defaultVolume}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={settings.defaultVolume}
-                    onChange={(event) => {
-                      const nextVolume = clampVolume(Number(event.target.value));
-                      updateSettings((prev) => ({ ...prev, defaultVolume: nextVolume }));
-                    }}
-                    className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/20 accent-red-500"
-                    aria-label={language === 'hi' ? '\u0921\u093f\u092b\u0949\u0932\u094d\u091f \u0935\u0949\u0932\u094d\u092f\u0942\u092e' : 'Default volume'}
-                  />
-                </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings((prev) => ({ ...prev, muteByDefault: !prev.muteByDefault }))
+                      }
+                      className={settingsRowClass}
+                    >
+                      <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
+                        <VolumeX className="h-5 w-5 md:h-6 md:w-6" />
+                        {language === 'hi' ? '\u092e\u094d\u092f\u0942\u091f \u092c\u093e\u0908 \u0921\u093f\u092b\u0949\u0932\u094d\u091f' : 'Mute by default'}
+                      </span>
+                      <span
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                          settings.muteByDefault ? 'bg-red-500' : 'bg-zinc-700'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                            settings.muteByDefault ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </span>
+                    </button>
 
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
-                  <p className="text-sm font-medium text-white">
-                    {language === 'hi' ? '\u092e\u094d\u092f\u0942\u091f \u092c\u093e\u0908 \u0921\u093f\u092b\u0949\u0932\u094d\u091f' : 'Mute by default'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => updateSettings((prev) => ({ ...prev, muteByDefault: !prev.muteByDefault }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                      settings.muteByDefault ? 'bg-red-500' : 'bg-zinc-700'
-                    }`}
-                    aria-label={language === 'hi' ? '\u092e\u094d\u092f\u0942\u091f \u0921\u093f\u092b\u0949\u0932\u094d\u091f \u091f\u0949\u0917\u0932' : 'Toggle mute by default'}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                        settings.muteByDefault ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsVolumeExpanded(false);
+                        setSettingsPanelView('playback-speed');
+                      }}
+                      className={settingsRowClass}
+                    >
+                      <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
+                        <Play className="h-5 w-5 md:h-6 md:w-6" />
+                        {language === 'hi' ? '\u092a\u094d\u0932\u0947\u092c\u0948\u0915 \u0938\u094d\u092a\u0940\u0921' : 'Playback speed'}
+                      </span>
+                      <span className="inline-flex items-center gap-2 text-xs text-white/60 md:text-sm">
+                        {formatPlaybackSpeedLabel(settings.playbackSpeed)}
+                        <ChevronRight className="h-4 w-4" />
+                      </span>
+                    </button>
 
-                <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
-                  <label className="mb-2 block text-sm font-medium text-white" htmlFor="playback-speed-select">
-                    {language === 'hi' ? '\u092a\u094d\u0932\u0947\u092c\u0948\u0915 \u0938\u094d\u092a\u0940\u0921' : 'Playback speed'}
-                  </label>
-                  <select
-                    id="playback-speed-select"
-                    value={settings.playbackSpeed}
-                    onChange={(event) => {
-                      const nextSpeed = normalizePlaybackSpeed(Number(event.target.value));
-                      updateSettings((prev) => ({ ...prev, playbackSpeed: nextSpeed }));
-                    }}
-                    className="w-full rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-400"
-                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsVolumeExpanded(false);
+                        setSettingsPanelView('quality');
+                      }}
+                      className={settingsRowClass}
+                    >
+                      <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
+                        <SlidersHorizontal className="h-5 w-5 md:h-6 md:w-6" />
+                        {language === 'hi' ? '\u0915\u094d\u0935\u093e\u0932\u093f\u091f\u0940' : 'Quality'}
+                      </span>
+                      <span className="inline-flex items-center gap-2 text-xs text-white/60 md:text-sm">
+                        {formatQualityLabel(settings.quality)}
+                        <ChevronRight className="h-4 w-4" />
+                      </span>
+                    </button>
+                  </>
+                ) : null}
+
+                {settingsPanelView === 'playback-speed' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsPanelView('main')}
+                      className={settingsRowClass}
+                    >
+                      <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
+                        <ChevronLeft className="h-5 w-5 md:h-6 md:w-6" />
+                        {language === 'hi' ? '\u092a\u094d\u0932\u0947\u092c\u0948\u0915 \u0938\u094d\u092a\u0940\u0921' : 'Playback speed'}
+                      </span>
+                    </button>
+
                     {PLAYBACK_SPEED_OPTIONS.map((speed) => (
-                      <option key={speed} value={speed} className="bg-zinc-900 text-white">
-                        {speed}x
-                      </option>
+                      <button
+                        key={speed}
+                        type="button"
+                        onClick={() => {
+                          updateSettings((prev) => ({ ...prev, playbackSpeed: speed }));
+                          setSettingsPanelView('main');
+                        }}
+                        className={`${settingsRowClass} ${
+                          settings.playbackSpeed === speed ? 'bg-white/10 text-white' : 'text-white/90'
+                        }`}
+                      >
+                        <span className="text-sm md:text-base">{formatPlaybackSpeedLabel(speed)}</span>
+                        {settings.playbackSpeed === speed ? <Check className="h-4 w-4 md:h-5 md:w-5" /> : null}
+                      </button>
                     ))}
-                  </select>
-                </div>
+                  </>
+                ) : null}
 
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
-                  <p className="text-sm font-medium text-white">
-                    {language === 'hi' ? '\u0921\u0947\u091f\u093e \u0938\u0947\u0935\u0930' : 'Data saver'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => updateSettings((prev) => ({ ...prev, dataSaver: !prev.dataSaver }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                      settings.dataSaver ? 'bg-red-500' : 'bg-zinc-700'
-                    }`}
-                    aria-label={language === 'hi' ? '\u0921\u0947\u091f\u093e \u0938\u0947\u0935\u0930 \u091f\u0949\u0917\u0932' : 'Toggle data saver'}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                        settings.dataSaver ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
+                {settingsPanelView === 'quality' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsPanelView('main')}
+                      className={settingsRowClass}
+                    >
+                      <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
+                        <ChevronLeft className="h-5 w-5 md:h-6 md:w-6" />
+                        {language === 'hi' ? '\u0915\u094d\u0935\u093e\u0932\u093f\u091f\u0940' : 'Quality'}
+                      </span>
+                    </button>
 
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
-                  <div>
-                    <p className="text-sm font-medium text-white">
-                      {language === 'hi' ? '\u092d\u093e\u0937\u093e' : 'Language'}
-                    </p>
-                    <p className="text-xs text-zinc-300">
-                      {language === 'hi' ? '\u0939\u093f\u0902\u0926\u0940' : 'English'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleLanguageQuickToggle}
-                    className="rounded-full border border-red-400/45 bg-red-500/15 px-3 py-1.5 text-xs font-semibold text-red-100 transition hover:bg-red-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
-                    aria-label={language === 'hi' ? '\u092d\u093e\u0937\u093e \u092c\u0926\u0932\u0947\u0902' : 'Toggle language'}
-                  >
-                    {language === 'hi' ? 'Switch to EN' : '\u0939\u093f\u0902\u0926\u0940'}
-                  </button>
-                </div>
+                    {QUALITY_OPTIONS.map((qualityOption) => (
+                      <button
+                        key={qualityOption.id}
+                        type="button"
+                        onClick={() => {
+                          updateSettings((prev) => ({ ...prev, quality: qualityOption.id }));
+                          setSettingsPanelView('main');
+                        }}
+                        className={`${settingsRowClass} ${
+                          settings.quality === qualityOption.id ? 'bg-white/10 text-white' : 'text-white/90'
+                        }`}
+                      >
+                        <span className="text-sm md:text-base">{qualityOption.label}</span>
+                        {settings.quality === qualityOption.id ? <Check className="h-4 w-4 md:h-5 md:w-5" /> : null}
+                      </button>
+                    ))}
+                  </>
+                ) : null}
               </div>
             </div>
           </div>

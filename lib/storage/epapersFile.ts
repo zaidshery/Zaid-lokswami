@@ -89,6 +89,10 @@ export async function listStoredEPapers(params: {
   return { data, total: filtered.length };
 }
 
+export async function listAllStoredEPapers() {
+  return readAllEPapers();
+}
+
 export async function getStoredEPaperById(id: string) {
   const all = await readAllEPapers();
   return all.find((item) => item._id === id) || null;

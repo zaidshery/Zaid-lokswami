@@ -15,6 +15,7 @@ export interface IVideo {
   isPublished: boolean;
   shortsRank: number;
   views: number;
+  createdAt: Date;
   publishedAt: Date;
   updatedAt: Date;
 }
@@ -30,8 +31,12 @@ const VideoSchema = new mongoose.Schema<IVideo>({
   isPublished: { type: Boolean, default: true },
   shortsRank: { type: Number, default: 0 },
   views: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
   publishedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
+
+VideoSchema.index({ publishedAt: -1, _id: -1 });
+VideoSchema.index({ createdAt: -1, _id: -1 });
 
 export default mongoose.models.Video || mongoose.model('Video', VideoSchema);
