@@ -36,6 +36,9 @@ export interface IArticle {
   isTrending: boolean;
   seo: IArticleSeo;
   revisions: IArticleRevision[];
+  embedding: number[];
+  embeddingGeneratedAt: Date | null;
+  aiSummary: string;
 }
 
 const SeoSchema = new mongoose.Schema<IArticleSeo>(
@@ -79,6 +82,9 @@ const ArticleSchema = new mongoose.Schema<IArticle>({
   isTrending: { type: Boolean, default: false },
   seo: { type: SeoSchema, default: () => ({}) },
   revisions: { type: [RevisionSchema], default: [] },
+  embedding: { type: [Number], default: [], select: false },
+  embeddingGeneratedAt: { type: Date, default: null },
+  aiSummary: { type: String, default: '' },
 });
 
 ArticleSchema.index({ publishedAt: -1, _id: -1 });

@@ -17,6 +17,9 @@ export interface IStory {
   isPublished: boolean;
   publishedAt: Date;
   updatedAt: Date;
+  embedding: number[];
+  embeddingGeneratedAt: Date | null;
+  aiSummary: string;
 }
 
 const StorySchema = new mongoose.Schema<IStory>({
@@ -35,6 +38,9 @@ const StorySchema = new mongoose.Schema<IStory>({
   isPublished: { type: Boolean, default: true },
   publishedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+  embedding: { type: [Number], default: [], select: false },
+  embeddingGeneratedAt: { type: Date, default: null },
+  aiSummary: { type: String, default: '' },
 });
 
 export default mongoose.models.Story || mongoose.model('Story', StorySchema);

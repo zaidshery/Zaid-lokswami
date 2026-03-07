@@ -27,6 +27,9 @@ export interface IEPaper {
   status: EPaperStatus;
   createdAt: Date;
   updatedAt: Date;
+  embedding: number[];
+  embeddingGeneratedAt: Date | null;
+  aiSummary: string;
 }
 
 const EPaperPageSchema = new mongoose.Schema<IEPaperPage>(
@@ -54,6 +57,9 @@ const EPaperSchema = new mongoose.Schema<IEPaper>(
     pageCount: { type: Number, required: true, min: 1, max: 1000 },
     pages: { type: [EPaperPageSchema], default: [] },
     status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+    embedding: { type: [Number], default: [], select: false },
+    embeddingGeneratedAt: { type: Date, default: null },
+    aiSummary: { type: String, default: '' },
   },
   { timestamps: true }
 );

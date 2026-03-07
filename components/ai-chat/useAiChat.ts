@@ -2,22 +2,46 @@
 
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NEWS_CATEGORIES, resolveNewsCategory } from '@/lib/constants/newsCategories';
 import { BHASHINI_LANGUAGE_OPTIONS } from '@/lib/constants/lokswamiAi';
 import { useAppStore } from '@/lib/store/appStore';
-import type { ChatMessage, ChatRole, UseAiChatOptions, UseAiChatResult } from './types';
+import type {
+  AiAnswerSource,
+  AiCategorySuggestion,
+  AiChatSuggestions,
+  AiContentGroups,
+  AiContentItem,
+  AiContentType,
+  AiPrimaryAction,
+  ChatMessage,
+  ChatRole,
+  UseAiChatOptions,
+  UseAiChatResult,
+} from './types';
 
 type AwarenessResult = {
   id: string;
   title: string;
   summary: string;
-  snippet?: string;
+  type?: AiContentType;
+  url?: string;
 };
 
 type AwarenessResponse = {
   success?: boolean;
+  answer?: string;
+  answerSource?: AiAnswerSource;
+  content?: AiContentGroups;
+  confidence?: 'high' | 'medium' | 'low';
+  followUpSuggestion?: string;
+  primaryAction?: AiPrimaryAction | null;
   data?: {
     answer?: string;
+    answerSource?: AiAnswerSource;
     results?: AwarenessResult[];
+    content?: AiContentGroups;
+    followUpSuggestion?: string;
+    primaryAction?: AiPrimaryAction | null;
   };
   error?: string;
 };
@@ -47,12 +71,65 @@ type TtsResponse = {
   error?: string;
 };
 
-function createMessage(role: ChatRole, text: string, links?: ChatMessage['links']): ChatMessage {
+type SuggestionsResponse = {
+  latestEpaper?: {
+    title?: string;
+    date?: string;
+    url?: string;
+  } | null;
+  trendingVideo?: {
+    title?: string;
+    thumbnail?: string;
+    url?: string;
+  } | null;
+  topStory?: {
+    title?: string;
+    thumbnail?: string;
+    url?: string;
+    durationSeconds?: number;
+  } | null;
+  breakingArticle?: {
+    title?: string;
+    url?: string;
+  } | null;
+};
+
+type CategoriesResponse = {
+  categories?: Array<{
+    name?: string;
+    hindi?: string;
+    count?: number;
+  }>;
+};
+
+function emptyContentGroups(): AiContentGroups {
+  return {
+    articles: [],
+    epapers: [],
+    videos: [],
+    stories: [],
+  };
+}
+
+function emptySuggestions(): AiChatSuggestions {
+  return {
+    latestEpaper: null,
+    trendingVideo: null,
+    topStory: null,
+    breakingArticle: null,
+  };
+}
+
+function createMessage(
+  role: ChatRole,
+  text: string,
+  extras: Omit<Partial<ChatMessage>, 'id' | 'role' | 'text'> = {}
+): ChatMessage {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     role,
     text,
-    links,
+    ...extras,
   };
 }
 
@@ -137,8 +214,197 @@ function isAwarenessResult(value: unknown): value is AwarenessResult {
   );
 }
 
+function isContentItem(value: unknown): value is AiContentItem {
+  if (!value || typeof value !== 'object') return false;
+
+  const source = value as Partial<AiContentItem>;
+  return Boolean(
+    typeof source.id === 'string' &&
+      typeof source.type === 'string' &&
+      typeof source.title === 'string' &&
+      typeof source.description === 'string' &&
+      typeof source.category === 'string' &&
+      typeof source.thumbnail === 'string' &&
+      typeof source.url === 'string' &&
+      typeof source.date === 'string'
+  );
+}
+
+function normalizeContentGroup(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is AiContentItem => isContentItem(item));
+}
+
+function normalizeContentGroups(value: unknown): AiContentGroups {
+  if (!value || typeof value !== 'object') {
+    return emptyContentGroups();
+  }
+
+  const source = value as Partial<AiContentGroups>;
+
+  return {
+    articles: normalizeContentGroup(source.articles),
+    epapers: normalizeContentGroup(source.epapers),
+    videos: normalizeContentGroup(source.videos),
+    stories: normalizeContentGroup(source.stories),
+  };
+}
+
+function hasContentGroups(groups: AiContentGroups) {
+  return (
+    groups.articles.length > 0 ||
+    groups.epapers.length > 0 ||
+    groups.videos.length > 0 ||
+    groups.stories.length > 0
+  );
+}
+
 function toSpeakableText(value: string) {
   return value.replace(/\s+/g, ' ').trim().slice(0, 3200);
+}
+
+function getPreferredListenLanguageCode(language: 'hi' | 'en') {
+  return language === 'hi' ? 'hi-IN' : 'en-US';
+}
+
+function normalizeAnswerSource(value: unknown): AiAnswerSource | undefined {
+  if (
+    value === 'cms_articles' ||
+    value === 'general_knowledge' ||
+    value === 'related_category' ||
+    value === 'category_redirect' ||
+    value === 'refused' ||
+    value === 'empty_database' ||
+    value === 'error_fallback'
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function buildSuggestions(
+  payload: SuggestionsResponse,
+  language: 'hi' | 'en'
+): AiChatSuggestions {
+  return {
+    latestEpaper:
+      payload.latestEpaper &&
+      typeof payload.latestEpaper.title === 'string' &&
+      typeof payload.latestEpaper.url === 'string'
+        ? {
+            type: 'epaper',
+            title: payload.latestEpaper.title,
+            subtitle:
+              language === 'hi' ? '📄 आज का अखबार पढ़ें' : '📄 Read today’s e-paper',
+            url: payload.latestEpaper.url,
+            date:
+              typeof payload.latestEpaper.date === 'string'
+                ? payload.latestEpaper.date
+                : '',
+          }
+        : null,
+    trendingVideo:
+      payload.trendingVideo &&
+      typeof payload.trendingVideo.title === 'string' &&
+      typeof payload.trendingVideo.url === 'string'
+        ? {
+            type: 'video',
+            title: payload.trendingVideo.title,
+            subtitle:
+              language === 'hi' ? '🎬 आज का वायरल वीडियो' : '🎬 Trending video today',
+            url: payload.trendingVideo.url,
+            thumbnail:
+              typeof payload.trendingVideo.thumbnail === 'string'
+                ? payload.trendingVideo.thumbnail
+                : '',
+          }
+        : null,
+    topStory:
+      payload.topStory &&
+      typeof payload.topStory.title === 'string' &&
+      typeof payload.topStory.url === 'string'
+        ? {
+            type: 'story',
+            title: payload.topStory.title,
+            subtitle:
+              language === 'hi' ? '⚡ आज का Mojo देखें' : '⚡ Watch today’s Mojo',
+            url: payload.topStory.url,
+            thumbnail:
+              typeof payload.topStory.thumbnail === 'string'
+                ? payload.topStory.thumbnail
+                : '',
+            durationSeconds:
+              typeof payload.topStory.durationSeconds === 'number'
+                ? payload.topStory.durationSeconds
+                : undefined,
+          }
+        : null,
+    breakingArticle:
+      payload.breakingArticle &&
+      typeof payload.breakingArticle.title === 'string' &&
+      typeof payload.breakingArticle.url === 'string'
+        ? {
+            type: 'article',
+            title: payload.breakingArticle.title,
+            subtitle:
+              language === 'hi'
+                ? '📰 ब्रेकिंग खबर पढ़ें'
+                : '📰 Read breaking coverage',
+            url: payload.breakingArticle.url,
+          }
+        : null,
+  };
+}
+
+function buildCategorySuggestions(
+  payload: CategoriesResponse,
+  language: 'hi' | 'en'
+): AiCategorySuggestion[] {
+  const source =
+    Array.isArray(payload.categories) && payload.categories.length
+      ? payload.categories
+      : NEWS_CATEGORIES.slice(0, 4).map((category) => ({
+          name: category.nameEn,
+          hindi: category.name,
+          count: 0,
+        }));
+
+  return source.slice(0, 4).map((item) => {
+    const fallbackName = typeof item.name === 'string' ? item.name.trim() : '';
+    const fallbackHindi = typeof item.hindi === 'string' ? item.hindi.trim() : '';
+    const resolved = resolveNewsCategory(fallbackName || fallbackHindi || '');
+    const hindi = fallbackHindi || resolved?.name || 'खबरें';
+    const name = fallbackName || resolved?.nameEn || hindi;
+    const icon = resolved?.icon || '📰';
+
+    return {
+      name,
+      hindi,
+      count: typeof item.count === 'number' ? item.count : 0,
+      label:
+        language === 'hi'
+          ? `${icon} ${hindi} की खबरें`
+          : `${icon} ${name} news`,
+      query: language === 'hi' ? `${hindi} की खबरें` : `${name} news`,
+    };
+  });
+}
+
+function buildTechnicalFallbackMessage(
+  query: string,
+  language: 'hi' | 'en'
+): ChatMessage {
+  return createMessage(
+    'assistant',
+    language === 'hi'
+      ? 'थोड़ी तकनीकी परेशानी है, एक पल में दोबारा कोशिश करें! 🔄'
+      : 'There is a brief technical hiccup. Please try again in a moment! 🔄',
+    {
+      answerSource: 'error_fallback',
+      retryQuery: query,
+    }
+  );
 }
 
 export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
@@ -154,12 +420,18 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   const [isWorking, setIsWorking] = useState(false);
   const [errorText, setErrorText] = useState('');
 
-  const [listenLanguageCode, setListenLanguageCode] = useState('hi-IN');
+  const [listenLanguageCode, setListenLanguageCode] = useState(
+    getPreferredListenLanguageCode(language)
+  );
   const [isPreparingListen, setIsPreparingListen] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [listenError, setListenError] = useState('');
   const [isBhashiniConfigured, setIsBhashiniConfigured] = useState(false);
   const [browserVoiceLangCodes, setBrowserVoiceLangCodes] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<AiChatSuggestions>(emptySuggestions());
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [categorySuggestions, setCategorySuggestions] = useState<AiCategorySuggestion[]>([]);
+  const [isLoadingCategorySuggestions, setIsLoadingCategorySuggestions] = useState(false);
 
   const currentArticleId = useMemo(() => {
     const match = pathname.match(/\/main\/article\/([^/?#]+)/i);
@@ -172,9 +444,9 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   }, [pathname]);
 
   const latestAssistantText = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (messages[i].role === 'assistant' && messages[i].text.trim()) {
-        return messages[i].text;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].role === 'assistant' && messages[index].text.trim()) {
+        return messages[index].text;
       }
     }
     return '';
@@ -222,8 +494,8 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
 
     const greeting =
       language === 'hi'
-        ? 'Namaste, main Lokswami AI hoon. Aap search, TL;DR summary, ya listen feature use kar sakte hain.'
-        : 'Hello, I am Lokswami AI. You can use semantic search, TL;DR summary, and listen mode here.';
+        ? 'नमस्ते, मैं लोकस्वामी AI हूं। आप खबर खोज सकते हैं, सारांश पा सकते हैं, या सुन सकते हैं।'
+        : 'Hello, I am Lokswami AI. You can search news, get summaries, or listen here.';
     setMessages([createMessage('assistant', greeting)]);
   }, [isOpen, language, messages.length]);
 
@@ -295,7 +567,15 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   }, []);
 
   useEffect(() => {
+    const preferredCode = getPreferredListenLanguageCode(language);
+    setListenLanguageCode((current) =>
+      current === preferredCode ? current : preferredCode
+    );
+  }, [language]);
+
+  useEffect(() => {
     if (!listenLanguageOptions.length) return;
+    if (listenLanguageCode === 'en-US') return;
     const exists = listenLanguageOptions.some((item) => item.code === listenLanguageCode);
     if (!exists) {
       setListenLanguageCode(listenLanguageOptions[0].code);
@@ -308,59 +588,142 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     };
   }, [stopListening]);
 
-  const runAwarenessSearch = async (query: string) => {
-    const cleanQuery = query.trim();
-    if (!cleanQuery) return;
+  useEffect(() => {
+    if (!isOpen) return;
 
-    setErrorText('');
-    setIsWorking(true);
-    appendMessage(createMessage('user', cleanQuery));
+    let active = true;
+    setIsLoadingSuggestions(true);
+    setIsLoadingCategorySuggestions(true);
 
-    try {
-      const response = await fetch('/api/ai/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: cleanQuery,
-          limit: 6,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as AwarenessResponse;
+    const loadSuggestions = async () => {
+      try {
+        const [suggestionsResponse, categoriesResponse] = await Promise.all([
+          fetch('/api/ai/suggestions', {
+            method: 'GET',
+            cache: 'no-store',
+          }),
+          fetch('/api/ai/categories', {
+            method: 'GET',
+            cache: 'no-store',
+          }),
+        ]);
 
-      if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'AI search failed.');
+        const suggestionsPayload = (await suggestionsResponse
+          .json()
+          .catch(() => ({}))) as SuggestionsResponse;
+        const categoriesPayload = (await categoriesResponse
+          .json()
+          .catch(() => ({}))) as CategoriesResponse;
+
+        if (!active) return;
+
+        setSuggestions(buildSuggestions(suggestionsPayload, language));
+        setCategorySuggestions(buildCategorySuggestions(categoriesPayload, language));
+      } catch {
+        if (!active) return;
+        setSuggestions(emptySuggestions());
+        setCategorySuggestions(buildCategorySuggestions({}, language));
+      } finally {
+        if (active) {
+          setIsLoadingSuggestions(false);
+          setIsLoadingCategorySuggestions(false);
+        }
       }
+    };
 
-      const answer =
-        typeof payload.data.answer === 'string' && payload.data.answer.trim()
-          ? payload.data.answer.trim()
-          : language === 'hi'
-            ? 'Search result mil gaya. Neeche relevant stories dekh sakte hain.'
-            : 'Search completed. You can check relevant stories below.';
+    void loadSuggestions();
 
-      const links = Array.isArray(payload.data.results)
-        ? payload.data.results
-            .filter((item) => isAwarenessResult(item))
-            .slice(0, 3)
-            .map((item) => ({ id: item.id, title: item.title }))
-        : [];
+    return () => {
+      active = false;
+    };
+  }, [isOpen, language]);
 
-      appendMessage(createMessage('assistant', answer, links.length ? links : undefined));
-    } catch (error) {
-      const fallback =
-        error instanceof Error
-          ? error.message
-          : language === 'hi'
-            ? 'AI search is samay uplabdh nahi hai.'
-            : 'AI search is currently unavailable.';
-      setErrorText(fallback);
-      appendMessage(createMessage('assistant', fallback));
-    } finally {
-      setIsWorking(false);
-    }
-  };
+  const runAwarenessSearch = useCallback(
+    async (query: string) => {
+      const cleanQuery = query.trim();
+      if (!cleanQuery) return;
+
+      setErrorText('');
+      setIsWorking(true);
+      appendMessage(createMessage('user', cleanQuery));
+
+      try {
+        const response = await fetch('/api/ai/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: cleanQuery,
+            language,
+            limit: 8,
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as AwarenessResponse;
+
+        if (!response.ok || !payload.success) {
+          appendMessage(buildTechnicalFallbackMessage(cleanQuery, language));
+          return;
+        }
+
+        const answer =
+          typeof payload.data?.answer === 'string' && payload.data.answer.trim()
+            ? payload.data.answer.trim()
+            : typeof payload.answer === 'string' && payload.answer.trim()
+              ? payload.answer.trim()
+              : language === 'hi'
+                ? 'लोकस्वामी पर आपके लिए कुछ उपयोगी अपडेट मिले हैं।'
+                : 'I found a few useful updates for you on Lokswami.';
+
+        const normalizedGroups = normalizeContentGroups(payload.data?.content || payload.content);
+        const articleLinks = Array.isArray(payload.data?.results)
+          ? payload.data.results
+              .filter((item) => isAwarenessResult(item))
+              .slice(0, 3)
+              .map((item) => ({
+                id: item.id,
+                title: item.title,
+                type: item.type,
+                url: item.url,
+              }))
+          : [];
+
+        const answerSource = normalizeAnswerSource(
+          payload.data?.answerSource || payload.answerSource
+        );
+        const primaryAction =
+          payload.data?.primaryAction && typeof payload.data.primaryAction.url === 'string'
+            ? payload.data.primaryAction
+            : payload.primaryAction && typeof payload.primaryAction.url === 'string'
+              ? payload.primaryAction
+              : null;
+
+        appendMessage(
+          createMessage('assistant', answer, {
+            links:
+              articleLinks.length && !hasContentGroups(normalizedGroups)
+                ? articleLinks
+                : undefined,
+            content: hasContentGroups(normalizedGroups) ? normalizedGroups : undefined,
+            followUpSuggestion:
+              typeof payload.data?.followUpSuggestion === 'string'
+                ? payload.data.followUpSuggestion
+                : typeof payload.followUpSuggestion === 'string'
+                  ? payload.followUpSuggestion
+                  : '',
+            answerSource,
+            primaryAction,
+            retryQuery: answerSource === 'error_fallback' ? cleanQuery : undefined,
+          })
+        );
+      } catch {
+        appendMessage(buildTechnicalFallbackMessage(cleanQuery, language));
+      } finally {
+        setIsWorking(false);
+      }
+    },
+    [appendMessage, language]
+  );
 
   const runSummary = async (mode: 'article' | 'text') => {
     const trimmedText = draft.trim();
@@ -368,12 +731,14 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     const useText = mode === 'text' && Boolean(trimmedText);
 
     if (!useArticle && !useText) {
-      const noSourceText =
-        language === 'hi'
-          ? 'Summary ke liye article open karein ya text likhein.'
-          : 'Open an article or enter text for summary.';
-      setErrorText(noSourceText);
-      appendMessage(createMessage('assistant', noSourceText));
+      appendMessage(
+        createMessage(
+          'assistant',
+          language === 'hi'
+            ? 'टेक्स्ट भेजें या कोई खबर खोलें, मैं उसका आसान सारांश तुरंत दूँगा!'
+            : 'Share some text or open an article, and I will summarize it right away.'
+        )
+      );
       return;
     }
 
@@ -385,7 +750,10 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
       setDraft('');
     } else {
       appendMessage(
-        createMessage('user', language === 'hi' ? 'Is article ka TL;DR do.' : 'Summarize this article.')
+        createMessage(
+          'user',
+          language === 'hi' ? 'इस लेख का TL;DR दीजिए।' : 'Summarize this article.'
+        )
       );
     }
 
@@ -410,7 +778,15 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
 
       const payload = (await response.json().catch(() => ({}))) as SummaryResponse;
       if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'Summary generation failed.');
+        appendMessage(
+          createMessage(
+            'assistant',
+            language === 'hi'
+              ? 'सारांश तैयार करते समय थोड़ी तकनीकी परेशानी है, एक पल बाद फिर कोशिश करें! 🔄'
+              : 'There is a brief technical issue while creating the summary. Please try again in a moment! 🔄'
+          )
+        );
+        return;
       }
 
       const bullets = Array.isArray(payload.data.bullets)
@@ -420,20 +796,28 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
         : [];
 
       if (!bullets.length) {
-        throw new Error('Summary returned no points.');
+        appendMessage(
+          createMessage(
+            'assistant',
+            language === 'hi'
+              ? 'सारांश के मुख्य बिंदु तैयार हो रहे हैं। थोड़ी देर में फिर कोशिश करें!'
+              : 'The summary highlights are being prepared. Please try again shortly.'
+          )
+        );
+        return;
       }
 
       const summaryText = bullets.slice(0, 3).map((item) => `- ${item}`).join('\n');
       appendMessage(createMessage('assistant', summaryText));
-    } catch (error) {
-      const fallback =
-        error instanceof Error
-          ? error.message
-          : language === 'hi'
-            ? 'Summary banaane mein dikkat aayi.'
-            : 'Unable to generate summary.';
-      setErrorText(fallback);
-      appendMessage(createMessage('assistant', fallback));
+    } catch {
+      appendMessage(
+        createMessage(
+          'assistant',
+          language === 'hi'
+            ? 'सारांश तैयार करते समय थोड़ी तकनीकी परेशानी है, एक पल बाद फिर कोशिश करें! 🔄'
+            : 'There is a brief technical issue while creating the summary. Please try again in a moment! 🔄'
+        )
+      );
     } finally {
       setIsWorking(false);
     }
@@ -443,7 +827,7 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       setListenError(
         language === 'hi'
-          ? 'Listen feature is browser mein available nahi hai.'
+          ? 'यह ब्राउज़र सुनने की सुविधा सपोर्ट नहीं करता।'
           : 'Listen feature is unavailable in this browser.'
       );
       return;
@@ -476,11 +860,11 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   };
 
   const handleListen = async () => {
-    const sourceText = toSpeakableText(latestAssistantText || draft.trim());
+    const sourceText = toSpeakableText(draft.trim() || latestAssistantText);
     if (!sourceText) {
       setListenError(
         language === 'hi'
-          ? 'Sunane ke liye pehle AI response ya text chahiye.'
+          ? 'सुनने के लिए पहले AI जवाब या टेक्स्ट चाहिए।'
           : 'Need AI response or text before using Listen.'
       );
       return;
@@ -492,8 +876,8 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
 
     const friendlyVoiceMessage =
       language === 'hi'
-        ? 'Selected voice unavailable hai. Hindi/English try karein ya Bhashini connect karein.'
-        : 'Selected voice is unavailable. Try Hindi/English or connect Bhashini.';
+        ? 'चुनी गई voice उपलब्ध नहीं है। हिंदी या English voice चुनें, या Bhashini connect करें।'
+        : 'The selected voice is unavailable. Try a Hindi or English voice, or connect Bhashini.';
 
     try {
       if (!isBhashiniConfigured) {
@@ -561,8 +945,23 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     sendMessage();
   };
 
+  const runSuggestedQuery = (query: string) => {
+    if (!query.trim() || isWorking) return;
+    setDraft('');
+    void runAwarenessSearch(query);
+  };
+
+  const retrySearch = (query: string) => {
+    if (!query.trim() || isWorking) return;
+    void runAwarenessSearch(query);
+  };
+
   const runSummaryAction = () => {
     if (isWorking) return;
+    if (draft.trim()) {
+      void runSummary('text');
+      return;
+    }
     if (currentArticleId) {
       void runSummary('article');
       return;
@@ -573,7 +972,7 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   const runTopHeadlines = () => {
     if (isWorking) return;
     const query =
-      language === 'hi' ? 'Aaj ki top headlines kya hain?' : 'Top headlines today in India';
+      language === 'hi' ? 'आज की टॉप हेडलाइंस क्या हैं?' : 'Top headlines today in India';
     void runAwarenessSearch(query);
   };
 
@@ -593,10 +992,16 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     isPlayingAudio,
     listenError,
     messagesEndRef,
+    suggestions,
+    isLoadingSuggestions,
+    categorySuggestions,
+    isLoadingCategorySuggestions,
     sendMessage,
     runDraftSearch,
     runSummaryAction,
     runTopHeadlines,
+    runSuggestedQuery,
+    retrySearch,
     handleListen,
     stopListening: () => stopListening(),
   };

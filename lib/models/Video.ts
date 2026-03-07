@@ -18,6 +18,9 @@ export interface IVideo {
   createdAt: Date;
   publishedAt: Date;
   updatedAt: Date;
+  embedding: number[];
+  embeddingGeneratedAt: Date | null;
+  aiSummary: string;
 }
 
 const VideoSchema = new mongoose.Schema<IVideo>({
@@ -34,6 +37,9 @@ const VideoSchema = new mongoose.Schema<IVideo>({
   createdAt: { type: Date, default: Date.now },
   publishedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+  embedding: { type: [Number], default: [], select: false },
+  embeddingGeneratedAt: { type: Date, default: null },
+  aiSummary: { type: String, default: '' },
 });
 
 VideoSchema.index({ publishedAt: -1, _id: -1 });
