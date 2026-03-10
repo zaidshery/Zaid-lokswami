@@ -8,6 +8,7 @@ import { signOut, useSession } from 'next-auth/react';
 import {
   Bookmark,
   LogOut,
+  Menu,
   Moon,
   Newspaper,
   Settings,
@@ -23,7 +24,14 @@ export default function Header() {
   const [mounted, setMounted] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
-  const { theme, toggleTheme, language, toggleLanguage } = useAppStore();
+  const {
+    theme,
+    toggleTheme,
+    language,
+    toggleLanguage,
+    toggleMobileMenu,
+    isMobileMenuOpen,
+  } = useAppStore();
   const { data: session, status } = useSession();
 
   const userName = session?.user?.name?.trim() || 'Reader';
@@ -150,9 +158,9 @@ export default function Header() {
                 </Link>
               </motion.div>
 
-              <div className="relative" ref={userMenuRef}>
+              <div className="relative hidden lg:block" ref={userMenuRef}>
                 {status === 'loading' ? (
-                  <div className="h-8 w-8 animate-pulse rounded-full border border-zinc-200/80 bg-zinc-200/80 dark:border-zinc-700 dark:bg-zinc-700 sm:h-10 sm:w-10" />
+                  <div className="h-10 w-10 animate-pulse rounded-full border border-zinc-200/80 bg-zinc-200/80 dark:border-zinc-700 dark:bg-zinc-700" />
                 ) : userEmail ? (
                   <>
                     <motion.button
@@ -160,7 +168,7 @@ export default function Header() {
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => setIsUserMenuOpen((open) => !open)}
-                      className="relative inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-zinc-200/80 bg-white text-zinc-800 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 sm:h-10 sm:w-10"
+                      className="relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-zinc-200/80 bg-white text-zinc-800 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                       aria-label={language === 'hi' ? '\u0930\u0940\u0921\u0930 \u092e\u0947\u0928\u0942' : 'Reader menu'}
                     >
                       {userImage ? (
@@ -173,7 +181,7 @@ export default function Header() {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span className="text-xs font-bold sm:text-sm">{userInitial}</span>
+                        <span className="text-sm font-bold">{userInitial}</span>
                       )}
                     </motion.button>
 
@@ -240,11 +248,11 @@ export default function Header() {
                   <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                     <Link
                       href="/signin"
-                      className="cnp-motion inline-flex h-8 items-center gap-1 rounded-xl border border-zinc-200/80 bg-white px-2 text-[10px] font-semibold text-zinc-800 shadow-sm hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-red-500/40 dark:hover:bg-red-500/15 dark:hover:text-red-300 sm:h-10 sm:px-3 sm:text-xs"
+                      className="cnp-motion inline-flex h-10 items-center gap-1 rounded-xl border border-zinc-200/80 bg-white px-3 text-xs font-semibold text-zinc-800 shadow-sm hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-red-500/40 dark:hover:bg-red-500/15 dark:hover:text-red-300"
                       aria-label={language === 'hi' ? '\u0938\u093e\u0907\u0928 \u0907\u0928' : 'Sign In'}
                     >
                       <User size={16} />
-                      <span className="hidden min-[420px]:inline">Sign In</span>
+                      <span>Sign In</span>
                     </Link>
                   </motion.div>
                 )}
@@ -260,6 +268,19 @@ export default function Header() {
                 <span className="attention-pulsate-bck-slow inline-flex">
                   {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
                 </span>
+              </motion.button>
+
+              <motion.button
+                type="button"
+                onClick={toggleMobileMenu}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                className="cnp-motion inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200/80 bg-white text-zinc-800 shadow-sm hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 sm:h-10 sm:w-10 lg:hidden"
+                aria-label={language === 'hi' ? '\u092e\u0947\u0928\u0942' : 'Menu'}
+                aria-controls="mobile-drawer"
+                aria-expanded={isMobileMenuOpen}
+              >
+                <Menu size={16} />
               </motion.button>
             </div>
           </div>

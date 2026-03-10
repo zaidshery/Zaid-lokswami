@@ -1,7 +1,8 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSession } from 'next-auth/react';
 import { Home, PlayCircle, Newspaper, Zap, Menu, User } from 'lucide-react';
@@ -33,13 +34,16 @@ export default function BottomNav({
   isMenuOpen = false,
   isOverlayDark = false,
 }: BottomNavProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const { language } = useAppStore();
-  const { status } = useSession();
-  const accountHref =
-    status === 'unauthenticated'
-      ? '/signin?redirect=/main/account'
-      : '/main/account';
+  const { data: session, status } = useSession();
+  const userName = session?.user?.name?.trim() || session?.user?.email?.trim() || 'Reader';
+  const userImage = session?.user?.image || null;
+  const userInitial = (userName.charAt(0) || 'R').toUpperCase();
+  const isSignedIn = status === 'authenticated' && Boolean(session?.user?.email);
+  const accountLabel = isSignedIn ? 'Account' : 'Sign In';
+  const accountTarget = isSignedIn ? '/main/account' : '/signin';
 
   const shellTone = isOverlayDark
     ? 'border-white/10 bg-black/90 dark:border-white/10 dark:bg-black/90'
@@ -61,10 +65,16 @@ export default function BottomNav({
       <div className="mx-auto grid h-16 w-full max-w-2xl grid-cols-6 items-center gap-x-1 px-2 pb-safe sm:gap-x-2 sm:px-3">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const label = language === 'hi' ? item.label : item.labelEn;
-          const href = item.isAccount ? accountHref : item.href;
+          const label = item.isAccount
+            ? accountLabel
+            : language === 'hi'
+              ? item.label
+              : item.labelEn;
+          const href = item.isAccount ? accountTarget : item.href;
           const isActive =
-            href !== '#' && (pathname === href || pathname.startsWith(`${href}/`));
+            item.isAccount
+              ? isSignedIn && (pathname === '/main/account' || pathname.startsWith('/main/account/'))
+              : href !== '#' && (pathname === href || pathname.startsWith(`${href}/`));
 
           if (item.isMenu) {
             return (
@@ -84,6 +94,64 @@ export default function BottomNav({
               >
                 <Icon size={22} strokeWidth={2} />
                 <span className="text-[11px] font-semibold leading-none">{label}</span>
+              </motion.button>
+            );
+          }
+
+          if (item.isAccount) {
+            return (
+              <motion.button
+                key="account"
+                type="button"
+                onClick={() => router.push(accountTarget)}
+                whileTap={{ scale: 0.96 }}
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={accountLabel}
+                className="relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-1.5"
+              >
+                {isActive ? (
+                  <motion.div
+                    layoutId="bottomNavActive"
+                    className={`absolute inset-1 rounded-xl ${activeBackgroundTone}`}
+                    transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+                  />
+                ) : null}
+
+                <span
+                  className={`relative z-10 inline-flex h-[22px] w-[22px] items-center justify-center overflow-hidden rounded-full ${
+                    isSignedIn
+                      ? 'border border-zinc-300 bg-white text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100'
+                      : ''
+                  }`}
+                >
+                  {isSignedIn ? (
+                    userImage ? (
+                      <Image
+                        src={userImage}
+                        alt={userName}
+                        width={22}
+                        height={22}
+                        unoptimized
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[10px] font-bold">{userInitial}</span>
+                    )
+                  ) : (
+                    <Icon
+                      size={22}
+                      strokeWidth={isActive ? 2.35 : 2}
+                      className={isActive ? activeTone : inactiveTone}
+                    />
+                  )}
+                </span>
+                <span
+                  className={`cnp-motion relative z-10 text-[11px] font-semibold leading-none ${
+                    isActive ? activeTone : inactiveTone
+                  }`}
+                >
+                  {label}
+                </span>
               </motion.button>
             );
           }
