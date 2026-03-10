@@ -2,15 +2,29 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Bookmark, Loader2, LogOut, Settings, UserCircle2 } from 'lucide-react';
+import { Activity, Bookmark, Loader2, LogOut, Settings, UserCircle2 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import { formatUserRoleLabel } from '@/lib/auth/roles';
 import { useAppStore } from '@/lib/store/appStore';
 
 const ACCOUNT_REDIRECT_URL = '/signin?redirect=/main/account';
+
+type ReaderTrackStats = {
+  readCount: number;
+  readHistoryCount: number;
+  averageCompletionPercent: number;
+  lastActiveAt: string;
+};
+
+type SavedArticlesSummaryPayload = {
+  success?: boolean;
+  data?: {
+    count?: number;
+  };
+};
 
 function formatMemberSince(value: string | undefined, language: 'hi' | 'en') {
   if (!value) {
@@ -26,6 +40,25 @@ function formatMemberSince(value: string | undefined, language: 'hi' | 'en') {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+  }).format(date);
+}
+
+function formatLastActive(value: string | undefined, language: 'hi' | 'en') {
+  if (!value) {
+    return language === 'hi' ? '\u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Unavailable';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return language === 'hi' ? '\u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Unavailable';
+  }
+
+  return new Intl.DateTimeFormat(language === 'hi' ? 'hi-IN' : 'en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   }).format(date);
 }
 
@@ -77,6 +110,9 @@ export default function ReaderAccountPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { language } = useAppStore();
+  const [trackStats, setTrackStats] = useState<ReaderTrackStats | null>(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [savedArticlesCount, setSavedArticlesCount] = useState(0);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -90,6 +126,10 @@ export default function ReaderAccountPage() {
         memberSince: '\u092e\u0947\u0902\u092c\u0930 \u0938\u093f\u0902\u0938',
         savedArticles: '\u0938\u0947\u0935\u094d\u0921 \u0906\u0930\u094d\u091f\u093f\u0915\u0932\u094d\u0938',
         savedArticlesHint: '\u0906\u092a\u0915\u0947 \u0926\u094d\u0935\u093e\u0930\u093e \u0938\u0947\u0935 \u0915\u0940 \u0917\u0908 \u0916\u092c\u0930\u0947\u0902',
+        readingStats: '\u0930\u0940\u0921\u093f\u0902\u0917 \u0938\u094d\u091f\u0948\u091f\u094d\u0938',
+        averageCompletion: '\u0914\u0938\u0924 \u0915\u0902\u092a\u094d\u0932\u0940\u0936\u0928',
+        lastActive: '\u0906\u0916\u093f\u0930\u0940 \u090f\u0915\u094d\u091f\u093f\u0935',
+        statsLoading: '\u0938\u094d\u091f\u0948\u091f\u094d\u0938 \u0932\u094b\u0921 \u0939\u094b \u0930\u0939\u0947 \u0939\u0948\u0902...',
         preferences: '\u092a\u094d\u0930\u093f\u092b\u0930\u0947\u0902\u0938\u0947\u0938',
         preferencesHint: '\u092d\u093e\u0937\u093e, \u092b\u0940\u0921 \u0914\u0930 \u0930\u0940\u0921\u093f\u0902\u0917 \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938',
         openPreferences: '\u092a\u094d\u0930\u093f\u092b\u0930\u0947\u0902\u0938\u0947\u0938 \u0916\u094b\u0932\u0947\u0902',
@@ -106,6 +146,10 @@ export default function ReaderAccountPage() {
       memberSince: 'Member Since',
       savedArticles: 'Saved Articles',
       savedArticlesHint: 'Stories you have saved for later reading',
+      readingStats: 'Reading Stats',
+      averageCompletion: 'Average Completion',
+      lastActive: 'Last Active',
+      statsLoading: 'Loading reading stats...',
       preferences: 'Preferences',
       preferencesHint: 'Language, feed and reading settings',
       openPreferences: 'Open Preferences',
@@ -122,9 +166,15 @@ export default function ReaderAccountPage() {
   const userInitials = getUserInitials(userName, userEmail);
   const userRole = formatUserRoleLabel(sessionUser?.role);
   const memberSince = formatMemberSince(sessionUser?.createdAt, language);
-  const savedArticlesCount = Array.isArray(sessionUser?.savedArticles)
+  const fallbackSavedArticlesCount = Array.isArray(sessionUser?.savedArticles)
     ? sessionUser.savedArticles.length
     : 0;
+  const readCount = typeof trackStats?.readCount === 'number' ? trackStats.readCount : 0;
+  const averageCompletionPercent =
+    typeof trackStats?.averageCompletionPercent === 'number'
+      ? trackStats.averageCompletionPercent
+      : 0;
+  const lastActive = formatLastActive(trackStats?.lastActiveAt, language);
 
   useEffect(() => {
     if (status !== 'unauthenticated') {
@@ -135,6 +185,103 @@ export default function ReaderAccountPage() {
     setIsRedirecting(true);
     router.replace(ACCOUNT_REDIRECT_URL);
   }, [router, status]);
+
+  const loadSavedArticlesCount = useCallback(async () => {
+    if (status !== 'authenticated' || !userEmail) {
+      setSavedArticlesCount(0);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/user/save', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as SavedArticlesSummaryPayload;
+
+      if (
+        response.ok &&
+        payload.success &&
+        typeof payload.data?.count === 'number' &&
+        Number.isFinite(payload.data.count)
+      ) {
+        setSavedArticlesCount(payload.data.count);
+        return;
+      }
+
+      setSavedArticlesCount(fallbackSavedArticlesCount);
+    } catch (error) {
+      console.error('Failed to load saved articles count:', error);
+      setSavedArticlesCount(fallbackSavedArticlesCount);
+    }
+  }, [fallbackSavedArticlesCount, status, userEmail]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadTrackStats = async () => {
+      if (status !== 'authenticated' || !userEmail) {
+        if (!active) return;
+        setTrackStats(null);
+        setIsStatsLoading(false);
+        return;
+      }
+
+      setIsStatsLoading(true);
+
+      try {
+        const response = await fetch('/api/user/track', { cache: 'no-store' });
+        const payload = (await response.json().catch(() => ({}))) as {
+          success?: boolean;
+          data?: ReaderTrackStats;
+        };
+
+        if (!active) return;
+
+        if (response.ok && payload.success && payload.data) {
+          setTrackStats(payload.data);
+        } else {
+          setTrackStats(null);
+        }
+      } catch (error) {
+        console.error('Failed to load reader stats:', error);
+        if (active) {
+          setTrackStats(null);
+        }
+      } finally {
+        if (active) {
+          setIsStatsLoading(false);
+        }
+      }
+    };
+
+    void loadTrackStats();
+
+    return () => {
+      active = false;
+    };
+  }, [status, userEmail]);
+
+  useEffect(() => {
+    void loadSavedArticlesCount();
+  }, [loadSavedArticlesCount]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || status !== 'authenticated') {
+      return;
+    }
+
+    const handleSavedArticleUpdated = () => {
+      void loadSavedArticlesCount();
+    };
+
+    window.addEventListener('lokswami:saved-article-updated', handleSavedArticleUpdated);
+
+    return () => {
+      window.removeEventListener('lokswami:saved-article-updated', handleSavedArticleUpdated);
+    };
+  }, [loadSavedArticlesCount, status]);
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -204,7 +351,7 @@ export default function ReaderAccountPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
@@ -236,6 +383,36 @@ export default function ReaderAccountPage() {
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                   {copy.savedArticlesHint}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                <Activity className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                  {copy.readingStats}
+                </p>
+                {isStatsLoading ? (
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    {copy.statsLoading}
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-lg font-black text-zinc-900 dark:text-zinc-100">
+                      {readCount}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                      {copy.averageCompletion}: {averageCompletionPercent}%
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                      {copy.lastActive}: {lastActive}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>

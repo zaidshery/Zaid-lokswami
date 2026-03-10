@@ -78,6 +78,7 @@ interface AppState {
   currentUser: AppUser | null;
   isAuthenticated: boolean;
   setUser: (user: AppUser) => void;
+  setSavedArticles: (savedArticles: string[]) => void;
   clearUser: () => void;
 }
 
@@ -144,6 +145,19 @@ export const useAppStore = create<AppState>()(
       currentUser: null,
       isAuthenticated: false,
       setUser: (currentUser) => set({ currentUser, isAuthenticated: true }),
+      setSavedArticles: (savedArticles) =>
+        set((state) => {
+          if (!state.currentUser) {
+            return state;
+          }
+
+          return {
+            currentUser: {
+              ...state.currentUser,
+              savedArticles: Array.from(new Set(savedArticles.map((value) => String(value).trim()).filter(Boolean))),
+            },
+          };
+        }),
       clearUser: () => set({ currentUser: null, isAuthenticated: false }),
     }),
     {

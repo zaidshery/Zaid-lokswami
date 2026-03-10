@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import type { UserRole } from '@/lib/auth/roles';
 import { useAppStore, type AppUser } from '@/lib/store/appStore';
+
+type SavedArticlesPayload = {
+  success?: boolean;
+  data?: {
+    savedArticleIds?: string[];
+  };
+};
 
 function mapSessionToAppUser(
   sessionUser: {
@@ -37,7 +44,36 @@ function mapSessionToAppUser(
 export default function AuthSync() {
   const { data: session, status } = useSession();
   const setUser = useAppStore((state) => state.setUser);
+  const setSavedArticles = useAppStore((state) => state.setSavedArticles);
   const clearUser = useAppStore((state) => state.clearUser);
+
+  const refreshSavedArticles = useCallback(async () => {
+    if (status !== 'authenticated') {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/user/save', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as SavedArticlesPayload;
+
+      if (
+        response.ok &&
+        payload.success &&
+        Array.isArray(payload.data?.savedArticleIds)
+      ) {
+        const normalized = payload.data.savedArticleIds
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+        setSavedArticles(normalized);
+      }
+    } catch (error) {
+      console.error('Failed to refresh saved articles from API:', error);
+    }
+  }, [setSavedArticles, status]);
 
   useEffect(() => {
     if (status === 'loading') {
@@ -57,7 +93,67 @@ export default function AuthSync() {
     }
 
     setUser(mappedUser);
-  }, [clearUser, session?.user, setUser, status]);
+    void refreshSavedArticles();
+  }, [clearUser, refreshSavedArticles, session?.user, setUser, status]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || status !== 'authenticated') {
+      return;
+    }
+
+    const handleSavedArticleUpdated = (
+      event: Event
+    ) => {
+      const payload = (event as CustomEvent<{
+        articleId?: string;
+        saved?: boolean;
+        savedArticleIds?: string[];
+      }>).detail;
+
+      if (!payload) {
+        return;
+      }
+
+      if (Array.isArray(payload.savedArticleIds)) {
+        const normalized = payload.savedArticleIds
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+        setSavedArticles(normalized);
+        return;
+      }
+
+      if (!payload.articleId || typeof payload.saved !== 'boolean') {
+        return;
+      }
+
+      const currentUser = useAppStore.getState().currentUser;
+      if (!currentUser) {
+        return;
+      }
+
+      const currentIds = Array.isArray(currentUser.savedArticles)
+        ? currentUser.savedArticles
+        : [];
+
+      const nextIds = payload.saved
+        ? Array.from(new Set([...currentIds, payload.articleId]))
+        : currentIds.filter((id) => id !== payload.articleId);
+
+      setSavedArticles(nextIds);
+    };
+
+    window.addEventListener(
+      'lokswami:saved-article-updated',
+      handleSavedArticleUpdated as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        'lokswami:saved-article-updated',
+        handleSavedArticleUpdated as EventListener
+      );
+    };
+  }, [setSavedArticles, status]);
 
   return null;
 }

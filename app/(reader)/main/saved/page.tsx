@@ -22,6 +22,7 @@ type SavedArticle = {
 type SavedArticlesPayload = {
   success?: boolean;
   data?: {
+    savedArticleIds?: string[];
     savedArticles?: SavedArticle[];
     count?: number;
   };
@@ -100,6 +101,16 @@ export default function SavedArticlesPage() {
         : [];
 
       setSavedArticles(rows);
+
+      if (typeof window !== 'undefined' && Array.isArray(payload.data.savedArticleIds)) {
+        window.dispatchEvent(
+          new CustomEvent('lokswami:saved-article-updated', {
+            detail: {
+              savedArticleIds: payload.data.savedArticleIds,
+            },
+          })
+        );
+      }
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -137,6 +148,7 @@ export default function SavedArticlesPage() {
         success?: boolean;
         data?: {
           saved?: boolean;
+          savedArticleIds?: string[];
         };
         error?: string;
       };
@@ -159,6 +171,9 @@ export default function SavedArticlesPage() {
             detail: {
               articleId,
               saved: isSaved,
+              savedArticleIds: Array.isArray(payload.data.savedArticleIds)
+                ? payload.data.savedArticleIds
+                : undefined,
             },
           })
         );

@@ -199,7 +199,7 @@ export default function LatestFeedClient({
           <div>
             <h1 className="text-2xl font-bold text-lokswami-white">{t.title}</h1>
             <p className="text-sm text-lokswami-text-secondary">
-              {sortedArticles.length} {t.countLabel} Ã¢â‚¬Â¢ {t.subtitle}
+              {sortedArticles.length} {t.countLabel} • {t.subtitle}
             </p>
           </div>
         </div>

@@ -21,12 +21,14 @@ interface NewsCardProps {
 
 export default function NewsCard({ article, variant = 'default', size = 'default', index = 0 }: NewsCardProps) {
   const router = useRouter();
-  const { data: session, status } = useSession();
-  const { language } = useAppStore();
+  const { status } = useSession();
+  const language = useAppStore((state) => state.language);
+  const savedArticleIds = useAppStore((state) => state.currentUser?.savedArticles ?? null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isSavingBookmark, setIsSavingBookmark] = useState(false);
   const isSignedIn = status === 'authenticated';
+  const isSavedInProfile = Array.isArray(savedArticleIds) && savedArticleIds.includes(article.id);
   const isSmall = size === 'sm';
   const articleHref = `/main/article/${encodeURIComponent(article.id)}`;
   const canSaveArticle = /^[a-fA-F0-9]{24}$/.test(article.id);
@@ -39,11 +41,8 @@ export default function NewsCard({ article, variant = 'default', size = 'default
   }, []);
 
   useEffect(() => {
-    const savedArticleIds = Array.isArray(session?.user?.savedArticles)
-      ? session.user.savedArticles
-      : [];
-    setIsBookmarked(savedArticleIds.includes(article.id));
-  }, [article.id, session?.user?.savedArticles]);
+    setIsBookmarked(isSavedInProfile);
+  }, [isSavedInProfile]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -133,6 +132,7 @@ export default function NewsCard({ article, variant = 'default', size = 'default
         success?: boolean;
         data?: {
           saved?: boolean;
+          savedArticleIds?: string[];
         };
       };
 
@@ -149,6 +149,9 @@ export default function NewsCard({ article, variant = 'default', size = 'default
             detail: {
               articleId: article.id,
               saved: nextSaved,
+              savedArticleIds: Array.isArray(payload.data.savedArticleIds)
+                ? payload.data.savedArticleIds
+                : undefined,
             },
           })
         );

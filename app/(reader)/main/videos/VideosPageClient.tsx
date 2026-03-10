@@ -254,20 +254,20 @@ export default function VideosPageClient({
     const diff = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
 
     if (diff < 60) {
-      return language === 'hi' ? `${diff} Ã Â¤Â®Ã Â¤Â¿Ã Â¤Â¨Ã Â¤Å¸ Ã Â¤ÂªÃ Â¤Â¹Ã Â¤Â²Ã Â¥â€¡` : `${diff} min ago`;
+      return language === 'hi' ? `${diff} मिनट पहले` : `${diff} min ago`;
     }
 
     if (diff < 1440) {
       const hours = Math.floor(diff / 60);
-      return language === 'hi' ? `${hours} Ã Â¤ËœÃ Â¤â€šÃ Â¤Å¸Ã Â¥â€¡ Ã Â¤ÂªÃ Â¤Â¹Ã Â¤Â²Ã Â¥â€¡` : `${hours} hours ago`;
+      return language === 'hi' ? `${hours} घंटे पहले` : `${hours} hours ago`;
     }
 
     const days = Math.floor(diff / 1440);
-    return language === 'hi' ? `${days} Ã Â¤Â¦Ã Â¤Â¿Ã Â¤Â¨ Ã Â¤ÂªÃ Â¤Â¹Ã Â¤Â²Ã Â¥â€¡` : `${days} days ago`;
+    return language === 'hi' ? `${days} दिन पहले` : `${days} days ago`;
   };
 
   const renderTime = (dateString: string) =>
-    isHydrated ? formatTime(dateString) : language === 'hi' ? 'Ã Â¤Â¹Ã Â¤Â¾Ã Â¤Â² Ã Â¤Â¹Ã Â¥â‚¬ Ã Â¤Â®Ã Â¥â€¡Ã Â¤â€š' : 'recently';
+    isHydrated ? formatTime(dateString) : language === 'hi' ? 'हाल ही में' : 'recently';
 
   const categoryOptions = useMemo(() => {
     const unique = new Map<string, string>();
@@ -277,7 +277,7 @@ export default function VideosPageClient({
     });
 
     return [
-      { id: 'all', name: language === 'hi' ? 'Ã Â¤Â¸Ã Â¤Â­Ã Â¥â‚¬' : 'All' },
+      { id: 'all', name: language === 'hi' ? 'सभी' : 'All' },
       ...Array.from(unique.entries()).map(([id, label]) => ({
         id,
         name: getCategoryLabel(label, language),
@@ -408,15 +408,15 @@ export default function VideosPageClient({
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
             <span className="h-8 w-1 rounded-full bg-red-600" />
-            {language === 'hi' ? 'Ã Â¤ÂµÃ Â¥â‚¬Ã Â¤Â¡Ã Â¤Â¿Ã Â¤Â¯Ã Â¥â€¹' : 'Videos'}
+            {language === 'hi' ? 'वीडियो' : 'Videos'}
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             {viewMode === 'shorts'
               ? language === 'hi'
-                ? 'Ã Â¤Â¶Ã Â¥â€°Ã Â¤Â°Ã Â¥ÂÃ Â¤Å¸Ã Â¥ÂÃ Â¤Â¸ Ã Â¤Â®Ã Â¥â€¹Ã Â¤Â¡: Ã Â¤Â«Ã Â¥ÂÃ Â¤Â² Ã Â¤Â¸Ã Â¥ÂÃ Â¤â€¢Ã Â¥ÂÃ Â¤Â°Ã Â¥â‚¬Ã Â¤Â¨ Ã Â¤Â¸Ã Â¥ÂÃ Â¤ÂµÃ Â¤Â¾Ã Â¤â€¡Ã Â¤Âª Ã Â¤ÂµÃ Â¥â‚¬Ã Â¤Â¡Ã Â¤Â¿Ã Â¤Â¯Ã Â¥â€¹'
+                ? 'शॉर्ट्स मोड: फुल स्क्रीन स्वाइप वीडियो फीड'
                 : 'Shorts mode: full-screen swipe video feed'
               : language === 'hi'
-              ? 'Ã Â¤Â¤Ã Â¤Â¾Ã Â¤Å“Ã Â¤Â¼Ã Â¤Â¾ Ã Â¤ÂµÃ Â¥â‚¬Ã Â¤Â¡Ã Â¤Â¿Ã Â¤Â¯Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¾Ã Â¤Å¡Ã Â¤Â¾Ã Â¤Â° Ã Â¤Â¦Ã Â¥â€¡Ã Â¤â€“Ã Â¥â€¡Ã Â¤â€š'
+              ? 'ताज़ा वीडियो समाचार देखें'
               : 'Watch latest video news'}
           </p>
         </div>
@@ -431,7 +431,7 @@ export default function VideosPageClient({
             }`}
           >
             <Film className="h-4 w-4" />
-            {language === 'hi' ? 'Ã Â¤Â«Ã Â¥â‚¬Ã Â¤Â¡' : 'Feed'}
+            {language === 'hi' ? 'फीड' : 'Feed'}
           </button>
 
           <button
@@ -443,7 +443,7 @@ export default function VideosPageClient({
             }`}
           >
             <Smartphone className="h-4 w-4" />
-            {language === 'hi' ? 'Ã Â¤Â¶Ã Â¥â€°Ã Â¤Â°Ã Â¥ÂÃ Â¤Å¸Ã Â¥ÂÃ Â¤Â¸' : 'Shorts'}
+            {language === 'hi' ? 'शॉर्ट्स' : 'Shorts'}
           </button>
 
           <button
@@ -455,7 +455,7 @@ export default function VideosPageClient({
             }`}
           >
             <Clock3 className="h-4 w-4" />
-            {language === 'hi' ? 'Ã Â¤Â¤Ã Â¤Â¾Ã Â¤Å“Ã Â¤Â¼Ã Â¤Â¾' : 'Latest'}
+            {language === 'hi' ? 'ताज़ा' : 'Latest'}
           </button>
 
           <button
@@ -467,7 +467,7 @@ export default function VideosPageClient({
             }`}
           >
             <TrendingUp className="h-4 w-4" />
-            {language === 'hi' ? 'Ã Â¤Å¸Ã Â¥ÂÃ Â¤Â°Ã Â¥â€¡Ã Â¤â€šÃ Â¤Â¡Ã Â¤Â¿Ã Â¤â€šÃ Â¤â€”' : 'Trending'}
+            {language === 'hi' ? 'ट्रेंडिंग' : 'Trending'}
           </button>
         </div>
           </div>
@@ -492,7 +492,7 @@ export default function VideosPageClient({
         <div className="hidden">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-base font-extrabold tracking-tight">
-              {language === 'hi' ? 'Ã Â¤Â¶Ã Â¥â€°Ã Â¤Â°Ã Â¥ÂÃ Â¤Å¸Ã Â¥ÂÃ Â¤Â¸' : 'Shorts'}
+              {language === 'hi' ? 'शॉर्ट्स' : 'Shorts'}
             </h1>
 
             <div className="inline-flex items-center rounded-full border border-zinc-700 bg-zinc-900 p-1">
@@ -500,13 +500,13 @@ export default function VideosPageClient({
                 onClick={() => setViewMode('feed')}
                 className="rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
               >
-                {language === 'hi' ? 'Ã Â¤Â«Ã Â¥â‚¬Ã Â¤Â¡' : 'Feed'}
+                {language === 'hi' ? 'फीड' : 'Feed'}
               </button>
               <button
                 onClick={() => setViewMode('shorts')}
                 className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
               >
-                {language === 'hi' ? 'Ã Â¤Â¶Ã Â¥â€°Ã Â¤Â°Ã Â¥ÂÃ Â¤Å¸Ã Â¥ÂÃ Â¤Â¸' : 'Shorts'}
+                {language === 'hi' ? 'शॉर्ट्स' : 'Shorts'}
               </button>
             </div>
           </div>
@@ -520,7 +520,7 @@ export default function VideosPageClient({
                   : 'border-zinc-700 bg-zinc-900 text-zinc-200'
               }`}
             >
-              {language === 'hi' ? 'Ã Â¤Â¤Ã Â¤Â¾Ã Â¤Å“Ã Â¤Â¼Ã Â¤Â¾' : 'Latest'}
+              {language === 'hi' ? 'ताज़ा' : 'Latest'}
             </button>
 
             <button
@@ -531,7 +531,7 @@ export default function VideosPageClient({
                   : 'border-zinc-700 bg-zinc-900 text-zinc-200'
               }`}
             >
-              {language === 'hi' ? 'Ã Â¤Å¸Ã Â¥ÂÃ Â¤Â°Ã Â¥â€¡Ã Â¤â€šÃ Â¤Â¡Ã Â¤Â¿Ã Â¤â€šÃ Â¤â€”' : 'Trending'}
+              {language === 'hi' ? 'ट्रेंडिंग' : 'Trending'}
             </button>
 
             {categoryOptions.map((category) => (
@@ -576,7 +576,7 @@ export default function VideosPageClient({
       ) : !sortedVideos.length ? (
         <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-            {language === 'hi' ? 'Ã Â¤ÂµÃ Â¥â‚¬Ã Â¤Â¡Ã Â¤Â¿Ã Â¤Â¯Ã Â¥â€¹ Ã Â¤â€°Ã Â¤ÂªÃ Â¤Â²Ã Â¤Â¬Ã Â¥ÂÃ Â¤Â§ Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥Ë†Ã Â¤â€š' : 'No videos available'}
+            {language === 'hi' ? 'वीडियो उपलब्ध नहीं हैं' : 'No videos available'}
           </p>
         </div>
       ) : viewMode === 'shorts' ? (
@@ -594,7 +594,7 @@ export default function VideosPageClient({
               }`}
             >
               {language === 'hi'
-                ? 'Ã Â¤Â¶Ã Â¥â€°Ã Â¤Â°Ã Â¥ÂÃ Â¤Å¸Ã Â¥ÂÃ Â¤Â¸ Ã Â¤Å¸Ã Â¥Ë†Ã Â¤â€” Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â®Ã Â¤Â¿Ã Â¤Â²Ã Â¥â€¡, Ã Â¤Â¸Ã Â¤Â¾Ã Â¤Â®Ã Â¤Â¾Ã Â¤Â¨Ã Â¥ÂÃ Â¤Â¯ Ã Â¤ÂµÃ Â¥â‚¬Ã Â¤Â¡Ã Â¤Â¿Ã Â¤Â¯Ã Â¥â€¹ Ã Â¤Â¶Ã Â¥â€°Ã Â¤Â°Ã Â¥ÂÃ Â¤Å¸Ã Â¥ÂÃ Â¤Â¸ Ã Â¤Â®Ã Â¥â€¹Ã Â¤Â¡ Ã Â¤Â®Ã Â¥â€¡Ã Â¤â€š Ã Â¤Â¦Ã Â¤Â¿Ã Â¤â€“Ã Â¤Â¾Ã Â¤Â Ã Â¤Å“Ã Â¤Â¾ Ã Â¤Â°Ã Â¤Â¹Ã Â¥â€¡ Ã Â¤Â¹Ã Â¥Ë†Ã Â¤â€š'
+                ? 'शॉर्ट्स टैग नहीं मिले, सामान्य वीडियो शॉर्ट्स मोड में दिखाए जा रहे हैं'
                 : 'No shorts-tagged videos found, showing regular videos in shorts mode'}
             </p>
           ) : null}
@@ -644,7 +644,7 @@ export default function VideosPageClient({
                 </span>
                 {featuredVideo.isShort ? (
                   <span className="rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
-                    {language === 'hi' ? 'Ã Â¤Â¶Ã Â¥â€°Ã Â¤Â°Ã Â¥ÂÃ Â¤Å¸Ã Â¥ÂÃ Â¤Â¸' : 'Shorts'}
+                    {language === 'hi' ? 'शॉर्ट्स' : 'Shorts'}
                   </span>
                 ) : null}
               </div>
@@ -708,7 +708,7 @@ export default function VideosPageClient({
 
                   {video.isShort ? (
                     <span className="absolute left-2 top-2 rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-semibold text-white">
-                      {language === 'hi' ? 'Ã Â¤Â¶Ã Â¥â€°Ã Â¤Â°Ã Â¥ÂÃ Â¤Å¸Ã Â¥ÂÃ Â¤Â¸' : 'Shorts'}
+                      {language === 'hi' ? 'शॉर्ट्स' : 'Shorts'}
                     </span>
                   ) : null}
 

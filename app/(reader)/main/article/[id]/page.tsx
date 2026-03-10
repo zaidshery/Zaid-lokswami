@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, Newspaper, Sparkles, Volume2, PauseCircle, Loader2 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Bookmark, Newspaper, Sparkles, Volume2, PauseCircle, Loader2 } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 import NewsCard from '@/components/ui/NewsCard';
 import { fetchMergedLiveArticles } from '@/lib/content/liveArticles';
 import type { Article } from '@/lib/mock/data';
@@ -47,6 +48,7 @@ const USE_REMOTE_DEMO_MEDIA =
 const ALLOW_BROWSER_TTS_FALLBACK = process.env.NODE_ENV !== 'production';
 const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
 const LOCAL_NEWS_FALLBACK_IMAGE = '/placeholders/news-16x9.svg';
+const MONGO_OBJECT_ID_REGEX = /^[a-fA-F0-9]{24}$/;
 
 function parsePublicBhashiniVoiceOptions(raw: string | undefined): TtsVoiceOption[] {
   if (!raw) return [];
@@ -184,9 +186,12 @@ function isLangSupportedByVoices(targetCode: string, voices: string[]) {
 }
 
 export default function ArticleDetailPage() {
+  const router = useRouter();
+  const { status } = useSession();
   const params = useParams<{ id: string }>();
   const routeId = Array.isArray(params?.id) ? params.id[0] || '' : params?.id || '';
-  const { language } = useAppStore();
+  const language = useAppStore((state) => state.language);
+  const savedArticleIds = useAppStore((state) => state.currentUser?.savedArticles ?? null);
   const [article, setArticle] = useState<Article | null>(null);
   const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -198,10 +203,18 @@ export default function ArticleDetailPage() {
   const [listenVoiceId, setListenVoiceId] = useState('');
   const [isPreparingListen, setIsPreparingListen] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isSavingBookmark, setIsSavingBookmark] = useState(false);
   const [listenError, setListenError] = useState('');
   const [isBhashiniConfigured, setIsBhashiniConfigured] = useState(false);
   const [browserVoiceLangCodes, setBrowserVoiceLangCodes] = useState<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hasTrackedReadRef = useRef(false);
+  const readingProgressRef = useRef(0);
+  const isSignedIn = status === 'authenticated';
+  const canSaveArticle = Boolean(article && MONGO_OBJECT_ID_REGEX.test(article.id));
+  const isBookmarked = Boolean(
+    article && Array.isArray(savedArticleIds) && savedArticleIds.includes(article.id)
+  );
 
   useEffect(() => {
     let active = true;
@@ -279,6 +292,63 @@ export default function ArticleDetailPage() {
       window.removeEventListener('resize', updateReadingProgress);
     };
   }, []);
+
+  useEffect(() => {
+    readingProgressRef.current = readingProgress;
+  }, [readingProgress]);
+
+  const trackArticleRead = useCallback(
+    async (completionPercent: number) => {
+      if (!article || !MONGO_OBJECT_ID_REGEX.test(article.id) || hasTrackedReadRef.current) {
+        return;
+      }
+
+      hasTrackedReadRef.current = true;
+
+      try {
+        await fetch('/api/user/track', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            articleId: article.id,
+            completionPercent: Math.min(100, Math.max(0, Math.round(completionPercent))),
+          }),
+        });
+      } catch (error) {
+        console.error('Failed to track article read:', error);
+        hasTrackedReadRef.current = false;
+      }
+    },
+    [article]
+  );
+
+  useEffect(() => {
+    hasTrackedReadRef.current = false;
+  }, [article?.id]);
+
+  useEffect(() => {
+    if (!article || !MONGO_OBJECT_ID_REGEX.test(article.id)) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void trackArticleRead(Math.max(60, readingProgressRef.current));
+    }, 60_000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [article, trackArticleRead]);
+
+  useEffect(() => {
+    if (readingProgress < 80) {
+      return;
+    }
+
+    void trackArticleRead(readingProgress);
+  }, [readingProgress, trackArticleRead]);
 
   useEffect(() => {
     let active = true;
@@ -786,6 +856,59 @@ export default function ArticleDetailPage() {
     window.open(shareUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const handleBookmarkToggle = async () => {
+    if (!article) return;
+
+    if (!isSignedIn) {
+      router.push('/signin?redirect=/main/saved');
+      return;
+    }
+
+    if (!canSaveArticle || isSavingBookmark) return;
+
+    setIsSavingBookmark(true);
+
+    try {
+      const response = await fetch('/api/user/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ articleId: article.id }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        data?: {
+          saved?: boolean;
+          savedArticleIds?: string[];
+        };
+      };
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error('Failed to toggle bookmark');
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('lokswami:saved-article-updated', {
+            detail: {
+              articleId: article.id,
+              saved: Boolean(payload.data.saved),
+              savedArticleIds: Array.isArray(payload.data.savedArticleIds)
+                ? payload.data.savedArticleIds
+                : undefined,
+            },
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Failed to toggle article bookmark:', error);
+    } finally {
+      setIsSavingBookmark(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="mx-auto max-w-4xl py-10">
@@ -873,6 +996,30 @@ export default function ArticleDetailPage() {
               </span>
             ) : null}
             <div className="inline-flex items-center gap-1 sm:ml-auto sm:gap-2">
+              <button
+                type="button"
+                onClick={() => void handleBookmarkToggle()}
+                disabled={!canSaveArticle || isSavingBookmark}
+                className={`inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-full border px-2 text-[10px] font-semibold leading-none transition sm:h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal ${
+                  isBookmarked
+                    ? 'border-orange-400 bg-orange-600 text-white hover:bg-orange-700 dark:border-orange-500 dark:bg-orange-500 dark:hover:bg-orange-400'
+                    : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-500/45 dark:bg-orange-500/12 dark:text-orange-300 dark:hover:bg-orange-500/20'
+                } ${!canSaveArticle || isSavingBookmark ? 'cursor-not-allowed opacity-60' : ''}`}
+                aria-pressed={isBookmarked}
+                aria-label={isBookmarked ? 'Remove bookmark' : 'Save article'}
+              >
+                {isSavingBookmark ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin sm:h-4 sm:w-4" />
+                ) : (
+                  <Bookmark
+                    className={`h-3.5 w-3.5 max-[420px]:hidden sm:h-4 sm:w-4 ${
+                      isBookmarked ? 'fill-current' : ''
+                    }`}
+                  />
+                )}
+                {isBookmarked ? 'Saved' : 'Save'}
+              </button>
+
               <button
                 type="button"
                 onClick={handleWhatsAppShare}
