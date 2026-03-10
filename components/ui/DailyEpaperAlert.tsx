@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { BellRing, Newspaper, X } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store/appStore';
 
 type LatestPaper = {
@@ -22,12 +23,14 @@ function localDateKey(date: Date) {
 
 export default function DailyEpaperAlert() {
   const { language } = useAppStore();
+  const { data: session, status } = useSession();
   const [latestPaper, setLatestPaper] = useState<LatestPaper | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [enableState, setEnableState] = useState<'idle' | 'working'>('idle');
   const [notice, setNotice] = useState('');
 
   const today = useMemo(() => localDateKey(new Date()), []);
+  const isSignedIn = status === 'authenticated' && Boolean(session?.user?.email);
 
   useEffect(() => {
     let active = true;
@@ -102,15 +105,15 @@ export default function DailyEpaperAlert() {
             icon: '/logo-icon-final.png',
           });
         }
-
-        // If reader is logged in, this keeps their daily-alert preference synced.
-        await fetch('/api/auth/preferences', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ wantsDailyAlerts: true }),
-        }).catch(() => undefined);
-
-        setNotice(language === 'hi' ? '\u0928\u094b\u091f\u093f\u092b\u093f\u0915\u0947\u0936\u0928 \u0938\u0915\u094d\u0937\u092e \u0939\u094b \u0917\u092f\u093e' : 'Browser notifications enabled');
+        setNotice(
+          language === 'hi'
+            ? isSignedIn
+              ? '\u0906\u092a\u0915\u0947 \u0905\u0915\u093e\u0909\u0902\u091f \u0915\u0947 \u0932\u093f\u090f \u0907\u0938 \u0921\u093f\u0935\u093e\u0907\u0938 \u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u0938\u0915\u094d\u0937\u092e \u0939\u094b \u0917\u090f'
+              : '\u0907\u0938 \u0921\u093f\u0935\u093e\u0907\u0938 \u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u0938\u0915\u094d\u0937\u092e \u0939\u094b \u0917\u090f'
+            : isSignedIn
+              ? 'Alerts enabled for this account on this device'
+              : 'Alerts enabled on this device'
+        );
       } else {
         setNotice(language === 'hi' ? '\u0928\u094b\u091f\u093f\u092b\u093f\u0915\u0947\u0936\u0928 \u0905\u0928\u0941\u092e\u0924\u093f \u0928\u0939\u0940\u0902 \u092e\u093f\u0932\u0940' : 'Notification permission denied');
       }
