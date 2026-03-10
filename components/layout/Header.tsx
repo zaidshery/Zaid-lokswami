@@ -197,6 +197,14 @@ export default function Header() {
 
                           <div className="mt-2 space-y-1">
                             <Link
+                              href="/main/account"
+                              onClick={() => setIsUserMenuOpen(false)}
+                              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                            >
+                              <User size={16} />
+                              <span>My Account</span>
+                            </Link>
+                            <Link
                               href="/main/saved"
                               onClick={() => setIsUserMenuOpen(false)}
                               className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
