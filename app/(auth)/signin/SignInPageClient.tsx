@@ -314,31 +314,55 @@ function SignInPageContent() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const hasResolvedPostAuthRoute = useRef(false);
+  const hasHandledPostAuthMount = useRef(false);
+  const hasHandledSessionRedirect = useRef(false);
+  const redirectParam = searchParams.get('redirect');
+  const callbackUrlParam = searchParams.get('callbackUrl');
+  const errorKey = searchParams.get('error');
+  const isPostAuth = searchParams.get(POST_AUTH_QUERY_PARAM) === '1';
+  const shouldShowAdminBanner = searchParams.get(ADMIN_BANNER_QUERY_PARAM) === '1';
 
   const redirectTo = useMemo(
     () =>
-      resolvePostSignInRedirect(searchParams.get('redirect')) ||
-      resolvePostSignInRedirect(searchParams.get('callbackUrl')) ||
+      resolvePostSignInRedirect(redirectParam) ||
+      resolvePostSignInRedirect(callbackUrlParam) ||
       '/main',
-    [searchParams]
+    [callbackUrlParam, redirectParam]
   );
-  const isPostAuth = searchParams.get(POST_AUTH_QUERY_PARAM) === '1';
-  const shouldShowAdminBanner = searchParams.get(ADMIN_BANNER_QUERY_PARAM) === '1';
-  const errorKey = searchParams.get('error');
   const isAdminSession = isAdminRole(session?.user?.role) && session?.user?.isActive !== false;
   const callbackUrl = useMemo(
     () =>
       buildPostAuthCallbackUrl(
         redirectTo,
-        !searchParams.get('redirect') && !searchParams.get('callbackUrl')
+        !redirectParam && !callbackUrlParam
       ),
-    [redirectTo, searchParams]
+    [callbackUrlParam, redirectParam, redirectTo]
   );
 
   useEffect(() => {
-    if (status !== 'authenticated') {
-      hasResolvedPostAuthRoute.current = false;
+    if (!isPostAuth || hasHandledPostAuthMount.current) {
+      return;
+    }
+
+    hasHandledPostAuthMount.current = true;
+
+    if (shouldShowAdminBanner) {
+      armAdminSigninBanner();
+    }
+
+    router.replace(redirectTo);
+    router.refresh();
+  }, [isPostAuth, redirectTo, router, shouldShowAdminBanner]);
+
+  useEffect(() => {
+    if (status === 'loading') {
+      return;
+    }
+
+    if (status === 'unauthenticated') {
+      if (!isPostAuth) {
+        hasHandledSessionRedirect.current = false;
+      }
       return;
     }
 
@@ -346,26 +370,13 @@ function SignInPageContent() {
       return;
     }
 
-    if (!isPostAuth) {
-      router.replace('/main');
-      router.refresh();
+    if (hasHandledSessionRedirect.current) {
       return;
     }
 
-    if (hasResolvedPostAuthRoute.current) {
-      return;
-    }
+    hasHandledSessionRedirect.current = true;
 
-    hasResolvedPostAuthRoute.current = true;
-
-    if (isAdminSession) {
-      if (shouldShowAdminBanner) {
-        armAdminSigninBanner();
-        router.replace('/main');
-        router.refresh();
-        return;
-      }
-
+    if (isAdminSession && isAdminOnlyTarget(redirectTo)) {
       router.replace('/admin');
       router.refresh();
       return;
@@ -379,7 +390,7 @@ function SignInPageContent() {
 
     router.replace(redirectTo);
     router.refresh();
-  }, [errorKey, isAdminSession, isPostAuth, redirectTo, router, shouldShowAdminBanner, status]);
+  }, [errorKey, isAdminSession, isPostAuth, redirectTo, router, status]);
 
   useEffect(() => {
     if (status === 'authenticated' && (errorKey === 'inactive' || errorKey === 'no_admin_access')) {

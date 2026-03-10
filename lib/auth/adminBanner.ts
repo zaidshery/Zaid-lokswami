@@ -1,6 +1,4 @@
-export const ADMIN_SIGNIN_BANNER_PENDING_KEY = 'lokswami-admin-signin-banner-pending';
-export const ADMIN_SIGNIN_BANNER_DISMISSED_KEY =
-  'lokswami-admin-signin-banner-dismissed';
+export const ADMIN_SIGNIN_BANNER_KEY = 'showAdminBanner';
 
 function canUseSessionStorage() {
   return typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
@@ -11,8 +9,7 @@ export function armAdminSigninBanner() {
     return;
   }
 
-  window.sessionStorage.setItem(ADMIN_SIGNIN_BANNER_PENDING_KEY, '1');
-  window.sessionStorage.removeItem(ADMIN_SIGNIN_BANNER_DISMISSED_KEY);
+  window.sessionStorage.setItem(ADMIN_SIGNIN_BANNER_KEY, '1');
 }
 
 export function dismissAdminSigninBanner() {
@@ -20,8 +17,7 @@ export function dismissAdminSigninBanner() {
     return;
   }
 
-  window.sessionStorage.setItem(ADMIN_SIGNIN_BANNER_DISMISSED_KEY, '1');
-  window.sessionStorage.removeItem(ADMIN_SIGNIN_BANNER_PENDING_KEY);
+  window.sessionStorage.removeItem(ADMIN_SIGNIN_BANNER_KEY);
 }
 
 export function shouldShowAdminSigninBanner() {
@@ -29,8 +25,5 @@ export function shouldShowAdminSigninBanner() {
     return false;
   }
 
-  return (
-    window.sessionStorage.getItem(ADMIN_SIGNIN_BANNER_PENDING_KEY) === '1' &&
-    window.sessionStorage.getItem(ADMIN_SIGNIN_BANNER_DISMISSED_KEY) !== '1'
-  );
+  return window.sessionStorage.getItem(ADMIN_SIGNIN_BANNER_KEY) === '1';
 }

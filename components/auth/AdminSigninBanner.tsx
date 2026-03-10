@@ -12,6 +12,10 @@ export default function AdminSigninBanner() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    if (status === 'loading') {
+      return;
+    }
+
     if (
       status !== 'authenticated' ||
       !isAdminRole(session?.user?.role) ||
