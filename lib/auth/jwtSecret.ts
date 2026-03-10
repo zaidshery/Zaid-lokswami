@@ -1,5 +1,3 @@
-const MIN_JWT_SECRET_LENGTH = 32;
-
 function normalizeSecret(value: string | undefined) {
   const trimmed = (value || '').trim();
   return trimmed || '';
@@ -14,7 +12,7 @@ export function getJwtSecretOrNull() {
 
   for (const candidate of candidates) {
     const secret = normalizeSecret(candidate);
-    if (secret.length >= MIN_JWT_SECRET_LENGTH) {
+    if (secret) {
       return secret;
     }
   }
@@ -25,9 +23,7 @@ export function getJwtSecretOrNull() {
 export function requireJwtSecret() {
   const secret = getJwtSecretOrNull();
   if (!secret) {
-    throw new Error(
-      `JWT_SECRET or NEXTAUTH_SECRET must be set and at least ${MIN_JWT_SECRET_LENGTH} characters long`
-    );
+    throw new Error('JWT_SECRET, NEXTAUTH_SECRET, or AUTH_SECRET must be set.');
   }
   return secret;
 }

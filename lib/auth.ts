@@ -7,6 +7,7 @@ import {
   isReaderRole,
   type UserRole,
 } from '@/lib/auth/roles';
+import { getJwtSecretOrNull } from '@/lib/auth/jwtSecret';
 import connectDB from '@/lib/db/mongoose';
 import User from '@/lib/models/User';
 
@@ -50,7 +51,7 @@ const POST_AUTH_MARKER = '1';
 const POST_AUTH_QUERY_PARAM = 'postAuth';
 const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim() || '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || '';
-const nextAuthSecret = process.env.NEXTAUTH_SECRET?.trim() || '';
+const nextAuthSecret = getJwtSecretOrNull() || '';
 const nextAuthUrl = process.env.NEXTAUTH_URL?.trim() || '';
 const bootstrapAdminEmails = new Set(
   String(process.env.ADMIN_EMAILS || '')
