@@ -575,11 +575,15 @@ export default function LokswamiAIBot() {
     const friendlyVoiceMessage =
       language === 'hi'
         ? 'Selected voice unavailable hai. Hindi/English try karein ya Bhashini connect karein.'
-        : 'Selected voice is unavailable. Try Hindi/English or connect Bhashini.';
+        : 'Selected voice is unavailable. Try Hindi/English or connect server TTS.';
+    const resolvedFriendlyVoiceMessage =
+      language === 'hi'
+        ? 'Selected voice unavailable hai. Hindi/English try karein ya server TTS connect karein.'
+        : friendlyVoiceMessage;
 
     try {
       if (!isBhashiniConfigured) {
-        await speakWithBrowserFallback(sourceText, friendlyVoiceMessage);
+        await speakWithBrowserFallback(sourceText, resolvedFriendlyVoiceMessage);
         return;
       }
 
@@ -596,7 +600,7 @@ export default function LokswamiAIBot() {
       const payload = (await response.json().catch(() => ({}))) as TtsResponse;
 
       if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'Bhashini TTS unavailable.');
+        throw new Error(payload.error || 'Server TTS unavailable.');
       }
 
       const audioUrl =
@@ -628,7 +632,7 @@ export default function LokswamiAIBot() {
       await audio.play();
       setIsPlayingAudio(true);
     } catch {
-      await speakWithBrowserFallback(sourceText, friendlyVoiceMessage);
+      await speakWithBrowserFallback(sourceText, resolvedFriendlyVoiceMessage);
     } finally {
       setIsPreparingListen(false);
     }

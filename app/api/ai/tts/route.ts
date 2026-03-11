@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { synthesizeBhashiniSpeech } from '@/lib/ai/bhashiniTts';
 import {
+  isSarvamConfigured,
+  isSupportedSarvamLanguage,
+  SARVAM_LANGUAGE_OPTIONS,
+  synthesizeSarvamSpeech,
+} from '@/lib/ai/sarvamTts';
+import {
   BHASHINI_LANGUAGE_OPTIONS,
   isSupportedBhashiniLanguage,
 } from '@/lib/constants/lokswamiAi';
@@ -9,12 +15,22 @@ function isBhashiniConfigured() {
   return Boolean(process.env.BHASHINI_TTS_API_URL?.trim());
 }
 
+function getConfiguredTtsProvider() {
+  if (isSarvamConfigured()) return 'sarvam' as const;
+  if (isBhashiniConfigured()) return 'bhashini' as const;
+  return null;
+}
+
 export async function GET() {
+  const provider = getConfiguredTtsProvider();
+
   return NextResponse.json({
     success: true,
     data: {
-      bhashiniConfigured: isBhashiniConfigured(),
-      supportedLanguages: BHASHINI_LANGUAGE_OPTIONS,
+      bhashiniConfigured: Boolean(provider),
+      provider,
+      supportedLanguages:
+        provider === 'sarvam' ? SARVAM_LANGUAGE_OPTIONS : BHASHINI_LANGUAGE_OPTIONS,
     },
   });
 }
@@ -39,25 +55,56 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (text.length > 3500) {
+    const provider = getConfiguredTtsProvider();
+
+    if (!provider) {
       return NextResponse.json(
-        { success: false, error: 'Text is too long for TTS. Keep it under 3500 characters.' },
+        { success: false, error: 'No server TTS provider is configured.' },
+        { status: 501 }
+      );
+    }
+
+    const maxLength = provider === 'sarvam' ? 2500 : 3500;
+    if (text.length > maxLength) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Text is too long for TTS. Keep it under ${maxLength} characters.`,
+        },
         { status: 400 }
       );
     }
 
-    if (!isSupportedBhashiniLanguage(languageCode)) {
+    const isSupportedLanguage =
+      provider === 'sarvam'
+        ? isSupportedSarvamLanguage(languageCode)
+        : isSupportedBhashiniLanguage(languageCode);
+
+    if (!isSupportedLanguage) {
       return NextResponse.json(
-        { success: false, error: 'Unsupported language code for Bhashini TTS.' },
+        {
+          success: false,
+          error:
+            provider === 'sarvam'
+              ? 'Unsupported language code for Sarvam TTS.'
+              : 'Unsupported language code for Bhashini TTS.',
+        },
         { status: 400 }
       );
     }
 
-    const synthesized = await synthesizeBhashiniSpeech({
-      text,
-      languageCode,
-      voice,
-    });
+    const synthesized =
+      provider === 'sarvam'
+        ? await synthesizeSarvamSpeech({
+            text,
+            languageCode,
+            voice,
+          })
+        : await synthesizeBhashiniSpeech({
+            text,
+            languageCode,
+            voice,
+          });
 
     if (synthesized.mode === 'unavailable') {
       return NextResponse.json(

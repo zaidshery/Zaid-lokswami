@@ -877,11 +877,15 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     const friendlyVoiceMessage =
       language === 'hi'
         ? 'चुनी गई voice उपलब्ध नहीं है। हिंदी या English voice चुनें, या Bhashini connect करें।'
-        : 'The selected voice is unavailable. Try a Hindi or English voice, or connect Bhashini.';
+        : 'The selected voice is unavailable. Try a Hindi or English voice, or connect server TTS.';
+    const resolvedFriendlyVoiceMessage =
+      language === 'hi'
+        ? 'Chosen voice unavailable hai. Hindi ya English voice try karein, ya server TTS connect karein.'
+        : friendlyVoiceMessage;
 
     try {
       if (!isBhashiniConfigured) {
-        await speakWithBrowserFallback(sourceText, friendlyVoiceMessage);
+        await speakWithBrowserFallback(sourceText, resolvedFriendlyVoiceMessage);
         return;
       }
 
@@ -898,7 +902,7 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
 
       const payload = (await response.json().catch(() => ({}))) as TtsResponse;
       if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'Bhashini TTS unavailable.');
+        throw new Error(payload.error || 'Server TTS unavailable.');
       }
 
       const audioUrl = typeof payload.data.audioUrl === 'string' ? payload.data.audioUrl.trim() : '';
@@ -927,7 +931,7 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
       await audio.play();
       setIsPlayingAudio(true);
     } catch {
-      await speakWithBrowserFallback(sourceText, friendlyVoiceMessage);
+      await speakWithBrowserFallback(sourceText, resolvedFriendlyVoiceMessage);
     } finally {
       setIsPreparingListen(false);
     }

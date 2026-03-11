@@ -673,7 +673,11 @@ export default function ArticleDetailPage() {
     const friendlyVoiceMessage =
       language === 'hi'
         ? 'Selected voice is unavailable on this device. Hindi/English try karein ya Bhashini connect karein.'
-        : 'Selected voice is unavailable on this device. Try Hindi/English or connect Bhashini.';
+        : 'Selected voice is unavailable on this device. Try Hindi/English or connect server TTS.';
+    const resolvedFriendlyVoiceMessage =
+      language === 'hi'
+        ? 'Selected voice is unavailable on this device. Hindi/English try karein ya server TTS connect karein.'
+        : friendlyVoiceMessage;
 
     const serverVoiceOnlyMessage =
       language === 'hi'
@@ -722,7 +726,7 @@ export default function ArticleDetailPage() {
       }
 
       if (!voices.length) {
-        setListenError(friendlyVoiceMessage);
+        setListenError(resolvedFriendlyVoiceMessage);
         return;
       }
 
@@ -747,7 +751,7 @@ export default function ArticleDetailPage() {
       };
       utterance.onerror = () => {
         setIsPlayingAudio(false);
-        setListenError(friendlyVoiceMessage);
+        setListenError(resolvedFriendlyVoiceMessage);
       };
 
       speech.cancel();
@@ -788,7 +792,7 @@ export default function ArticleDetailPage() {
       };
 
       if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'Bhashini TTS is not available.');
+        throw new Error(payload.error || 'Server TTS is not available.');
       }
 
       const audioUrl =
