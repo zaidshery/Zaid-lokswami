@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import AiChatBrandMark from './AiChatBrandMark';
 import AiChatSheet from './AiChatSheet';
 import { useAiChat } from './useAiChat';
+import { usePopupState } from '@/lib/popups/usePopupState';
 import { useAppStore } from '@/lib/store/appStore';
 
 type ChatPortalProps = {
@@ -29,9 +30,11 @@ export default function AiChatLauncher() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [previewDismissed, setPreviewDismissed] = useState(false);
   const chat = useAiChat({ isOpen: sheetOpen });
+  const popupState = usePopupState();
   const { theme, language } = useAppStore();
   const isLight = theme === 'light';
   const isHindi = language === 'hi';
+  const previewBlocked = Boolean(popupState.activeSurface);
 
   const content = useMemo(
     () => ({
@@ -82,7 +85,7 @@ export default function AiChatLauncher() {
   return (
     <ChatPortal>
       <AnimatePresence>
-        {!sheetOpen && !previewDismissed ? (
+        {!sheetOpen && !previewDismissed && !previewBlocked ? (
           <motion.div
             initial={{ opacity: 0, y: 14, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

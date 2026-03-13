@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   CheckCircle2,
@@ -19,6 +19,13 @@ import {
   resolveInstallPlatform,
   type InstallPlatform,
 } from '@/lib/pwa/client';
+import {
+  canShowInstallPrompt,
+  dismissInstallPrompt,
+  markInstallPromptShown,
+  releaseActiveSurface,
+} from '@/lib/popups/popupManager';
+import { usePopupState } from '@/lib/popups/usePopupState';
 
 const INSTALL_PROMPT_STORAGE_KEY = 'lokswami_install_prompt_state_v1';
 const DISMISS_COOLDOWN_MS = 5 * 24 * 60 * 60 * 1000;
@@ -170,6 +177,7 @@ function resolveRevealDelayMs(pathname: string | null, platform: InstallPlatform
 export default function InstallAppPrompt() {
   const pathname = usePathname();
   const { language } = useAppStore();
+  const popupState = usePopupState();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installState, setInstallState] = useState<InstallPromptState>(() =>
     readInstallPromptState()
@@ -189,6 +197,28 @@ export default function InstallAppPrompt() {
   const hasMetEngagement =
     Number(installState.eligibleVisitCount || 0) >= minEligibleVisits;
   const autoCanShow = canAutoShowPrompt(installState);
+  const canReuseActiveSurface = popupState.activeSurface === 'install-app';
+
+  const presentInstallPrompt = useCallback(
+    ({
+      useIosInstructions,
+      nextNotice = '',
+    }: {
+      useIosInstructions: boolean;
+      nextNotice?: string;
+    }) => {
+      if (!canReuseActiveSurface && !canShowInstallPrompt()) {
+        return false;
+      }
+
+      markInstallPromptShown();
+      setShowIosInstructions(useIosInstructions);
+      setNotice(nextNotice);
+      setIsVisible(true);
+      return true;
+    },
+    [canReuseActiveSurface]
+  );
 
   const copy = useMemo(() => {
     const installLabel =
@@ -311,6 +341,7 @@ export default function InstallAppPrompt() {
     if (!eligiblePath || isStandalone) {
       setIsVisible(false);
       setShowIosInstructions(false);
+      releaseActiveSurface('install-app');
       return;
     }
 
@@ -327,6 +358,7 @@ export default function InstallAppPrompt() {
         acceptedAt: Date.now(),
       }));
       setInstallState(next);
+      dismissInstallPrompt();
       setDeferredPrompt(null);
       setShowIosInstructions(false);
       setIsVisible(false);
@@ -354,22 +386,19 @@ export default function InstallAppPrompt() {
       }
 
       if (installPlatform === 'ios') {
-        setShowIosInstructions(true);
-        setNotice('');
-        setIsVisible(true);
+        presentInstallPrompt({ useIosInstructions: true });
         return;
       }
 
       if (deferredPrompt) {
-        setShowIosInstructions(false);
-        setNotice('');
-        setIsVisible(true);
+        presentInstallPrompt({ useIosInstructions: false });
         return;
       }
 
-      setShowIosInstructions(false);
-      setNotice(copy.unavailable);
-      setIsVisible(true);
+      presentInstallPrompt({
+        useIosInstructions: false,
+        nextNotice: copy.unavailable,
+      });
     };
 
     window.addEventListener(INSTALL_PROMPT_REQUEST_EVENT, handlePromptRequest as EventListener);
@@ -379,7 +408,14 @@ export default function InstallAppPrompt() {
         handlePromptRequest as EventListener
       );
     };
-  }, [copy.unavailable, deferredPrompt, eligiblePath, installPlatform]);
+  }, [
+    canReuseActiveSurface,
+    copy.unavailable,
+    deferredPrompt,
+    eligiblePath,
+    installPlatform,
+    presentInstallPrompt,
+  ]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -389,6 +425,7 @@ export default function InstallAppPrompt() {
     const handlePromptHide = () => {
       setIsVisible(false);
       setNotice('');
+      releaseActiveSurface('install-app');
     };
 
     window.addEventListener(INSTALL_PROMPT_HIDE_EVENT, handlePromptHide as EventListener);
@@ -404,6 +441,11 @@ export default function InstallAppPrompt() {
     if (!eligiblePath || isStandalone || hasAcceptedPrompt(installState)) {
       setIsVisible(false);
       setShowIosInstructions(false);
+      releaseActiveSurface('install-app');
+      return;
+    }
+
+    if (isVisible) {
       return;
     }
 
@@ -417,14 +459,15 @@ export default function InstallAppPrompt() {
       if (
         document.visibilityState !== 'visible' ||
         document.body.dataset.lokswamiPopupActive === '1' ||
-        isStandaloneMode()
+        isStandaloneMode() ||
+        (!canReuseActiveSurface && !canShowInstallPrompt())
       ) {
         return;
       }
 
-      setShowIosInstructions(installPlatform === 'ios' && !deferredPrompt);
-      setNotice('');
-      setIsVisible(true);
+      presentInstallPrompt({
+        useIosInstructions: installPlatform === 'ios' && !deferredPrompt,
+      });
     }, revealDelayMs);
 
     return () => {
@@ -438,7 +481,11 @@ export default function InstallAppPrompt() {
     installPlatform,
     installState,
     isStandalone,
+    isVisible,
     pathname,
+    canReuseActiveSurface,
+    presentInstallPrompt,
+    popupState.activeSurface,
   ]);
 
   const dismissPrompt = () => {
@@ -447,6 +494,7 @@ export default function InstallAppPrompt() {
       dismissedAt: Date.now(),
     }));
     setInstallState(next);
+    dismissInstallPrompt();
     setIsVisible(false);
     setNotice('');
   };
@@ -477,6 +525,7 @@ export default function InstallAppPrompt() {
       );
 
       setInstallState(next);
+      dismissInstallPrompt();
       setDeferredPrompt(null);
       setIsVisible(false);
     } catch {

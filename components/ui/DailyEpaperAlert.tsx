@@ -4,6 +4,14 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { BellRing, Newspaper, Smartphone, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import {
+  canShowDailyEpaperAlert,
+  clearActiveSurface,
+  dismissDailyEpaperAlert,
+  markDailyEpaperAlertShown,
+  releaseActiveSurface,
+} from '@/lib/popups/popupManager';
+import { usePopupState } from '@/lib/popups/usePopupState';
 import { useAppStore } from '@/lib/store/appStore';
 import {
   requestInstallPrompt,
@@ -28,6 +36,7 @@ function localDateKey(date: Date) {
 export default function DailyEpaperAlert() {
   const { language } = useAppStore();
   const { data: session, status } = useSession();
+  const popupState = usePopupState();
   const [latestPaper, setLatestPaper] = useState<LatestPaper | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [enableState, setEnableState] = useState<'idle' | 'working'>('idle');
@@ -36,6 +45,17 @@ export default function DailyEpaperAlert() {
   const today = useMemo(() => localDateKey(new Date()), []);
   const isSignedIn = status === 'authenticated' && Boolean(session?.user?.email);
   const notificationCapability = resolveNotificationCapability();
+  const isHandledToday =
+    popupState.epaperAlertShownOn === today ||
+    popupState.epaperAlertDismissedOn === today;
+
+  useEffect(() => {
+    if (showBanner || popupState.activeSurface !== 'epaper-alert' || !isHandledToday) {
+      return;
+    }
+
+    clearActiveSurface('epaper-alert');
+  }, [isHandledToday, popupState.activeSurface, showBanner]);
 
   useEffect(() => {
     let active = true;
@@ -43,7 +63,7 @@ export default function DailyEpaperAlert() {
     const run = async () => {
       if (typeof window === 'undefined') return;
       const alreadySent = localStorage.getItem(DAILY_ALERT_STORAGE_KEY);
-      if (alreadySent === today) return;
+      if (alreadySent === today || isHandledToday || latestPaper) return;
 
       try {
         const response = await fetch('/api/epapers?limit=1&status=published', {
@@ -64,29 +84,6 @@ export default function DailyEpaperAlert() {
           publishDate,
         };
         setLatestPaper(paper);
-        setShowBanner(true);
-        localStorage.setItem(DAILY_ALERT_STORAGE_KEY, today);
-
-        if (
-          typeof Notification !== 'undefined' &&
-          Notification.permission === 'granted' &&
-          document.visibilityState === 'visible'
-        ) {
-          const body =
-            language === 'hi'
-              ? `${paper.city} \u0915\u093e \u0928\u092f\u093e \u0908-\u092a\u0947\u092a\u0930 \u0906 \u0917\u092f\u093e \u0939\u0948\u0964`
-              : `Today's ${paper.city} e-paper is now available.`;
-          new Notification(
-            language === 'hi'
-              ? '\u0906\u091c \u0915\u093e \u0908-\u092a\u0947\u092a\u0930 \u0906 \u0917\u092f\u093e!'
-              : "Today's E-paper has arrived!",
-            {
-              body,
-              icon: '/logo-icon-final.png',
-              tag: `epaper-${today}`,
-            }
-          );
-        }
       } catch {
         // Silent fail: notifications should never block primary browsing.
       }
@@ -96,12 +93,57 @@ export default function DailyEpaperAlert() {
     return () => {
       active = false;
     };
-  }, [language, today]);
+  }, [isHandledToday, latestPaper, today]);
+
+  useEffect(() => {
+    if (!latestPaper || showBanner || isHandledToday || !canShowDailyEpaperAlert(today)) {
+      return;
+    }
+
+    setShowBanner(true);
+    markDailyEpaperAlertShown(today);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DAILY_ALERT_STORAGE_KEY, today);
+    }
+
+    if (
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted' &&
+      document.visibilityState === 'visible'
+    ) {
+      const body =
+        language === 'hi'
+          ? `${latestPaper.city} \u0915\u093e \u0928\u092f\u093e \u0908-\u092a\u0947\u092a\u0930 \u0906 \u0917\u092f\u093e \u0939\u0948\u0964`
+          : `Today's ${latestPaper.city} e-paper is now available.`;
+      new Notification(
+        language === 'hi'
+          ? '\u0906\u091c \u0915\u093e \u0908-\u092a\u0947\u092a\u0930 \u0906 \u0917\u092f\u093e!'
+          : "Today's E-paper has arrived!",
+        {
+          body,
+          icon: '/logo-icon-final.png',
+          tag: `epaper-${today}`,
+        }
+      );
+    }
+  }, [isHandledToday, language, latestPaper, showBanner, today]);
+
+  const closeBanner = () => {
+    setShowBanner(false);
+    dismissDailyEpaperAlert(today);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DAILY_ALERT_STORAGE_KEY, today);
+    }
+  };
 
   const requestNotificationPermission = async () => {
     const capability = resolveNotificationCapability();
 
     if (capability.requiresAppInstall) {
+      setShowBanner(false);
+      releaseActiveSurface('epaper-alert');
       requestInstallPrompt();
       setNotice(
         language === 'hi'
@@ -208,7 +250,7 @@ export default function DailyEpaperAlert() {
           </div>
           <button
             type="button"
-            onClick={() => setShowBanner(false)}
+            onClick={closeBanner}
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             aria-label={language === 'hi' ? '\u092c\u0902\u0926 \u0915\u0930\u0947\u0902' : 'Dismiss'}
           >
@@ -219,7 +261,7 @@ export default function DailyEpaperAlert() {
         <div className="flex flex-wrap gap-2">
           <Link
             href="/main/epaper"
-            onClick={() => setShowBanner(false)}
+            onClick={closeBanner}
             className="attention-pulsate-bck inline-flex h-8 items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-900/40 dark:bg-primary-950/30 dark:text-primary-300 dark:hover:bg-primary-950/45"
           >
             <Newspaper className="h-3.5 w-3.5 text-primary-600 dark:text-primary-300" />

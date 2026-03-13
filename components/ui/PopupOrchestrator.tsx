@@ -5,13 +5,18 @@ import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { BellRing, MapPin, Sparkles, X } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
-import { hideInstallPrompt, resolveNotificationCapability } from '@/lib/pwa/client';
+import {
+  hideInstallPrompt,
+  requestInstallPrompt,
+  resolveNotificationCapability,
+} from '@/lib/pwa/client';
 import {
   activatePopup,
   dismissPopup,
   getNextPopup,
   neverShowPopupAgain,
   readPopupState,
+  releaseActiveSurface,
   registerPathVisit,
   savePreferredCategories,
   saveSelectedState,
@@ -138,6 +143,7 @@ export default function PopupOrchestrator() {
   const [activePopup, setActivePopup] = useState<PopupType | null>(null);
   const [notificationBusy, setNotificationBusy] = useState(false);
   const [notificationNotice, setNotificationNotice] = useState('');
+  const [notificationStep, setNotificationStep] = useState<'soft' | 'confirm'>('soft');
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
   const isAuthenticated = status === 'authenticated' && Boolean(session?.user?.email);
@@ -175,6 +181,8 @@ export default function PopupOrchestrator() {
     const nextState = activatePopup(nextPopup);
     setSnapshot(nextState);
     setActivePopup(nextPopup);
+    setNotificationStep('soft');
+    setNotificationNotice('');
 
     if (nextPopup === 'personalization') {
       setSelectedTopics(nextState.preferredCategories);
@@ -203,6 +211,7 @@ export default function PopupOrchestrator() {
   const closeActivePopup = (next: PopupSnapshot) => {
     setSnapshot(next);
     setActivePopup(null);
+    setNotificationStep('soft');
     setNotificationNotice('');
   };
 
@@ -264,11 +273,8 @@ export default function PopupOrchestrator() {
     const capability = resolveNotificationCapability();
 
     if (capability.requiresAppInstall) {
-      setNotificationNotice(
-        language === 'hi'
-          ? 'iPhone \u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u091a\u093e\u0932\u0942 \u0915\u0930\u0928\u0947 \u0938\u0947 \u092a\u0939\u0932\u0947 \u090f\u092a \u0907\u0902\u0938\u094d\u091f\u0949\u0932 \u0915\u0930\u0947\u0902\u0964'
-          : 'Install the app first on iPhone to enable alerts.'
-      );
+      closeActivePopup(releaseActiveSurface('notification'));
+      requestInstallPrompt();
       return;
     }
 
@@ -325,6 +331,44 @@ export default function PopupOrchestrator() {
     } finally {
       setNotificationBusy(false);
     }
+  };
+
+  const onPrepareNotifications = () => {
+    const capability = resolveNotificationCapability();
+
+    if (capability.requiresAppInstall) {
+      closeActivePopup(releaseActiveSurface('notification'));
+      requestInstallPrompt();
+      return;
+    }
+
+    if (!capability.isSupported) {
+      setNotificationNotice(
+        language === 'hi'
+          ? '\u0907\u0938 \u092c\u094d\u0930\u093e\u0909\u091c\u093c\u0930 \u092e\u0947\u0902 \u0928\u094b\u091f\u093f\u092b\u093f\u0915\u0947\u0936\u0928 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0902\u0964'
+          : 'Notifications are not supported in this browser.'
+      );
+      return;
+    }
+
+    if (!capability.canPrompt) {
+      if (capability.permission === 'granted') {
+        closeActivePopup(dismissPopup('notification'));
+        return;
+      }
+
+      if (capability.permission === 'denied') {
+        setNotificationNotice(
+          language === 'hi'
+            ? '\u0905\u0932\u0930\u094d\u091f \u092b\u093f\u0930 \u0938\u0947 \u091a\u093e\u0932\u0942 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f browser site settings \u092e\u0947\u0902 Notifications \u0905\u0928\u0941\u092e\u0924\u093f \u091a\u093e\u0932\u0942 \u0915\u0930\u0947\u0902\u0964'
+            : 'Notifications are blocked. Re-enable them from your browser site settings.'
+        );
+      }
+      return;
+    }
+
+    setNotificationNotice('');
+    setNotificationStep('confirm');
   };
 
   const onSelectState = (value: string) => {
@@ -393,14 +437,22 @@ export default function PopupOrchestrator() {
         <div className="rounded-xl border border-primary-200/70 bg-[radial-gradient(circle_at_top_right,rgba(231,33,41,0.12),transparent_42%),linear-gradient(135deg,rgba(255,241,242,0.95),rgba(255,255,255,0.98))] p-3 text-sm text-zinc-700 dark:border-primary-900/40 dark:bg-[radial-gradient(circle_at_top_right,rgba(231,33,41,0.16),transparent_38%),linear-gradient(135deg,rgba(63,7,11,0.7),rgba(36,32,36,0.96))] dark:text-zinc-200">
           <p className="flex items-center gap-2 font-semibold">
             <BellRing className="h-4 w-4 text-primary-600 dark:text-primary-300" />
-            {language === 'hi'
-              ? '\u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0928\u094d\u092f\u0942\u091c\u093c \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u092a\u0921\u0947\u091f \u092e\u093f\u0938 \u0928 \u0915\u0930\u0947\u0902\u0964'
-              : 'Do not miss breaking updates and e-paper alerts.'}
+            {notificationStep === 'soft'
+              ? language === 'hi'
+                ? '\u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0928\u094d\u092f\u0942\u091c\u093c \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u092a\u0921\u0947\u091f \u092e\u093f\u0938 \u0928 \u0915\u0930\u0947\u0902\u0964'
+                : 'Do not miss breaking updates and e-paper alerts.'
+              : language === 'hi'
+                ? '\u0905\u092d\u0940 browser prompt \u0916\u0941\u0932\u0947\u0917\u093e, \u0915\u0943\u092a\u092f\u093e Allow \u091a\u0941\u0928\u0947\u0902\u0964'
+                : 'Your browser will ask next. Choose Allow to receive alerts.'}
           </p>
           <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
-            {language === 'hi'
-              ? '\u092c\u093e\u0930-\u092c\u093e\u0930 \u0938\u093e\u0907\u091f \u0916\u094b\u0932\u0947 \u092c\u093f\u0928\u093e \u0924\u0941\u0930\u0902\u0924 \u0905\u0932\u0930\u094d\u091f \u092a\u093e\u090f\u0902\u0964'
-              : 'Get instant alerts without reopening the site every time.'}
+            {notificationStep === 'soft'
+              ? language === 'hi'
+                ? '\u091c\u092c \u0916\u092c\u0930 \u092e\u0939\u0924\u094d\u0935\u092a\u0942\u0930\u094d\u0923 \u0939\u094b, \u092c\u093e\u0930-\u092c\u093e\u0930 \u0938\u093e\u0907\u091f \u0916\u094b\u0932\u0947 \u092c\u093f\u0928\u093e \u0924\u0941\u0930\u0902\u0924 \u091c\u093e\u0928\u0915\u093e\u0930\u0940 \u092a\u093e\u090f\u0902\u0964'
+                : 'Get important updates without reopening the site every time.'
+              : language === 'hi'
+                ? '\u0905\u0928\u0941\u092e\u0924\u093f \u092e\u093f\u0932\u0924\u0947 \u0939\u0940 \u0939\u092e \u0938\u093f\u0930\u094d\u092b \u0909\u092a\u092f\u094b\u0917\u0940 \u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u092d\u0947\u091c\u0947\u0902\u0917\u0947\u0964'
+                : 'Once allowed, we will send only useful breaking and e-paper alerts.'}
           </p>
           {notificationNotice ? (
             <p aria-live="polite" className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
@@ -410,21 +462,44 @@ export default function PopupOrchestrator() {
         </div>
 
         <div className="mt-3">
-          <button
-            type="button"
-            onClick={() => void onEnableNotifications()}
-            disabled={notificationBusy}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,#c61d24_0%,#e72129_100%)] px-4 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(199,29,36,0.28)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <BellRing className="h-4 w-4" />
-            {notificationBusy
-              ? language === 'hi'
-                ? '\u092a\u094d\u0930\u094b\u0938\u0947\u0938 \u0939\u094b \u0930\u0939\u093e \u0939\u0948...'
-                : 'Processing...'
-              : language === 'hi'
-                ? '\u0924\u0941\u0930\u0902\u0924 \u0905\u0932\u0930\u094d\u091f \u091a\u093e\u0932\u0942 \u0915\u0930\u0947\u0902'
-                : 'Turn on instant alerts'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {notificationStep === 'confirm' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setNotificationStep('soft');
+                  setNotificationNotice('');
+                }}
+                className="inline-flex h-10 items-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              >
+                {language === 'hi' ? '\u092a\u0940\u091b\u0947' : 'Back'}
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() =>
+                notificationStep === 'soft'
+                  ? onPrepareNotifications()
+                  : void onEnableNotifications()
+              }
+              disabled={notificationBusy}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,#c61d24_0%,#e72129_100%)] px-4 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(199,29,36,0.28)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <BellRing className="h-4 w-4" />
+              {notificationBusy
+                ? language === 'hi'
+                  ? '\u092a\u094d\u0930\u094b\u0938\u0947\u0938 \u0939\u094b \u0930\u0939\u093e \u0939\u0948...'
+                  : 'Processing...'
+                : notificationStep === 'soft'
+                  ? language === 'hi'
+                    ? '\u0906\u0917\u0947 \u092c\u095d\u0947\u0902'
+                    : 'Continue'
+                  : language === 'hi'
+                    ? 'Allow prompt \u0916\u094b\u0932\u0947\u0902'
+                    : 'Open browser prompt'}
+            </button>
+          </div>
         </div>
       </PopupFrame>
     );
