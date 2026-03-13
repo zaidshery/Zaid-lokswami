@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getAdminDashboardData } from '@/lib/admin/dashboard';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
 
 type ActionCard = {
@@ -21,12 +22,7 @@ type ActionCard = {
 };
 
 function formatDate(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return 'Unknown date';
-  }
-
-  return parsed.toLocaleDateString('en-GB');
+  return formatUiDate(value, 'Unknown date');
 }
 
 function formatDuration(seconds: number) {

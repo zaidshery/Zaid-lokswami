@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 
 interface AdminStory {
   _id: string;
@@ -293,7 +294,7 @@ export default function StoriesManagementPage() {
                     <span>•</span>
                     <span>{story.views || 0} views</span>
                     <span>•</span>
-                    <span>{new Date(story.publishedAt).toLocaleDateString('en-GB')}</span>
+                    <span>{formatUiDate(story.publishedAt, story.publishedAt)}</span>
                   </div>
                 </div>
 

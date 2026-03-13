@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
 import { ArrowLeft, Loader2, UploadCloud } from 'lucide-react';
+import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { EPAPER_CITY_OPTIONS, type EPaperCitySlug } from '@/lib/constants/epaperCities';
 
@@ -189,10 +190,9 @@ export default function NewEPaperPage() {
 
             <label>
               <span className="mb-1 block text-xs font-semibold text-gray-600">Publish Date</span>
-              <input
-                type="date"
+              <DateInputField
                 value={publishDate}
-                onChange={(event) => setPublishDate(event.target.value)}
+                onChange={setPublishDate}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                 required
               />

@@ -46,11 +46,15 @@ export const NEWS_CATEGORIES: NewsCategory[] = [
   {
     id: 'international',
     slug: 'international',
-    name: '\u0905\u0902\u0924\u0930\u0930\u093e\u0937\u094d\u091f\u094d\u0930\u0940\u092f',
+    name: '\u0905\u0902\u0924\u0930\u094d\u0930\u093e\u0937\u094d\u091f\u094d\u0930\u0940\u092f',
     nameEn: 'International',
     icon: '\ud83c\udf0d',
     color: '#8B5CF6',
-    aliases: ['international', '\u0905\u0902\u0924\u0930\u0930\u093e\u0937\u094d\u091f\u094d\u0930\u0940\u092f'],
+    aliases: [
+      'international',
+      '\u0905\u0902\u0924\u0930\u0930\u093e\u0937\u094d\u091f\u094d\u0930\u0940\u092f',
+      '\u0905\u0902\u0924\u0930\u094d\u0930\u093e\u0937\u094d\u091f\u094d\u0930\u0940\u092f',
+    ],
   },
   {
     id: 'sports',

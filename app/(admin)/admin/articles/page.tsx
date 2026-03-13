@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { FileText, Edit, Trash2, Plus, Search, Loader } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 
 interface Article {
   _id: string;
@@ -185,7 +186,7 @@ export default function ArticlesManagement() {
                     <span>•</span>
                     <span>{article.category}</span>
                     <span>•</span>
-                    <span>{new Date(article.publishedAt).toLocaleDateString('en-GB')}</span>
+                    <span>{formatUiDate(article.publishedAt, article.publishedAt)}</span>
                     <span>•</span>
                     <span>{article.views} views</span>
                   </div>

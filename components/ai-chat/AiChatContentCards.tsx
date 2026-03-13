@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { FileText, Newspaper, Play, PlayCircle, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 import type { AiContentGroups, AiContentItem } from './types';
 
 type AiChatContentCardsProps = {
@@ -18,15 +19,7 @@ type ContentSection = {
 };
 
 function formatDateLabel(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-
-  return parsed.toLocaleDateString('hi-IN', {
-    day: '2-digit',
-    month: 'short',
-  });
+  return formatUiDate(value, '');
 }
 
 function formatDuration(seconds?: number) {

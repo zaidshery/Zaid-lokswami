@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, Eye, Search } from 'lucide-react';
+import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { EPAPER_CITY_OPTIONS } from '@/lib/constants/epaperCities';
 import type { EPaperRecord } from '@/lib/types/epaper';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 
 type ApiResponse = {
   success: boolean;
@@ -15,16 +17,6 @@ type ApiResponse = {
 
 function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
-}
-
-function formatDateLabel(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 }
 
 export default function AdminEPaperListPage() {
@@ -164,10 +156,9 @@ export default function AdminEPaperListPage() {
 
         <label>
           <span className="mb-1 block text-xs font-semibold text-gray-600">Date</span>
-          <input
-            type="date"
+          <DateInputField
             value={dateFilter}
-            onChange={(event) => setDateFilter(event.target.value)}
+            onChange={setDateFilter}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
           />
         </label>
@@ -203,7 +194,7 @@ export default function AdminEPaperListPage() {
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-lg font-semibold text-gray-900">{epaper.title}</h2>
                     <p className="mt-1 text-xs text-gray-600">
-                      {epaper.cityName} ({epaper.citySlug}) | {formatDateLabel(epaper.publishDate)}
+                      {epaper.cityName} ({epaper.citySlug}) | {formatUiDate(epaper.publishDate, epaper.publishDate)}
                     </p>
                     <p className="mt-1 text-xs text-gray-600">
                       {epaper.pageCount} pages | {pagesWithImage} with image | {missingPages} missing

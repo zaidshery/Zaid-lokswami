@@ -18,6 +18,7 @@ import {
   buildArticleImageVariantUrl,
   resolveArticleOgImageUrl,
 } from '@/lib/utils/articleMedia';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import { BHASHINI_LANGUAGE_OPTIONS } from '@/lib/constants/lokswamiAi';
 
@@ -433,18 +434,10 @@ export default function ArticleDetailPage() {
     const words = plain ? plain.split(/\s+/).filter(Boolean).length : 0;
     const readMinutes = Math.max(1, Math.round(words / 220));
 
-    const date = new Date(article.publishedAt);
-    const locale = language === 'hi' ? 'hi-IN' : 'en-US';
-    const publishedText = Number.isNaN(date.getTime())
-      ? ''
-      : date.toLocaleDateString(locale, {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        });
+    const publishedText = formatUiDate(article.publishedAt, '');
 
     return { readMinutes, publishedText };
-  }, [article, language]);
+  }, [article]);
 
   const articleStructuredData = useMemo(() => {
     if (!article) return null;

@@ -13,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import { formatUiDateTime } from '@/lib/utils/dateFormat';
 
 type ContactStatus = 'new' | 'in_progress' | 'resolved';
 
@@ -73,15 +74,7 @@ const STATUS_CLASS: Record<ContactStatus, string> = {
 };
 
 function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatUiDateTime(value, value);
 }
 
 function statusLabel(value: ContactStatus) {

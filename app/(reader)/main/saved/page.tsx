@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { BookmarkX, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import { buildArticleImageVariantUrl } from '@/lib/utils/articleMedia';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 
 type SavedArticle = {
   id: string;
@@ -37,11 +38,7 @@ function formatPublishedAt(value: string, language: 'hi' | 'en') {
       : 'Date unavailable';
   }
 
-  return date.toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-US', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatUiDate(value, language === 'hi' ? '\u0924\u093e\u0930\u0940\u0916 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Date unavailable');
 }
 
 /** Renders the authenticated reader saved-articles page backed by /api/user/save. */

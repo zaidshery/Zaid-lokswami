@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 
 interface AdminVideo {
   _id: string;
@@ -329,7 +330,7 @@ export default function VideosManagementPage() {
                     <span>•</span>
                     <span>{video.views} views</span>
                     <span>•</span>
-                    <span>{new Date(video.publishedAt).toLocaleDateString('en-GB')}</span>
+                    <span>{formatUiDate(video.publishedAt, video.publishedAt)}</span>
                   </div>
                 </div>
 

@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Loader2, Save, Trash2, UploadCloud, PencilRuler } from 'lucide-react';
+import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import type { EPaperArticleRecord, EPaperRecord } from '@/lib/types/epaper';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 
 type EpaperResponse = {
   success: boolean;
@@ -19,16 +21,6 @@ type ArticlesResponse = {
   error?: string;
   data?: EPaperArticleRecord[];
 };
-
-function formatDateLabel(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
 
 function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
@@ -296,7 +288,7 @@ export default function AdminEPaperDetailPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{epaper.title}</h1>
           <p className="mt-1 text-xs text-gray-600">
-            {epaper.cityName} ({epaper.citySlug}) | {formatDateLabel(epaper.publishDate)}
+            {epaper.cityName} ({epaper.citySlug}) | {formatUiDate(epaper.publishDate, epaper.publishDate)}
           </p>
           <p className="mt-1 text-xs text-gray-600">
             {epaper.pageCount} pages | {articles.length} mapped articles
@@ -315,10 +307,9 @@ export default function AdminEPaperDetailPage() {
 
             <label>
               <span className="mb-1 block text-xs font-semibold text-gray-600">Publish Date</span>
-              <input
-                type="date"
+              <DateInputField
                 value={publishDate}
-                onChange={(event) => setPublishDate(event.target.value)}
+                onChange={setPublishDate}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
               />
             </label>

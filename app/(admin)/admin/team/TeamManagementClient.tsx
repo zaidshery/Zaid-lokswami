@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Mail, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ADMIN_ROLES, formatUserRoleLabel, type AdminRole } from '@/lib/auth/roles';
+import { formatUiDateTime } from '@/lib/utils/dateFormat';
 
 type TeamMember = {
   id: string;
@@ -27,18 +28,7 @@ function formatDateTime(value: string | null) {
     return 'Never';
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'Never';
-  }
-
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
+  return formatUiDateTime(value, 'Never');
 }
 
 function getInitials(name: string, email: string) {

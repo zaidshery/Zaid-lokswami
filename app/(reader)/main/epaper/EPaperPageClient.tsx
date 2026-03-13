@@ -11,11 +11,13 @@ import {
   Share2,
   X,
 } from 'lucide-react';
+import DateInputField from '@/components/ui/DateInputField';
 import {
   EPAPER_CITY_OPTIONS,
   type EPaperCitySlug,
 } from '@/lib/constants/epaperCities';
 import { useAppStore } from '@/lib/store/appStore';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 import { renderPdfPagePreviewFromUrl } from '@/lib/utils/pdfThumbnailClient';
 import type { EPaperArticleRecord, EPaperRecord } from '@/lib/types/epaper';
 
@@ -123,16 +125,6 @@ const EPAPER_LAST_PAGE_STORAGE_KEY = 'lokswami_epaper_last_page_v1';
 const MIN_PREVIEW_ZOOM = 1;
 const MAX_PREVIEW_ZOOM = 2.2;
 const PREVIEW_ZOOM_STEP = 0.2;
-
-function formatDateLabel(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
 
 function clampPage(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -602,10 +594,9 @@ export default function EPaperPageClient({
           <div className="w-full justify-self-start sm:w-auto sm:justify-self-end">
             <div className="flex items-center gap-2 rounded-xl border border-zinc-200/80 bg-white/80 p-2 dark:border-zinc-800 dark:bg-zinc-900/70 sm:hidden">
               <div className="relative min-w-0 flex-1">
-                <input
-                  type="date"
+                <DateInputField
                   value={selectedPublishDate}
-                  onChange={(event) => setSelectedPublishDate(event.target.value)}
+                  onChange={setSelectedPublishDate}
                   aria-label={t.publishDate}
                   className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 pr-8 text-xs outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
                 />
@@ -640,10 +631,9 @@ export default function EPaperPageClient({
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 sm:text-sm sm:normal-case sm:tracking-normal">
                   {t.publishDate}
                 </span>
-                <input
-                  type="date"
+                <DateInputField
                   value={selectedPublishDate}
-                  onChange={(event) => setSelectedPublishDate(event.target.value)}
+                  onChange={setSelectedPublishDate}
                   className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-sm outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:w-[170px] sm:min-w-[170px]"
                 />
               </label>
@@ -687,7 +677,7 @@ export default function EPaperPageClient({
         {selectedPublishDate ? (
           <div className="mb-3">
             <span className="inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300">
-              {t.showingDate}: {formatDateLabel(selectedPublishDate)}
+              {t.showingDate}: {formatUiDate(selectedPublishDate, selectedPublishDate)}
             </span>
           </div>
         ) : null}
@@ -732,7 +722,7 @@ export default function EPaperPageClient({
                   <div className="p-2.5 sm:p-3">
                     <h2 className="line-clamp-2 text-xs font-semibold text-gray-900 dark:text-zinc-100 sm:text-sm">{paper.title}</h2>
                     <p className="mt-1 line-clamp-2 text-[11px] text-gray-600 dark:text-zinc-400 sm:text-xs">
-                      {paper.cityName} | {formatDateLabel(paper.publishDate)} | {paper.pageCount} {t.pages}
+                      {paper.cityName} | {formatUiDate(paper.publishDate, paper.publishDate)} | {paper.pageCount} {t.pages}
                     </p>
                   </div>
                 </button>
@@ -768,7 +758,7 @@ export default function EPaperPageClient({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-gray-900 dark:text-zinc-100">{activePaper.title}</p>
                   <p className="truncate text-xs text-gray-600 dark:text-zinc-400">
-                    {activePaper.cityName} | {formatDateLabel(activePaper.publishDate)}
+                    {activePaper.cityName} | {formatUiDate(activePaper.publishDate, activePaper.publishDate)}
                   </p>
                 </div>
 

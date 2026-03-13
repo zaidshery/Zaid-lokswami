@@ -9,6 +9,7 @@ import { useParams, useRouter } from 'next/navigation';
 import RichTextEditor from '@/components/forms/RichTextEditor';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
+import { formatUiDateTime } from '@/lib/utils/dateFormat';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import {
   ARTICLE_IMAGE_UPLOAD_GUIDE,
@@ -64,16 +65,7 @@ const EMPTY_FORM: ArticleFormState = {
 };
 
 function formatDraftTimestamp(value: string) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatUiDateTime(value, '');
 }
 
 function isValidAbsoluteHttpUrl(value: string) {

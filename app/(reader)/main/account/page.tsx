@@ -9,6 +9,7 @@ import { Activity, Bookmark, Loader2, LogOut, Settings, UserCircle2 } from 'luci
 import { signOut, useSession } from 'next-auth/react';
 import { formatUserRoleLabel } from '@/lib/auth/roles';
 import { useAppStore } from '@/lib/store/appStore';
+import { formatUiDate, formatUiDateTime } from '@/lib/utils/dateFormat';
 
 const ACCOUNT_REDIRECT_URL = '/signin?redirect=/main/account';
 
@@ -31,16 +32,10 @@ function formatMemberSince(value: string | undefined, language: 'hi' | 'en') {
     return language === 'hi' ? '\u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Unavailable';
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return language === 'hi' ? '\u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Unavailable';
-  }
-
-  return new Intl.DateTimeFormat(language === 'hi' ? 'hi-IN' : 'en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
+  return formatUiDate(
+    value,
+    language === 'hi' ? '\u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Unavailable'
+  );
 }
 
 function formatLastActive(value: string | undefined, language: 'hi' | 'en') {
@@ -48,18 +43,10 @@ function formatLastActive(value: string | undefined, language: 'hi' | 'en') {
     return language === 'hi' ? '\u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Unavailable';
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return language === 'hi' ? '\u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Unavailable';
-  }
-
-  return new Intl.DateTimeFormat(language === 'hi' ? 'hi-IN' : 'en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
+  return formatUiDateTime(
+    value,
+    language === 'hi' ? '\u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902' : 'Unavailable'
+  );
 }
 
 function getUserInitials(name: string, email: string) {
