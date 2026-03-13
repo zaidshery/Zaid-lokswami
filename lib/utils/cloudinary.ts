@@ -203,6 +203,16 @@ function normalizeDeliveryFormat(value: string) {
   return trimmed.replace(/[^a-z0-9]/g, '');
 }
 
+function resolveEmbeddedPublicIdFormat(publicId: string) {
+  const lastSegment = publicId.split('/').pop() || '';
+  const dotIndex = lastSegment.lastIndexOf('.');
+  if (dotIndex <= 0 || dotIndex >= lastSegment.length - 1) {
+    return '';
+  }
+
+  return normalizeDeliveryFormat(lastSegment.slice(dotIndex + 1));
+}
+
 export function buildSignedCloudinaryRawUploadUrl(options: SignedRawUploadUrlOptions) {
   const publicId = normalizePublicId(options.publicId || '');
   if (!publicId) {
@@ -210,6 +220,8 @@ export function buildSignedCloudinaryRawUploadUrl(options: SignedRawUploadUrlOpt
   }
 
   const format = normalizeDeliveryFormat(options.format || '');
+  const embeddedFormat = resolveEmbeddedPublicIdFormat(publicId);
+  const deliveryFormat = format && embeddedFormat !== format ? format : '';
   ensureCloudinaryConfigured();
 
   return cloudinary.url(publicId, {
@@ -217,6 +229,7 @@ export function buildSignedCloudinaryRawUploadUrl(options: SignedRawUploadUrlOpt
     type: 'upload',
     sign_url: true,
     secure: true,
-    ...(format ? { format } : {}),
+    // Raw uploads often keep the file extension inside the public_id.
+    ...(deliveryFormat ? { format: deliveryFormat } : {}),
   });
 }
