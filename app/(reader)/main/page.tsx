@@ -34,6 +34,7 @@ import {
   buildArticleImageVariantUrl,
   resolveArticleOgImageUrl,
 } from '@/lib/utils/articleMedia';
+import { formatUiDate } from '@/lib/utils/dateFormat';
 
 function hexToRgba(hex: string, alpha: number) {
   const cleaned = hex.replace('#', '').trim();
@@ -51,6 +52,26 @@ function hexToRgba(hex: string, alpha: number) {
 
 const HOME_LATEST_INITIAL_COUNT = 8;
 const HOME_LATEST_PAGE_STEP = 8;
+const HI_EPAPER_CITY_LABELS: Record<string, string> = {
+  indore: '\u0907\u0902\u0926\u094c\u0930',
+  ujjain: '\u0909\u091c\u094d\u091c\u0948\u0928',
+  mumbai: '\u092e\u0941\u0902\u092c\u0908',
+  delhi: '\u0926\u093f\u0932\u094d\u0932\u0940',
+};
+
+type HomeEpaperPreview = {
+  _id: string;
+  citySlug: string;
+  cityName: string;
+  title: string;
+  publishDate: string;
+  thumbnailPath: string;
+  pageCount: number;
+};
+
+type HomeEpaperResponse = {
+  items?: HomeEpaperPreview[];
+};
 
 export default function HomePage() {
   const { language } = useAppStore();
@@ -58,6 +79,7 @@ export default function HomePage() {
   const categoryScrollerRef = useRef<HTMLDivElement | null>(null);
   const [feedArticles, setFeedArticles] = useState<Article[]>(mockArticles);
   const [cmsStories, setCmsStories] = useState<VisualStory[]>([]);
+  const [latestEpaper, setLatestEpaper] = useState<HomeEpaperPreview | null>(null);
   const [visibleLatestNewsCount, setVisibleLatestNewsCount] = useState(
     HOME_LATEST_INITIAL_COUNT
   );
@@ -158,6 +180,84 @@ export default function HomePage() {
   useEffect(() => {
     setVisibleLatestNewsCount(HOME_LATEST_INITIAL_COUNT);
   }, [feedArticles.length]);
+
+  useEffect(() => {
+    let active = true;
+    const loadLatestEpaper = async () => {
+      try {
+        const response = await fetch('/api/epapers/latest?limit=1', {
+          cache: 'no-store',
+        });
+        const payload = (await response.json().catch(() => ({}))) as HomeEpaperResponse;
+        if (!response.ok || !active) return;
+
+        const first = Array.isArray(payload.items) ? payload.items[0] : null;
+        if (!first) return;
+
+        setLatestEpaper({
+          _id: String(first._id || ''),
+          citySlug: String(first.citySlug || ''),
+          cityName: String(first.cityName || ''),
+          title: String(first.title || ''),
+          publishDate: String(first.publishDate || ''),
+          thumbnailPath: String(first.thumbnailPath || ''),
+          pageCount: Number(first.pageCount || 0),
+        });
+      } catch {
+        // Silent fail keeps the sidebar card usable with the default fallback art.
+      }
+    };
+
+    void loadLatestEpaper();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const epaperHref = (() => {
+    if (!latestEpaper) return '/main/epaper';
+    const query = new URLSearchParams();
+    if (latestEpaper.citySlug) {
+      query.set('city', latestEpaper.citySlug);
+    }
+    if (latestEpaper.publishDate) {
+      query.set('date', latestEpaper.publishDate);
+    }
+    const search = query.toString();
+    return search ? `/main/epaper?${search}` : '/main/epaper';
+  })();
+  const epaperCity = latestEpaper?.cityName.trim()
+    ? latestEpaper.cityName
+    : language === 'hi'
+      ? '\u0921\u093f\u091c\u093f\u091f\u0932 \u090f\u0921\u093f\u0936\u0928'
+      : 'Digital edition';
+  const localizedEpaperCity =
+    language === 'hi' && latestEpaper?.citySlug
+      ? HI_EPAPER_CITY_LABELS[latestEpaper.citySlug] || epaperCity
+      : epaperCity;
+  const epaperDateLabel = latestEpaper?.publishDate
+    ? formatUiDate(latestEpaper.publishDate, latestEpaper.publishDate)
+    : '';
+  const epaperThumbnail = latestEpaper?.thumbnailPath || '/placeholders/epaper-3x4.svg';
+  const epaperThumbnailAlt =
+    language === 'hi'
+      ? `${localizedEpaperCity} \u0908-\u092a\u0947\u092a\u0930 \u0915\u0935\u0930`
+      : `${epaperCity} e-paper cover`;
+  const epaperEditionLabel =
+    language === 'hi'
+      ? latestEpaper?.cityName.trim()
+        ? `${localizedEpaperCity} \u0938\u0902\u0938\u094d\u0915\u0930\u0923`
+        : '\u0906\u091c \u0915\u093e \u0921\u093f\u091c\u093f\u091f\u0932 \u0938\u0902\u0938\u094d\u0915\u0930\u0923'
+      : latestEpaper?.cityName.trim()
+        ? `${epaperCity} Edition`
+        : "Today's digital edition";
+  const epaperSupportLabel =
+    language === 'hi'
+      ? '\u0906\u091c \u0915\u093e \u092a\u0942\u0930\u093e \u0905\u0902\u0915 \u090f\u0915 \u091f\u0948\u092a \u092e\u0947\u0902 \u092a\u0922\u093c\u0947\u0902'
+      : "Open today's full edition in one tap";
+  const epaperPagesLabel = latestEpaper?.pageCount
+    ? `${latestEpaper.pageCount} ${language === 'hi' ? '\u092a\u0947\u091c' : 'pages'}`
+    : '';
 
   return (
     <div className="relative pb-3 [--section-gap:1rem] sm:[--section-gap:1.25rem] lg:[--section-gap:1.5rem]">
@@ -351,27 +451,86 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-xl border border-red-300/50 bg-gradient-to-br from-red-500 via-red-600 to-red-700 p-4 text-white shadow-[var(--shadow-card)] sm:rounded-2xl sm:p-5">
-            <div className="absolute -top-8 right-0 h-24 w-24 rounded-full bg-white/20 blur-2xl" />
-            <div className="absolute -bottom-8 left-0 h-24 w-24 rounded-full bg-black/20 blur-2xl" />
+          <div className="relative overflow-hidden rounded-xl border border-red-500/20 bg-[linear-gradient(145deg,#17171c_0%,#101118_58%,#5f1118_130%)] p-4 text-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] sm:rounded-2xl sm:p-5">
+            <div className="absolute inset-x-0 top-0 h-[3px] bg-[linear-gradient(90deg,#ef4444_0%,#f97316_48%,#f8fafc_100%)]" />
+            <div className="pointer-events-none absolute -right-10 -bottom-10 h-36 w-36 rounded-full bg-red-600/18 blur-3xl" />
+            <div className="pointer-events-none absolute right-20 top-10 h-20 w-20 rounded-full bg-white/6 blur-2xl" />
+            <div className="pointer-events-none absolute inset-y-6 right-[9rem] hidden w-px bg-white/10 sm:block md:right-[11rem] lg:right-[10rem] xl:right-[11rem]" />
 
-            <div className="relative">
-              <h3 className="mb-2 inline-flex items-center gap-2 text-lg font-black tracking-tight">
-                <CalendarDays className="h-[18px] w-[18px]" />
-                {language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
-              </h3>
-              <p className="mb-4 text-xs leading-relaxed text-red-50/95 sm:text-sm">
-                {language === 'hi'
-                  ? '\u0906\u091c \u0915\u093e \u0905\u0916\u092c\u093e\u0930 \u092a\u0922\u093c\u0947\u0902\u0964 \u0907\u0902\u0926\u094c\u0930, \u0909\u091c\u094d\u091c\u0948\u0928, \u092e\u0941\u0902\u092c\u0908 \u0914\u0930 \u0926\u093f\u0932\u094d\u0932\u0940 \u0915\u0947 \u0921\u093f\u091c\u093f\u091f\u0932 \u0938\u0902\u0938\u094d\u0915\u0930\u0923 \u0909\u092a\u0932\u092c\u094d\u0927 \u0939\u0948\u0902\u0964'
-                  : 'Read today\'s newspaper edition. Indore, Ujjain, Mumbai and Delhi editions available.'}
-              </p>
+            <div className="relative grid grid-cols-[minmax(0,1fr)_132px] gap-4 max-[359px]:grid-cols-[minmax(0,1fr)_118px] max-[359px]:gap-3 sm:grid-cols-[minmax(0,1fr)_156px] md:grid-cols-[minmax(0,1fr)_184px] lg:grid-cols-[minmax(0,1fr)_168px] xl:grid-cols-[minmax(0,1fr)_184px] sm:gap-5">
+              <div className="flex min-w-0 flex-col justify-between py-1">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white shadow-sm">
+                      {language === 'hi' ? '\u0906\u091c \u0915\u093e \u0905\u0902\u0915' : "Today's Edition"}
+                    </span>
+                    {epaperDateLabel ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/8 px-2.5 py-1 text-[10px] font-semibold text-zinc-200">
+                        <CalendarDays className="h-3.5 w-3.5 text-red-300" />
+                        {epaperDateLabel}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-zinc-400">
+                      {language === 'hi' ? '\u0921\u093f\u091c\u093f\u091f\u0932 \u090f\u0921\u093f\u0936\u0928' : 'Digital Edition'}
+                    </p>
+                    <h3 className="mt-2 inline-flex items-center gap-2 text-[1.7rem] font-black tracking-tight text-white sm:text-[1.95rem] md:text-[2.1rem] lg:text-[1.85rem] xl:text-[2.05rem]">
+                      <Newspaper className="h-[18px] w-[18px] text-red-300" />
+                      {language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
+                    </h3>
+                    <p className="mt-2 text-[1.05rem] font-semibold leading-tight text-zinc-100 sm:text-[1.22rem] md:text-[1.3rem] lg:text-[1.15rem] xl:text-[1.28rem]">
+                      {epaperEditionLabel}
+                    </p>
+                    <p className="mt-2 max-w-[26ch] text-[13px] leading-relaxed text-zinc-300 sm:text-sm md:max-w-[30ch] lg:max-w-[22ch] xl:max-w-[24ch]">
+                      {epaperSupportLabel}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <Link
+                    href={epaperHref}
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-zinc-950 shadow-[0_14px_30px_rgba(255,255,255,0.12)] transition-all hover:-translate-y-0.5 hover:bg-red-50 sm:px-5 sm:text-sm"
+                  >
+                    {language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930 \u0916\u094b\u0932\u0947\u0902' : 'Open E-Paper'}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  {epaperPagesLabel ? (
+                    <span className="text-[11px] font-semibold text-zinc-300 sm:text-xs">
+                      {epaperPagesLabel}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
 
               <Link
-                href="/main/epaper"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white/95 px-3.5 py-2.5 text-xs font-bold text-red-700 transition-colors hover:bg-white sm:text-sm"
+                href={epaperHref}
+                className="group relative block w-full self-center justify-self-end"
+                aria-label={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930 \u0915\u0935\u0930 \u0926\u0947\u0916\u0947\u0902' : 'View e-paper cover'}
               >
-                {language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930 \u0926\u0947\u0916\u0947\u0902' : 'View E-Paper'}
-                <ArrowRight className="h-4 w-4" />
+                <div className="pointer-events-none absolute left-3 right-2 top-4 aspect-[3/4] rounded-[1rem] border border-white/10 bg-white/6 opacity-60 rotate-[8deg]" />
+                <div className="pointer-events-none absolute left-1 right-4 top-2 aspect-[3/4] rounded-[1rem] border border-white/10 bg-black/20 opacity-70 -rotate-[6deg]" />
+                <div className="pointer-events-none absolute inset-x-2 bottom-0 top-6 rounded-[1.3rem] bg-black/35 blur-xl" />
+                <div className="relative overflow-hidden rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] p-2.5 shadow-[0_18px_38px_rgba(0,0,0,0.28)] transition-transform duration-300 group-hover:-translate-y-1">
+                  <div className="relative aspect-[3/4] overflow-hidden rounded-[1rem] bg-white">
+                    <Image
+                      src={epaperThumbnail}
+                      alt={epaperThumbnailAlt}
+                      fill
+                      className="object-contain p-1.5 transition-transform duration-500 group-hover:scale-[1.03]"
+                      sizes="(max-width: 359px) 118px, (max-width: 639px) 132px, (max-width: 767px) 156px, (max-width: 1023px) 184px, (max-width: 1279px) 168px, 184px"
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300">
+                    <span>{language === 'hi' ? '\u092b\u094d\u0930\u0902\u091f \u092a\u0947\u091c' : 'Front Page'}</span>
+                    <ArrowUpRight className="h-3.5 w-3.5 text-red-300" />
+                  </div>
+                </div>
+                <span className="absolute left-3 top-3 rounded-full bg-red-600/95 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
+                  {language === 'hi' ? '\u0915\u0935\u0930' : 'Cover'}
+                </span>
               </Link>
             </div>
           </div>
