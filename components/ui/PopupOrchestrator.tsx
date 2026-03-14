@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { BellRing, MapPin, Sparkles, X } from 'lucide-react';
+import { BellRing, MapPin, Smartphone, Sparkles, X } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import {
   hideInstallPrompt,
@@ -92,40 +92,43 @@ function PopupFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-[120] flex items-end justify-center bg-black/45 p-3 sm:items-center sm:p-5">
-      <section className="pointer-events-auto relative w-full max-w-lg overflow-hidden rounded-2xl border border-primary-200/60 bg-white p-4 shadow-[0_26px_62px_rgba(24,24,27,0.2)] dark:border-primary-900/35 dark:bg-zinc-900 sm:p-5">
+    <div className="pointer-events-none fixed inset-0 z-[120] flex items-end justify-center bg-[radial-gradient(circle_at_top,rgba(231,33,41,0.18),transparent_42%),rgba(10,10,12,0.55)] p-3 backdrop-blur-[2px] sm:items-center sm:p-5">
+      <section className="pointer-events-auto relative w-full max-w-lg overflow-hidden rounded-[1.75rem] border border-white/65 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,248,248,0.95))] p-4 shadow-[0_28px_72px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(24,24,27,0.96),rgba(15,15,18,0.98))] sm:p-5">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(231,33,41,0.16),transparent_70%)]" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#8b141a_0%,#e72129_52%,#c61d24_100%)]" />
-        <header className="mb-3 flex items-start justify-between gap-3">
+        <header className="relative mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">
+            <h2 className="text-[1.15rem] font-black tracking-tight text-zinc-950 dark:text-zinc-50">
               {title}
             </h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{subtitle}</p>
+            <p className="mt-1.5 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+              {subtitle}
+            </p>
           </div>
           <button
             type="button"
             onClick={onDismiss}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/70 bg-white/75 text-zinc-600 shadow-sm backdrop-blur transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
             aria-label="Dismiss popup"
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
-        {children}
+        <div className="relative">{children}</div>
 
-        <footer className="mt-4 flex flex-wrap gap-2">
+        <footer className="mt-5 flex flex-col-reverse gap-2 border-t border-zinc-200/70 pt-4 dark:border-zinc-800/80 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onDismiss}
-            className="inline-flex h-10 items-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300/90 bg-white/85 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-white dark:border-zinc-700 dark:bg-white/[0.03] dark:text-zinc-100 dark:hover:bg-white/[0.06]"
           >
             {dismissLabel}
           </button>
           <button
             type="button"
             onClick={onNeverShow}
-            className="inline-flex h-10 items-center rounded-xl border border-primary-200 bg-primary-50 px-4 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-900/40 dark:bg-primary-950/30 dark:text-primary-300 dark:hover:bg-primary-950/45"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-primary-200/80 bg-primary-50/90 px-4 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-500/20 dark:bg-primary-500/12 dark:text-primary-300 dark:hover:bg-primary-500/18"
           >
             {neverShowLabel}
           </button>
@@ -148,6 +151,7 @@ export default function PopupOrchestrator() {
 
   const isAuthenticated = status === 'authenticated' && Boolean(session?.user?.email);
   const notificationCapability = resolveNotificationCapability();
+  const requiresInstallForNotifications = notificationCapability.requiresAppInstall;
 
   const dismissLabel = language === 'hi' ? '\u0905\u092d\u0940 \u0928\u0939\u0940\u0902' : 'Not now';
   const neverShowLabel =
@@ -241,10 +245,14 @@ export default function PopupOrchestrator() {
 
   const notificationSubtitle = useMemo(
     () =>
-      language === 'hi'
-        ? '\u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0928\u094d\u092f\u0942\u091c\u093c \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u092a\u093e\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f \u0928\u094b\u091f\u093f\u092b\u093f\u0915\u0947\u0936\u0928 \u0905\u0928\u0941\u092e\u0924\u093f \u0926\u0947\u0902\u0964'
-        : 'Allow browser notifications for breaking and e-paper alerts.',
-    [language]
+      requiresInstallForNotifications
+        ? language === 'hi'
+          ? 'iPhone \u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u091a\u093e\u0932\u0942 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f \u092a\u0939\u0932\u0947 \u090f\u092a \u0907\u0902\u0938\u094d\u091f\u0949\u0932 \u0915\u0930\u0947\u0902\u0964'
+          : 'Install the app first to enable alerts on iPhone.'
+        : language === 'hi'
+          ? '\u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0928\u094d\u092f\u0942\u091c\u093c \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u092a\u093e\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f \u0928\u094b\u091f\u093f\u092b\u093f\u0915\u0947\u0936\u0928 \u0905\u0928\u0941\u092e\u0924\u093f \u0926\u0947\u0902\u0964'
+          : 'Allow browser notifications for breaking and e-paper alerts.',
+    [language, requiresInstallForNotifications]
   );
 
   const personalizationSubtitle = useMemo(
@@ -437,22 +445,30 @@ export default function PopupOrchestrator() {
         <div className="rounded-xl border border-primary-200/70 bg-[radial-gradient(circle_at_top_right,rgba(231,33,41,0.12),transparent_42%),linear-gradient(135deg,rgba(255,241,242,0.95),rgba(255,255,255,0.98))] p-3 text-sm text-zinc-700 dark:border-primary-900/40 dark:bg-[radial-gradient(circle_at_top_right,rgba(231,33,41,0.16),transparent_38%),linear-gradient(135deg,rgba(63,7,11,0.7),rgba(36,32,36,0.96))] dark:text-zinc-200">
           <p className="flex items-center gap-2 font-semibold">
             <BellRing className="h-4 w-4 text-primary-600 dark:text-primary-300" />
-            {notificationStep === 'soft'
+            {requiresInstallForNotifications
               ? language === 'hi'
-                ? '\u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0928\u094d\u092f\u0942\u091c\u093c \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u092a\u0921\u0947\u091f \u092e\u093f\u0938 \u0928 \u0915\u0930\u0947\u0902\u0964'
-                : 'Do not miss breaking updates and e-paper alerts.'
-              : language === 'hi'
-                ? '\u0905\u092d\u0940 browser prompt \u0916\u0941\u0932\u0947\u0917\u093e, \u0915\u0943\u092a\u092f\u093e Allow \u091a\u0941\u0928\u0947\u0902\u0964'
-                : 'Your browser will ask next. Choose Allow to receive alerts.'}
+                ? '\u0905\u0932\u0930\u094d\u091f \u091a\u093e\u0932\u0942 \u0915\u0930\u0928\u0947 \u0938\u0947 \u092a\u0939\u0932\u0947 \u090f\u092a \u0907\u0902\u0938\u094d\u091f\u0949\u0932 \u0915\u0930\u0928\u093e \u091c\u0930\u0942\u0930\u0940 \u0939\u0948\u0964'
+                : 'Install the app first before enabling alerts.'
+              : notificationStep === 'soft'
+                ? language === 'hi'
+                  ? '\u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0928\u094d\u092f\u0942\u091c\u093c \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u092a\u0921\u0947\u091f \u092e\u093f\u0938 \u0928 \u0915\u0930\u0947\u0902\u0964'
+                  : 'Do not miss breaking updates and e-paper alerts.'
+                : language === 'hi'
+                  ? '\u0905\u092d\u0940 browser prompt \u0916\u0941\u0932\u0947\u0917\u093e, \u0915\u0943\u092a\u092f\u093e Allow \u091a\u0941\u0928\u0947\u0902\u0964'
+                  : 'Your browser will ask next. Choose Allow to receive alerts.'}
           </p>
           <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
-            {notificationStep === 'soft'
+            {requiresInstallForNotifications
               ? language === 'hi'
-                ? '\u091c\u092c \u0916\u092c\u0930 \u092e\u0939\u0924\u094d\u0935\u092a\u0942\u0930\u094d\u0923 \u0939\u094b, \u092c\u093e\u0930-\u092c\u093e\u0930 \u0938\u093e\u0907\u091f \u0916\u094b\u0932\u0947 \u092c\u093f\u0928\u093e \u0924\u0941\u0930\u0902\u0924 \u091c\u093e\u0928\u0915\u093e\u0930\u0940 \u092a\u093e\u090f\u0902\u0964'
-                : 'Get important updates without reopening the site every time.'
-              : language === 'hi'
-                ? '\u0905\u0928\u0941\u092e\u0924\u093f \u092e\u093f\u0932\u0924\u0947 \u0939\u0940 \u0939\u092e \u0938\u093f\u0930\u094d\u092b \u0909\u092a\u092f\u094b\u0917\u0940 \u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u092d\u0947\u091c\u0947\u0902\u0917\u0947\u0964'
-                : 'Once allowed, we will send only useful breaking and e-paper alerts.'}
+                ? '\u0907\u0902\u0938\u094d\u091f\u0949\u0932 \u0915\u0947 \u092c\u093e\u0926 \u0905\u092a \u0915\u094b browser Allow prompt \u0926\u093f\u0916\u093e\u092f\u0947\u0917\u093e\u0964'
+                : 'After install, the browser will let you allow alerts.'
+              : notificationStep === 'soft'
+                ? language === 'hi'
+                  ? '\u091c\u092c \u0916\u092c\u0930 \u092e\u0939\u0924\u094d\u0935\u092a\u0942\u0930\u094d\u0923 \u0939\u094b, \u092c\u093e\u0930-\u092c\u093e\u0930 \u0938\u093e\u0907\u091f \u0916\u094b\u0932\u0947 \u092c\u093f\u0928\u093e \u0924\u0941\u0930\u0902\u0924 \u091c\u093e\u0928\u0915\u093e\u0930\u0940 \u092a\u093e\u090f\u0902\u0964'
+                  : 'Get important updates without reopening the site every time.'
+                : language === 'hi'
+                  ? '\u0905\u0928\u0941\u092e\u0924\u093f \u092e\u093f\u0932\u0924\u0947 \u0939\u0940 \u0939\u092e \u0938\u093f\u0930\u094d\u092b \u0909\u092a\u092f\u094b\u0917\u0940 \u092c\u094d\u0930\u0947\u0915\u093f\u0902\u0917 \u0914\u0930 \u0908-\u092a\u0947\u092a\u0930 \u0905\u0932\u0930\u094d\u091f \u092d\u0947\u091c\u0947\u0902\u0917\u0947\u0964'
+                  : 'Once allowed, we will send only useful breaking and e-paper alerts.'}
           </p>
           {notificationNotice ? (
             <p aria-live="polite" className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
@@ -486,15 +502,23 @@ export default function PopupOrchestrator() {
               disabled={notificationBusy}
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,#c61d24_0%,#e72129_100%)] px-4 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(199,29,36,0.28)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <BellRing className="h-4 w-4" />
+              {requiresInstallForNotifications && notificationStep === 'soft' ? (
+                <Smartphone className="h-4 w-4" />
+              ) : (
+                <BellRing className="h-4 w-4" />
+              )}
               {notificationBusy
                 ? language === 'hi'
                   ? '\u092a\u094d\u0930\u094b\u0938\u0947\u0938 \u0939\u094b \u0930\u0939\u093e \u0939\u0948...'
                   : 'Processing...'
                 : notificationStep === 'soft'
-                  ? language === 'hi'
-                    ? '\u0906\u0917\u0947 \u092c\u095d\u0947\u0902'
-                    : 'Continue'
+                  ? requiresInstallForNotifications
+                    ? language === 'hi'
+                      ? '\u0907\u0902\u0938\u094d\u091f\u0949\u0932 popup \u0916\u094b\u0932\u0947\u0902'
+                      : 'Open install popup'
+                    : language === 'hi'
+                      ? '\u0906\u0917\u0947 \u092c\u095d\u0947\u0902'
+                      : 'Continue'
                   : language === 'hi'
                     ? 'Allow prompt \u0916\u094b\u0932\u0947\u0902'
                     : 'Open browser prompt'}

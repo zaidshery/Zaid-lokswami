@@ -1,12 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   CheckCircle2,
   Download,
   Share2,
-  Smartphone,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -17,24 +16,22 @@ import {
   INSTALL_PROMPT_REQUEST_EVENT,
   isStandaloneMode,
   resolveInstallPlatform,
-  type InstallPlatform,
 } from '@/lib/pwa/client';
 import {
   canShowInstallPrompt,
-  dismissInstallPrompt,
   markInstallPromptShown,
   releaseActiveSurface,
 } from '@/lib/popups/popupManager';
 import { usePopupState } from '@/lib/popups/usePopupState';
 
 const INSTALL_PROMPT_STORAGE_KEY = 'lokswami_install_prompt_state_v1';
-const DISMISS_COOLDOWN_MS = 5 * 24 * 60 * 60 * 1000;
+const INSTALL_PROMPT_INITIAL_DELAY_MS = 10 * 1000;
+const INSTALL_PROMPT_FOLLOW_UP_DELAY_MS = 30 * 1000;
+const INSTALL_PROMPT_REPEAT_DELAY_MS = 60 * 1000;
 
 type InstallPromptState = {
   dismissedAt?: number;
   acceptedAt?: number;
-  eligibleVisitCount?: number;
-  lastEligiblePath?: string;
 };
 
 function normalizeInstallPromptState(raw: unknown): InstallPromptState {
@@ -52,12 +49,6 @@ function normalizeInstallPromptState(raw: unknown): InstallPromptState {
       typeof value.acceptedAt === 'number' && Number.isFinite(value.acceptedAt)
         ? value.acceptedAt
         : undefined,
-    eligibleVisitCount:
-      typeof value.eligibleVisitCount === 'number' && Number.isFinite(value.eligibleVisitCount)
-        ? Math.max(0, Math.floor(value.eligibleVisitCount))
-        : 0,
-    lastEligiblePath:
-      typeof value.lastEligiblePath === 'string' ? value.lastEligiblePath.slice(0, 200) : '',
   };
 }
 
@@ -102,39 +93,8 @@ function updateInstallPromptState(
   return next;
 }
 
-function markEligibleInstallVisit(pathname: string) {
-  const normalizedPath = pathname.trim();
-  if (!normalizedPath) {
-    return readInstallPromptState();
-  }
-
-  return updateInstallPromptState((current) => {
-    if (current.lastEligiblePath === normalizedPath) {
-      return current;
-    }
-
-    return {
-      ...current,
-      eligibleVisitCount: (current.eligibleVisitCount || 0) + 1,
-      lastEligiblePath: normalizedPath,
-    };
-  });
-}
-
 function hasAcceptedPrompt(state: InstallPromptState) {
   return Boolean(state.acceptedAt && state.acceptedAt > 0);
-}
-
-function canAutoShowPrompt(state: InstallPromptState) {
-  if (hasAcceptedPrompt(state)) {
-    return false;
-  }
-
-  if (!state.dismissedAt) {
-    return true;
-  }
-
-  return Date.now() - state.dismissedAt >= DISMISS_COOLDOWN_MS;
 }
 
 function isEligiblePath(pathname: string | null) {
@@ -148,30 +108,6 @@ function isEligiblePath(pathname: string | null) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/signin')
   );
-}
-
-function resolveMinEligibleVisits(pathname: string | null, platform: InstallPlatform) {
-  if (pathname?.startsWith('/main/epaper')) {
-    return 1;
-  }
-
-  if (pathname?.startsWith('/main')) {
-    return platform === 'desktop' ? 3 : 2;
-  }
-
-  return platform === 'desktop' ? 4 : 3;
-}
-
-function resolveRevealDelayMs(pathname: string | null, platform: InstallPlatform) {
-  if (pathname?.startsWith('/main/epaper')) {
-    return 1800;
-  }
-
-  if (pathname?.startsWith('/main')) {
-    return platform === 'desktop' ? 4200 : 2800;
-  }
-
-  return platform === 'desktop' ? 5200 : 3600;
 }
 
 export default function InstallAppPrompt() {
@@ -190,14 +126,19 @@ export default function InstallAppPrompt() {
   const eligiblePath = isEligiblePath(pathname);
   const installPlatform = resolveInstallPlatform();
   const isStandalone = isStandaloneMode();
+  const hasAcceptedInstallPrompt = hasAcceptedPrompt(installState);
   const isReaderRoute = pathname?.startsWith('/main') ?? false;
   const isEpaperRoute = pathname?.startsWith('/main/epaper') ?? false;
   const isVideoRoute = pathname?.startsWith('/main/videos') ?? false;
-  const minEligibleVisits = resolveMinEligibleVisits(pathname, installPlatform);
-  const hasMetEngagement =
-    Number(installState.eligibleVisitCount || 0) >= minEligibleVisits;
-  const autoCanShow = canAutoShowPrompt(installState);
   const canReuseActiveSurface = popupState.activeSurface === 'install-app';
+  const autoPromptStateRef = useRef({
+    canReuseActiveSurface,
+    copyUnavailable: '',
+    deferredPrompt: null as BeforeInstallPromptEvent | null,
+    eligiblePath,
+    installPlatform,
+    isVisible: false,
+  });
 
   const presentInstallPrompt = useCallback(
     ({
@@ -301,13 +242,22 @@ export default function InstallAppPrompt() {
   }, [installPlatform, isEpaperRoute, isVideoRoute, language]);
 
   useEffect(() => {
-    if (!eligiblePath) {
-      return;
-    }
-
-    const next = markEligibleInstallVisit(pathname || '');
-    setInstallState(next);
-  }, [eligiblePath, pathname]);
+    autoPromptStateRef.current = {
+      canReuseActiveSurface,
+      copyUnavailable: copy.unavailable,
+      deferredPrompt,
+      eligiblePath,
+      installPlatform,
+      isVisible,
+    };
+  }, [
+    canReuseActiveSurface,
+    copy.unavailable,
+    deferredPrompt,
+    eligiblePath,
+    installPlatform,
+    isVisible,
+  ]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !canRegisterServiceWorker()) {
@@ -358,7 +308,7 @@ export default function InstallAppPrompt() {
         acceptedAt: Date.now(),
       }));
       setInstallState(next);
-      dismissInstallPrompt();
+      releaseActiveSurface('install-app');
       setDeferredPrompt(null);
       setShowIosInstructions(false);
       setIsVisible(false);
@@ -438,55 +388,65 @@ export default function InstallAppPrompt() {
   }, []);
 
   useEffect(() => {
-    if (!eligiblePath || isStandalone || hasAcceptedPrompt(installState)) {
+    if (!eligiblePath || isStandalone || hasAcceptedInstallPrompt) {
       setIsVisible(false);
       setShowIosInstructions(false);
       releaseActiveSurface('install-app');
       return;
     }
 
-    if (isVisible) {
-      return;
-    }
-
-    const hasInstallSurface = installPlatform === 'ios' || Boolean(deferredPrompt);
-    if (!hasInstallSurface || !autoCanShow || !hasMetEngagement) {
-      return;
-    }
-
-    const revealDelayMs = resolveRevealDelayMs(pathname, installPlatform);
-    const timer = window.setTimeout(() => {
+    const attemptAutoPrompt = () => {
+      const current = autoPromptStateRef.current;
       if (
+        !current.eligiblePath ||
+        current.isVisible ||
         document.visibilityState !== 'visible' ||
         document.body.dataset.lokswamiPopupActive === '1' ||
-        isStandaloneMode() ||
-        (!canReuseActiveSurface && !canShowInstallPrompt())
+        isStandaloneMode()
       ) {
         return;
       }
 
+      if (!current.canReuseActiveSurface && !canShowInstallPrompt()) {
+        return;
+      }
+
       presentInstallPrompt({
-        useIosInstructions: installPlatform === 'ios' && !deferredPrompt,
+        useIosInstructions: current.installPlatform === 'ios' && !current.deferredPrompt,
+        nextNotice:
+          current.installPlatform === 'ios' || current.deferredPrompt
+            ? ''
+            : current.copyUnavailable,
       });
-    }, revealDelayMs);
+    };
+
+    const initialTimer = window.setTimeout(
+      attemptAutoPrompt,
+      INSTALL_PROMPT_INITIAL_DELAY_MS
+    );
+    const followUpTimer = window.setTimeout(
+      attemptAutoPrompt,
+      INSTALL_PROMPT_FOLLOW_UP_DELAY_MS
+    );
+
+    let repeatTimer = 0;
+    const repeatStarter = window.setTimeout(() => {
+      attemptAutoPrompt();
+      repeatTimer = window.setInterval(
+        attemptAutoPrompt,
+        INSTALL_PROMPT_REPEAT_DELAY_MS
+      );
+    }, INSTALL_PROMPT_REPEAT_DELAY_MS);
 
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(initialTimer);
+      window.clearTimeout(followUpTimer);
+      window.clearTimeout(repeatStarter);
+      if (repeatTimer) {
+        window.clearInterval(repeatTimer);
+      }
     };
-  }, [
-    autoCanShow,
-    deferredPrompt,
-    eligiblePath,
-    hasMetEngagement,
-    installPlatform,
-    installState,
-    isStandalone,
-    isVisible,
-    pathname,
-    canReuseActiveSurface,
-    presentInstallPrompt,
-    popupState.activeSurface,
-  ]);
+  }, [eligiblePath, hasAcceptedInstallPrompt, isStandalone, pathname, presentInstallPrompt]);
 
   const dismissPrompt = () => {
     const next = updateInstallPromptState((current) => ({
@@ -494,7 +454,7 @@ export default function InstallAppPrompt() {
       dismissedAt: Date.now(),
     }));
     setInstallState(next);
-    dismissInstallPrompt();
+    releaseActiveSurface('install-app');
     setIsVisible(false);
     setNotice('');
   };
@@ -525,7 +485,7 @@ export default function InstallAppPrompt() {
       );
 
       setInstallState(next);
-      dismissInstallPrompt();
+      releaseActiveSurface('install-app');
       setDeferredPrompt(null);
       setIsVisible(false);
     } catch {
@@ -547,53 +507,56 @@ export default function InstallAppPrompt() {
           : 'bottom-4'
       }`}
     >
-      <section className="pointer-events-auto mx-auto w-full max-w-md overflow-hidden rounded-[1.65rem] border border-primary-200/70 bg-white/95 shadow-[0_24px_60px_rgba(199,29,36,0.2)] backdrop-blur dark:border-primary-900/40 dark:bg-zinc-950/95">
-        <div className="bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.2),_transparent_34%),linear-gradient(135deg,#8b141a_0%,#e72129_58%,#c61d24_100%)] px-4 py-3.5 text-white">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/90">
-                <Sparkles className="h-3.5 w-3.5" />
-                {copy.badge}
+      <section className="pointer-events-auto mx-auto w-full max-w-md overflow-hidden rounded-[1.8rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,247,247,0.96))] shadow-[0_28px_75px_rgba(15,23,42,0.22)] backdrop-blur dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(24,24,27,0.97),rgba(13,13,16,0.98))]">
+        <div className="relative overflow-hidden px-4 pb-4 pt-4 sm:px-5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top_right,rgba(231,33,41,0.26),transparent_68%)]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#8b141a_0%,#e72129_52%,#c61d24_100%)]" />
+
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8b141a_0%,#e72129_100%)] text-white shadow-[0_16px_30px_rgba(199,29,36,0.26)]">
+                {showIosInstructions ? (
+                  <Share2 className="h-5 w-5" />
+                ) : (
+                  <Download className="h-5 w-5" />
+                )}
+              </span>
+
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-primary-200/80 bg-primary-50/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-primary-700 dark:border-primary-500/25 dark:bg-primary-500/10 dark:text-primary-200">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {copy.badge}
+                </div>
+                <h2 className="mt-3 text-[1.05rem] font-black leading-tight tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-[1.15rem]">
+                  {showIosInstructions ? copy.iosTitle : copy.title}
+                </h2>
+                <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                  {showIosInstructions ? copy.iosSubtitle : copy.subtitle}
+                </p>
               </div>
-              <h2 className="mt-2 text-base font-black leading-tight sm:text-lg">
-                {showIosInstructions ? copy.iosTitle : copy.title}
-              </h2>
-              <p className="mt-1 text-sm text-white/85">
-                {showIosInstructions ? copy.iosSubtitle : copy.subtitle}
-              </p>
             </div>
+
             <button
               type="button"
               onClick={dismissPrompt}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/15"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/80 bg-white/80 text-zinc-600 shadow-sm backdrop-blur transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
               aria-label="Dismiss install prompt"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {copy.benefits.map((item) => (
-              <span
-                key={item}
-                className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/90"
-              >
-                <Smartphone className="h-3.5 w-3.5" />
-                {item}
-              </span>
-            ))}
-          </div>
         </div>
 
-        <div className="px-4 py-4">
+        <div className="border-t border-zinc-200/70 bg-white/70 px-4 py-4 backdrop-blur dark:border-zinc-800/80 dark:bg-white/[0.02] sm:px-5">
           {showIosInstructions ? (
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900/80">
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-200">
+            <div className="rounded-[1.4rem] border border-primary-100 bg-[linear-gradient(135deg,rgba(255,245,245,0.98),rgba(255,255,255,0.96))] p-4 shadow-sm dark:border-primary-500/20 dark:bg-[linear-gradient(135deg,rgba(99,20,24,0.18),rgba(255,255,255,0.03))]">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-200">
                   <Share2 className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  <p className="text-sm font-semibold leading-6 text-zinc-900 dark:text-zinc-100">
                     {copy.iosSubtitle}
                   </p>
                   <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
@@ -609,26 +572,15 @@ export default function InstallAppPrompt() {
             </div>
           ) : null}
 
-          {notice ? (
-            <div
-              aria-live="polite"
-              className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/12 dark:text-amber-100"
-            >
-              {notice}
-            </div>
-          ) : null}
+          {notice ? <span className="sr-only">{notice}</span> : null}
 
-          <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
-            {copy.availability}
-          </p>
-
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className={`${showIosInstructions ? 'mt-4' : ''} flex flex-col-reverse gap-2 sm:flex-row sm:items-center`}>
             {!showIosInstructions ? (
               <button
                 type="button"
                 onClick={() => void installApp()}
                 disabled={isInstalling}
-                className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary-600 px-4 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#b3171d_0%,#e72129_100%)] px-4 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(199,29,36,0.26)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-4 w-4" />
                 {isInstalling ? copy.installing : copy.install}
@@ -637,7 +589,7 @@ export default function InstallAppPrompt() {
             <button
               type="button"
               onClick={dismissPrompt}
-              className="inline-flex h-11 items-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-300/90 bg-white/85 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-white dark:border-zinc-700 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/[0.06]"
             >
               {copy.dismiss}
             </button>

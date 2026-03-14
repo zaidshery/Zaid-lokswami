@@ -512,13 +512,11 @@ export function getNextPopup(userState: PopupUserState): PopupType | null {
   const notificationHandled =
     userState.notificationPermission === 'granted' ||
     userState.notificationPermission === 'denied' ||
-    userState.notificationPermission === 'unsupported' ||
-    userState.notificationPermission === 'requires-install';
+    userState.notificationPermission === 'unsupported';
 
   const shouldShowNotificationPrompt =
     !notificationHandled &&
     !state.neverNotifPrompt &&
-    !state.notifPromptShown &&
     (state.readCount >= 4 || (state.hasVisitedEpaper && state.visitCount >= 2));
 
   if (shouldShowNotificationPrompt) {
