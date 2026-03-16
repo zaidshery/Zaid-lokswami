@@ -25,6 +25,9 @@ export interface IEPaper {
   pageCount: number;
   pages: IEPaperPage[];
   status: EPaperStatus;
+  sourceType?: 'manual-upload' | 'drive-import' | 'remote-import' | 'legacy' | 'unknown';
+  sourceLabel?: string;
+  sourceUrl?: string;
   createdAt: Date;
   updatedAt: Date;
   embedding: number[];
@@ -57,6 +60,13 @@ const EPaperSchema = new mongoose.Schema<IEPaper>(
     pageCount: { type: Number, required: true, min: 1, max: 1000 },
     pages: { type: [EPaperPageSchema], default: [] },
     status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+    sourceType: {
+      type: String,
+      enum: ['manual-upload', 'drive-import', 'remote-import', 'legacy', 'unknown'],
+      default: 'manual-upload',
+    },
+    sourceLabel: { type: String, trim: true, maxlength: 180, default: '' },
+    sourceUrl: { type: String, trim: true, maxlength: 800, default: '' },
     embedding: { type: [Number], default: [], select: false },
     embeddingGeneratedAt: { type: Date, default: null },
     aiSummary: { type: String, default: '' },

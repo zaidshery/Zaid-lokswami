@@ -4,6 +4,7 @@ import Image from 'next/image';
 import {
   type TouchEvent as ReactTouchEvent,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -11,20 +12,28 @@ import {
 } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
+  Bookmark,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Download,
   ExternalLink,
   Loader2,
   Minus,
   Newspaper,
+  PauseCircle,
   Plus,
+  Printer,
+  Type,
+  RotateCcw,
+  Search,
   Share2,
+  Volume2,
   X,
 } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import {
   EPAPER_CITY_OPTIONS,
-  type EPaperCitySlug,
 } from '@/lib/constants/epaperCities';
 import { useAppStore } from '@/lib/store/appStore';
 import {
@@ -32,7 +41,23 @@ import {
   toAbsoluteShareUrl,
 } from '@/lib/utils/articleShare';
 import { formatUiDate } from '@/lib/utils/dateFormat';
+import {
+  readSavedEpaperPapers,
+  readSavedEpaperStories,
+  setSavedEpaperPaperOfflineReady,
+  toggleSavedEpaperPaper,
+  toggleSavedEpaperStory,
+  updateSavedEpaperPaperLastPage,
+  type SavedEpaperPaperEntry,
+  type SavedEpaperPaperInput,
+  type SavedEpaperStoryEntry,
+} from '@/lib/utils/epaperReaderLibrary';
 import { renderPdfPagePreviewFromUrl } from '@/lib/utils/pdfThumbnailClient';
+import {
+  normalizeMetadataQuery,
+  parseArchiveMonth,
+  type EPaperCityFilter,
+} from '@/lib/utils/publicEpaperFilters';
 import type { EPaperArticleRecord, EPaperRecord } from '@/lib/types/epaper';
 
 export type PublicCursor = {
@@ -74,8 +99,10 @@ type EPaperPageClientProps = {
   initialLimit: number;
   initialHasMore: boolean;
   initialNextCursor: PublicCursor | null;
-  initialCity: EPaperCitySlug;
+  initialCity: EPaperCityFilter;
   initialPublishDate: string;
+  initialArchiveMonth: string;
+  initialSearchQuery: string;
 };
 
 const COPY = {
@@ -85,9 +112,17 @@ const COPY = {
     publishDate: 'Publish date',
     clearDate: 'Clear',
     city: 'City',
+    allCities: 'All editions',
+    archiveMonth: 'Archive month',
+    archiveSearch: 'Search editions',
+    archiveSearchPlaceholder: 'Search by title, city, or YYYY-MM-DD',
+    clearFilters: 'Clear filters',
     pages: 'pages',
+    editions: 'editions',
+    stories: 'stories',
     noThumbnail: 'No thumbnail',
-    noPaper: 'No published e-paper for this city yet.',
+    noPaper: 'No published e-paper available right now.',
+    noPaperFiltered: 'No e-paper matched these archive filters.',
     openPdf: 'Open PDF',
     shareWhatsApp: 'Share',
     shareStory: 'Share story',
@@ -96,6 +131,23 @@ const COPY = {
     pageMissingPrefix: 'Page image missing: rendering fallback from PDF for page',
     noPreview: 'No preview available for this page.',
     noArticle: 'No article content available.',
+    noReadableText: 'Readable text is not available for this story yet.',
+    textMode: 'Text mode',
+    storyMode: 'Visual mode',
+    textSize: 'Text size',
+    readerTextReady: 'Reader text ready',
+    readerTextExcerpt: 'OCR excerpt only',
+    readerTextFallback: 'Context fallback only',
+    readerTextExcerptHelp:
+      'This story currently has only a short OCR-derived excerpt. The page image remains the source view.',
+    readerTextFallbackHelp:
+      'Detailed story text is not available yet. Use the mapped page view for the original layout.',
+    listen: 'Listen',
+    stopListening: 'Stop',
+    listening: 'Preparing audio...',
+    audioUnavailable: 'Audio playback is unavailable right now.',
+    articleReader: 'Story reader',
+    openVisualStory: 'Open visual story view',
     story: 'Story',
     storyImage: 'Story image',
     previous: 'Previous page',
@@ -105,9 +157,53 @@ const COPY = {
     imageZoomOut: 'Zoom out image',
     imageZoomIn: 'Zoom in image',
     close: 'Close viewer',
+    page: 'Page',
+    quickJump: 'Quick jump',
+    pageStrip: 'Page strip',
+    pageStories: 'Page stories',
+    editionContents: 'Edition contents',
+    pagesTab: 'Pages',
+    contentsTab: 'Contents',
+    spreadView: 'Spread view',
+    singleView: 'Single page',
+    openPage: 'Open page',
+    tapPageToFocus: 'Tap a page to focus it',
+    noStoriesEdition: 'No mapped stories in this edition yet.',
     storiesOnPage: 'Stories on this page',
     noStories: 'No mapped stories on this page.',
     showingDate: 'Showing date',
+    archiveSummary: 'Archive',
+    resultsLoaded: 'loaded',
+    moreAvailable: 'More editions available',
+    loadMore: 'Load more',
+    noMore: 'No more editions',
+    searchFilter: 'Search',
+    saveIssue: 'Save issue',
+    savedIssue: 'Issue saved',
+    saveStory: 'Save story',
+    savedStory: 'Story saved',
+    downloadPdf: 'Download PDF',
+    downloadText: 'Download text',
+    printStory: 'Print story',
+    keepOffline: 'Keep offline',
+    offlineReady: 'Available offline',
+    offlineSaving: 'Preparing offline...',
+    savedLibrary: 'Saved for later',
+    savedLibraryHint: 'Quickly reopen saved issues and story highlights.',
+    savedIssues: 'Saved issues',
+    savedStories: 'Saved stories',
+    openSaved: 'Open',
+    openStory: 'Open story',
+    issueSavedNotice: 'Issue saved for later.',
+    issueRemovedNotice: 'Issue removed from saved list.',
+    storySavedNotice: 'Story saved for later.',
+    storyRemovedNotice: 'Story removed from saved list.',
+    offlineReadyNotice: 'This edition is ready for offline reading.',
+    offlinePartialNotice: 'Offline copy saved, but a few assets could not be cached.',
+    offlineUnsupported: 'Offline saving is not supported in this browser.',
+    offlineCachedNotice: 'Loaded this edition from your offline cache.',
+    printBlocked: 'Allow pop-ups in this browser to print the story.',
+    textDownloadUnavailable: 'Readable text is required to download this story.',
   },
   hi: {
     title: '\u0907\u0902\u091f\u0930\u090f\u0915\u094d\u091f\u093f\u0935 \u0908-\u092a\u0947\u092a\u0930',
@@ -116,11 +212,21 @@ const COPY = {
     publishDate: 'Publish date',
     clearDate: 'Clear',
     city: '\u0936\u0939\u0930',
+    allCities: '\u0938\u092d\u0940 \u0938\u0902\u0938\u094d\u0915\u0930\u0923',
+    archiveMonth: '\u0906\u0930\u094d\u0915\u093e\u0907\u0935 \u092e\u0939\u0940\u0928\u093e',
+    archiveSearch: '\u0908-\u092a\u0947\u092a\u0930 \u0916\u094b\u091c\u0947\u0902',
+    archiveSearchPlaceholder:
+      '\u0936\u0940\u0930\u094d\u0937\u0915, \u0936\u0939\u0930 \u092f\u093e YYYY-MM-DD \u0938\u0947 \u0916\u094b\u091c\u0947\u0902',
+    clearFilters: '\u092b\u093f\u0932\u094d\u091f\u0930 \u0939\u091f\u093e\u090f\u0902',
     pages: '\u092a\u0947\u091c',
+    editions: '\u0938\u0902\u0938\u094d\u0915\u0930\u0923',
+    stories: '\u0938\u094d\u091f\u094b\u0930\u0940',
     noThumbnail:
       '\u0925\u0902\u092c\u0928\u0947\u0932 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902',
     noPaper:
-      '\u0907\u0938 \u0936\u0939\u0930 \u0915\u0947 \u0932\u093f\u090f \u0905\u092d\u0940 \u0915\u094b\u0908 \u092a\u094d\u0930\u0915\u093e\u0936\u093f\u0924 \u0908-\u092a\u0947\u092a\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964',
+      '\u0905\u092d\u0940 \u0915\u094b\u0908 \u092a\u094d\u0930\u0915\u093e\u0936\u093f\u0924 \u0908-\u092a\u0947\u092a\u0930 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964',
+    noPaperFiltered:
+      '\u0907\u0928 \u0906\u0930\u094d\u0915\u093e\u0907\u0935 \u092b\u093f\u0932\u094d\u091f\u0930\u094d\u0938 \u0938\u0947 \u0915\u094b\u0908 \u0908-\u092a\u0947\u092a\u0930 \u0928\u0939\u0940\u0902 \u092e\u093f\u0932\u093e\u0964',
     openPdf: 'PDF \u0916\u094b\u0932\u0947\u0902',
     shareWhatsApp: '\u0936\u0947\u092f\u0930',
     shareStory: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0936\u0947\u092f\u0930 \u0915\u0930\u0947\u0902',
@@ -132,6 +238,25 @@ const COPY = {
       '\u0907\u0938 \u092a\u0947\u091c \u0915\u093e \u092a\u094d\u0930\u0940\u0935\u094d\u092f\u0942 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964',
     noArticle:
       '\u0907\u0938 \u0938\u094d\u091f\u094b\u0930\u0940 \u0915\u0940 \u0938\u093e\u092e\u0917\u094d\u0930\u0940 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964',
+    noReadableText:
+      '\u0907\u0938 \u0938\u094d\u091f\u094b\u0930\u0940 \u0915\u093e \u092a\u0922\u093c\u0928\u0947 \u0932\u093e\u092f\u0915 \u091f\u0947\u0915\u094d\u0938\u094d\u091f \u0905\u092d\u0940 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964',
+    textMode: '\u091f\u0947\u0915\u094d\u0938\u094d\u091f \u092e\u094b\u0921',
+    storyMode: '\u0935\u093f\u091c\u0941\u0905\u0932 \u092e\u094b\u0921',
+    textSize: '\u091f\u0947\u0915\u094d\u0938\u094d\u091f \u0938\u093e\u0907\u091c',
+    readerTextReady: '\u092a\u093e\u0920\u0915 \u091f\u0947\u0915\u094d\u0938\u094d\u091f \u0924\u0948\u092f\u093e\u0930',
+    readerTextExcerpt: '\u0915\u0947\u0935\u0932 OCR \u0905\u0902\u0936',
+    readerTextFallback: '\u0915\u0947\u0935\u0932 \u0938\u0902\u0926\u0930\u094d\u092d \u092b\u0949\u0932\u092c\u0948\u0915',
+    readerTextExcerptHelp:
+      '\u0907\u0938 \u0938\u094d\u091f\u094b\u0930\u0940 \u0915\u0947 \u0932\u093f\u090f \u0905\u092d\u0940 \u0938\u093f\u0930\u094d\u092b \u091b\u094b\u091f\u093e OCR \u0905\u0902\u0936 \u0909\u092a\u0932\u092c\u094d\u0927 \u0939\u0948\u0964 \u092a\u0947\u091c \u0907\u092e\u0947\u091c \u0939\u0940 \u0905\u0938\u0932 \u0935\u094d\u092f\u0942 \u0939\u0948\u0964',
+    readerTextFallbackHelp:
+      '\u0907\u0938 \u0938\u094d\u091f\u094b\u0930\u0940 \u0915\u093e \u0935\u093f\u0938\u094d\u0924\u0943\u0924 \u091f\u0947\u0915\u094d\u0938\u094d\u091f \u0905\u092d\u0940 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964 \u0905\u0938\u0932 \u0932\u0947\u0906\u0909\u091f \u0915\u0947 \u0932\u093f\u090f \u092e\u0948\u092a \u0915\u093f\u090f \u0917\u090f \u092a\u0947\u091c \u0935\u094d\u092f\u0942 \u0915\u093e \u0909\u092a\u092f\u094b\u0917 \u0915\u0930\u0947\u0902\u0964',
+    listen: '\u0938\u0941\u0928\u0947\u0902',
+    stopListening: '\u0930\u094b\u0915\u0947\u0902',
+    listening: '\u0911\u0921\u093f\u092f\u094b \u0924\u0948\u092f\u093e\u0930 \u0939\u094b \u0930\u0939\u093e \u0939\u0948...',
+    audioUnavailable:
+      '\u0905\u092d\u0940 \u0911\u0921\u093f\u092f\u094b \u092a\u094d\u0932\u0947\u092c\u0948\u0915 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964',
+    articleReader: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0930\u0940\u0921\u0930',
+    openVisualStory: '\u0935\u093f\u091c\u0941\u0905\u0932 \u0938\u094d\u091f\u094b\u0930\u0940 \u0935\u094d\u092f\u0942',
     story: '\u0938\u094d\u091f\u094b\u0930\u0940',
     storyImage: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0907\u092e\u0947\u091c',
     previous: 'Previous page',
@@ -141,13 +266,66 @@ const COPY = {
     imageZoomOut: '\u0907\u092e\u0947\u091c \u091c\u0942\u092e \u0918\u091f\u093e\u090f\u0902',
     imageZoomIn: '\u0907\u092e\u0947\u091c \u091c\u0942\u092e \u092c\u0922\u093c\u093e\u090f\u0902',
     close: 'Close viewer',
+    page: '\u092a\u0947\u091c',
+    quickJump: '\u091c\u0932\u094d\u0926\u0940 \u091c\u093e\u090f\u0902',
+    pageStrip: '\u092a\u0947\u091c \u0938\u094d\u091f\u094d\u0930\u093f\u092a',
+    pageStories: '\u0907\u0938 \u092a\u0947\u091c \u0915\u0940 \u0938\u094d\u091f\u094b\u0930\u0940',
+    editionContents: '\u0908-\u092a\u0947\u092a\u0930 \u0938\u093e\u092e\u0917\u094d\u0930\u0940',
+    pagesTab: '\u092a\u0947\u091c',
+    contentsTab: '\u0938\u093e\u092e\u0917\u094d\u0930\u0940',
+    spreadView: '\u0938\u094d\u092a\u094d\u0930\u0947\u0921 \u0935\u094d\u092f\u0942',
+    singleView: '\u090f\u0915 \u092a\u0947\u091c',
+    openPage: '\u092a\u0947\u091c \u0916\u094b\u0932\u0947\u0902',
+    tapPageToFocus: '\u0915\u093f\u0938\u0940 \u092a\u0947\u091c \u092a\u0930 \u091f\u0948\u092a \u0915\u0930\u0915\u0947 \u0909\u0938\u0947 \u0916\u094b\u0932\u0947\u0902',
+    noStoriesEdition:
+      '\u0907\u0938 \u0908-\u092a\u0947\u092a\u0930 \u092e\u0947\u0902 \u0905\u092d\u0940 \u0915\u094b\u0908 \u092e\u0948\u092a \u0938\u094d\u091f\u094b\u0930\u0940 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964',
     storiesOnPage: 'Stories on this page',
     noStories: 'No mapped stories on this page.',
     showingDate: 'Showing date',
+    archiveSummary: '\u0906\u0930\u094d\u0915\u093e\u0907\u0935',
+    resultsLoaded: '\u0932\u094b\u0921 \u0939\u0941\u090f',
+    moreAvailable: '\u0914\u0930 \u0938\u0902\u0938\u094d\u0915\u0930\u0923 \u0909\u092a\u0932\u092c\u094d\u0927 \u0939\u0948\u0902',
+    loadMore: '\u0914\u0930 \u0932\u094b\u0921 \u0915\u0930\u0947\u0902',
+    noMore: '\u0914\u0930 \u0938\u0902\u0938\u094d\u0915\u0930\u0923 \u0928\u0939\u0940\u0902 \u0939\u0948\u0902',
+    searchFilter: '\u0916\u094b\u091c',
+    saveIssue: '\u0907\u0936\u094d\u092f\u0942 \u0938\u0947\u0935 \u0915\u0930\u0947\u0902',
+    savedIssue: '\u0907\u0936\u094d\u092f\u0942 \u0938\u0947\u0935 \u0939\u0948',
+    saveStory: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0938\u0947\u0935 \u0915\u0930\u0947\u0902',
+    savedStory: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0938\u0947\u0935 \u0939\u0948',
+    downloadPdf: 'PDF \u0921\u093e\u0909\u0928\u0932\u094b\u0921',
+    downloadText: '\u091f\u0947\u0915\u094d\u0938\u094d\u091f \u0921\u093e\u0909\u0928\u0932\u094b\u0921',
+    printStory: '\u0938\u094d\u091f\u094b\u0930\u0940 \u092a\u094d\u0930\u093f\u0902\u091f',
+    keepOffline: '\u0911\u092b\u0932\u093e\u0907\u0928 \u0930\u0916\u0947\u0902',
+    offlineReady: '\u0911\u092b\u0932\u093e\u0907\u0928 \u0924\u0948\u092f\u093e\u0930',
+    offlineSaving: '\u0911\u092b\u0932\u093e\u0907\u0928 \u0924\u0948\u092f\u093e\u0930 \u0939\u094b \u0930\u0939\u093e \u0939\u0948...',
+    savedLibrary: '\u0938\u0947\u0935 \u0915\u093f\u090f \u0917\u090f',
+    savedLibraryHint:
+      '\u0938\u0947\u0935 \u0915\u0940 \u0917\u0908 \u0908-\u092a\u0947\u092a\u0930 \u0914\u0930 \u0938\u094d\u091f\u094b\u0930\u0940 \u092b\u093f\u0930 \u0916\u094b\u0932\u0947\u0902\u0964',
+    savedIssues: '\u0938\u0947\u0935 \u0907\u0936\u094d\u092f\u0942',
+    savedStories: '\u0938\u0947\u0935 \u0938\u094d\u091f\u094b\u0930\u0940',
+    openSaved: '\u0916\u094b\u0932\u0947\u0902',
+    openStory: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0916\u094b\u0932\u0947\u0902',
+    issueSavedNotice: '\u0907\u0936\u094d\u092f\u0942 \u092c\u093e\u0926 \u0915\u0947 \u0932\u093f\u090f \u0938\u0947\u0935 \u0939\u094b \u0917\u092f\u093e\u0964',
+    issueRemovedNotice: '\u0907\u0936\u094d\u092f\u0942 \u0938\u0947\u0935 \u0938\u0942\u091a\u0940 \u0938\u0947 \u0939\u091f \u0917\u092f\u093e\u0964',
+    storySavedNotice: '\u0938\u094d\u091f\u094b\u0930\u0940 \u092c\u093e\u0926 \u0915\u0947 \u0932\u093f\u090f \u0938\u0947\u0935 \u0939\u094b \u0917\u0908\u0964',
+    storyRemovedNotice: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0938\u0947\u0935 \u0938\u0942\u091a\u0940 \u0938\u0947 \u0939\u091f \u0917\u0908\u0964',
+    offlineReadyNotice:
+      '\u092f\u0939 \u0938\u0902\u0938\u094d\u0915\u0930\u0923 \u0905\u092c \u0911\u092b\u0932\u093e\u0907\u0928 \u092a\u0922\u093c\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f \u0924\u0948\u092f\u093e\u0930 \u0939\u0948\u0964',
+    offlinePartialNotice:
+      '\u0915\u0941\u091b \u090f\u0938\u0947\u091f \u0928\u0939\u0940\u0902 \u0938\u0947\u0935 \u0939\u094b \u092a\u093e\u090f, \u092b\u093f\u0930 \u092d\u0940 \u0911\u092b\u0932\u093e\u0907\u0928 \u0915\u0949\u092a\u0940 \u0924\u0948\u092f\u093e\u0930 \u0939\u0948\u0964',
+    offlineUnsupported:
+      '\u0907\u0938 \u092c\u094d\u0930\u093e\u0909\u091c\u0930 \u092e\u0947\u0902 \u0911\u092b\u0932\u093e\u0907\u0928 \u0938\u0947\u0935 \u0938\u092e\u0930\u094d\u0925\u093f\u0924 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964',
+    offlineCachedNotice:
+      '\u092f\u0939 \u0938\u0902\u0938\u094d\u0915\u0930\u0923 \u0906\u092a\u0915\u0947 \u0921\u093f\u0935\u093e\u0907\u0938 \u0915\u0948\u0936 \u0938\u0947 \u0916\u094b\u0932\u093e \u0917\u092f\u093e\u0964',
+    printBlocked:
+      '\u0907\u0938 \u0938\u094d\u091f\u094b\u0930\u0940 \u0915\u094b \u092a\u094d\u0930\u093f\u0902\u091f \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f \u092a\u0949\u092a-\u0905\u092a \u0905\u0928\u0941\u092e\u0924\u093f \u0926\u0947\u0902\u0964',
+    textDownloadUnavailable:
+      '\u0907\u0938 \u0938\u094d\u091f\u094b\u0930\u0940 \u0915\u094b \u0921\u093e\u0909\u0928\u0932\u094b\u0921 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f \u092a\u0922\u093c\u0928\u0947 \u0932\u093e\u092f\u0915 \u091f\u0947\u0915\u094d\u0938\u094d\u091f \u091c\u0930\u0942\u0930\u0940 \u0939\u0948\u0964',
   },
 } as const;
 
 const EPAPER_LAST_PAGE_STORAGE_KEY = 'lokswami_epaper_last_page_v1';
+const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v1';
 const MIN_PREVIEW_ZOOM = 1;
 const MAX_PREVIEW_ZOOM = 2.2;
 const PREVIEW_ZOOM_STEP = 0.2;
@@ -188,6 +366,13 @@ type PageSwipeState = {
   tracking: boolean;
 };
 
+type ReaderSidebarView = 'pages' | 'contents';
+type ArticleReaderMode = 'story' | 'text';
+type ReaderActionNotice = {
+  tone: 'success' | 'error' | 'info';
+  message: string;
+};
+
 function clampPage(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -199,6 +384,42 @@ function getTouchDistance(touches: TouchListLike) {
   const dx = first.clientX - second.clientX;
   const dy = first.clientY - second.clientY;
   return Math.hypot(dx, dy);
+}
+
+function toPlainText(html: string) {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function splitTextParagraphs(value: string) {
+  return value
+    .split(/\n{2,}/)
+    .map((item) => item.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function normalizeLangCode(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getBaseLang(value: string) {
+  return normalizeLangCode(value).split('-')[0] || '';
 }
 
 function toErrorMessage(error: unknown, fallback: string) {
@@ -218,6 +439,190 @@ function buildEpaperPdfProxyUrl(epaperId: string) {
   const id = epaperId.trim();
   if (!id) return '';
   return `/api/public/epapers/${encodeURIComponent(id)}/pdf`;
+}
+
+function slugifyDownloadName(value: string) {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return normalized || 'lokswami-epaper';
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function triggerTextDownload(filename: string, content: string) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return;
+  }
+
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+  }, 0);
+}
+
+async function readCachedJson<T>(requestPath: string): Promise<T | null> {
+  if (typeof window === 'undefined' || !('caches' in window)) {
+    return null;
+  }
+
+  try {
+    const requestUrl = toAbsoluteShareUrl(requestPath, window.location.origin);
+    const response = await caches.match(requestUrl);
+    if (!response) {
+      return null;
+    }
+
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function cacheUrlsForOffline(urls: string[]) {
+  if (typeof window === 'undefined' || !('caches' in window)) {
+    throw new Error('offline-unsupported');
+  }
+
+  const cache = await caches.open(EPAPER_OFFLINE_CACHE_NAME);
+  let cachedCount = 0;
+  let failedCount = 0;
+
+  for (const rawUrl of urls) {
+    const normalized = String(rawUrl || '').trim();
+    if (!normalized) continue;
+
+    const requestUrl = toAbsoluteShareUrl(normalized, window.location.origin);
+
+    try {
+      const response = await fetch(requestUrl, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+
+      if (!response.ok) {
+        failedCount += 1;
+        continue;
+      }
+
+      await cache.put(requestUrl, response.clone());
+      cachedCount += 1;
+    } catch {
+      failedCount += 1;
+    }
+  }
+
+  return { cachedCount, failedCount };
+}
+
+function buildSavedPaperInput(
+  paper: PublicEPaperListItem | (EPaperRecord & { articles: EPaperArticleRecord[] }),
+  lastOpenedPage: number
+): SavedEpaperPaperInput {
+  return {
+    paperId: paper._id,
+    title: paper.title,
+    cityName: paper.cityName,
+    publishDate: paper.publishDate,
+    thumbnailPath: paper.thumbnailPath,
+    pageCount: Math.max(1, Number(paper.pageCount || 1)),
+    lastOpenedPage: Math.max(1, Number(lastOpenedPage || 1)),
+  };
+}
+
+function buildSavedStoryInput(
+  paper: EPaperRecord & { articles: EPaperArticleRecord[] },
+  story: EPaperArticleRecord
+) {
+  return {
+    storyId: story._id,
+    storyToken: String(story.slug || story._id || '').trim(),
+    paperId: paper._id,
+    paperTitle: paper.title,
+    cityName: paper.cityName,
+    publishDate: paper.publishDate,
+    title: story.title,
+    excerpt: String(story.excerpt || '').trim(),
+    pageNumber: Math.max(1, Number(story.pageNumber || 1)),
+    coverImagePath: String(story.coverImagePath || '').trim(),
+  };
+}
+
+function buildStoryTextDownload(
+  paper: EPaperRecord & { articles: EPaperArticleRecord[] },
+  story: EPaperArticleRecord,
+  readableText: string
+) {
+  const lines = [
+    story.title || paper.title,
+    `${paper.cityName} | ${formatUiDate(paper.publishDate, paper.publishDate)}`,
+    `Page ${story.pageNumber || 1}`,
+    '',
+    readableText.trim(),
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
+function buildStoryPrintHtml(options: {
+  title: string;
+  metaLine: string;
+  excerpt: string;
+  contentHtml: string;
+  paragraphs: string[];
+}) {
+  const paragraphHtml = options.paragraphs.length
+    ? options.paragraphs
+        .map(
+          (paragraph) =>
+            `<p style="margin:0 0 1rem;font-size:1rem;line-height:1.9;">${escapeHtml(paragraph)}</p>`
+        )
+        .join('')
+    : '';
+
+  const bodyHtml = options.contentHtml
+    ? `<article>${options.contentHtml}</article>`
+    : paragraphHtml || `<p>${escapeHtml(options.excerpt)}</p>`;
+
+  return `<!doctype html>
+<html lang="hi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(options.title)}</title>
+  </head>
+  <body style="margin:0;background:#ffffff;color:#111827;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <main style="max-width:760px;margin:0 auto;padding:2rem 1.25rem 3rem;">
+      <p style="margin:0 0 0.75rem;color:#b91c1c;font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Lokswami e-paper</p>
+      <h1 style="margin:0 0 0.75rem;font-size:2rem;line-height:1.2;">${escapeHtml(options.title)}</h1>
+      <p style="margin:0 0 1.25rem;color:#6b7280;font-size:0.95rem;">${escapeHtml(options.metaLine)}</p>
+      ${
+        options.excerpt
+          ? `<p style="margin:0 0 1.25rem;font-size:1.05rem;line-height:1.8;font-weight:600;color:#374151;">${escapeHtml(options.excerpt)}</p>`
+          : ''
+      }
+      <section style="font-size:1rem;line-height:1.9;">${bodyHtml}</section>
+    </main>
+  </body>
+</html>`;
 }
 
 function readSavedPagesFromStorage() {
@@ -279,6 +684,68 @@ function mergeUniquePapers(
   return merged;
 }
 
+function formatArchiveMonthLabel(month: string, language: 'en' | 'hi') {
+  const normalized = parseArchiveMonth(month);
+  if (!normalized) return month;
+
+  const [yearPart, monthPart] = normalized.split('-');
+  const date = new Date(Date.UTC(Number.parseInt(yearPart, 10), Number.parseInt(monthPart, 10) - 1, 1));
+  if (Number.isNaN(date.getTime())) return normalized;
+
+  try {
+    return new Intl.DateTimeFormat(language === 'hi' ? 'hi-IN' : 'en-IN', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(date);
+  } catch {
+    return normalized;
+  }
+}
+
+function buildReaderSearchParams(options: {
+  city: EPaperCityFilter;
+  publishDate: string;
+  archiveMonth: string;
+  query: string;
+  paperId?: string;
+  page?: number;
+  story?: string;
+}) {
+  const params = new URLSearchParams();
+
+  if (options.city !== 'all') {
+    params.set('city', options.city);
+  }
+
+  if (options.publishDate) {
+    params.set('date', options.publishDate);
+  } else if (options.archiveMonth) {
+    params.set('month', options.archiveMonth);
+  }
+
+  if (options.query) {
+    params.set('query', options.query);
+  }
+
+  const paperId = String(options.paperId || '').trim();
+  if (paperId) {
+    params.set('paper', paperId);
+  }
+
+  const page = Number.parseInt(String(options.page ?? ''), 10);
+  if (Number.isFinite(page) && page > 0) {
+    params.set('page', String(Math.floor(page)));
+  }
+
+  const story = String(options.story || '').trim();
+  if (story) {
+    params.set('story', story);
+  }
+
+  return params;
+}
+
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -299,12 +766,16 @@ export default function EPaperPageClient({
   initialNextCursor,
   initialCity,
   initialPublishDate,
+  initialArchiveMonth,
+  initialSearchQuery,
 }: EPaperPageClientProps) {
   const language = useAppStore((state) => state.language);
   const prefersReducedMotion = useReducedMotion();
   const t = COPY[language];
-  const [selectedCity, setSelectedCity] = useState<EPaperCitySlug>(initialCity);
+  const [selectedCity, setSelectedCity] = useState<EPaperCityFilter>(initialCity);
   const [selectedPublishDate, setSelectedPublishDate] = useState(initialPublishDate);
+  const [selectedArchiveMonth, setSelectedArchiveMonth] = useState(initialArchiveMonth);
+  const [searchInput, setSearchInput] = useState(initialSearchQuery);
   const [epapers, setEpapers] = useState<PublicEPaperListItem[]>(
     Array.isArray(initialItems) ? initialItems : []
   );
@@ -317,11 +788,25 @@ export default function EPaperPageClient({
   );
   const [hasInitializedListEffect, setHasInitializedListEffect] = useState(false);
   const [error, setError] = useState('');
+  const deferredSearchQuery = useDeferredValue(normalizeMetadataQuery(searchInput));
+  const [readerSidebarView, setReaderSidebarView] = useState<ReaderSidebarView>('contents');
+  const [readerDisplayMode, setReaderDisplayMode] = useState<'single' | 'spread'>('single');
 
   const [activePaper, setActivePaper] = useState<(EPaperRecord & { articles: EPaperArticleRecord[] }) | null>(null);
   const [activePage, setActivePage] = useState(1);
   const [activeArticle, setActiveArticle] = useState<EPaperArticleRecord | null>(null);
+  const [articleReaderMode, setArticleReaderMode] = useState<ArticleReaderMode>('story');
+  const [articleTextScale, setArticleTextScale] = useState(1);
+  const [isPreparingArticleListen, setIsPreparingArticleListen] = useState(false);
+  const [isPlayingArticleAudio, setIsPlayingArticleAudio] = useState(false);
+  const [articleListenError, setArticleListenError] = useState('');
   const [pendingStorySlug, setPendingStorySlug] = useState('');
+  const [savedPapers, setSavedPapers] = useState<SavedEpaperPaperEntry[]>([]);
+  const [savedStories, setSavedStories] = useState<SavedEpaperStoryEntry[]>([]);
+  const [readerNotice, setReaderNotice] = useState<ReaderActionNotice | null>(null);
+  const [isSavingIssue, setIsSavingIssue] = useState(false);
+  const [isSavingStory, setIsSavingStory] = useState(false);
+  const [isPreparingOfflinePaper, setIsPreparingOfflinePaper] = useState(false);
 
   const [pdfFallbackPreview, setPdfFallbackPreview] = useState('');
   const [loadingFallback, setLoadingFallback] = useState(false);
@@ -354,6 +839,68 @@ export default function EPaperPageClient({
     startY: 0,
     tracking: false,
   });
+  const articleAudioRef = useRef<HTMLAudioElement | null>(null);
+  const hasArchiveFilters =
+    selectedCity !== 'all' ||
+    Boolean(selectedPublishDate) ||
+    Boolean(selectedArchiveMonth) ||
+    Boolean(deferredSearchQuery);
+  const syncSavedLibrary = useCallback(() => {
+    setSavedPapers(readSavedEpaperPapers());
+    setSavedStories(readSavedEpaperStories());
+  }, []);
+  const showReaderNotice = useCallback((tone: ReaderActionNotice['tone'], message: string) => {
+    setReaderNotice({ tone, message });
+  }, []);
+
+  const buildListQueryParams = useCallback(
+    (cursor?: PublicCursor | null) => {
+      const query = new URLSearchParams({
+        limit: String(listLimit),
+      });
+
+      if (selectedCity !== 'all') {
+        query.set('citySlug', selectedCity);
+      }
+      if (selectedPublishDate) {
+        query.set('date', selectedPublishDate);
+      } else if (selectedArchiveMonth) {
+        query.set('month', selectedArchiveMonth);
+      }
+      if (deferredSearchQuery) {
+        query.set('query', deferredSearchQuery);
+      }
+      if (cursor?.publishedAt && cursor.id) {
+        query.set('cursorPublishedAt', cursor.publishedAt);
+        query.set('cursorId', cursor.id);
+      }
+
+      return query;
+    },
+    [deferredSearchQuery, listLimit, selectedArchiveMonth, selectedCity, selectedPublishDate]
+  );
+
+  const clearArchiveFilters = useCallback(() => {
+    setSelectedCity('all');
+    setSelectedPublishDate('');
+    setSelectedArchiveMonth('');
+    setSearchInput('');
+  }, []);
+
+  const onPublishDateChange = useCallback((nextValue: string) => {
+    setSelectedPublishDate(nextValue);
+    if (nextValue) {
+      setSelectedArchiveMonth('');
+    }
+  }, []);
+
+  const onArchiveMonthChange = useCallback((nextValue: string) => {
+    const normalized = parseArchiveMonth(nextValue);
+    setSelectedArchiveMonth(normalized);
+    if (normalized) {
+      setSelectedPublishDate('');
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -373,6 +920,31 @@ export default function EPaperPageClient({
       setPendingStorySlug(story);
     }
   }, []);
+
+  useEffect(() => {
+    syncSavedLibrary();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) return;
+      syncSavedLibrary();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [syncSavedLibrary]);
+
+  useEffect(() => {
+    if (!readerNotice) return;
+    const timeoutId = window.setTimeout(() => {
+      setReaderNotice(null);
+    }, 4200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [readerNotice]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -402,15 +974,7 @@ export default function EPaperPageClient({
       setLoadingList(true);
       setError('');
       try {
-        const query = new URLSearchParams({
-          citySlug: selectedCity,
-          limit: String(listLimit),
-        });
-        if (selectedPublishDate) {
-          query.set('date', selectedPublishDate);
-        }
-
-        const response = await fetch(`/api/epapers/latest?${query.toString()}`, {
+        const response = await fetch(`/api/epapers/latest?${buildListQueryParams().toString()}`, {
           cache: 'no-store',
         });
         const payload = (await response.json()) as LatestListResponse;
@@ -448,9 +1012,7 @@ export default function EPaperPageClient({
     };
   }, [
     hasInitializedListEffect,
-    selectedCity,
-    selectedPublishDate,
-    listLimit,
+    buildListQueryParams,
   ]);
 
   const loadMorePapers = useCallback(async () => {
@@ -460,19 +1022,7 @@ export default function EPaperPageClient({
     setIsLoadingMore(true);
     setError('');
     try {
-      const query = new URLSearchParams({
-        citySlug: selectedCity,
-        limit: String(listLimit),
-      });
-      if (selectedPublishDate) {
-        query.set('date', selectedPublishDate);
-      }
-      if (nextCursor?.publishedAt && nextCursor.id) {
-        query.set('cursorPublishedAt', nextCursor.publishedAt);
-        query.set('cursorId', nextCursor.id);
-      }
-
-      const response = await fetch(`/api/epapers/latest?${query.toString()}`, {
+      const response = await fetch(`/api/epapers/latest?${buildListQueryParams(nextCursor).toString()}`, {
         cache: 'no-store',
       });
       const payload = (await response.json()) as LatestListResponse;
@@ -500,7 +1050,7 @@ export default function EPaperPageClient({
       setIsLoadingMore(false);
       loadMoreLockRef.current = false;
     }
-  }, [hasMoreList, isLoadingMore, listLimit, nextCursor, selectedCity, selectedPublishDate]);
+  }, [buildListQueryParams, hasMoreList, isLoadingMore, nextCursor]);
 
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
@@ -527,19 +1077,40 @@ export default function EPaperPageClient({
     };
   }, [activePaper, hasMoreList, isLoadingMore, loadMorePapers]);
 
-  const openPaper = async (paperId: string, initialPage?: number) => {
+  const openPaper = useCallback(async (paperId: string, initialPage?: number) => {
     setError('');
     try {
-      const response = await fetch(`/api/epapers/${paperId}`);
-      const payload = (await response.json()) as DetailResponse;
-      if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'Failed to open e-paper');
+      let payload: DetailResponse | null = null;
+
+      try {
+        const response = await fetch(`/api/epapers/${paperId}`);
+        const parsed = (await response.json()) as DetailResponse;
+        if (!response.ok || !parsed.success || !parsed.data) {
+          throw new Error(parsed.error || 'Failed to open e-paper');
+        }
+        payload = parsed;
+      } catch (networkError) {
+        const cachedPayload = await readCachedJson<DetailResponse>(`/api/epapers/${paperId}`);
+        if (!cachedPayload?.success || !cachedPayload.data) {
+          throw networkError;
+        }
+        payload = cachedPayload;
+        showReaderNotice('info', t.offlineCachedNotice);
+      }
+
+      if (!payload?.data) {
+        throw new Error('Failed to open e-paper');
       }
 
       const explicitInitialPage =
         Number.isFinite(initialPage) && Number(initialPage) > 0 ? Math.floor(Number(initialPage)) : 0;
       const savedPage = explicitInitialPage ? 0 : getSavedPageForPaper(paperId);
-      const pageToOpen = explicitInitialPage || savedPage || 1;
+      const savedPaperEntry = savedPapers.find((item) => item.paperId === paperId);
+      const pageToOpen =
+        explicitInitialPage ||
+        savedPage ||
+        (savedPaperEntry?.lastOpenedPage ? Math.floor(savedPaperEntry.lastOpenedPage) : 0) ||
+        1;
 
       setActivePaper(payload.data);
       setPageTurnDirection(0);
@@ -553,7 +1124,7 @@ export default function EPaperPageClient({
     } catch (err: unknown) {
       setError(toErrorMessage(err, 'Failed to open e-paper'));
     }
-  };
+  }, [savedPapers, showReaderNotice, t.offlineCachedNotice]);
 
   useEffect(() => {
     if (!pendingPaperId) return;
@@ -567,16 +1138,21 @@ export default function EPaperPageClient({
 
     void openPaper(pendingPaperId, activePage);
     setPendingPaperId('');
-  }, [pendingPaperId, epapers, loadingList, activePage]);
+  }, [pendingPaperId, epapers, loadingList, activePage, openPaper]);
 
   useEffect(() => {
     if (!activePaper) return;
     const maxPages = Math.max(1, Number(activePaper.pageCount || 1));
-    saveLastPageForPaper(activePaper._id, clampPage(activePage, 1, maxPages));
+    const resolvedPage = clampPage(activePage, 1, maxPages);
+    saveLastPageForPaper(activePaper._id, resolvedPage);
+    setSavedPapers(updateSavedEpaperPaperLastPage(activePaper._id, resolvedPage));
   }, [activePaper, activePage]);
 
   useEffect(() => {
     setArticleImageZoom(1);
+    setArticleReaderMode('story');
+    setArticleTextScale(1);
+    setArticleListenError('');
     articleTapStateRef.current = {
       lastTapAt: 0,
       lastTapX: 0,
@@ -599,9 +1175,10 @@ export default function EPaperPageClient({
     (delta: number) => {
       if (!activePaper || !delta) return;
       const maxPages = Math.max(1, Number(activePaper.pageCount || 1));
+      const step = readerDisplayMode === 'spread' && maxPages > 1 ? 2 : 1;
 
       setActivePage((current) => {
-        const nextPage = clampPage(current + delta, 1, maxPages);
+        const nextPage = clampPage(current + delta * step, 1, maxPages);
         if (nextPage !== current) {
           setPageTurnDirection(delta > 0 ? 1 : -1);
           setActiveArticle(null);
@@ -609,7 +1186,7 @@ export default function EPaperPageClient({
         return nextPage;
       });
     },
-    [activePaper]
+    [activePaper, readerDisplayMode]
   );
 
   const navigateToPage = useCallback(
@@ -655,19 +1232,146 @@ export default function EPaperPageClient({
     setPendingStorySlug('');
   }, [activePaper, pendingStorySlug, navigateToPage]);
 
+  useEffect(() => {
+    if (!activePaper) return;
+    if (readerDisplayMode !== 'spread') return;
+    if (activePaper.pageCount <= 1) {
+      setReaderDisplayMode('single');
+      return;
+    }
+
+    const maxStartPage = Math.max(1, activePaper.pageCount - 1);
+    if (activePage > maxStartPage) {
+      setActivePage(maxStartPage);
+    }
+  }, [activePage, activePaper, readerDisplayMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const effectivePaperId = activePaper?._id || pendingPaperId;
+    const effectiveStoryToken = String(
+      activeArticle?.slug || activeArticle?._id || pendingStorySlug || ''
+    ).trim();
+    const effectivePage = effectivePaperId ? activePage : 0;
+    const params = buildReaderSearchParams({
+      city: selectedCity,
+      publishDate: selectedPublishDate,
+      archiveMonth: selectedArchiveMonth,
+      query: deferredSearchQuery,
+      paperId: effectivePaperId,
+      page: effectivePage,
+      story: effectiveStoryToken,
+    });
+    const nextUrl = params.toString()
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+
+    window.history.replaceState(window.history.state, '', nextUrl);
+  }, [
+    activeArticle?._id,
+    activeArticle?.slug,
+    activePage,
+    activePaper?._id,
+    deferredSearchQuery,
+    pendingPaperId,
+    pendingStorySlug,
+    selectedArchiveMonth,
+    selectedCity,
+    selectedPublishDate,
+  ]);
+
   const activePageMeta = useMemo(() => {
     if (!activePaper) return null;
     return activePaper.pages.find((item) => item.pageNumber === activePage) || null;
   }, [activePaper, activePage]);
+  const pageSummaries = useMemo(() => {
+    if (!activePaper) return [] as Array<{
+      pageNumber: number;
+      imagePath: string;
+      width: number;
+      height: number;
+      articles: EPaperArticleRecord[];
+      storyCount: number;
+    }>;
+
+    const pageMetaByNumber = new Map(
+      activePaper.pages.map((item) => [
+        item.pageNumber,
+        {
+          imagePath: String(item.imagePath || ''),
+          width: Number(item.width || 0) || 1200,
+          height: Number(item.height || 0) || 1600,
+        },
+      ])
+    );
+    const articlesByPage = new Map<number, EPaperArticleRecord[]>();
+    activePaper.articles.forEach((article) => {
+      const pageNumber = Number(article.pageNumber || 0);
+      if (!pageNumber) return;
+      const current = articlesByPage.get(pageNumber) || [];
+      current.push(article);
+      articlesByPage.set(pageNumber, current);
+    });
+
+    return Array.from({ length: Math.max(1, activePaper.pageCount) }, (_, index) => {
+      const pageNumber = index + 1;
+      const meta = pageMetaByNumber.get(pageNumber);
+      const articles = articlesByPage.get(pageNumber) || [];
+
+      return {
+        pageNumber,
+        imagePath: meta?.imagePath || '',
+        width: meta?.width || 1200,
+        height: meta?.height || 1600,
+        articles,
+        storyCount: articles.length,
+      };
+    });
+  }, [activePaper]);
+  const editionArticlesByPage = useMemo(
+    () => pageSummaries.filter((item) => item.storyCount > 0),
+    [pageSummaries]
+  );
+  const canUseSpreadMode = Boolean(activePaper && activePaper.pageCount > 1);
+  const shouldShowSpreadMode = canUseSpreadMode && readerDisplayMode === 'spread';
+  const spreadCompanionPage = useMemo(() => {
+    if (!shouldShowSpreadMode) return null;
+    return pageSummaries.find((item) => item.pageNumber === activePage + 1) || null;
+  }, [activePage, pageSummaries, shouldShowSpreadMode]);
   const previewSrc = activePageImage || pdfFallbackPreview;
   const previewIsDataUrl = previewSrc.startsWith('data:');
   const previewWidth = activePageMeta?.width || 1200;
   const previewHeight = activePageMeta?.height || 1600;
+  const maxReaderPage = Math.max(1, Number(activePaper?.pageCount || 1));
+  const maxSpreadStartPage = Math.max(1, maxReaderPage - 1);
+  const canGoPreviousPage = activePage > 1;
+  const canGoNextPage = shouldShowSpreadMode
+    ? activePage < maxSpreadStartPage
+    : activePage < maxReaderPage;
   const pdfProxyUrl = useMemo(() => {
     if (!activePaper) return '';
     return buildEpaperPdfProxyUrl(String(activePaper._id || ''));
   }, [activePaper]);
   const pdfUrlForOpen = pdfProxyUrl;
+  const activePaperLibraryInput = useMemo(
+    () => (activePaper ? buildSavedPaperInput(activePaper, activePage) : null),
+    [activePaper, activePage]
+  );
+  const isActivePaperSaved = Boolean(
+    activePaper && savedPapers.some((entry) => entry.paperId === activePaper._id && entry.saved)
+  );
+  const isActivePaperOfflineReady = Boolean(
+    activePaper &&
+      savedPapers.some((entry) => entry.paperId === activePaper._id && entry.offlineReady)
+  );
+  const activeArticleSavedToken = String(activeArticle?._id || '').trim();
+  const isActiveArticleSaved = Boolean(
+    activeArticleSavedToken &&
+      savedStories.some((entry) => entry.storyId === activeArticleSavedToken)
+  );
+  const savedPaperCards = useMemo(() => savedPapers.slice(0, 6), [savedPapers]);
+  const savedStoryCards = useMemo(() => savedStories.slice(0, 8), [savedStories]);
 
   useEffect(() => {
     let cancelled = false;
@@ -747,14 +1451,14 @@ export default function EPaperPageClient({
   const shareActivePaperOnWhatsApp = async () => {
     if (!activePaper) return;
 
-    const params = new URLSearchParams({
-      paper: activePaper._id,
-      city: activePaper.citySlug,
-      page: String(activePage),
+    const params = buildReaderSearchParams({
+      city: selectedCity,
+      publishDate: selectedPublishDate,
+      archiveMonth: selectedArchiveMonth,
+      query: deferredSearchQuery,
+      paperId: activePaper._id,
+      page: activePage,
     });
-    if (activePaper.publishDate) {
-      params.set('date', activePaper.publishDate);
-    }
 
     const shareUrl = `${window.location.origin}/main/epaper?${params.toString()}`;
     const shareText = `${activePaper.title}\n${shareUrl}`;
@@ -782,19 +1486,16 @@ export default function EPaperPageClient({
   const buildActiveArticleShareUrl = () => {
     if (!activePaper || !activeArticle) return '';
 
-    const params = new URLSearchParams({
-      paper: activePaper._id,
-      city: activePaper.citySlug,
-      page: String(activeArticle.pageNumber || activePage),
-    });
-    if (activePaper.publishDate) {
-      params.set('date', activePaper.publishDate);
-    }
-
     const storyToken = String(activeArticle.slug || activeArticle._id || '').trim();
-    if (storyToken) {
-      params.set('story', storyToken);
-    }
+    const params = buildReaderSearchParams({
+      city: selectedCity,
+      publishDate: selectedPublishDate,
+      archiveMonth: selectedArchiveMonth,
+      query: deferredSearchQuery,
+      paperId: activePaper._id,
+      page: activeArticle.pageNumber || activePage,
+      story: storyToken,
+    });
 
     return `${window.location.origin}/main/epaper?${params.toString()}`;
   };
@@ -840,14 +1541,446 @@ export default function EPaperPageClient({
     await shareActiveArticleOnWhatsApp();
   };
 
+  const handleIssueSaveToggle = useCallback(() => {
+    if (!activePaperLibraryInput) return;
+
+    setIsSavingIssue(true);
+    try {
+      const result = toggleSavedEpaperPaper(activePaperLibraryInput);
+      setSavedPapers(result.papers);
+      showReaderNotice(
+        'success',
+        result.saved ? t.issueSavedNotice : t.issueRemovedNotice
+      );
+    } finally {
+      setIsSavingIssue(false);
+    }
+  }, [activePaperLibraryInput, showReaderNotice, t.issueRemovedNotice, t.issueSavedNotice]);
+
+  const handleOfflinePaperSave = useCallback(async () => {
+    if (!activePaper || !activePaperLibraryInput || isPreparingOfflinePaper) return;
+
+    if (typeof window === 'undefined' || !('caches' in window)) {
+      showReaderNotice('error', t.offlineUnsupported);
+      return;
+    }
+
+    setIsPreparingOfflinePaper(true);
+    try {
+      const urlSet = new Set<string>();
+      urlSet.add('/main/epaper');
+      urlSet.add(
+        `/main/epaper?${buildReaderSearchParams({
+          city: selectedCity,
+          publishDate: selectedPublishDate,
+          archiveMonth: selectedArchiveMonth,
+          query: deferredSearchQuery,
+          paperId: activePaper._id,
+          page: activePage,
+        }).toString()}`
+      );
+      urlSet.add(`/api/epapers/${activePaper._id}`);
+      urlSet.add(`/api/public/epapers/${activePaper._id}/pdf`);
+
+      if (activePaper.thumbnailPath) {
+        urlSet.add(activePaper.thumbnailPath);
+      }
+
+      activePaper.pages.forEach((page) => {
+        if (page.imagePath) {
+          urlSet.add(page.imagePath);
+        }
+      });
+
+      activePaper.articles.forEach((story) => {
+        if (story.coverImagePath) {
+          urlSet.add(story.coverImagePath);
+        }
+      });
+
+      const result = await cacheUrlsForOffline(Array.from(urlSet));
+      if (result.cachedCount <= 0) {
+        throw new Error('offline-cache-empty');
+      }
+      const nextState = setSavedEpaperPaperOfflineReady(activePaperLibraryInput, true);
+      setSavedPapers(nextState.papers);
+
+      showReaderNotice(
+        result.failedCount > 0 ? 'info' : 'success',
+        result.failedCount > 0 ? t.offlinePartialNotice : t.offlineReadyNotice
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error &&
+        (error.message === 'offline-unsupported' || error.message === 'offline-cache-empty')
+          ? t.offlineUnsupported
+          : t.offlineUnsupported;
+      showReaderNotice('error', message);
+    } finally {
+      setIsPreparingOfflinePaper(false);
+    }
+  }, [
+    activePage,
+    activePaper,
+    activePaperLibraryInput,
+    deferredSearchQuery,
+    isPreparingOfflinePaper,
+    selectedArchiveMonth,
+    selectedCity,
+    selectedPublishDate,
+    showReaderNotice,
+    t.offlinePartialNotice,
+    t.offlineReadyNotice,
+    t.offlineUnsupported,
+  ]);
+
+  const handlePdfDownload = useCallback(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined' || !pdfUrlForOpen) {
+      return;
+    }
+
+    const anchor = document.createElement('a');
+    anchor.href = pdfUrlForOpen;
+    anchor.download = `${slugifyDownloadName(activePaper?.title || 'lokswami-epaper')}.pdf`;
+    anchor.rel = 'noopener';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }, [activePaper?.title, pdfUrlForOpen]);
+
+  const handleOpenSavedPaper = useCallback(
+    (paper: SavedEpaperPaperEntry) => {
+      void openPaper(paper.paperId, paper.lastOpenedPage || 1);
+    },
+    [openPaper]
+  );
+
+  const handleOpenSavedStory = useCallback(
+    (story: SavedEpaperStoryEntry) => {
+      setPendingStorySlug(story.storyToken);
+      void openPaper(story.paperId, story.pageNumber || 1);
+    },
+    [openPaper]
+  );
+
+  const stopArticleListening = useCallback((suppressState = false) => {
+    if (articleAudioRef.current) {
+      articleAudioRef.current.pause();
+      articleAudioRef.current.currentTime = 0;
+      articleAudioRef.current = null;
+    }
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    if (!suppressState) {
+      setIsPreparingArticleListen(false);
+      setIsPlayingArticleAudio(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeArticle) {
+      stopArticleListening(true);
+      setIsPreparingArticleListen(false);
+      setIsPlayingArticleAudio(false);
+      setArticleListenError('');
+    }
+  }, [activeArticle, stopArticleListening]);
+
+  useEffect(() => {
+    return () => {
+      stopArticleListening(true);
+    };
+  }, [stopArticleListening]);
+
   const activeArticleHasImage = Boolean(activeArticle?.coverImagePath?.trim());
   const activeArticleHasContent = Boolean(activeArticle?.contentHtml?.trim());
   const activeArticleHasExcerpt = Boolean(activeArticle?.excerpt?.trim());
+  const activeArticlePlainText = useMemo(() => {
+    if (!activeArticle || !activePaper) return '';
+
+    const contentText = activeArticle.contentHtml ? toPlainText(activeArticle.contentHtml) : '';
+    if (contentText) return contentText.slice(0, 8000);
+
+    const excerptText = String(activeArticle.excerpt || '').trim();
+    if (excerptText) return excerptText.slice(0, 2400);
+
+    const context = [
+      activeArticle.title || t.story,
+      `${activePaper.cityName} e-paper`,
+      `${t.page} ${activeArticle.pageNumber || activePage}`,
+      activePaper.publishDate
+        ? formatUiDate(activePaper.publishDate, activePaper.publishDate)
+        : '',
+    ]
+      .filter(Boolean)
+      .join('. ');
+    return context.trim();
+  }, [activeArticle, activePage, activePaper, t.page, t.story]);
+  const activeArticleParagraphs = useMemo(
+    () => splitTextParagraphs(activeArticlePlainText),
+    [activeArticlePlainText]
+  );
+  const activeArticleReadableTextState = activeArticleHasContent
+    ? 'full'
+    : activeArticleHasExcerpt
+      ? 'excerpt'
+      : activeArticlePlainText
+        ? 'fallback'
+        : 'none';
+  const activeArticleTextBadgeLabel =
+    activeArticleReadableTextState === 'full'
+      ? t.readerTextReady
+      : activeArticleReadableTextState === 'excerpt'
+        ? t.readerTextExcerpt
+        : t.readerTextFallback;
+  const activeArticleTextHelp =
+    activeArticleReadableTextState === 'excerpt'
+      ? t.readerTextExcerptHelp
+      : activeArticleReadableTextState === 'fallback'
+        ? t.readerTextFallbackHelp
+        : '';
+  const activeArticleListenSourceText = useMemo(() => {
+    if (!activeArticle || !activePaper) return '';
+    const parts = [
+      String(activeArticle.title || activePaper.title || '').trim(),
+      activeArticlePlainText,
+    ]
+      .filter(Boolean)
+      .join('. ');
+    return parts.slice(0, 2400);
+  }, [activeArticle, activeArticlePlainText, activePaper]);
+  const handleStorySaveToggle = useCallback(() => {
+    if (!activePaper || !activeArticle) return;
+
+    setIsSavingStory(true);
+    try {
+      const result = toggleSavedEpaperStory(buildSavedStoryInput(activePaper, activeArticle));
+      setSavedStories(result.stories);
+      showReaderNotice(
+        'success',
+        result.saved ? t.storySavedNotice : t.storyRemovedNotice
+      );
+    } finally {
+      setIsSavingStory(false);
+    }
+  }, [
+    activeArticle,
+    activePaper,
+    showReaderNotice,
+    t.storyRemovedNotice,
+    t.storySavedNotice,
+  ]);
+  const handleStoryTextDownload = useCallback(() => {
+    if (!activePaper || !activeArticle) return;
+    if (!activeArticlePlainText.trim()) {
+      showReaderNotice('error', t.textDownloadUnavailable);
+      return;
+    }
+
+    const filename = `${slugifyDownloadName(activeArticle.title || activePaper.title)}.txt`;
+    const content = buildStoryTextDownload(activePaper, activeArticle, activeArticlePlainText);
+    triggerTextDownload(filename, content);
+  }, [
+    activeArticle,
+    activeArticlePlainText,
+    activePaper,
+    showReaderNotice,
+    t.textDownloadUnavailable,
+  ]);
+  const handleStoryPrint = useCallback(() => {
+    if (typeof window === 'undefined' || !activePaper || !activeArticle) return;
+
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=960,height=720');
+    if (!printWindow) {
+      showReaderNotice('error', t.printBlocked);
+      return;
+    }
+
+    const metaLine = [
+      activePaper.cityName,
+      formatUiDate(activePaper.publishDate, activePaper.publishDate),
+      `${t.page} ${activeArticle.pageNumber || activePage}`,
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    const html = buildStoryPrintHtml({
+      title: activeArticle.title || activePaper.title,
+      metaLine,
+      excerpt: String(activeArticle.excerpt || '').trim(),
+      contentHtml: activeArticle.contentHtml || '',
+      paragraphs: activeArticleHasContent ? [] : activeArticleParagraphs,
+    });
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => {
+      printWindow.print();
+    }, 180);
+  }, [
+    activeArticle,
+    activeArticleHasContent,
+    activeArticleParagraphs,
+    activePage,
+    activePaper,
+    showReaderNotice,
+    t.page,
+    t.printBlocked,
+  ]);
+  const handleArticleListen = useCallback(async () => {
+    const sourceText = activeArticleListenSourceText.trim();
+    if (!sourceText) {
+      setArticleListenError(t.noReadableText);
+      return;
+    }
+
+    setArticleListenError('');
+    setIsPreparingArticleListen(true);
+    stopArticleListening(true);
+
+    const fallbackSpeak = async () => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        throw new Error(t.audioUnavailable);
+      }
+
+      const speech = window.speechSynthesis;
+      let voices = speech.getVoices();
+
+      if (!voices.length) {
+        voices = await new Promise<SpeechSynthesisVoice[]>((resolve) => {
+          let settled = false;
+          const timeout = window.setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve(speech.getVoices());
+          }, 800);
+
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            resolve(speech.getVoices());
+          };
+
+          if (typeof speech.addEventListener === 'function') {
+            speech.addEventListener('voiceschanged', done, { once: true });
+          } else {
+            const previous = speech.onvoiceschanged;
+            speech.onvoiceschanged = () => {
+              done();
+              speech.onvoiceschanged = previous;
+            };
+          }
+        });
+      }
+
+      if (!voices.length) {
+        throw new Error(t.audioUnavailable);
+      }
+
+      const targetCode = 'hi-IN';
+      const normalizedTarget = normalizeLangCode(targetCode);
+      const baseTarget = getBaseLang(targetCode);
+      const preferredVoice =
+        voices.find((voice) => normalizeLangCode(voice.lang) === normalizedTarget) ||
+        voices.find((voice) => normalizeLangCode(voice.lang).startsWith(`${baseTarget}-`)) ||
+        voices.find((voice) => normalizeLangCode(voice.lang) === 'hi-in') ||
+        voices.find((voice) => normalizeLangCode(voice.lang).startsWith('hi-')) ||
+        voices.find((voice) => normalizeLangCode(voice.lang) === 'en-us') ||
+        voices.find((voice) => normalizeLangCode(voice.lang).startsWith('en-')) ||
+        voices[0];
+
+      const utterance = new SpeechSynthesisUtterance(sourceText);
+      utterance.voice = preferredVoice || null;
+      utterance.lang = preferredVoice?.lang || targetCode;
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.onend = () => {
+        setIsPlayingArticleAudio(false);
+      };
+      utterance.onerror = () => {
+        setIsPlayingArticleAudio(false);
+        setArticleListenError(t.audioUnavailable);
+      };
+
+      speech.cancel();
+      speech.speak(utterance);
+      setIsPlayingArticleAudio(true);
+    };
+
+    try {
+      const response = await fetch('/api/ai/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: sourceText,
+          languageCode: 'hi-IN',
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        data?: {
+          audioUrl?: string;
+          audioBase64?: string;
+          mimeType?: string;
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error || t.audioUnavailable);
+      }
+
+      const audioUrl =
+        typeof payload.data.audioUrl === 'string' ? payload.data.audioUrl.trim() : '';
+      const audioBase64 =
+        typeof payload.data.audioBase64 === 'string' ? payload.data.audioBase64.trim() : '';
+      const mimeType =
+        typeof payload.data.mimeType === 'string' && payload.data.mimeType.trim()
+          ? payload.data.mimeType.trim()
+          : 'audio/mpeg';
+      const src = audioUrl || (audioBase64 ? `data:${mimeType};base64,${audioBase64}` : '');
+
+      if (!src) {
+        throw new Error('No audio payload returned.');
+      }
+
+      const audio = new Audio(src);
+      articleAudioRef.current = audio;
+      audio.onended = () => {
+        setIsPlayingArticleAudio(false);
+      };
+      audio.onerror = () => {
+        setIsPlayingArticleAudio(false);
+        setArticleListenError(t.audioUnavailable);
+      };
+
+      await audio.play();
+      setIsPlayingArticleAudio(true);
+    } catch {
+      try {
+        await fallbackSpeak();
+      } catch (fallbackError) {
+        setArticleListenError(toErrorMessage(fallbackError, t.audioUnavailable));
+      }
+    } finally {
+      setIsPreparingArticleListen(false);
+    }
+  }, [activeArticleListenSourceText, stopArticleListening, t.audioUnavailable, t.noReadableText]);
   const shouldShowNoArticleState =
     Boolean(activeArticle) &&
     !activeArticleHasImage &&
     !activeArticleHasContent &&
     !activeArticleHasExcerpt;
+  const hasReadableArticleText = activeArticleReadableTextState !== 'none';
 
   const pageTurnVariants = useMemo(
     () => ({
@@ -1113,92 +2246,154 @@ export default function EPaperPageClient({
     pageSwipeStateRef.current.tracking = false;
   };
 
+  const selectedCityLabel =
+    selectedCity === 'all'
+      ? t.allCities
+      : EPAPER_CITY_OPTIONS.find((city) => city.slug === selectedCity)?.name || selectedCity;
+  const archiveMonthLabel = selectedArchiveMonth
+    ? formatArchiveMonthLabel(selectedArchiveMonth, language)
+    : '';
+  const emptyStateMessage = hasArchiveFilters ? t.noPaperFiltered : t.noPaper;
+  const readerPageLabel = shouldShowSpreadMode && spreadCompanionPage
+    ? `${activePage}-${spreadCompanionPage.pageNumber} / ${maxReaderPage}`
+    : `${activePage} / ${maxReaderPage}`;
+  const previewMaxHeight = shouldShowSpreadMode
+    ? `calc((100dvh - 290px) * ${previewZoom})`
+    : `calc((100dvh - 250px) * ${previewZoom})`;
+
   return (
     <div className="relative pb-2 md:pb-4">
       <div className="pointer-events-none absolute -top-10 right-3 h-44 w-44 rounded-full bg-orange-200/30 blur-3xl dark:bg-orange-900/12 sm:-top-12 sm:right-6 sm:h-56 sm:w-56" />
       <div className="pointer-events-none absolute top-[24rem] -left-12 h-52 w-52 rounded-full bg-cyan-200/28 blur-3xl dark:bg-cyan-900/12 sm:top-[27rem] sm:h-64 sm:w-64" />
 
+      {readerNotice ? (
+        <div className="pointer-events-none fixed inset-x-0 top-20 z-[120] flex justify-center px-3">
+          <div
+            className={`pointer-events-auto inline-flex max-w-xl items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-lg backdrop-blur ${
+              readerNotice.tone === 'success'
+                ? 'border-emerald-300 bg-emerald-50/95 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/90 dark:text-emerald-200'
+                : readerNotice.tone === 'error'
+                  ? 'border-red-300 bg-red-50/95 text-red-700 dark:border-red-900 dark:bg-red-950/90 dark:text-red-200'
+                  : 'border-primary-200 bg-primary-50/95 text-primary-800 dark:border-primary-800 dark:bg-primary-950/90 dark:text-primary-200'
+            }`}
+          >
+            {readerNotice.tone === 'success' ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : null}
+            <span>{readerNotice.message}</span>
+          </div>
+        </div>
+      ) : null}
+
       <section className="cnp-surface p-3.5 sm:p-4 md:p-5">
-        <div className="mb-4 grid grid-cols-1 gap-3 border-b border-zinc-200/80 pb-3 dark:border-zinc-800 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-          <div className="min-w-0 hidden sm:block">
-            <h1 className="text-lg font-extrabold tracking-tight text-gray-900 dark:text-zinc-100 sm:text-2xl">{t.title}</h1>
-            <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-zinc-400 sm:text-sm">{t.subtitle}</p>
+        <div className="mb-4 grid grid-cols-1 gap-4 border-b border-zinc-200/80 pb-4 dark:border-zinc-800">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-lg font-extrabold tracking-tight text-gray-900 dark:text-zinc-100 sm:text-2xl">
+                {t.title}
+              </h1>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-600 dark:text-zinc-400 sm:text-sm">
+                {t.subtitle}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200/80 bg-white/80 px-3 py-2.5 text-left dark:border-zinc-800 dark:bg-zinc-900/70 lg:min-w-[220px]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
+                {t.archiveSummary}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-zinc-100">
+                {epapers.length} {t.editions} {t.resultsLoaded}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {hasMoreList && !loadingList ? t.moreAvailable : t.noMore}
+              </p>
+            </div>
           </div>
 
-          <div className="w-full justify-self-start sm:w-auto sm:justify-self-end">
-            <div className="flex items-center gap-2 rounded-xl border border-zinc-200/80 bg-white/80 p-2 dark:border-zinc-800 dark:bg-zinc-900/70 sm:hidden">
-              <div className="relative min-w-0 flex-1">
-                <DateInputField
-                  value={selectedPublishDate}
-                  onChange={setSelectedPublishDate}
-                  aria-label={t.publishDate}
-                  className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 pr-8 text-xs outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_auto]">
+            <label className="block">
+              <span className="sr-only">{t.archiveSearch}</span>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="search"
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  placeholder={t.archiveSearchPlaceholder}
+                  aria-label={t.archiveSearch}
+                  className="h-11 w-full rounded-xl border border-gray-300 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
                 />
-                {selectedPublishDate ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPublishDate('')}
-                    aria-label={t.clearDate}
-                    className="absolute inset-y-0 right-1 inline-flex w-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
               </div>
+            </label>
 
+            <label className="block">
+              <span className="sr-only">{t.city}</span>
               <select
                 value={selectedCity}
-                onChange={(event) => setSelectedCity(event.target.value as EPaperCitySlug)}
+                onChange={(event) => setSelectedCity(event.target.value as EPaperCityFilter)}
                 aria-label={t.city}
-                className="h-9 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2.5 text-sm outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
+                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
               >
+                <option value="all">{t.allCities}</option>
                 {EPAPER_CITY_OPTIONS.map((city) => (
                   <option key={city.slug} value={city.slug}>
                     {city.name}
                   </option>
                 ))}
               </select>
-            </div>
+            </label>
 
-            <div className="hidden w-full flex-wrap items-center gap-2.5 sm:flex sm:w-auto sm:justify-end">
-              <label className="flex w-full flex-col gap-1 text-sm font-medium text-gray-700 dark:text-zinc-300 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 sm:text-sm sm:normal-case sm:tracking-normal">
-                  {t.publishDate}
-                </span>
-                <DateInputField
-                  value={selectedPublishDate}
-                  onChange={setSelectedPublishDate}
-                  className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-sm outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:w-[170px] sm:min-w-[170px]"
+            <label className="block">
+              <span className="sr-only">{t.archiveMonth}</span>
+              <div className="relative">
+                <input
+                  type="month"
+                  value={selectedArchiveMonth}
+                  onChange={(event) => onArchiveMonthChange(event.target.value)}
+                  aria-label={t.archiveMonth}
+                  className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 pr-9 text-sm outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
                 />
-              </label>
+                {selectedArchiveMonth ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedArchiveMonth('')}
+                    aria-label={t.clearFilters}
+                    className="absolute inset-y-0 right-1 inline-flex w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+            </label>
 
+            <div className="relative">
+              <DateInputField
+                value={selectedPublishDate}
+                onChange={onPublishDateChange}
+                aria-label={t.publishDate}
+                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 pr-9 text-sm outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
+              />
               {selectedPublishDate ? (
                 <button
                   type="button"
                   onClick={() => setSelectedPublishDate('')}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 px-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  aria-label={t.clearDate}
+                  className="absolute inset-y-0 right-1 inline-flex w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
                 >
-                  {t.clearDate}
+                  <X className="h-4 w-4" />
                 </button>
               ) : null}
-
-              <label className="flex w-full flex-col gap-1 text-sm font-medium text-gray-700 dark:text-zinc-300 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 sm:text-sm sm:normal-case sm:tracking-normal">
-                  {t.city}
-                </span>
-                <select
-                  value={selectedCity}
-                  onChange={(event) => setSelectedCity(event.target.value as EPaperCitySlug)}
-                  className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-sm outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:w-[168px] sm:min-w-[168px]"
-                >
-                  {EPAPER_CITY_OPTIONS.map((city) => (
-                    <option key={city.slug} value={city.slug}>
-                      {city.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
             </div>
+
+            <button
+              type="button"
+              onClick={clearArchiveFilters}
+              disabled={!hasArchiveFilters}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>{t.clearFilters}</span>
+            </button>
           </div>
         </div>
 
@@ -1208,11 +2403,135 @@ export default function EPaperPageClient({
           </div>
         ) : null}
 
-        {selectedPublishDate ? (
-          <div className="mb-3">
-            <span className="inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300">
-              {t.showingDate}: {formatUiDate(selectedPublishDate, selectedPublishDate)}
-            </span>
+        {hasArchiveFilters ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {selectedCity !== 'all' ? (
+              <span className="inline-flex items-center rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                {selectedCityLabel}
+              </span>
+            ) : null}
+
+            {selectedPublishDate ? (
+              <span className="inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300">
+                {t.showingDate}: {formatUiDate(selectedPublishDate, selectedPublishDate)}
+              </span>
+            ) : null}
+
+            {archiveMonthLabel ? (
+              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                {t.archiveMonth}: {archiveMonthLabel}
+              </span>
+            ) : null}
+
+            {deferredSearchQuery ? (
+              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                {t.searchFilter}: {deferredSearchQuery}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {savedPaperCards.length || savedStoryCards.length ? (
+          <div className="mb-4 rounded-2xl border border-zinc-200 bg-white/85 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/75 sm:p-4">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-sm font-extrabold text-zinc-900 dark:text-zinc-100 sm:text-base">
+                  {t.savedLibrary}
+                </h2>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {t.savedLibraryHint}
+                </p>
+              </div>
+            </div>
+
+            {savedPaperCards.length ? (
+              <div className="mt-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  {t.savedIssues}
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {savedPaperCards.map((paper) => (
+                    <button
+                      key={`saved-paper-${paper.paperId}`}
+                      type="button"
+                      onClick={() => handleOpenSavedPaper(paper)}
+                      className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-3 text-left transition hover:border-primary-300 hover:bg-primary-50/50 dark:border-zinc-700 dark:bg-zinc-950/70 dark:hover:border-primary-700 dark:hover:bg-primary-950/20"
+                    >
+                      <div className="relative h-20 w-16 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                        {paper.thumbnailPath ? (
+                          <Image
+                            src={paper.thumbnailPath}
+                            alt={paper.title}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            sizes="64px"
+                          />
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {paper.saved ? (
+                            <span className="inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300">
+                              {t.savedIssue}
+                            </span>
+                          ) : null}
+                          {paper.offlineReady ? (
+                            <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                              {t.offlineReady}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          {paper.title}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          {paper.cityName} | {formatUiDate(paper.publishDate, paper.publishDate)}
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                          {t.page} {paper.lastOpenedPage}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {savedStoryCards.length ? (
+              <div className={`${savedPaperCards.length ? 'mt-4' : 'mt-3'}`}>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  {t.savedStories}
+                </p>
+                <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                  {savedStoryCards.map((story) => (
+                    <button
+                      key={`saved-story-${story.storyId}`}
+                      type="button"
+                      onClick={() => handleOpenSavedStory(story)}
+                      className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-3 text-left transition hover:border-primary-300 hover:bg-primary-50/60 dark:border-zinc-700 dark:bg-zinc-950/70 dark:hover:border-primary-700 dark:hover:bg-primary-950/20"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          {story.title}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          {story.paperTitle} | {t.page} {story.pageNumber}
+                        </p>
+                        {story.excerpt ? (
+                          <p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-300">
+                            {story.excerpt}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="inline-flex shrink-0 items-center rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">
+                        {t.openStory}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -1223,7 +2542,7 @@ export default function EPaperPageClient({
         ) : epapers.length === 0 ? (
           <div className="rounded-xl border border-gray-200 bg-white px-5 py-10 text-center dark:border-zinc-800 dark:bg-zinc-900 sm:py-12">
             <Newspaper className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-500" />
-            <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">{t.noPaper}</p>
+            <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">{emptyStateMessage}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -1274,11 +2593,11 @@ export default function EPaperPageClient({
                   disabled={isLoadingMore}
                   className="rounded-full border border-zinc-300 bg-white px-8 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-red-700/70 dark:hover:bg-zinc-800 dark:hover:text-red-300"
                 >
-                  {isLoadingMore ? 'Loading...' : 'Load More'}
+                  {isLoadingMore ? 'Loading...' : t.loadMore}
                 </button>
               </div>
             ) : (
-              <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">No more posts</p>
+              <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">{t.noMore}</p>
             )}
           </div>
         )}
@@ -1301,21 +2620,42 @@ export default function EPaperPageClient({
                     type="button"
                     onClick={() => goToRelativePage(-1)}
                     aria-label={t.previous}
-                    disabled={activePage <= 1}
+                    disabled={!canGoPreviousPage}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
 
                   <span className="min-w-[72px] rounded-md border border-gray-200 px-2 py-1 text-center text-xs font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-300">
-                    {activePage} / {activePaper.pageCount}
+                    {readerPageLabel}
                   </span>
+
+                  <label className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
+                    <span className="hidden sm:inline">{t.quickJump}</span>
+                    <select
+                      value={activePage}
+                      onChange={(event) => {
+                        const nextPage = Number.parseInt(event.target.value, 10);
+                        if (Number.isFinite(nextPage)) {
+                          navigateToPage(nextPage);
+                        }
+                      }}
+                      aria-label={t.quickJump}
+                      className="min-w-[72px] bg-transparent text-xs outline-none"
+                    >
+                      {pageSummaries.map((page) => (
+                        <option key={`jump-${page.pageNumber}`} value={page.pageNumber}>
+                          {t.page} {page.pageNumber}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
                   <button
                     type="button"
                     onClick={() => goToRelativePage(1)}
                     aria-label={t.next}
-                    disabled={activePage >= activePaper.pageCount}
+                    disabled={!canGoNextPage}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -1347,6 +2687,24 @@ export default function EPaperPageClient({
 
                   <button
                     type="button"
+                    onClick={handleIssueSaveToggle}
+                    disabled={!activePaperLibraryInput || isSavingIssue}
+                    className={`inline-flex h-8 items-center gap-1 rounded-md border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isActivePaperSaved
+                        ? 'border-primary-300 bg-primary-600 text-white hover:bg-primary-700 dark:border-primary-500 dark:bg-primary-500 dark:hover:bg-primary-400'
+                        : 'border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40'
+                    }`}
+                  >
+                    {isSavingIssue ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Bookmark className={`h-3.5 w-3.5 ${isActivePaperSaved ? 'fill-current' : ''}`} />
+                    )}
+                    <span>{isActivePaperSaved ? t.savedIssue : t.saveIssue}</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={openPdfInNewTab}
                     disabled={!pdfUrlForOpen}
                     className="inline-flex h-8 items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
@@ -1355,6 +2713,57 @@ export default function EPaperPageClient({
                     <span className="sm:hidden">PDF</span>
                     <ExternalLink className="h-3.5 w-3.5" />
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePdfDownload}
+                    disabled={!pdfUrlForOpen}
+                    className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{t.downloadPdf}</span>
+                    <span className="sm:hidden">PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleOfflinePaperSave();
+                    }}
+                    disabled={!activePaperLibraryInput || isPreparingOfflinePaper || isActivePaperOfflineReady}
+                    className={`inline-flex h-8 items-center gap-1 rounded-md border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isActivePaperOfflineReady
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
+                        : 'border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/30'
+                    }`}
+                  >
+                    {isPreparingOfflinePaper ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    <span>
+                      {isPreparingOfflinePaper
+                        ? t.offlineSaving
+                        : isActivePaperOfflineReady
+                          ? t.offlineReady
+                          : t.keepOffline}
+                    </span>
+                  </button>
+
+                  {canUseSpreadMode ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReaderDisplayMode((current) =>
+                          current === 'spread' ? 'single' : 'spread'
+                        )
+                      }
+                      className="hidden h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 xl:inline-flex"
+                    >
+                      <span>{shouldShowSpreadMode ? t.singleView : t.spreadView}</span>
+                    </button>
+                  ) : null}
 
                   <button
                     type="button"
@@ -1389,8 +2798,126 @@ export default function EPaperPageClient({
               </div>
             ) : null}
 
-            <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem]">
-              <div className="relative overflow-auto overscroll-contain bg-gradient-to-b from-zinc-100 via-white to-zinc-100 p-2 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900">
+            <div className="border-b border-gray-200 bg-white/90 px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-950/80 sm:px-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    {t.pageStrip}
+                  </p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{t.tapPageToFocus}</p>
+                </div>
+                {canUseSpreadMode ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReaderDisplayMode((current) =>
+                        current === 'spread' ? 'single' : 'spread'
+                      )
+                    }
+                    className="inline-flex h-8 items-center rounded-full border border-gray-300 px-3 text-[11px] font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800 xl:hidden"
+                  >
+                    {shouldShowSpreadMode ? t.singleView : t.spreadView}
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {pageSummaries.map((page) => {
+                  const isCurrentPage = page.pageNumber === activePage;
+                  const isCompanionPage =
+                    shouldShowSpreadMode && spreadCompanionPage?.pageNumber === page.pageNumber;
+
+                  return (
+                    <button
+                      key={`strip-${page.pageNumber}`}
+                      type="button"
+                      onClick={() => navigateToPage(page.pageNumber)}
+                      className={`group min-w-[84px] max-w-[84px] shrink-0 overflow-hidden rounded-xl border text-left transition ${
+                        isCurrentPage
+                          ? 'border-primary-500 bg-primary-50 shadow-sm dark:border-primary-400 dark:bg-primary-950/30'
+                          : isCompanionPage
+                            ? 'border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/20'
+                            : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/20'
+                      }`}
+                    >
+                      <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-900 dark:to-zinc-800">
+                        {page.imagePath ? (
+                          <Image
+                            src={page.imagePath}
+                            alt={`${t.page} ${page.pageNumber}`}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            sizes="84px"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center px-2 text-center text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                            {t.page} {page.pageNumber}
+                          </div>
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent px-2 py-1 text-[10px] font-semibold text-white">
+                          {t.page} {page.pageNumber}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          {page.storyCount} {t.stories}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[12rem_minmax(0,1fr)_20rem]">
+              <aside className="hidden min-h-0 bg-gray-50/80 dark:bg-zinc-900/70 xl:flex xl:flex-col">
+                <div className="border-b border-gray-200 px-3 py-3 dark:border-zinc-800">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    {t.pagesTab}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t.quickJump}</p>
+                </div>
+
+                <div className="flex-1 overflow-auto p-3">
+                  <div className="space-y-2">
+                    {pageSummaries.map((page) => {
+                      const isCurrentPage = page.pageNumber === activePage;
+                      const isCompanionPage =
+                        shouldShowSpreadMode && spreadCompanionPage?.pageNumber === page.pageNumber;
+
+                      return (
+                        <button
+                          key={`nav-${page.pageNumber}`}
+                          type="button"
+                          onClick={() => navigateToPage(page.pageNumber)}
+                          className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                            isCurrentPage
+                              ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-950/30'
+                              : isCompanionPage
+                                ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20'
+                                : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">
+                              {t.page} {page.pageNumber}
+                            </span>
+                            <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                              {page.storyCount} {t.stories}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                            {page.imagePath ? t.openPage : t.noThumbnail}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </aside>
+
+              <div className="relative min-w-0 overflow-auto overscroll-contain bg-gradient-to-b from-zinc-100 via-white to-zinc-100 p-2 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 xl:border-x xl:border-gray-200 dark:xl:border-zinc-800">
                 {loadingFallback ? (
                   <div className="flex h-full min-h-48 items-center justify-center">
                     <Loader2 className="h-7 w-7 animate-spin text-primary-600" />
@@ -1400,9 +2927,9 @@ export default function EPaperPageClient({
                     {fallbackError}
                   </div>
                 ) : activePageImage || pdfFallbackPreview ? (
-                  <div className="mx-auto flex min-h-full w-full max-w-[980px] items-start justify-center">
+                  <div className="mx-auto flex min-h-full w-full max-w-[1220px] items-start justify-center">
                     <div
-                      className="relative w-fit"
+                      className={`relative w-full ${shouldShowSpreadMode ? 'max-w-[1120px]' : 'max-w-[980px]'}`}
                       onTouchStart={onPreviewTouchStart}
                       onTouchMove={onPreviewTouchMove}
                       onTouchEnd={onPreviewTouchEnd}
@@ -1412,7 +2939,7 @@ export default function EPaperPageClient({
                         type="button"
                         onClick={() => goToRelativePage(-1)}
                         aria-label={t.previous}
-                        disabled={activePage <= 1}
+                        disabled={!canGoPreviousPage}
                         className="absolute left-2 top-1/2 z-20 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-30 sm:left-3 sm:h-12 sm:w-12"
                       >
                         <ChevronLeft className="h-5 w-5" />
@@ -1422,69 +2949,127 @@ export default function EPaperPageClient({
                         type="button"
                         onClick={() => goToRelativePage(1)}
                         aria-label={t.next}
-                        disabled={activePage >= activePaper.pageCount}
+                        disabled={!canGoNextPage}
                         className="absolute right-2 top-1/2 z-20 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-30 sm:right-3 sm:h-12 sm:w-12"
                       >
                         <ChevronRight className="h-5 w-5" />
                       </button>
 
-                      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_24px_60px_-30px_rgba(15,23,42,0.55)] dark:border-zinc-800 dark:bg-zinc-900">
-                        <AnimatePresence initial={false} custom={pageTurnDirection} mode="wait">
-                          <motion.div
-                            key={`epaper-page-${activePaper._id}-${activePage}-${previewSrc}`}
-                            custom={pageTurnDirection}
-                            variants={pageTurnVariants}
-                            initial="enter"
-                            animate="center"
-                            exit="exit"
-                            className="relative mx-auto w-fit"
-                            style={{ transformOrigin: pageTurnDirection >= 0 ? 'left center' : 'right center' }}
-                          >
-                            {previewIsDataUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={previewSrc}
-                                alt={`Page ${activePage}`}
-                                style={{
-                                  maxHeight: `calc((100dvh - 210px) * ${previewZoom})`,
-                                }}
-                                className="block h-auto w-auto object-contain"
-                                draggable={false}
-                              />
-                            ) : (
-                              <Image
-                                src={previewSrc}
-                                alt={`Page ${activePage}`}
-                                width={previewWidth}
-                                height={previewHeight}
-                                unoptimized
-                                style={{
-                                  maxHeight: `calc((100dvh - 210px) * ${previewZoom})`,
-                                }}
-                                className="block h-auto w-auto object-contain"
-                                draggable={false}
-                              />
-                            )}
+                      <div
+                        className={`mx-auto grid items-start gap-4 ${shouldShowSpreadMode ? 'xl:grid-cols-2' : 'grid-cols-1'}`}
+                      >
+                        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_24px_60px_-30px_rgba(15,23,42,0.55)] dark:border-zinc-800 dark:bg-zinc-900">
+                          <AnimatePresence initial={false} custom={pageTurnDirection} mode="wait">
+                            <motion.div
+                              key={`epaper-page-${activePaper._id}-${activePage}-${previewSrc}`}
+                              custom={pageTurnDirection}
+                              variants={pageTurnVariants}
+                              initial="enter"
+                              animate="center"
+                              exit="exit"
+                              className="relative mx-auto w-fit"
+                              style={{ transformOrigin: pageTurnDirection >= 0 ? 'left center' : 'right center' }}
+                            >
+                              {previewIsDataUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={previewSrc}
+                                  alt={`Page ${activePage}`}
+                                  style={{ maxHeight: previewMaxHeight }}
+                                  className="block h-auto w-auto object-contain"
+                                  draggable={false}
+                                />
+                              ) : (
+                                <Image
+                                  src={previewSrc}
+                                  alt={`Page ${activePage}`}
+                                  width={previewWidth}
+                                  height={previewHeight}
+                                  unoptimized
+                                  style={{ maxHeight: previewMaxHeight }}
+                                  className="block h-auto w-auto object-contain"
+                                  draggable={false}
+                                />
+                              )}
 
-                            {pageArticles.map((article, index) => (
-                              <button
-                                key={article._id}
-                                type="button"
-                                onClick={() => setActiveArticle(article)}
-                                className="absolute rounded-[2px] bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60"
-                                style={{
-                                  left: `${article.hotspot.x * 100}%`,
-                                  top: `${article.hotspot.y * 100}%`,
-                                  width: `${article.hotspot.w * 100}%`,
-                                  height: `${article.hotspot.h * 100}%`,
-                                }}
-                                title={article.title || `${t.story} ${index + 1}`}
-                              >
-                                <span className="sr-only">{article.title || `${t.story} ${index + 1}`}</span>
-                              </button>
-                            ))}
-                          </motion.div>
-                        </AnimatePresence>
+                              {pageArticles.map((article, index) => (
+                                <button
+                                  key={article._id}
+                                  type="button"
+                                  onClick={() => setActiveArticle(article)}
+                                  className="absolute rounded-[2px] bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60"
+                                  style={{
+                                    left: `${article.hotspot.x * 100}%`,
+                                    top: `${article.hotspot.y * 100}%`,
+                                    width: `${article.hotspot.w * 100}%`,
+                                    height: `${article.hotspot.h * 100}%`,
+                                  }}
+                                  title={article.title || `${t.story} ${index + 1}`}
+                                >
+                                  <span className="sr-only">
+                                    {article.title || `${t.story} ${index + 1}`}
+                                  </span>
+                                </button>
+                              ))}
+                            </motion.div>
+                          </AnimatePresence>
+                        </div>
+
+                        {shouldShowSpreadMode && spreadCompanionPage ? (
+                          <div
+                            className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_24px_60px_-30px_rgba(15,23,42,0.45)] transition hover:border-amber-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-amber-700"
+                            onClick={() => navigateToPage(spreadCompanionPage.pageNumber)}
+                          >
+                            <div className="border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 dark:border-zinc-800 dark:text-zinc-200">
+                              {t.page} {spreadCompanionPage.pageNumber}
+                            </div>
+
+                            <div className="relative">
+                              {spreadCompanionPage.imagePath ? (
+                                <Image
+                                  src={spreadCompanionPage.imagePath}
+                                  alt={`Page ${spreadCompanionPage.pageNumber}`}
+                                  width={spreadCompanionPage.width}
+                                  height={spreadCompanionPage.height}
+                                  unoptimized
+                                  style={{ maxHeight: previewMaxHeight }}
+                                  className="block h-auto w-auto object-contain"
+                                  draggable={false}
+                                />
+                              ) : (
+                                <div
+                                  className="flex items-center justify-center bg-zinc-100 px-6 py-16 text-center text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400"
+                                  style={{ minHeight: '22rem' }}
+                                >
+                                  {t.pageMissingPrefix} {spreadCompanionPage.pageNumber}.
+                                </div>
+                              )}
+
+                              {spreadCompanionPage.articles.map((article, index) => (
+                                <button
+                                  key={`spread-${article._id}`}
+                                  type="button"
+                                  onClick={() => {
+                                    navigateToPage(spreadCompanionPage.pageNumber);
+                                    setActiveArticle(article);
+                                  }}
+                                  className="absolute rounded-[2px] bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60"
+                                  style={{
+                                    left: `${article.hotspot.x * 100}%`,
+                                    top: `${article.hotspot.y * 100}%`,
+                                    width: `${article.hotspot.w * 100}%`,
+                                    height: `${article.hotspot.h * 100}%`,
+                                  }}
+                                  title={article.title || `${t.story} ${index + 1}`}
+                                >
+                                  <span className="sr-only">
+                                    {article.title || `${t.story} ${index + 1}`}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -1499,9 +3084,7 @@ export default function EPaperPageClient({
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                       {t.storiesOnPage}
                     </p>
-                    <p className="text-xs font-medium text-gray-700 dark:text-zinc-300">
-                      {activePage} / {activePaper.pageCount}
-                    </p>
+                    <p className="text-xs font-medium text-gray-700 dark:text-zinc-300">{readerPageLabel}</p>
                   </div>
 
                   {pageArticles.length === 0 ? (
@@ -1527,40 +3110,137 @@ export default function EPaperPageClient({
                       ))}
                     </div>
                   )}
+
+                  <details className="mt-3 rounded-lg border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-semibold text-gray-900 dark:text-zinc-100">
+                      {t.editionContents}
+                    </summary>
+                    <div className="border-t border-gray-200 px-3 py-3 dark:border-zinc-800">
+                      {editionArticlesByPage.length === 0 ? (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{t.noStoriesEdition}</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {editionArticlesByPage.map((page) => (
+                            <div key={`mobile-contents-${page.pageNumber}`} className="space-y-2">
+                              <button
+                                type="button"
+                                onClick={() => navigateToPage(page.pageNumber)}
+                                className="text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300"
+                              >
+                                {t.page} {page.pageNumber}
+                              </button>
+                              <div className="space-y-2">
+                                {page.articles.map((article, index) => (
+                                  <button
+                                    key={`mobile-contents-article-${article._id}`}
+                                    type="button"
+                                    onClick={() => {
+                                      navigateToPage(page.pageNumber);
+                                      setActiveArticle(article);
+                                    }}
+                                    className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm text-gray-700 transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
+                                  >
+                                    {article.title || `${t.story} ${index + 1}`}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </details>
                 </div>
               </div>
 
-              <aside className="hidden min-h-0 border-l border-gray-200 bg-gray-50/80 dark:border-zinc-800 dark:bg-zinc-900/70 lg:flex lg:flex-col">
+              <aside className="hidden min-h-0 border-l border-gray-200 bg-gray-50/80 dark:border-zinc-800 dark:bg-zinc-900/70 xl:flex xl:flex-col">
                 <div className="border-b border-gray-200 px-3 py-3 dark:border-zinc-800">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    {t.storiesOnPage}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReaderSidebarView('pages')}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                        readerSidebarView === 'pages'
+                          ? 'bg-primary-600 text-white'
+                          : 'border border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      {t.pagesTab}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReaderSidebarView('contents')}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                        readerSidebarView === 'contents'
+                          ? 'bg-primary-600 text-white'
+                          : 'border border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      {t.contentsTab}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    {readerSidebarView === 'pages' ? t.pageStories : t.editionContents}
                   </p>
-                  <p className="mt-1 text-xs font-medium text-gray-700 dark:text-zinc-300">
-                    {activePage} / {activePaper.pageCount}
-                  </p>
+                  <p className="mt-1 text-xs font-medium text-gray-700 dark:text-zinc-300">{readerPageLabel}</p>
                 </div>
 
                 <div className="flex-1 overflow-auto p-3">
-                  {pageArticles.length === 0 ? (
+                  {readerSidebarView === 'pages' ? (
+                    pageArticles.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-600 dark:border-zinc-700 dark:text-zinc-400">
+                        {t.noStories}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {pageArticles.map((article, index) => (
+                          <button
+                            key={`${article._id}-side`}
+                            type="button"
+                            onClick={() => setActiveArticle(article)}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
+                          >
+                            <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
+                              {t.story} {index + 1}
+                            </span>
+                            <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-zinc-100">
+                              {article.title || `${t.story} ${index + 1}`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  ) : editionArticlesByPage.length === 0 ? (
                     <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-600 dark:border-zinc-700 dark:text-zinc-400">
-                      {t.noStories}
+                      {t.noStoriesEdition}
                     </p>
                   ) : (
-                    <div className="space-y-2">
-                      {pageArticles.map((article, index) => (
-                        <button
-                          key={`${article._id}-side`}
-                          type="button"
-                          onClick={() => setActiveArticle(article)}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
-                        >
-                          <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
-                            {t.story} {index + 1}
-                          </span>
-                          <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-zinc-100">
-                            {article.title || `${t.story} ${index + 1}`}
-                          </span>
-                        </button>
+                    <div className="space-y-3">
+                      {editionArticlesByPage.map((page) => (
+                        <div key={`contents-${page.pageNumber}`} className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => navigateToPage(page.pageNumber)}
+                            className="text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300"
+                          >
+                            {t.page} {page.pageNumber}
+                          </button>
+                          <div className="space-y-2">
+                            {page.articles.map((article, index) => (
+                              <button
+                                key={`contents-article-${article._id}`}
+                                type="button"
+                                onClick={() => {
+                                  navigateToPage(page.pageNumber);
+                                  setActiveArticle(article);
+                                }}
+                                className="block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-700 transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
+                              >
+                                {article.title || `${t.story} ${index + 1}`}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -1589,6 +3269,52 @@ export default function EPaperPageClient({
 
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 dark:border-zinc-800 sm:px-4">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <div className="inline-flex h-9 items-center rounded-full border border-gray-200 bg-white p-1 dark:border-zinc-700 dark:bg-zinc-950">
+                  <button
+                    type="button"
+                    onClick={() => setArticleReaderMode('story')}
+                    className={`inline-flex h-7 items-center gap-1 rounded-full px-3 text-xs font-semibold transition ${
+                      articleReaderMode === 'story'
+                        ? 'bg-primary-600 text-white'
+                        : 'text-gray-700 hover:bg-gray-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <Newspaper className="h-3.5 w-3.5" />
+                    <span>{t.storyMode}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setArticleReaderMode('text')}
+                    disabled={!hasReadableArticleText}
+                    className={`inline-flex h-7 items-center gap-1 rounded-full px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      articleReaderMode === 'text'
+                        ? 'bg-primary-600 text-white'
+                        : 'text-gray-700 hover:bg-gray-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <Type className="h-3.5 w-3.5" />
+                    <span>{t.textMode}</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleStorySaveToggle}
+                  disabled={isSavingStory}
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isActiveArticleSaved
+                      ? 'border-primary-300 bg-primary-600 text-white hover:bg-primary-700 dark:border-primary-500 dark:bg-primary-500 dark:hover:bg-primary-400'
+                      : 'border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40'
+                  }`}
+                >
+                  {isSavingStory ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Bookmark className={`h-3.5 w-3.5 ${isActiveArticleSaved ? 'fill-current' : ''}`} />
+                  )}
+                  <span>{isActiveArticleSaved ? t.savedStory : t.saveStory}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -1613,7 +3339,86 @@ export default function EPaperPageClient({
                   <span>{t.shareStory}</span>
                 </button>
 
-                {activeArticleHasImage && !isCoarsePointer ? (
+                <button
+                  type="button"
+                  onClick={handleStoryTextDownload}
+                  disabled={!hasReadableArticleText}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>{t.downloadText}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleStoryPrint}
+                  disabled={!hasReadableArticleText && !activeArticleHasContent}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  <span>{t.printStory}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleArticleListen()}
+                  disabled={isPreparingArticleListen || !hasReadableArticleText}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                >
+                  {isPreparingArticleListen ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Volume2 className="h-3.5 w-3.5" />
+                  )}
+                  <span>{isPreparingArticleListen ? t.listening : t.listen}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => stopArticleListening()}
+                  disabled={!isPlayingArticleAudio && !isPreparingArticleListen}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  <PauseCircle className="h-3.5 w-3.5" />
+                  <span>{t.stopListening}</span>
+                </button>
+
+                {articleReaderMode === 'text' ? (
+                  <div className="inline-flex h-9 items-center gap-1 rounded-full border border-gray-200 bg-white px-1 text-xs font-semibold text-gray-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
+                    <span className="px-2 text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      {t.textSize}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setArticleTextScale((current) =>
+                          Math.max(0.9, Number((current - 0.1).toFixed(2)))
+                        )
+                      }
+                      disabled={articleTextScale <= 0.9}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-800"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="min-w-[44px] text-center text-[11px]">
+                      {Math.round(articleTextScale * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setArticleTextScale((current) =>
+                          Math.min(1.4, Number((current + 0.1).toFixed(2)))
+                        )
+                      }
+                      disabled={articleTextScale >= 1.4}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-800"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+
+                {articleReaderMode === 'story' && activeArticleHasImage && !isCoarsePointer ? (
                   <div className="inline-flex h-9 items-center gap-1 rounded-full border border-gray-200 bg-white px-1 text-xs font-semibold text-gray-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
                     <button
                       type="button"
@@ -1653,7 +3458,7 @@ export default function EPaperPageClient({
                   </div>
                 ) : null}
 
-                {activeArticleHasImage && isCoarsePointer ? (
+                {articleReaderMode === 'story' && activeArticleHasImage && isCoarsePointer ? (
                   <div className="inline-flex h-9 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 text-[11px] font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
                     {t.pinchToZoom}
                   </div>
@@ -1671,7 +3476,36 @@ export default function EPaperPageClient({
 
             <div className="flex-1 overflow-auto bg-white dark:bg-zinc-900">
               <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4 md:p-5">
-                {activeArticleHasImage ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      activeArticleReadableTextState === 'full'
+                        ? 'border border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
+                        : activeArticleReadableTextState === 'excerpt'
+                          ? 'border border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
+                          : 'border border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'
+                    }`}
+                  >
+                    {activeArticleTextBadgeLabel}
+                  </span>
+                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    {t.articleReader}
+                  </span>
+                </div>
+
+                {activeArticleTextHelp ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                    {activeArticleTextHelp}
+                  </div>
+                ) : null}
+
+                {articleListenError ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
+                    {articleListenError}
+                  </div>
+                ) : null}
+
+                {articleReaderMode === 'story' && activeArticleHasImage ? (
                   <div
                     className="overflow-auto rounded-2xl border border-gray-200 bg-zinc-100 shadow-sm dark:border-zinc-800 dark:bg-black"
                     onTouchStart={onArticleImageTouchStart}
@@ -1697,22 +3531,84 @@ export default function EPaperPageClient({
                   </div>
                 ) : null}
 
-                {activeArticleHasExcerpt && (!activeArticleHasImage || activeArticleHasContent) ? (
-                  <p className="text-sm font-medium leading-6 text-gray-700 dark:text-zinc-300">
-                    {activeArticle.excerpt}
-                  </p>
-                ) : null}
+                {articleReaderMode === 'story' ? (
+                  <>
+                    {activeArticleHasExcerpt && (!activeArticleHasImage || activeArticleHasContent) ? (
+                      <p className="text-sm font-medium leading-6 text-gray-700 dark:text-zinc-300">
+                        {activeArticle.excerpt}
+                      </p>
+                    ) : null}
 
-                {activeArticleHasContent ? (
-                  <article
-                    className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-zinc-200 sm:prose-base"
-                    dangerouslySetInnerHTML={{ __html: activeArticle.contentHtml || '' }}
-                  />
-                ) : null}
+                    {activeArticleHasContent ? (
+                      <article
+                        className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-zinc-200 sm:prose-base"
+                        dangerouslySetInnerHTML={{ __html: activeArticle.contentHtml || '' }}
+                      />
+                    ) : null}
 
-                {shouldShowNoArticleState ? (
-                  <p className="text-sm text-gray-600 dark:text-zinc-400">{t.noArticle}</p>
-                ) : null}
+                    {shouldShowNoArticleState ? (
+                      <p className="text-sm text-gray-600 dark:text-zinc-400">{t.noArticle}</p>
+                    ) : null}
+                  </>
+                ) : hasReadableArticleText ? (
+                  <div className="mx-auto w-full max-w-3xl rounded-2xl border border-gray-200 bg-white px-4 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 sm:px-6 sm:py-6">
+                    <div className="border-b border-gray-200 pb-4 dark:border-zinc-800">
+                      <h4
+                        className="text-xl font-black leading-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl"
+                        style={{ fontSize: `${1.35 * articleTextScale}rem` }}
+                      >
+                        {activeArticle?.title || t.story}
+                      </h4>
+                      {activeArticleHasExcerpt && activeArticleHasContent ? (
+                        <p
+                          className="mt-3 font-medium leading-8 text-zinc-700 dark:text-zinc-300"
+                          style={{ fontSize: `${1.02 * articleTextScale}rem` }}
+                        >
+                          {activeArticle.excerpt}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {activeArticleHasContent ? (
+                      <article
+                        className="prose max-w-none pt-5 text-zinc-800 dark:prose-invert dark:text-zinc-200"
+                        style={{ fontSize: `${1 * articleTextScale}rem`, lineHeight: 1.95 }}
+                        dangerouslySetInnerHTML={{ __html: activeArticle.contentHtml || '' }}
+                      />
+                    ) : activeArticleParagraphs.length ? (
+                      <div
+                        className="space-y-4 pt-5 text-zinc-800 dark:text-zinc-200"
+                        style={{ fontSize: `${1 * articleTextScale}rem`, lineHeight: 1.95 }}
+                      >
+                        {activeArticleParagraphs.map((paragraph, index) => (
+                          <p
+                            key={`reader-paragraph-${index + 1}`}
+                            className="font-[family:var(--font-devanagari),var(--font-latin),system-ui,sans-serif]"
+                          >
+                            {paragraph}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="pt-5 text-sm text-zinc-600 dark:text-zinc-400">
+                        {t.noReadableText}
+                      </p>
+                    )}
+
+                    {activeArticleHasImage ? (
+                      <button
+                        type="button"
+                        onClick={() => setArticleReaderMode('story')}
+                        className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        <Newspaper className="h-4 w-4" />
+                        <span>{t.openVisualStory}</span>
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-zinc-400">{t.noReadableText}</p>
+                )}
               </div>
             </div>
           </div>

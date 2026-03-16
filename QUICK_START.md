@@ -1,252 +1,123 @@
-# Lokswami Admin CMS - Quick Reference
+# Lokswami Quick Start
 
-## 🚀 Quick Start (5 minutes)
+## 5-Minute Setup
+
+1. Copy `.env.local.example` to `.env.local`.
+2. Set the values you actually need in `.env.local`.
+3. Install dependencies, optionally seed sample data, then start the app.
 
 ```bash
-# 1. Add MongoDB URI to .env.local
-MONGODB_URI=mongodb+srv://...
-
-# 2. Install & seed database
 npm install
 npm run seed
-
-# 3. Start development server
 npm run dev
-
-# 4. Login to admin
-# Visit: http://localhost:3000/login
-# Username: admin
-# Password: password
 ```
 
----
+Open `http://localhost:3000/signin`.
 
-## 📁 Important Files
+`/login` is still available, but it permanently redirects to `/signin`.
+
+## Minimum Local Auth Setup
+
+Set these values for local admin sign-in:
+
+```env
+MONGODB_URI=mongodb+srv://...
+NEXTAUTH_SECRET=replace-with-a-long-random-secret
+NEXTAUTH_URL=http://localhost:3000
+ADMIN_LOGIN_ID=admin
+ADMIN_PASSWORD_HASH=replace-with-bcrypt-hash
+```
+
+Notes:
+
+- `ADMIN_USERNAME` is also supported if you prefer that name over `ADMIN_LOGIN_ID`.
+- Generate a bcrypt hash with `npm run hash-password`.
+- Google OAuth is optional for local development. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` only if you want Google sign-in.
+
+## Current Auth Model
+
+- Auth is handled by NextAuth at `/api/auth/[...nextauth]`.
+- Reader sign-in uses Google when OAuth is configured.
+- Admin sign-in uses the NextAuth credentials provider when `ADMIN_LOGIN_ID` or `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` are set.
+- Admin Google sign-in is optional and requires `ADMIN_GOOGLE_LOGIN_ENABLED=true` plus an allowlist in `ADMIN_EMAILS`.
+- Admin APIs rely on the authenticated session cookie. There is no `/api/admin/login` token endpoint.
+
+## Important Files
 
 | File | Purpose |
 |------|---------|
+| `lib/auth.ts` | NextAuth configuration and callbacks |
+| `lib/auth/adminCredentials.ts` | Env-driven admin credentials login |
+| `app/api/auth/[...nextauth]/route.ts` | NextAuth route handler |
+| `middleware.ts` | Route protection for admin and signed-in reader pages |
 | `lib/db/mongoose.ts` | MongoDB connection |
-| `lib/models/*.ts` | Database schemas |
-| `app/api/admin/*.ts` | API endpoints |
-| `lib/auth/service.ts` | Login utilities |
-| `.env.local` | Secrets (create from `.env.local.example`) |
-| `MONGODB_SETUP.md` | Full setup guide |
+| `.env.local.example` | Full local environment template |
+| `app/(admin)/admin/epapers/new/page.tsx` | Admin e-paper direct upload and Drive/URL import UI |
+| `app/api/admin/epapers/import/route.ts` | Remote / Google Drive e-paper import route |
+| `lib/utils/epaperAdminReadiness.ts` | Admin publish-readiness calculation |
 
----
-
-## 🔌 API Endpoints
-
-### Authentication
-```
-POST /api/admin/login
-├─ Input: {username, password}
-└─ Output: {token, user}
-```
-
-### Articles
-```
-GET    /api/admin/articles?category=X&limit=10&page=1
-POST   /api/admin/articles {title, summary, content, image, category, author}
-GET    /api/admin/articles/:id
-PATCH  /api/admin/articles/:id {title, summary, ...}
-DELETE /api/admin/articles/:id
-```
-
----
-
-## 🔐 Authentication
-
-```typescript
-// Login & store token
-const response = await fetch('/api/admin/login', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ username: 'admin', password: 'password' })
-});
-const { token } = await response.json();
-localStorage.setItem('lokswami_admin_token', token);
-
-// Use token in requests
-const headers = {
-  'Authorization': `Bearer ${token}`,
-  'Content-Type': 'application/json'
-};
-```
-
----
-
-## 💾 Database Models
-
-### Article
-```typescript
-{
-  title: string (required)
-  summary: string (required)
-  content: string (required)
-  image: string (required)
-  category: string (National|International|Sports|Entertainment|Tech|Business)
-  author: string (required)
-  views: number (default: 0)
-  isBreaking: boolean (default: false)
-  isTrending: boolean (default: false)
-  publishedAt: Date
-  updatedAt: Date
-}
-```
-
-### Category
-```typescript
-{
-  name: string (unique)
-  slug: string (unique)
-  description: string
-  icon: string? (optional)
-}
-```
-
-### Author
-```typescript
-{
-  name: string (required)
-  email: string (unique)
-  bio: string (required)
-  avatar: string (required)
-}
-```
-
----
-
-## 📝 npm Scripts
+## Useful Commands
 
 ```bash
-npm run dev              # Start development server
-npm run build           # Production build
-npm run start           # Start production server
-npm run lint            # Check code quality
-npm run seed            # Populate database with sample data
-npm run hash-password   # Generate bcrypt hash for new password
-```
-
----
-
-## 🛠️ Helpful Commands
-
-### Generate Password Hash
-```bash
+npm run dev
+npm run lint
+npm run typecheck
+npm run build
+npm run test:auth-guards
 npm run hash-password
-# Follow prompt, copy output to ADMIN_PASSWORD_HASH in .env.local
+npm run seed
 ```
 
-### Test API with curl
-```bash
-# Login
-curl -X POST http://localhost:3000/api/admin/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"password"}'
+## E-Paper Admin Flow
 
-# List articles
-curl http://localhost:3000/api/admin/articles
+The admin e-paper workflow now supports both:
 
-# Create article (replace TOKEN)
-curl -X POST http://localhost:3000/api/admin/articles \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title":"Test Article",
-    "summary":"Test",
-    "content":"Test content",
-    "image":"https://example.com/img.jpg",
-    "category":"National",
-    "author":"Test Author"
-  }'
-```
+- direct upload from `/admin/epapers/new`
+- Google Drive / URL import from the same screen
 
----
+Drive / URL import accepts:
 
-## 🔍 Query Parameters
+- a shared PDF URL
+- a shared thumbnail URL
+- optional page-image URLs, one per line
 
-### Article List
-```
-GET /api/admin/articles?category=sports&limit=5&page=2
-├─ category (optional): Filter by category slug
-├─ limit (optional): Items per page (default: 10)
-└─ page (optional): Page number (default: 1)
-```
+After creation:
 
----
+1. Open the e-paper detail page.
+2. Check the new readiness panel.
+3. Upload missing page images if needed.
+4. Map hotspots page by page.
+5. Review warnings about unreadable text before publishing.
 
-## ❌ Common Errors & Fixes
+Important limitation:
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `MONGODB_URI not defined` | Missing .env.local | Create `.env.local` from template with MongoDB URI |
-| `MongoParseError: Invalid scheme` | Wrong URI format | Use full connection string: `mongodb+srv://...` |
-| `Invalid credentials` | Wrong username/password | Default: `admin` / `password` |
-| `401 Unauthorized` | Missing or invalid token | Add `Authorization: Bearer TOKEN` header |
-| `Cannot POST /api/admin/articles` | Route not found | Verify file at `app/api/admin/articles/route.ts` exists |
+- `Generate Page Images` currently works only when the PDF is stored in local e-paper storage and server conversion is enabled.
+- imported cloud-hosted PDFs still need manual page-image upload or page-image URLs during import.
 
----
+## Smoke Checks
 
-## 🔐 Security Checklist
+These checks currently pass in this repo:
 
-- [ ] Add MongoDB URI to `.env.local`
-- [ ] Change admin password: `npm run hash-password`
-- [ ] Update `ADMIN_PASSWORD_HASH` in `.env.local`
-- [ ] Use strong `JWT_SECRET` (32+ characters)
-- [ ] Enable HTTPS in production
-- [ ] Restrict MongoDB IP access (don't use "Allow Anywhere")
-- [ ] Keep `.env.local` out of git (add to `.gitignore`)
-- [ ] Never commit `.env.local` file
+- `GET /signin` returns `200`
+- `GET /login` redirects to `/signin`
+- `GET /admin` redirects guests to `/signin?redirect=%2Fadmin`
+- `GET /main/saved` redirects guests to `/signin?redirect=%2Fmain%2Fsaved`
 
----
+## Common Errors
 
-## 📊 Database Info
+| Error | Likely cause | Fix |
+|------|--------------|-----|
+| `MONGODB_URI is not set` | Missing local env config | Copy `.env.local.example` to `.env.local` and set `MONGODB_URI` |
+| `Invalid admin ID or password` | Login ID does not match env or hash is wrong | Verify `ADMIN_LOGIN_ID` or `ADMIN_USERNAME`, then regenerate `ADMIN_PASSWORD_HASH` |
+| `no_admin_access` | Google account is authenticated but not allowlisted for admin | Add the email to `ADMIN_EMAILS` |
+| `querySrv ETIMEOUT` | Atlas cluster not reachable from your machine/network | Check Atlas IP access, DNS, and the connection string |
+| `Remote download failed` during e-paper import | Shared Drive/URL asset is not publicly reachable from the server | Verify the link, sharing permission, and file size |
+| E-paper shows `Not ready` | Page images, hotspots, or readable story text are still missing | Open the e-paper detail page and complete the listed blockers |
 
-**Seed Data Includes:**
-- 6 Categories (National, International, Sports, Entertainment, Tech, Business)
-- 3 Authors (with avatars)
-- 6 Articles (with real images from Unsplash)
+## Security Checklist
 
-**Default Credentials:**
-- Username: `admin`
-- Password: `password`
-- Token Expiry: 7 days
-
----
-
-## 🎯 Next Steps
-
-1. ✅ Base setup complete (you're here!)
-2. Create login page at `/login`
-3. Build admin dashboard at `/admin`
-4. Implement article CRUD forms
-5. Add image upload functionality
-6. Create category/author management
-7. Add search and filtering
-8. Deploy to production
-
-See [ADMIN_CMS_CHECKLIST.md](./ADMIN_CMS_CHECKLIST.md) for detailed roadmap.
-
----
-
-## 📚 Resources
-
-- [MongoDB Docs](https://docs.mongodb.com)
-- [Mongoose Guide](https://mongoosejs.com/docs)
-- [JWT.io](https://jwt.io)
-- [Next.js API Routes](https://nextjs.org/docs/api-routes/introduction)
-- [bcryptjs](https://www.npmjs.com/package/bcryptjs)
-
----
-
-## 💡 Tips
-
-- **Local Testing**: MongoDB free tier supports testing
-- **Postman**: Use for API testing before frontend
-- **Token Storage**: Currently in localStorage (consider sessionStorage for security)
-- **View Counter**: Track article views by incrementing on GET request
-- **Pagination**: Always implement for scalability
-
----
-
-**Last Updated:** 2024 | **Version:** 1.0.0
+- Use a strong `NEXTAUTH_SECRET`, `JWT_SECRET`, or `AUTH_SECRET`
+- Use a unique admin password and store only its bcrypt hash
+- Keep `.env.local` out of git
+- Restrict MongoDB Atlas network access before production
+- Configure Google OAuth callback URLs before enabling Google sign-in in production

@@ -184,6 +184,13 @@ export default function AdminEPaperListPage() {
             const pagesWithImage = epaper.pages.filter((page) => Boolean(page.imagePath)).length;
             const missingPages = Math.max(0, epaper.pageCount - pagesWithImage);
             const canOpenPublicView = epaper.status === 'published';
+            const readiness = epaper.readiness;
+            const readinessLabel =
+              readiness?.status === 'ready'
+                ? 'Ready'
+                : readiness?.status === 'needs-review'
+                  ? 'Needs review'
+                  : 'Not ready';
 
             return (
               <div
@@ -199,6 +206,29 @@ export default function AdminEPaperListPage() {
                     <p className="mt-1 text-xs text-gray-600">
                       {epaper.pageCount} pages | {pagesWithImage} with image | {missingPages} missing
                     </p>
+                    {readiness ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            readiness.status === 'ready'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : readiness.status === 'needs-review'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-red-100 text-red-700'
+                          }`}
+                        >
+                          {readinessLabel}
+                        </span>
+                        <span className="text-[11px] text-gray-500">
+                          Hotspots {readiness.hotspotCoveragePercent}% | Text {readiness.textCoveragePercent}%
+                        </span>
+                        {epaper.automation?.sourceLabel ? (
+                          <span className="text-[11px] text-gray-500">
+                            Source: {epaper.automation.sourceLabel}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div

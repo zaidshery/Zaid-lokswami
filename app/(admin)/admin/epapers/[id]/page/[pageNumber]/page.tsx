@@ -153,6 +153,14 @@ export default function EPaperPageHotspotEditor() {
   const pageImagePath = String(pageImageMeta?.imagePath || '');
   const pageImageWidth = pageImageMeta?.width || 1200;
   const pageImageHeight = pageImageMeta?.height || 1600;
+  const readableArticleCount = useMemo(
+    () =>
+      articles.filter((article) => {
+        return Boolean(String(article.contentHtml || '').trim() || String(article.excerpt || '').trim());
+      }).length,
+    [articles]
+  );
+  const unreadableArticleCount = Math.max(0, articles.length - readableArticleCount);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -562,6 +570,24 @@ export default function EPaperPageHotspotEditor() {
           {notice}
         </div>
       ) : null}
+
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Mapped stories</p>
+          <p className="mt-2 text-2xl font-bold text-gray-900">{articles.length}</p>
+          <p className="mt-1 text-xs text-gray-600">Hotspots already created on this page.</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Readable text</p>
+          <p className="mt-2 text-2xl font-bold text-gray-900">{readableArticleCount}</p>
+          <p className="mt-1 text-xs text-gray-600">Stories with full text or excerpt ready.</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Needs OCR review</p>
+          <p className="mt-2 text-2xl font-bold text-gray-900">{unreadableArticleCount}</p>
+          <p className="mt-1 text-xs text-gray-600">Mapped stories still missing readable text.</p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">

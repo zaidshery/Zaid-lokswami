@@ -137,6 +137,22 @@ function buildFallbackProfile(user: SyncableUser, role: UserRole): SessionProfil
   };
 }
 
+function isRecoverableMongoAuthError(error: unknown) {
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+
+  return (
+    message.includes('mongodb_uri is not set') ||
+    message.includes('querysrv') ||
+    message.includes('server selection') ||
+    message.includes('connection failed') ||
+    message.includes('timed out') ||
+    message.includes('etimeout') ||
+    message.includes('enotfound') ||
+    message.includes('econnrefused')
+  );
+}
+
 function buildSessionProfileFromDbUser(dbUser: DbUserRecord): SessionProfile | null {
   const email = normalizeEmail(dbUser.email);
   const role = normalizeRole(dbUser.role);
@@ -452,6 +468,24 @@ function buildAuthOptions(): NextAuthConfig {
           assignProfileToUser(user, profile);
           return true;
         } catch (error) {
+          if (isRecoverableMongoAuthError(error)) {
+            const fallbackRole = isBootstrapAdminEmail(normalizedEmail)
+              ? 'super_admin'
+              : 'reader';
+
+            console.warn(
+              'MongoDB unavailable during Google sign-in, using fallback session profile.',
+              {
+                email: normalizedEmail,
+                role: fallbackRole,
+                error: error instanceof Error ? error.message : String(error),
+              }
+            );
+
+            assignProfileToUser(user, buildFallbackProfile(user, fallbackRole));
+            return true;
+          }
+
           console.error('NextAuth sign-in failed:', error);
           return getAuthErrorRedirect('OAuthError');
         }

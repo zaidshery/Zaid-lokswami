@@ -1,6 +1,8 @@
+import { Types } from 'mongoose';
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
+import EPaperArticle from '@/lib/models/EPaperArticle';
 import { getAdminSession } from '@/lib/auth/admin';
 import {
   getCityNameFromSlug,
@@ -9,6 +11,10 @@ import {
 } from '@/lib/constants/epaperCities';
 import { listStoredEPapers } from '@/lib/storage/epapersFile';
 import { parsePublishDate } from '@/lib/utils/epaperStorage';
+import {
+  buildEpaperAutomationInfo,
+  buildEpaperReadiness,
+} from '@/lib/utils/epaperAdminReadiness';
 
 type EpaperPage = {
   pageNumber: number;
@@ -154,22 +160,34 @@ export async function GET(req: NextRequest) {
     const createFileResponse = () =>
       NextResponse.json({
         success: true,
-        data: fileResult.data.map((row) => ({
-          _id: row._id,
-          citySlug: getCitySlugFromName(row.city),
-          cityName: row.city,
-          title: row.title,
-          publishDate: row.publishDate,
-          pdfPath: row.pdfUrl,
-          thumbnailPath: row.thumbnail,
-          pageCount: Number(row.pages) || 1,
-          pages: [],
-          status: 'published' as const,
-          pagesWithImage: 0,
-          pagesMissingImage: Number(row.pages) || 1,
-          createdAt: row.publishedAt,
-          updatedAt: row.updatedAt,
-        })),
+        data: fileResult.data.map((row) => {
+          const item = {
+            _id: row._id,
+            citySlug: getCitySlugFromName(row.city),
+            cityName: row.city,
+            title: row.title,
+            publishDate: row.publishDate,
+            pdfPath: row.pdfUrl,
+            thumbnailPath: row.thumbnail,
+            pageCount: Number(row.pages) || 1,
+            pages: [],
+            status: 'published' as const,
+            pagesWithImage: 0,
+            pagesMissingImage: Number(row.pages) || 1,
+            sourceType: 'legacy' as const,
+            sourceLabel: 'Legacy file store',
+            sourceUrl: row.pdfUrl,
+            createdAt: row.publishedAt,
+            updatedAt: row.updatedAt,
+          };
+
+          return {
+            ...item,
+            articleCount: 0,
+            readiness: buildEpaperReadiness({ epaper: item, articles: [] }),
+            automation: buildEpaperAutomationInfo(item),
+          };
+        }),
         pagination: {
           total: fileResult.total,
           page: effectivePage,
@@ -206,27 +224,108 @@ export async function GET(req: NextRequest) {
         Boolean(String(pageItem.imagePath || '').trim())
       ).length;
 
-      return {
-        _id: String(item._id),
-        citySlug: String(item.citySlug || ''),
-        cityName: String(item.cityName || ''),
-        title: String(item.title || ''),
+        return {
+          _id: String(item._id),
+          citySlug: String(item.citySlug || ''),
+          cityName: String(item.cityName || ''),
+          title: String(item.title || ''),
         publishDate: toIsoDate(item.publishDate),
         pdfPath: firstNonEmptyString(item.pdfPath, item.pdfUrl),
         thumbnailPath: firstNonEmptyString(item.thumbnailPath, item.thumbnail),
-        pageCount,
-        pages,
-        status: item.status === 'published' ? 'published' : 'draft',
-        pagesWithImage,
-        pagesMissingImage: Math.max(0, pageCount - pagesWithImage),
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
+          pageCount,
+          pages,
+          status: item.status === 'published' ? 'published' : 'draft',
+          pagesWithImage,
+          pagesMissingImage: Math.max(0, pageCount - pagesWithImage),
+          sourceType: firstNonEmptyString(item.sourceType),
+          sourceLabel: firstNonEmptyString(item.sourceLabel),
+          sourceUrl: firstNonEmptyString(item.sourceUrl),
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        };
+      });
+
+    const epaperIds = data.map((item) => item._id).filter(Boolean);
+    const articleStats =
+      epaperIds.length > 0
+        ? await EPaperArticle.aggregate<{
+            _id: string;
+            articleCount: number;
+            pagesWithHotspots: number[];
+            articlesWithReadableText: number;
+          }>([
+            {
+              $match: {
+                epaperId: {
+                  $in: epaperIds.map((value) => new Types.ObjectId(value)),
+                },
+              },
+            },
+            {
+              $group: {
+                _id: '$epaperId',
+                articleCount: { $sum: 1 },
+                pagesWithHotspots: { $addToSet: '$pageNumber' },
+                articlesWithReadableText: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $or: [
+                          { $gt: [{ $strLenCP: { $ifNull: ['$contentHtml', ''] } }, 0] },
+                          { $gt: [{ $strLenCP: { $ifNull: ['$excerpt', ''] } }, 0] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+          ])
+        : [];
+    const articleStatsById = new Map(
+      articleStats.map((row) => [
+        String(row._id),
+        {
+          articleCount: Number(row.articleCount || 0),
+          pagesWithHotspots: Array.isArray(row.pagesWithHotspots)
+            ? row.pagesWithHotspots
+                .map((value) => Number(value || 0))
+                .filter((value) => Number.isFinite(value) && value > 0)
+            : [],
+          articlesWithReadableText: Number(row.articlesWithReadableText || 0),
+        },
+      ])
+    );
+
+    const enriched = data.map((item) => {
+      const stats = articleStatsById.get(item._id) || {
+        articleCount: 0,
+        pagesWithHotspots: [],
+        articlesWithReadableText: 0,
+      };
+      const readiness = buildEpaperReadiness({
+        epaper: item,
+        articles: Array.from({ length: stats.articleCount }, (_, index) => ({
+          pageNumber: stats.pagesWithHotspots[index] || stats.pagesWithHotspots[0] || 1,
+          excerpt: index < stats.articlesWithReadableText ? 'text-ready' : '',
+          contentHtml: '',
+          coverImagePath: '',
+        })),
+      });
+
+      return {
+        ...item,
+        articleCount: stats.articleCount,
+        readiness,
+        automation: buildEpaperAutomationInfo(item),
       };
     });
 
     return NextResponse.json({
       success: true,
-      data,
+      data: enriched,
       pagination: {
         total,
         page: effectivePage,

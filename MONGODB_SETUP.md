@@ -1,396 +1,202 @@
-# MongoDB & Admin CMS Setup Guide
+# MongoDB and Auth Setup Guide
 
 ## Overview
 
-The Lokswami v2 website now has full MongoDB integration with JWT-based admin authentication. This guide walks you through setting up the database and using the admin CMS.
+Lokswami uses MongoDB for persisted content and NextAuth for authentication. Local setup usually starts from `.env.local.example`, then adds a MongoDB Atlas connection and whichever sign-in methods you want to enable.
 
-## Prerequisites
+## Required Local Values
 
-- Node.js 16+ installed
-- MongoDB Atlas account (free tier available)
-- Environment variables configured
-
-## Step 1: Create MongoDB Atlas Cluster
-
-1. Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-2. Sign up or log in with your account
-3. Create a new project named "Lokswami"
-4. Create a new cluster (free M0 tier is sufficient)
-5. Choose your preferred region (closest to your users)
-6. Wait for the cluster to be created (~10 minutes)
-
-## Step 2: Set Up Database Access
-
-1. In MongoDB Atlas, go to "Database Access"
-2. Click "Add New Database User"
-3. Create a user with:
-   - **Username:** `lokswami_user`
-   - **Password:** Generate a strong password (save this!)
-   - **Authentication Method:** Password
-   - **Database User Privileges:** Built-in roles → `readWriteAnyDatabase@admin`
-
-## Step 3: Configure Network Access
-
-1. In MongoDB Atlas, go to "Network Access"
-2. Click "Add IP Address"
-3. For development: Click "Allow Access from Anywhere" (0.0.0.0/0)
-4. For production: Add your server's IP address
-
-## Step 4: Get Connection String
-
-1. In MongoDB Atlas, click "Clusters" → "Connect"
-2. Choose "Connect your application"
-3. Select "Node.js" driver version "4.0 or later"
-4. Copy the connection string: `mongodb+srv://<username>:<password>@cluster-name.mongodb.net/<database>?retryWrites=true&w=majority`
-
-## Step 5: Configure Environment Variables
-
-1. Copy `.env.local.example` to `.env.local`
-2. Update the following values:
+For a basic local admin setup, configure:
 
 ```env
-# Replace with your actual MongoDB URI
 MONGODB_URI=mongodb+srv://lokswami_user:YOUR_PASSWORD@cluster-name.mongodb.net/lokswami?retryWrites=true&w=majority
-
-# Generate a random JWT secret:
-# On Mac/Linux: openssl rand -base64 32
-# On Windows: Use an online generator or a random string
-JWT_SECRET=your-random-32-character-string-here
-
-# Admin login credentials
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD_HASH=$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcg7b3XeKeUxWdeS86E36jbMFm2
-# This hash is bcrypt of 'password' - change it in production!
+NEXTAUTH_SECRET=replace-with-a-long-random-secret
+NEXTAUTH_URL=http://localhost:3000
+ADMIN_LOGIN_ID=admin
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD_HASH=replace-with-bcrypt-hash
 ```
 
-## Step 6: Seed Database with Sample Data
+Also supported:
 
-With MongoDB connection configured, populate the database:
+- `ADMIN_USERNAME` instead of `ADMIN_LOGIN_ID`
+- `JWT_SECRET` or `AUTH_SECRET` as secret aliases
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for Google sign-in
+- `ADMIN_GOOGLE_LOGIN_ENABLED=true` and `ADMIN_EMAILS=...` for allowlisted admin Google access
+
+## 1. Create a MongoDB Atlas Cluster
+
+1. Create a project in MongoDB Atlas.
+2. Create a cluster. The free M0 tier is enough for local testing.
+3. Wait until the cluster is ready.
+
+## 2. Create a Database User
+
+1. Open Atlas `Database Access`.
+2. Create a database user for this app.
+3. Save the username and password somewhere secure.
+
+## 3. Allow Network Access
+
+1. Open Atlas `Network Access`.
+2. Add your current IP for local development.
+3. Avoid `0.0.0.0/0` outside quick experiments.
+
+## 4. Create `.env.local`
+
+Copy `.env.local.example` to `.env.local`, then fill in:
+
+- `MONGODB_URI`
+- `NEXTAUTH_SECRET`
+- `NEXTAUTH_URL`
+- `ADMIN_LOGIN_ID` or `ADMIN_USERNAME`
+- `ADMIN_PASSWORD_HASH`
+
+If you want Google sign-in too, also add:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `ADMIN_EMAILS`
+- `ADMIN_GOOGLE_LOGIN_ENABLED=true` for admin Google login
+
+## 5. Generate an Admin Password Hash
+
+Run:
 
 ```bash
+npm run hash-password
+```
+
+Use the generated bcrypt hash as `ADMIN_PASSWORD_HASH`.
+
+The plain-text password is whatever you typed into the hash script. The app never stores that plain password in the repo.
+
+## 6. Install Dependencies and Seed Data
+
+```bash
+npm install
 npm run seed
 ```
 
-This will create:
-- 6 categories (National, International, Sports, Entertainment, Tech, Business)
-- 3 authors (with Hindi names)
-- 6 sample articles with images
+Seeding recreates the main sample content collections used by the app.
 
-Expected output:
-```
-✓ Connected to MongoDB
-✓ Cleared existing data
-✓ Seeded categories
-✓ Seeded authors
-✓ Seeded articles
-
-✅ Database seeded successfully!
-```
-
-## Step 7: Start Development Server
+## 7. Start the App
 
 ```bash
 npm run dev
 ```
 
-The app will be available at `http://localhost:3000`
+Then open `http://localhost:3000/signin`.
 
-## Admin CMS Usage
+`/login` is only a redirect and forwards to `/signin`.
 
-### Logging In
+## Sign-In Behavior
 
-1. Navigate to `/login`
-2. Enter credentials:
-   - **Username:** `admin`
-   - **Password:** `password` (default)
-3. You'll receive a JWT token valid for 7 days
+### Reader Sign-In
 
-### Accessing Admin Dashboard
+- Uses Google when OAuth is configured.
+- Lands on the shared `/signin` page.
 
-1. After login, go to `/admin`
-2. You'll see:
-   - Dashboard with stats and charts
-   - Article management section
-   - Quick actions and trending content
+### Admin Sign-In
 
-### Managing Articles
+- Credentials-based admin sign-in is enabled when `ADMIN_LOGIN_ID` or `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` are set.
+- Admin Google sign-in is optional and depends on `ADMIN_GOOGLE_LOGIN_ENABLED` and `ADMIN_EMAILS`.
+- Successful admin sessions are stored as NextAuth session cookies.
 
-#### Create New Article
+## API Notes
 
-1. In admin dashboard, click "New Article"
-2. Fill in the form:
-   - **Title:** Article headline (required)
-   - **Summary:** Brief description (required)
-   - **Content:** Full article text (required)
-   - **Image URL:** Cover image link (required)
-   - **Category:** Select from dropdown (required)
-   - **Author:** Article author name (required)
-   - **Breaking News:** Toggle if it's a breaking story
-   - **Trending:** Toggle if it should appear in trending section
-3. Click "Create" to publish
+- Auth entrypoint: `/api/auth/[...nextauth]`
+- Admin content APIs: `/api/admin/articles`, `/api/admin/categories`, `/api/admin/stories`, `/api/admin/videos`, `/api/admin/epapers`, and related routes
+- Admin e-paper import API: `/api/admin/epapers/import`
+- Admin APIs expect an authenticated NextAuth session cookie
+- There is no `/api/admin/login` bearer-token endpoint in the current codebase
 
-#### Edit Article
+## Admin E-Paper Automation
 
-1. Find the article in the articles list
-2. Click the edit icon (pencil)
-3. Update fields as needed
-4. Click "Save"
+Lokswami now has two admin e-paper creation paths at `/admin/epapers/new`:
 
-#### Delete Article
+- direct file upload
+- Google Drive / URL import
 
-1. Find the article in the list
-2. Click the delete icon (trash)
-3. Confirm deletion
+The import flow:
 
-### Available Categories
+- accepts shared `http(s)` PDF and image URLs
+- supports Google Drive shared file links
+- downloads those assets server-side and stores them through the normal e-paper upload pipeline
 
-The system includes these default categories:
+Because imported PDFs are stored as cloud-hosted assets, the current `Generate Page Images` endpoint still cannot auto-render page images for those imported editions. For imports, upload page images manually or provide page-image URLs during import.
 
-- **National** - Indian news and updates
-- **International** - Global news coverage
-- **Sports** - Sports matches and results
-- **Entertainment** - Movies, celebrities, events
-- **Tech** - Technology and innovation
-- **Business** - Economy and finance
+## Publish Readiness
 
-## API Endpoints
+Admin e-paper list/detail pages now show readiness status before publishing:
 
-All admin endpoints require JWT authentication via `Authorization: Bearer <token>` header.
+- `Ready`
+- `Needs review`
+- `Not ready`
 
-### Articles
+Readiness is based on:
 
-#### List Articles
-```
-GET /api/admin/articles?category=national&limit=10&page=1
-```
-
-**Query Parameters:**
-- `category` (optional): Filter by category slug
-- `limit` (optional, default: 10): Results per page
-- `page` (optional, default: 1): Page number
-
-#### Get Single Article
-```
-GET /api/admin/articles/:id
-```
-
-#### Create Article
-```
-POST /api/admin/articles
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "title": "Article Title",
-  "summary": "Brief summary",
-  "content": "Full content",
-  "image": "https://example.com/image.jpg",
-  "category": "National",
-  "author": "Author Name",
-  "isBreaking": true,
-  "isTrending": false
-}
-```
-
-#### Update Article
-```
-PATCH /api/admin/articles/:id
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "title": "Updated Title",
-  "views": 1000
-}
-```
-
-#### Delete Article
-```
-DELETE /api/admin/articles/:id
-Authorization: Bearer <token>
-```
-
-### Login
-
-```
-POST /api/admin/login
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "password": "password"
-}
-
-Response:
-{
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIs...",
-  "user": {
-    "username": "admin",
-    "role": "admin"
-  }
-}
-```
-
-## Project Structure
-
-```
-lib/
-├── auth/
-│   ├── jwt.ts          # JWT utilities
-│   └── service.ts      # Auth service (login, token management)
-├── db/
-│   └── mongoose.ts     # MongoDB connection (singleton pattern)
-├── models/
-│   ├── Article.ts      # Article schema and interface
-│   ├── Author.ts       # Author schema and interface
-│   └── Category.ts     # Category schema and interface
-└── utils/
-    └── formatNumber.ts # Number formatting utility
-
-app/
-├── api/
-│   └── admin/
-│       ├── login/route.ts              # Login endpoint
-│       └── articles/
-│           ├── route.ts                # List/Create articles
-│           └── [id]/route.ts           # Get/Update/Delete article
-├── admin/                              # Admin panel pages
-└── ...
-
-scripts/
-└── seed.ts             # Database seeding script
-```
-
-## Database Schema
-
-### ArticleCollection
-
-```typescript
-{
-  _id: ObjectId
-  title: string (required, max 200 chars)
-  summary: string (required, max 500 chars)
-  content: string (required)
-  image: string (required)
-  category: string (required, enum: National | International | Sports | Entertainment | Tech | Business)
-  author: string (required)
-  publishedAt: Date (default: now)
-  updatedAt: Date (default: now)
-  views: number (default: 0)
-  isBreaking: boolean (default: false)
-  isTrending: boolean (default: false)
-}
-```
-
-### CategoryCollection
-
-```typescript
-{
-  _id: ObjectId
-  name: string (required, unique)
-  slug: string (required, unique)
-  description: string (required)
-  icon: string (optional)
-}
-```
-
-### AuthorCollection
-
-```typescript
-{
-  _id: ObjectId
-  name: string (required)
-  email: string (required, unique)
-  bio: string (required)
-  avatar: string (required)
-}
-```
-
-## Security Notes
-
-⚠️ **Production Checklist:**
-
-1. **Change Admin Credentials**
-   - Generate bcrypt hash of new password
-   - Update `ADMIN_PASSWORD_HASH` in `.env`
-
-2. **Rotate JWT Secret**
-   - Generate a new random string: `openssl rand -base64 32`
-   - Update `JWT_SECRET` in `.env.local`
-
-3. **Enable Production Network**
-   - Remove "Allow Access from Anywhere"
-   - Add only your server's IP to MongoDB Atlas
-
-4. **Use Strong Passwords**
-   - MongoDB user password: 16+ chars, mixed case, numbers, symbols
-   - Admin password: 12+ chars, high entropy
-
-5. **HTTPS Only**
-   - Deploy on HTTPS in production
-   - Set secure cookies: `sameSite: 'strict'`
-
-6. **Token Storage**
-   - Tokens stored in `localStorage` - use `sessionStorage` for extra security
-   - Token expires in 7 days - rotation recommended
-
-7. **API Rate Limiting**
-   - Add rate limiting middleware to `/api/admin/*` routes
-   - Prevent brute force attacks on login endpoint
+- page images present
+- hotspot coverage
+- readable text/excerpt coverage
+- required PDF/thumbnail availability
 
 ## Troubleshooting
 
-### MongoDB Connection Error
+### `querySrv ETIMEOUT` or MongoDB connection timeout
 
-**Error:** `MongoParseError: Invalid scheme`
+Usually means Atlas could not be reached.
 
-**Solution:** Ensure `MONGODB_URI` starts with `mongodb+srv://` and contains correct credentials.
+Check:
 
-### Authentication Failed
+- Atlas IP access rules
+- The `MONGODB_URI` hostname
+- Local DNS and firewall settings
 
-**Error:** `Invalid credentials` on login
+### `MONGODB_URI is not set`
 
-**Solution:** 
-- Verify `ADMIN_USERNAME` matches in `.env.local`
-- Default password is `password`
-- Check `ADMIN_PASSWORD_HASH` is properly set
+Create `.env.local` from `.env.local.example` and set the connection string.
 
-### Seed Script Failed
+### `Invalid admin ID or password`
 
-**Error:** `MONGODB_URI not defined`
+Check:
 
-**Solution:** 
-1. Create `.env.local` from `.env.local.example`
-2. Add your actual MongoDB URI
-3. Run `npm run seed` again
+- `ADMIN_LOGIN_ID` or `ADMIN_USERNAME`
+- `ADMIN_PASSWORD_HASH`
+- That the password hash was generated from the password you are actually typing
 
-### Articles Not Displaying
+### `no_admin_access`
 
-1. Verify seed script ran successfully
-2. Check MongoDB Atlas cluster is running
-3. Confirm network access allows your IP
+This usually means a Google-authenticated user is not allowlisted for admin access.
 
-## Next Steps
+Add the email to `ADMIN_EMAILS`.
 
-1. ✅ MongoDB configured
-2. ✅ Database seeded with sample data
-3. Create custom admin dashboard features
-4. Add image upload to articles (currently uses URLs)
-5. Implement article drafts/scheduled publishing
-6. Add author profile pages
-7. Implement comments/discussion system
+### `MongoDB unavailable for admin dashboard, using file store`
 
-## Support
+The app could not reach MongoDB and fell back to local file-backed dashboard data for that request path.
 
-For issues or questions:
-1. Check MongoDB Atlas documentation
-2. Review Next.js API routes documentation
-3. Verify `.env.local` has all required variables
-4. Check browser console for client-side errors
-5. Check terminal for server-side errors
+This is useful for resilience during development, but it means your MongoDB setup is still not healthy.
 
----
+### `Remote download failed` during e-paper import
 
-**Last Updated:** 2024
-**Version:** 1.0.0
+Check:
+
+- that the Google Drive or remote file is shared correctly
+- that the asset URL is a real file link, not a private preview-only page
+- that your local server/network can reach the remote host
+
+### E-paper shows `Not ready` or `Needs review`
+
+Open the admin e-paper detail page and review:
+
+- missing page images
+- pages without hotspots
+- stories that still have no readable text or excerpt
+
+## Production Notes
+
+- Use a persistent MongoDB deployment
+- Rotate auth secrets before production
+- Restrict Atlas network access
+- Configure Google OAuth callback URLs for your production domain
+- Keep `.env.local` and any production secrets out of version control

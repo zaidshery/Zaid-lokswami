@@ -130,8 +130,16 @@ export default function InstallAppPrompt() {
   const isReaderRoute = pathname?.startsWith('/main') ?? false;
   const isEpaperRoute = pathname?.startsWith('/main/epaper') ?? false;
   const isVideoRoute = pathname?.startsWith('/main/videos') ?? false;
+  const canPresentInstallPrompt = installPlatform === 'ios' || Boolean(deferredPrompt);
   const canReuseActiveSurface = popupState.activeSurface === 'install-app';
+  const promptOffsetClassName = isReaderRoute
+    ? 'bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.85rem)] xl:bottom-5'
+    : 'bottom-3 sm:bottom-4';
+  const promptMaxHeightClassName = isReaderRoute
+    ? 'max-h-[calc(100dvh-var(--bottom-nav-height)-env(safe-area-inset-bottom)-1.5rem)] md:max-h-[34rem] xl:max-h-[28rem]'
+    : 'max-h-[calc(100dvh-0.75rem)] sm:max-h-[34rem] xl:max-h-[28rem]';
   const autoPromptStateRef = useRef({
+    canPresentInstallPrompt,
     canReuseActiveSurface,
     copyUnavailable: '',
     deferredPrompt: null as BeforeInstallPromptEvent | null,
@@ -243,6 +251,7 @@ export default function InstallAppPrompt() {
 
   useEffect(() => {
     autoPromptStateRef.current = {
+      canPresentInstallPrompt,
       canReuseActiveSurface,
       copyUnavailable: copy.unavailable,
       deferredPrompt,
@@ -251,6 +260,7 @@ export default function InstallAppPrompt() {
       isVisible,
     };
   }, [
+    canPresentInstallPrompt,
     canReuseActiveSurface,
     copy.unavailable,
     deferredPrompt,
@@ -335,20 +345,12 @@ export default function InstallAppPrompt() {
         return;
       }
 
-      if (installPlatform === 'ios') {
-        presentInstallPrompt({ useIosInstructions: true });
+      if (canPresentInstallPrompt) {
+        presentInstallPrompt({
+          useIosInstructions: installPlatform === 'ios' && !deferredPrompt,
+        });
         return;
       }
-
-      if (deferredPrompt) {
-        presentInstallPrompt({ useIosInstructions: false });
-        return;
-      }
-
-      presentInstallPrompt({
-        useIosInstructions: false,
-        nextNotice: copy.unavailable,
-      });
     };
 
     window.addEventListener(INSTALL_PROMPT_REQUEST_EVENT, handlePromptRequest as EventListener);
@@ -359,8 +361,7 @@ export default function InstallAppPrompt() {
       );
     };
   }, [
-    canReuseActiveSurface,
-    copy.unavailable,
+    canPresentInstallPrompt,
     deferredPrompt,
     eligiblePath,
     installPlatform,
@@ -398,6 +399,7 @@ export default function InstallAppPrompt() {
     const attemptAutoPrompt = () => {
       const current = autoPromptStateRef.current;
       if (
+        !current.canPresentInstallPrompt ||
         !current.eligiblePath ||
         current.isVisible ||
         document.visibilityState !== 'visible' ||
@@ -413,10 +415,6 @@ export default function InstallAppPrompt() {
 
       presentInstallPrompt({
         useIosInstructions: current.installPlatform === 'ios' && !current.deferredPrompt,
-        nextNotice:
-          current.installPlatform === 'ios' || current.deferredPrompt
-            ? ''
-            : current.copyUnavailable,
       });
     };
 
@@ -501,20 +499,27 @@ export default function InstallAppPrompt() {
 
   return (
     <div
-      className={`pointer-events-none fixed inset-x-3 z-[115] ${
-        isReaderRoute
-          ? 'bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] sm:bottom-4'
-          : 'bottom-4'
-      }`}
+      className={`pointer-events-none fixed inset-x-2 z-[115] sm:inset-x-4 lg:inset-x-6 ${promptOffsetClassName}`}
     >
-      <section className="pointer-events-auto mx-auto w-full max-w-md overflow-hidden rounded-[1.8rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,247,247,0.96))] shadow-[0_28px_75px_rgba(15,23,42,0.22)] backdrop-blur dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(24,24,27,0.97),rgba(13,13,16,0.98))]">
-        <div className="relative overflow-hidden px-4 pb-4 pt-4 sm:px-5">
+      <section
+        className={`pointer-events-auto mx-auto flex w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.45rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,247,247,0.96))] shadow-[0_24px_60px_rgba(15,23,42,0.2)] backdrop-blur dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(24,24,27,0.97),rgba(13,13,16,0.98))] sm:max-w-[30rem] sm:rounded-[1.65rem] md:max-w-[34rem] xl:max-w-[26rem] ${promptMaxHeightClassName}`}
+      >
+        <div className="relative shrink-0 overflow-hidden px-3.5 pb-3.5 pt-3.5 sm:px-5 sm:pb-4 sm:pt-4">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top_right,rgba(231,33,41,0.26),transparent_68%)]" />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#8b141a_0%,#e72129_52%,#c61d24_100%)]" />
 
-          <div className="relative flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8b141a_0%,#e72129_100%)] text-white shadow-[0_16px_30px_rgba(199,29,36,0.26)]">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={dismissPrompt}
+              className="absolute right-0 top-0 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/80 bg-white/80 text-zinc-600 shadow-sm backdrop-blur transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10 sm:h-10 sm:w-10"
+              aria-label="Dismiss install prompt"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="flex min-w-0 items-start gap-3 pr-12 sm:gap-3.5 sm:pr-14">
+              <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1.15rem] bg-[linear-gradient(135deg,#8b141a_0%,#e72129_100%)] text-white shadow-[0_14px_28px_rgba(199,29,36,0.24)] sm:h-12 sm:w-12 sm:rounded-2xl">
                 {showIosInstructions ? (
                   <Share2 className="h-5 w-5" />
                 ) : (
@@ -523,43 +528,33 @@ export default function InstallAppPrompt() {
               </span>
 
               <div className="min-w-0">
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-primary-200/80 bg-primary-50/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-primary-700 dark:border-primary-500/25 dark:bg-primary-500/10 dark:text-primary-200">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-primary-200/80 bg-primary-50/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-primary-700 dark:border-primary-500/25 dark:bg-primary-500/10 dark:text-primary-200 sm:px-3 sm:text-[11px] sm:tracking-[0.14em]">
                   <Sparkles className="h-3.5 w-3.5" />
                   {copy.badge}
                 </div>
-                <h2 className="mt-3 text-[1.05rem] font-black leading-tight tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-[1.15rem]">
+                <h2 className="mt-2.5 text-[1rem] font-black leading-[1.18] tracking-tight text-zinc-950 dark:text-zinc-50 sm:mt-3 sm:text-[1.12rem] md:text-[1.18rem]">
                   {showIosInstructions ? copy.iosTitle : copy.title}
                 </h2>
-                <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                <p className="mt-1.5 max-w-[30ch] text-[13px] leading-5 text-zinc-600 dark:text-zinc-300 sm:text-sm sm:leading-6">
                   {showIosInstructions ? copy.iosSubtitle : copy.subtitle}
                 </p>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={dismissPrompt}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/80 bg-white/80 text-zinc-600 shadow-sm backdrop-blur transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
-              aria-label="Dismiss install prompt"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
-
         </div>
 
-        <div className="border-t border-zinc-200/70 bg-white/70 px-4 py-4 backdrop-blur dark:border-zinc-800/80 dark:bg-white/[0.02] sm:px-5">
+        <div className="overflow-y-auto border-t border-zinc-200/70 bg-white/70 px-3.5 py-3.5 backdrop-blur dark:border-zinc-800/80 dark:bg-white/[0.02] sm:px-5 sm:py-4">
           {showIosInstructions ? (
-            <div className="rounded-[1.4rem] border border-primary-100 bg-[linear-gradient(135deg,rgba(255,245,245,0.98),rgba(255,255,255,0.96))] p-4 shadow-sm dark:border-primary-500/20 dark:bg-[linear-gradient(135deg,rgba(99,20,24,0.18),rgba(255,255,255,0.03))]">
+            <div className="rounded-[1.25rem] border border-primary-100 bg-[linear-gradient(135deg,rgba(255,245,245,0.98),rgba(255,255,255,0.96))] p-3.5 shadow-sm dark:border-primary-500/20 dark:bg-[linear-gradient(135deg,rgba(99,20,24,0.18),rgba(255,255,255,0.03))] sm:rounded-[1.4rem] sm:p-4">
               <div className="flex items-start gap-3">
-                <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-200">
+                <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-200 sm:h-9 sm:w-9 sm:rounded-2xl">
                   <Share2 className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-6 text-zinc-900 dark:text-zinc-100">
+                  <p className="text-[13px] font-semibold leading-5 text-zinc-900 dark:text-zinc-100 sm:text-sm sm:leading-6">
                     {copy.iosSubtitle}
                   </p>
-                  <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+                  <ul className="mt-3 space-y-2 text-[13px] text-zinc-600 dark:text-zinc-300 sm:text-sm">
                     {copy.iosSteps.map((step) => (
                       <li key={step} className="flex items-start gap-2">
                         <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-emerald-600 dark:text-emerald-300" />
@@ -572,27 +567,31 @@ export default function InstallAppPrompt() {
             </div>
           ) : null}
 
-          {notice ? <span className="sr-only">{notice}</span> : null}
+          {notice ? (
+            <p className="mb-3 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[13px] leading-5 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100 sm:text-sm">
+              {notice}
+            </p>
+          ) : null}
 
-          <div className={`${showIosInstructions ? 'mt-4' : ''} flex flex-col-reverse gap-2 sm:flex-row sm:items-center`}>
+          <div className={`${showIosInstructions ? 'mt-4' : 'mt-1'} flex flex-col gap-2.5 md:flex-row md:items-center`}>
+            <button
+              type="button"
+              onClick={dismissPrompt}
+              className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-zinc-300/90 bg-white/85 px-4 text-[13px] font-semibold text-zinc-700 transition hover:bg-white dark:border-zinc-700 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/[0.06] sm:text-sm md:w-auto md:min-w-[9rem]"
+            >
+              {copy.dismiss}
+            </button>
             {!showIosInstructions ? (
               <button
                 type="button"
                 onClick={() => void installApp()}
                 disabled={isInstalling}
-                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#b3171d_0%,#e72129_100%)] px-4 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(199,29,36,0.26)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#b3171d_0%,#e72129_100%)] px-4 text-[13px] font-semibold text-white shadow-[0_14px_28px_rgba(199,29,36,0.24)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm md:flex-1"
               >
                 <Download className="h-4 w-4" />
-                {isInstalling ? copy.installing : copy.install}
+                <span className="truncate">{isInstalling ? copy.installing : copy.install}</span>
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={dismissPrompt}
-              className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-300/90 bg-white/85 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-white dark:border-zinc-700 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/[0.06]"
-            >
-              {copy.dismiss}
-            </button>
           </div>
         </div>
       </section>

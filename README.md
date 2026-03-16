@@ -1,6 +1,6 @@
 # Lokswami
 
-Hindi news PWA built on Next.js 15 with TypeScript, Tailwind CSS, MongoDB, Zustand, and NextAuth Google OAuth.
+Hindi news PWA built on Next.js 15 with TypeScript, Tailwind CSS, MongoDB, Zustand, and NextAuth session auth.
 
 ## Stack
 
@@ -32,29 +32,39 @@ Shared components live at the top level:
 
 ## Authentication
 
-- Single auth system: NextAuth with Google OAuth
-- Reader sign-in page: `/signin`
-- Admin sign-in page: `/login`
-- Admin access is allowlist-based in `lib/auth.ts`
+- Single auth system: NextAuth sessions
+- Unified sign-in page: `/signin`
+- `/login` permanently redirects to `/signin`
+- Reader sign-in can use Google OAuth
+- Admin sign-in can use env-backed credentials and optionally Google allowlisting
 - Middleware protects `/admin/*` plus reader-only routes such as `/main/saved` and `/main/preferences`
 
 ## Environment
 
-Copy `.env.example` to `.env.local` and set the values you actually use.
+Copy `.env.local.example` to `.env.local` and set the values you actually use.
 
-Minimum local setup:
+Minimum local setup for admin credentials sign-in:
 
 ```env
 MONGODB_URI=
 NEXTAUTH_SECRET=
 NEXTAUTH_URL=http://localhost:3000
+ADMIN_LOGIN_ID=admin
+ADMIN_PASSWORD_HASH=
+```
+
+Add Google OAuth only if you want Google sign-in:
+
+```env
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 ```
 
 Also supported:
 
+- `ADMIN_USERNAME` instead of `ADMIN_LOGIN_ID`
 - `JWT_SECRET` or `AUTH_SECRET`
+- `ADMIN_EMAILS`, `ADMIN_GOOGLE_LOGIN_ENABLED`
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
 - `BHASHINI_*`
@@ -100,6 +110,7 @@ Admin CMS:
 - `/api/admin/stories`
 - `/api/admin/videos`
 - `/api/admin/epapers`
+- `/api/admin/epapers/import`
 - `/api/admin/media`
 - `/api/admin/upload`
 - `/api/admin/contact-messages`
@@ -127,6 +138,39 @@ AI and utility:
 - `/api/careers/apply`
 - `/api/subscribe`
 - `/api/health`
+
+## E-Paper Admin Workflow
+
+Lokswami now supports two admin creation flows at `/admin/epapers/new`:
+
+- `Direct upload`: upload PDF + thumbnail, then optionally upload page images immediately or later.
+- `Google Drive / URL import`: paste shared PDF/image URLs. The server downloads those assets and creates the e-paper in the normal admin pipeline.
+
+What the import flow supports:
+
+- absolute `http(s)` URLs
+- Google Drive shared file links
+- optional page-image URLs, one per line
+
+Current limitation:
+
+- imported editions still use cloud-hosted PDF assets, so server-side `Generate Page Images` is currently unavailable for those editions
+- for imported editions, page images should be supplied during import or uploaded later from the e-paper detail page
+
+## E-Paper Readiness
+
+Admin e-paper list and detail pages now show publish readiness:
+
+- `Ready`: no blockers and no review warnings
+- `Needs review`: publishable structure exists, but hotspot/text review is still recommended
+- `Not ready`: required assets or mappings are missing
+
+Readiness currently checks:
+
+- page-image coverage
+- hotspot coverage across pages
+- readable story text coverage
+- missing thumbnail / missing PDF
 
 ## Deployment
 

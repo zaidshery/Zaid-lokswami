@@ -1,9 +1,10 @@
 import { headers } from 'next/headers';
 import {
-  EPAPER_CITY_OPTIONS,
-  isEPaperCitySlug,
-  type EPaperCitySlug,
-} from '@/lib/constants/epaperCities';
+  normalizeMetadataQuery,
+  parseArchiveMonth,
+  resolvePublicEpaperCityFilter,
+  type EPaperCityFilter,
+} from '@/lib/utils/publicEpaperFilters';
 import EPaperPageClient, {
   type PublicCursor,
   type PublicEPaperListItem,
@@ -60,28 +61,44 @@ function toSingleString(value: string | string[] | undefined) {
 }
 
 function resolveInitialFilters(params: Record<string, string | string[] | undefined>) {
-  const defaultCity = EPAPER_CITY_OPTIONS[0]?.slug || ('indore' as EPaperCitySlug);
   const cityRaw = toSingleString(params.city).trim().toLowerCase();
   const dateRaw = toSingleString(params.date).trim();
+  const monthRaw = toSingleString(params.month).trim();
+  const queryRaw = toSingleString(params.query || params.q).trim();
 
-  const city = isEPaperCitySlug(cityRaw) ? cityRaw : defaultCity;
+  const city = resolvePublicEpaperCityFilter(cityRaw);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : '';
+  const month = date ? '' : parseArchiveMonth(monthRaw);
+  const query = normalizeMetadataQuery(queryRaw);
 
   return {
     city,
     date,
+    month,
+    query,
   };
 }
 
-async function fetchInitialEPapers(city: EPaperCitySlug, publishDate: string) {
+async function fetchInitialEPapers(
+  city: EPaperCityFilter,
+  publishDate: string,
+  archiveMonth: string,
+  queryText: string
+) {
   try {
     const origin = await resolveRequestOrigin();
-    const query = new URLSearchParams({
-      citySlug: city,
-      limit: String(EPAPER_LIMIT),
-    });
+    const query = new URLSearchParams({ limit: String(EPAPER_LIMIT) });
+    if (city !== 'all') {
+      query.set('citySlug', city);
+    }
     if (publishDate) {
       query.set('date', publishDate);
+    }
+    if (!publishDate && archiveMonth) {
+      query.set('month', archiveMonth);
+    }
+    if (queryText) {
+      query.set('query', queryText);
     }
 
     const response = await fetch(`${origin}/api/epapers/latest?${query.toString()}`, {
@@ -122,7 +139,12 @@ async function fetchInitialEPapers(city: EPaperCitySlug, publishDate: string) {
 export default async function EPaperPage({ searchParams }: PageProps) {
   const resolvedParams = searchParams ? await searchParams : {};
   const filters = resolveInitialFilters(resolvedParams);
-  const initial = await fetchInitialEPapers(filters.city, filters.date);
+  const initial = await fetchInitialEPapers(
+    filters.city,
+    filters.date,
+    filters.month,
+    filters.query
+  );
 
   return (
     <EPaperPageClient
@@ -132,6 +154,8 @@ export default async function EPaperPage({ searchParams }: PageProps) {
       initialNextCursor={initial.nextCursor}
       initialCity={filters.city}
       initialPublishDate={filters.date}
+      initialArchiveMonth={filters.month}
+      initialSearchQuery={filters.query}
     />
   );
 }

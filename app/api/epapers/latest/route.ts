@@ -4,11 +4,14 @@ import EPaper from '@/lib/models/EPaper';
 import {
   getCityNameFromSlug,
   getCitySlugFromName,
-  isEPaperCitySlug,
 } from '@/lib/constants/epaperCities';
-import { parsePublishDate } from '@/lib/utils/epaperStorage';
 import { listAllStoredEPapers } from '@/lib/storage/epapersFile';
 import { cursorPage } from '@/lib/utils/cursorPage';
+import {
+  buildPublicEpaperMongoQuery,
+  matchesPublicEpaperMetadata,
+  parsePublicEpaperFilters,
+} from '@/lib/utils/publicEpaperFilters';
 
 type PublicEPaperItem = {
   _id: string;
@@ -142,48 +145,26 @@ async function shouldUseFileStore() {
   }
 }
 
-function buildMongoFilters(searchParams: URLSearchParams) {
-  const citySlug = (searchParams.get('citySlug') || '').trim().toLowerCase();
-  const date = (searchParams.get('date') || '').trim();
-
-  if (citySlug && !isEPaperCitySlug(citySlug)) {
-    return { error: 'Invalid citySlug' } as const;
-  }
-
-  let parsedDate: Date | null = null;
-  if (date) {
-    parsedDate = parsePublishDate(date);
-    if (!parsedDate) {
-      return { error: 'Invalid date. Use YYYY-MM-DD.' } as const;
-    }
-  }
-
-  const query: Record<string, unknown> = { status: 'published' };
-  if (citySlug) {
-    query.citySlug = citySlug;
-  }
-  if (parsedDate) {
-    const next = new Date(parsedDate);
-    next.setUTCDate(next.getUTCDate() + 1);
-    query.publishDate = { $gte: parsedDate, $lt: next };
-  }
-
-  return { query, citySlug, parsedDate } as const;
-}
-
 export async function GET(req: NextRequest) {
   try {
     // Developer note:
     // First: /api/epapers/latest?limit=20
     // Next:  /api/epapers/latest?limit=20&cursorPublishedAt=...&cursorId=...
     const { searchParams } = new URL(req.url);
-    const filters = buildMongoFilters(searchParams);
-    if ('error' in filters) {
+    const filterResult = parsePublicEpaperFilters(searchParams);
+    if ('error' in filterResult) {
       return NextResponse.json(
-        { items: [], limit: 20, hasMore: false, nextCursor: null },
+        {
+          items: [],
+          limit: 20,
+          hasMore: false,
+          nextCursor: null,
+          error: filterResult.error,
+        },
         { status: 400 }
       );
     }
+    const { filters } = filterResult;
 
     const limit = searchParams.get('limit');
     const cursorPublishedAt = searchParams.get('cursorPublishedAt');
@@ -201,6 +182,27 @@ export async function GET(req: NextRequest) {
       const filtered = rows.filter((item) => {
         if (cityNameFilter && item.city !== cityNameFilter) return false;
         if (dateFilter && item.publishDate !== dateFilter) return false;
+        if (
+          !dateFilter &&
+          filters.month &&
+          !String(item.publishDate || '').startsWith(`${filters.month}-`)
+        ) {
+          return false;
+        }
+        if (
+          filters.query &&
+          !matchesPublicEpaperMetadata(
+            {
+              title: item.title,
+              cityName: item.city,
+              citySlug: getCitySlugFromName(item.city),
+              publishDate: item.publishDate,
+            },
+            filters.query
+          )
+        ) {
+          return false;
+        }
         return true;
       });
 
@@ -220,7 +222,7 @@ export async function GET(req: NextRequest) {
 
     const result = await cursorPage<PublicEPaperItem>({
       model: EPaper,
-      mongoFilter: filters.query,
+      mongoFilter: buildPublicEpaperMongoQuery(filters, { status: 'published' }),
       mongoProjection:
         '_id citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl status pageCount pages createdAt',
       limit,

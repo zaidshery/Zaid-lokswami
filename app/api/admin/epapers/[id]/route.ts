@@ -13,6 +13,10 @@ import {
   normalizeCityName,
   normalizeCitySlug,
 } from '@/lib/constants/epaperCities';
+import {
+  buildEpaperAutomationInfo,
+  buildEpaperReadiness,
+} from '@/lib/utils/epaperAdminReadiness';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -85,6 +89,9 @@ function mapEpaper(epaper: unknown) {
     pageCount: Math.max(toPositiveInt(source.pageCount), pages.length),
     pages,
     status: source.status === 'published' ? 'published' : 'draft',
+    sourceType: firstNonEmptyString(source.sourceType),
+    sourceLabel: firstNonEmptyString(source.sourceLabel),
+    sourceUrl: firstNonEmptyString(source.sourceUrl),
     createdAt: source.createdAt,
     updatedAt: source.updatedAt,
   };
@@ -146,9 +153,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
       );
     }
 
-    const [epaper, articleCount] = await Promise.all([
+    const [epaper, articles] = await Promise.all([
       EPaper.findById(id).lean(),
-      EPaperArticle.countDocuments({ epaperId: id }),
+      EPaperArticle.find({ epaperId: id })
+        .select('pageNumber excerpt contentHtml coverImagePath')
+        .lean(),
     ]);
 
     if (!epaper) {
@@ -158,11 +167,21 @@ export async function GET(req: NextRequest, context: RouteContext) {
       );
     }
 
+    const mapped = mapEpaper(epaper);
+    const readiness = buildEpaperReadiness({
+      epaper: mapped,
+      articles: Array.isArray(articles) ? articles : [],
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        ...mapEpaper(epaper),
-        articleCount,
+        ...mapped,
+        articleCount: Array.isArray(articles) ? articles.length : 0,
+        pagesWithImage: readiness.pagesWithImage,
+        pagesMissingImage: readiness.pagesMissingImage,
+        readiness,
+        automation: buildEpaperAutomationInfo(mapped),
       },
     });
   } catch (error) {

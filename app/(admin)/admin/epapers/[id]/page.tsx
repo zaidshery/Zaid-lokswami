@@ -4,7 +4,16 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Loader2, Save, Trash2, UploadCloud, PencilRuler } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  Save,
+  Trash2,
+  UploadCloud,
+  PencilRuler,
+} from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import type { EPaperArticleRecord, EPaperRecord } from '@/lib/types/epaper';
@@ -251,6 +260,17 @@ export default function AdminEPaperDetailPage() {
       hotspotCount: hotspotsByPage.get(pageNumber) || 0,
     };
   });
+  const readiness = epaper.readiness;
+  const automation = epaper.automation;
+  const readinessTone =
+    readiness?.status === 'ready'
+      ? 'emerald'
+      : readiness?.status === 'needs-review'
+        ? 'amber'
+        : 'red';
+  const pageCoverage = readiness?.pageImageCoveragePercent ?? 0;
+  const hotspotCoverage = readiness?.hotspotCoveragePercent ?? 0;
+  const textCoverage = readiness?.textCoveragePercent ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -293,6 +313,105 @@ export default function AdminEPaperDetailPage() {
           <p className="mt-1 text-xs text-gray-600">
             {epaper.pageCount} pages | {articles.length} mapped articles
           </p>
+
+          {readiness ? (
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Publish readiness
+                  </p>
+                  <div
+                    className={`mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
+                      readinessTone === 'emerald'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : readinessTone === 'amber'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-red-100 text-red-700'
+                    }`}
+                  >
+                    {readiness.status === 'ready' ? (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                    )}
+                    {readiness.status === 'ready'
+                      ? 'Ready to publish'
+                      : readiness.status === 'needs-review'
+                        ? 'Needs review'
+                        : 'Not ready'}
+                  </div>
+                </div>
+
+                {automation ? (
+                  <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
+                    <p>
+                      Source: <span className="font-semibold text-gray-900">{automation.sourceLabel || automation.sourceType}</span>
+                    </p>
+                    {automation.sourceHost ? (
+                      <p className="mt-1">Host: {automation.sourceHost}</p>
+                    ) : null}
+                    <p className="mt-1">
+                      Auto page images:{' '}
+                      <span className="font-semibold text-gray-900">
+                        {automation.pageImageGenerationAvailable ? 'Available' : 'Manual / blocked'}
+                      </span>
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Page images</p>
+                  <p className="mt-2 text-2xl font-bold text-gray-900">{pageCoverage}%</p>
+                  <p className="mt-1 text-xs text-gray-600">
+                    {readiness.pagesWithImage}/{epaper.pageCount} pages ready
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Hotspot coverage</p>
+                  <p className="mt-2 text-2xl font-bold text-gray-900">{hotspotCoverage}%</p>
+                  <p className="mt-1 text-xs text-gray-600">
+                    {readiness.pagesWithHotspots}/{epaper.pageCount} pages mapped
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Readable text</p>
+                  <p className="mt-2 text-2xl font-bold text-gray-900">{textCoverage}%</p>
+                  <p className="mt-1 text-xs text-gray-600">
+                    {readiness.articlesWithReadableText}/{readiness.mappedArticles} stories readable
+                  </p>
+                </div>
+              </div>
+
+              {readiness.blockers.length > 0 ? (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Blockers</p>
+                  <ul className="mt-2 space-y-1 text-sm text-red-700">
+                    {readiness.blockers.map((item) => (
+                      <li key={item}>- {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {readiness.warnings.length > 0 ? (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Review notes</p>
+                  <ul className="mt-2 space-y-1 text-sm text-amber-700">
+                    {readiness.warnings.map((item) => (
+                      <li key={item}>- {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {automation?.pageImageGenerationReason ? (
+                <p className="mt-3 text-xs text-gray-600">{automation.pageImageGenerationReason}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             <label>
@@ -341,9 +460,12 @@ export default function AdminEPaperDetailPage() {
             <button
               type="button"
               onClick={() => void generatePageImages()}
-              disabled={generatingPages}
+              disabled={generatingPages || automation?.pageImageGenerationAvailable === false}
               className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
-              title="Requires EPAPER_ENABLE_PAGE_IMAGE_GENERATION=1 and server converter binary"
+              title={
+                automation?.pageImageGenerationReason ||
+                'Requires EPAPER_ENABLE_PAGE_IMAGE_GENERATION=1 and server converter binary'
+              }
             >
               {generatingPages ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

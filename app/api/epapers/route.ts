@@ -4,10 +4,13 @@ import EPaper from '@/lib/models/EPaper';
 import {
   getCityNameFromSlug,
   getCitySlugFromName,
-  isEPaperCitySlug,
 } from '@/lib/constants/epaperCities';
-import { parsePublishDate } from '@/lib/utils/epaperStorage';
-import { listStoredEPapers } from '@/lib/storage/epapersFile';
+import { listAllStoredEPapers } from '@/lib/storage/epapersFile';
+import {
+  buildPublicEpaperMongoQuery,
+  matchesPublicEpaperMetadata,
+  parsePublicEpaperFilters,
+} from '@/lib/utils/publicEpaperFilters';
 
 type EpaperPage = {
   pageNumber: number;
@@ -107,8 +110,6 @@ function mapStoredRecord(record: Record<string, unknown>) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const citySlug = (searchParams.get('citySlug') || '').trim().toLowerCase();
-    const date = (searchParams.get('date') || '').trim();
     const limit = parsePositiveInt(searchParams.get('limit'), 20, 100);
     const page = parsePositiveInt(searchParams.get('page'), 1, 500);
 
@@ -120,49 +121,63 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    let parsedDateFilter: Date | null = null;
-
-    if (citySlug) {
-      if (!isEPaperCitySlug(citySlug)) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid citySlug' },
-          { status: 400 }
-        );
-      }
+    const filterResult = parsePublicEpaperFilters(searchParams);
+    if ('error' in filterResult) {
+      return NextResponse.json(
+        { success: false, error: filterResult.error },
+        { status: 400 }
+      );
     }
+    const { filters } = filterResult;
 
-    if (date) {
-      const parsedDate = parsePublishDate(date);
-      if (!parsedDate) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid date. Use YYYY-MM-DD.' },
-          { status: 400 }
-        );
+    const cityName = filters.citySlug ? getCityNameFromSlug(filters.citySlug) : '';
+    const publishDate = filters.parsedDate
+      ? filters.parsedDate.toISOString().slice(0, 10)
+      : null;
+    const storedRows = await listAllStoredEPapers();
+    const filteredRows = storedRows.filter((row) => {
+      if (cityName && row.city !== cityName) return false;
+      if (publishDate && row.publishDate !== publishDate) return false;
+      if (!publishDate && filters.month && !String(row.publishDate || '').startsWith(`${filters.month}-`)) {
+        return false;
       }
-      parsedDateFilter = parsedDate;
-    }
-
-    const cityName = citySlug ? getCityNameFromSlug(citySlug) : '';
-    const publishDate = parsedDateFilter ? parsedDateFilter.toISOString().slice(0, 10) : null;
-    const fileResult = await listStoredEPapers({
-      city: cityName || null,
-      publishDate,
-      limit,
-      page,
+      if (
+        filters.query &&
+        !matchesPublicEpaperMetadata(
+          {
+            title: row.title,
+            cityName: row.city,
+            citySlug: getCitySlugFromName(row.city),
+            publishDate: row.publishDate,
+          },
+          filters.query
+        )
+      ) {
+        return false;
+      }
+      return true;
     });
+    filteredRows.sort((a, b) => {
+      const byPublishDate =
+        new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime();
+      if (byPublishDate !== 0) return byPublishDate;
+      return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+    });
+    const start = (page - 1) * limit;
+    const pagedRows = filteredRows.slice(start, start + limit);
 
     const createFileResponse = () =>
       NextResponse.json({
         success: true,
-        data: fileResult.data.map((row) => {
+        data: pagedRows.map((row) => {
           const safe = JSON.parse(JSON.stringify(row)) as Record<string, unknown>;
           return mapStoredRecord(safe);
         }),
         pagination: {
-          total: fileResult.total,
+          total: filteredRows.length,
           page,
           limit,
-          pages: Math.ceil(fileResult.total / limit),
+          pages: Math.ceil(filteredRows.length / limit),
         },
       });
 
@@ -170,18 +185,10 @@ export async function GET(req: NextRequest) {
       return createFileResponse();
     }
 
-    const query: Record<string, unknown> = { status: 'published' };
-    if (citySlug) {
-      query.citySlug = citySlug;
-    }
-    if (parsedDateFilter) {
-      const next = new Date(parsedDateFilter);
-      next.setUTCDate(next.getUTCDate() + 1);
-      query.publishDate = { $gte: parsedDateFilter, $lt: next };
-    }
+    const query = buildPublicEpaperMongoQuery(filters, { status: 'published' });
 
     const total = await EPaper.countDocuments(query);
-    if (total === 0 && fileResult.total > 0) {
+    if (total === 0 && filteredRows.length > 0) {
       return createFileResponse();
     }
 

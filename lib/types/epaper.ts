@@ -1,10 +1,44 @@
 export type EPaperStatus = 'draft' | 'published';
+export type EPaperReadinessStatus = 'ready' | 'needs-review' | 'not-ready';
 
 export interface EPaperPageData {
   pageNumber: number;
   imagePath?: string;
   width?: number;
   height?: number;
+}
+
+export interface EPaperReadiness {
+  status: EPaperReadinessStatus;
+  blockers: string[];
+  warnings: string[];
+  pageImageCoveragePercent: number;
+  hotspotCoveragePercent: number;
+  textCoveragePercent: number;
+  pagesWithImage: number;
+  pagesMissingImage: number;
+  pagesWithHotspots: number;
+  pagesMissingHotspots: number;
+  mappedArticles: number;
+  articlesWithReadableText: number;
+  articlesMissingReadableText: number;
+  missingImagePages: number[];
+  missingHotspotPages: number[];
+}
+
+export interface EPaperAutomationInfo {
+  sourceType:
+    | 'manual-upload'
+    | 'drive-import'
+    | 'remote-import'
+    | 'legacy'
+    | 'unknown';
+  sourceLabel?: string;
+  sourceUrl?: string;
+  sourceHost?: string;
+  pageImageGenerationEnabled: boolean;
+  pageImageGenerationAvailable: boolean;
+  pageImageGenerationReason?: string;
 }
 
 export interface EPaperRecord {
@@ -18,6 +52,14 @@ export interface EPaperRecord {
   pageCount: number;
   pages: EPaperPageData[];
   status: EPaperStatus;
+  articleCount?: number;
+  pagesWithImage?: number;
+  pagesMissingImage?: number;
+  readiness?: EPaperReadiness;
+  automation?: EPaperAutomationInfo;
+  sourceType?: EPaperAutomationInfo['sourceType'];
+  sourceLabel?: string;
+  sourceUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }
