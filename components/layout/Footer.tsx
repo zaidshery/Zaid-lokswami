@@ -149,24 +149,54 @@ function FooterSection({
   language: 'hi' | 'en';
   twoCols?: boolean;
 }) {
+  const listClassName = twoCols
+    ? 'grid grid-cols-1 gap-y-1.5 xl:grid-cols-2 xl:gap-x-5'
+    : 'space-y-1.5';
+
   return (
     <div>
-      <h4 className="mb-3 border-b border-zinc-200 pb-2 text-[1.28rem] font-semibold leading-tight tracking-tight text-zinc-900 dark:border-zinc-800 dark:text-zinc-50">
-        {title}
-      </h4>
-      <ul className={twoCols ? 'grid grid-cols-1 gap-y-1.5 xl:grid-cols-2 xl:gap-x-5' : 'space-y-1.5'}>
-        {items.map((item) => (
-          <li key={item.href}>
-            <Link
-              href={item.href}
-              className="inline-flex items-center gap-2 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400 md:text-[15px]"
-            >
-              <ChevronRight className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
-              {language === 'hi' ? item.hi : item.en}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <details className="group rounded-2xl border border-zinc-200/80 px-3 py-0 dark:border-zinc-800 md:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3">
+          <span className="text-[1.08rem] font-semibold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50">
+            {title}
+          </span>
+          <ChevronRight className="h-4 w-4 text-zinc-500 transition group-open:rotate-90 dark:text-zinc-400" />
+        </summary>
+        <div className="border-t border-zinc-200 py-3 dark:border-zinc-800">
+          <ul className="space-y-1.5">
+            {items.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className="inline-flex items-center gap-2 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
+                >
+                  <ChevronRight className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                  {language === 'hi' ? item.hi : item.en}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
+
+      <div className="hidden md:block">
+        <h4 className="mb-3 border-b border-zinc-200 pb-2 text-[1.28rem] font-semibold leading-tight tracking-tight text-zinc-900 dark:border-zinc-800 dark:text-zinc-50">
+          {title}
+        </h4>
+        <ul className={listClassName}>
+          {items.map((item) => (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                className="inline-flex items-center gap-2 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400 md:text-[15px]"
+              >
+                <ChevronRight className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                {language === 'hi' ? item.hi : item.en}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -266,50 +296,106 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="mb-3 border-b border-zinc-200 pb-2 text-[1.28rem] font-semibold leading-tight tracking-tight text-zinc-900 dark:border-zinc-800 dark:text-zinc-50">
-              {language === 'hi' ? '\u0938\u0902\u092a\u0930\u094d\u0915 \u0915\u0930\u0947\u0902' : 'Contact Us'}
-            </h4>
-
-            <ul className="space-y-2.5 text-zinc-600 dark:text-zinc-400">
-              <li className="flex items-start gap-3">
-                <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                <span className="max-w-[26rem] text-[13px] leading-6 md:text-[14px]">
-                  {COMPANY_INFO.address.street}, {COMPANY_INFO.address.road}, {COMPANY_INFO.address.city}, {COMPANY_INFO.address.state}
+            <details className="group rounded-2xl border border-zinc-200/80 px-3 py-0 dark:border-zinc-800 md:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3">
+                <span className="text-[1.08rem] font-semibold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50">
+                  {language === 'hi' ? '\u0938\u0902\u092a\u0930\u094d\u0915 \u0915\u0930\u0947\u0902' : 'Contact Us'}
                 </span>
-              </li>
+                <ChevronRight className="h-4 w-4 text-zinc-500 transition group-open:rotate-90 dark:text-zinc-400" />
+              </summary>
 
-              <li className="flex items-center gap-3">
-                <Phone className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                <a href={`tel:${COMPANY_INFO.contact.phone}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[15px]">
-                  {COMPANY_INFO.contact.phone}
-                </a>
-              </li>
+              <div className="border-t border-zinc-200 py-3 dark:border-zinc-800">
+                <ul className="space-y-2.5 text-zinc-600 dark:text-zinc-400">
+                  <li className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
+                    <span className="max-w-[26rem] text-[13px] leading-6">
+                      {COMPANY_INFO.address.street}, {COMPANY_INFO.address.road}, {COMPANY_INFO.address.city}, {COMPANY_INFO.address.state}
+                    </span>
+                  </li>
 
-              <li className="flex items-center gap-3">
-                <Mail className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                <a href={`mailto:${COMPANY_INFO.contact.email}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[15px]">
-                  {COMPANY_INFO.contact.email}
-                </a>
-              </li>
-            </ul>
+                  <li className="flex items-center gap-3">
+                    <Phone className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
+                    <a href={`tel:${COMPANY_INFO.contact.phone}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400">
+                      {COMPANY_INFO.contact.phone}
+                    </a>
+                  </li>
 
-            <div className="mt-5">
-              <p className="mb-2 text-[14px] text-zinc-700 dark:text-zinc-300 md:text-[15px]">
-                {language === 'hi' ? '\u090f\u092a \u0921\u093e\u0909\u0928\u0932\u094b\u0921 \u0915\u0930\u0947\u0902' : 'Download App'}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 md:text-[15px]"
-                >
-                  Android
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 md:text-[15px]"
-                >
-                  iOS
-                </button>
+                  <li className="flex items-center gap-3">
+                    <Mail className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
+                    <a href={`mailto:${COMPANY_INFO.contact.email}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400">
+                      {COMPANY_INFO.contact.email}
+                    </a>
+                  </li>
+                </ul>
+
+                <div className="mt-5">
+                  <p className="mb-2 text-[14px] text-zinc-700 dark:text-zinc-300">
+                    {language === 'hi' ? '\u090f\u092a \u0921\u093e\u0909\u0928\u0932\u094b\u0921 \u0915\u0930\u0947\u0902' : 'Download App'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                    >
+                      Android
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                    >
+                      iOS
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <div className="hidden md:block">
+              <h4 className="mb-3 border-b border-zinc-200 pb-2 text-[1.28rem] font-semibold leading-tight tracking-tight text-zinc-900 dark:border-zinc-800 dark:text-zinc-50">
+                {language === 'hi' ? '\u0938\u0902\u092a\u0930\u094d\u0915 \u0915\u0930\u0947\u0902' : 'Contact Us'}
+              </h4>
+
+              <ul className="space-y-2.5 text-zinc-600 dark:text-zinc-400">
+                <li className="flex items-start gap-3">
+                  <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
+                  <span className="max-w-[26rem] text-[13px] leading-6 md:text-[14px]">
+                    {COMPANY_INFO.address.street}, {COMPANY_INFO.address.road}, {COMPANY_INFO.address.city}, {COMPANY_INFO.address.state}
+                  </span>
+                </li>
+
+                <li className="flex items-center gap-3">
+                  <Phone className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
+                  <a href={`tel:${COMPANY_INFO.contact.phone}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[15px]">
+                    {COMPANY_INFO.contact.phone}
+                  </a>
+                </li>
+
+                <li className="flex items-center gap-3">
+                  <Mail className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
+                  <a href={`mailto:${COMPANY_INFO.contact.email}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[15px]">
+                    {COMPANY_INFO.contact.email}
+                  </a>
+                </li>
+              </ul>
+
+              <div className="mt-5">
+                <p className="mb-2 text-[14px] text-zinc-700 dark:text-zinc-300 md:text-[15px]">
+                  {language === 'hi' ? '\u090f\u092a \u0921\u093e\u0909\u0928\u0932\u094b\u0921 \u0915\u0930\u0947\u0902' : 'Download App'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 md:text-[15px]"
+                  >
+                    Android
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 md:text-[15px]"
+                  >
+                    iOS
+                  </button>
+                </div>
               </div>
             </div>
           </div>

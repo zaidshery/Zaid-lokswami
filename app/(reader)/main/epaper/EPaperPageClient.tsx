@@ -164,6 +164,8 @@ const COPY = {
     editionContents: 'Edition contents',
     pagesTab: 'Pages',
     contentsTab: 'Contents',
+    moreActions: 'More',
+    readerTools: 'Reader tools',
     spreadView: 'Spread view',
     singleView: 'Single page',
     openPage: 'Open page',
@@ -273,6 +275,8 @@ const COPY = {
     editionContents: '\u0908-\u092a\u0947\u092a\u0930 \u0938\u093e\u092e\u0917\u094d\u0930\u0940',
     pagesTab: '\u092a\u0947\u091c',
     contentsTab: '\u0938\u093e\u092e\u0917\u094d\u0930\u0940',
+    moreActions: '\u0914\u0930 \u0935\u093f\u0915\u0932\u094d\u092a',
+    readerTools: '\u0930\u0940\u0921\u0930 \u091f\u0942\u0932\u094d\u0938',
     spreadView: '\u0938\u094d\u092a\u094d\u0930\u0947\u0921 \u0935\u094d\u092f\u0942',
     singleView: '\u090f\u0915 \u092a\u0947\u091c',
     openPage: '\u092a\u0947\u091c \u0916\u094b\u0932\u0947\u0902',
@@ -770,6 +774,7 @@ export default function EPaperPageClient({
   initialSearchQuery,
 }: EPaperPageClientProps) {
   const language = useAppStore((state) => state.language);
+  const setEpaperReaderOpen = useAppStore((state) => state.setEpaperReaderOpen);
   const prefersReducedMotion = useReducedMotion();
   const t = COPY[language];
   const [selectedCity, setSelectedCity] = useState<EPaperCityFilter>(initialCity);
@@ -961,6 +966,16 @@ export default function EPaperPageClient({
     mediaQuery.addListener(updatePointerMode);
     return () => mediaQuery.removeListener(updatePointerMode);
   }, []);
+
+  useEffect(() => {
+    setEpaperReaderOpen(Boolean(activePaper));
+  }, [activePaper, setEpaperReaderOpen]);
+
+  useEffect(() => {
+    return () => {
+      setEpaperReaderOpen(false);
+    };
+  }, [setEpaperReaderOpen]);
 
   useEffect(() => {
     if (!hasInitializedListEffect) {
@@ -2257,9 +2272,14 @@ export default function EPaperPageClient({
   const readerPageLabel = shouldShowSpreadMode && spreadCompanionPage
     ? `${activePage}-${spreadCompanionPage.pageNumber} / ${maxReaderPage}`
     : `${activePage} / ${maxReaderPage}`;
-  const previewMaxHeight = shouldShowSpreadMode
-    ? `calc((100dvh - 290px) * ${previewZoom})`
-    : `calc((100dvh - 250px) * ${previewZoom})`;
+  const previewHeightOffset = isCoarsePointer
+    ? shouldShowSpreadMode
+      ? 228
+      : 196
+    : shouldShowSpreadMode
+      ? 290
+      : 250;
+  const previewMaxHeight = `calc((100dvh - ${previewHeightOffset}px) * ${previewZoom})`;
 
   return (
     <div className="relative pb-2 md:pb-4">
@@ -2604,10 +2624,188 @@ export default function EPaperPageClient({
       </section>
 
       {activePaper ? (
-        <div className="fixed inset-0 z-[95] bg-black/75 p-0 backdrop-blur-[1.5px] sm:p-4">
+        <div className="fixed inset-0 z-[95] bg-black/88 p-0 backdrop-blur-sm sm:bg-black/75 sm:p-4">
           <div className="mx-auto flex h-full w-full max-w-[1180px] flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:h-[calc(100dvh-2rem)] sm:rounded-2xl">
             <div className="border-b border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:px-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="sm:hidden">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-zinc-100">
+                      {activePaper.title}
+                    </p>
+                    <p className="truncate text-xs text-gray-600 dark:text-zinc-400">
+                      {activePaper.cityName} | {formatUiDate(activePaper.publishDate, activePaper.publishDate)}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePaper(null);
+                      setActiveArticle(null);
+                    }}
+                    aria-label={t.close}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-3 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => goToRelativePage(-1)}
+                    aria-label={t.previous}
+                    disabled={!canGoPreviousPage}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+
+                  <span className="inline-flex h-9 shrink-0 items-center rounded-xl border border-gray-200 px-2.5 text-center text-xs font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-300">
+                    {readerPageLabel}
+                  </span>
+
+                  <label className="flex h-9 min-w-0 flex-1 items-center rounded-xl border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
+                    <select
+                      value={activePage}
+                      onChange={(event) => {
+                        const nextPage = Number.parseInt(event.target.value, 10);
+                        if (Number.isFinite(nextPage)) {
+                          navigateToPage(nextPage);
+                        }
+                      }}
+                      aria-label={t.quickJump}
+                      className="w-full bg-transparent text-xs outline-none"
+                    >
+                      {pageSummaries.map((page) => (
+                        <option key={`jump-mobile-${page.pageNumber}`} value={page.pageNumber}>
+                          {t.page} {page.pageNumber}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => goToRelativePage(1)}
+                    aria-label={t.next}
+                    disabled={!canGoNextPage}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handlePdfDownload}
+                    disabled={!pdfUrlForOpen}
+                    className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void shareActivePaperOnWhatsApp();
+                    }}
+                    aria-label={t.shareWhatsApp}
+                    className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    <span>{t.shareWhatsApp}</span>
+                  </button>
+
+                  <details className="relative">
+                    <summary className="flex h-9 cursor-pointer list-none items-center justify-center rounded-xl border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 [&::-webkit-details-marker]:hidden">
+                      {t.moreActions}
+                    </summary>
+
+                    <div className="absolute right-0 top-[calc(100%+0.45rem)] z-30 w-56 rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
+                      <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                        {t.readerTools}
+                      </p>
+
+                      <div className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={handleIssueSaveToggle}
+                          disabled={!activePaperLibraryInput || isSavingIssue}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            isActivePaperSaved
+                              ? 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400'
+                              : 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40'
+                          }`}
+                        >
+                          <span>{isActivePaperSaved ? t.savedIssue : t.saveIssue}</span>
+                          {isSavingIssue ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Bookmark className={`h-3.5 w-3.5 ${isActivePaperSaved ? 'fill-current' : ''}`} />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={openPdfInNewTab}
+                          disabled={!pdfUrlForOpen}
+                          className="flex w-full items-center justify-between rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-left text-xs font-semibold text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
+                        >
+                          <span>{t.openPdf}</span>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleOfflinePaperSave();
+                          }}
+                          disabled={!activePaperLibraryInput || isPreparingOfflinePaper || isActivePaperOfflineReady}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            isActivePaperOfflineReady
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                              : 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/30'
+                          }`}
+                        >
+                          <span>
+                            {isPreparingOfflinePaper
+                              ? t.offlineSaving
+                              : isActivePaperOfflineReady
+                                ? t.offlineReady
+                                : t.keepOffline}
+                          </span>
+                          {isPreparingOfflinePaper ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+
+                        {canUseSpreadMode ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReaderDisplayMode((current) =>
+                                current === 'spread' ? 'single' : 'spread'
+                              )
+                            }
+                            className="flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-3 py-2 text-left text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          >
+                            <span>{shouldShowSpreadMode ? t.singleView : t.spreadView}</span>
+                            <Newspaper className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </div>
+
+              <div className="hidden flex-col gap-2 sm:flex sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-gray-900 dark:text-zinc-100">{activePaper.title}</p>
                   <p className="truncate text-xs text-gray-600 dark:text-zinc-400">
@@ -3079,42 +3277,66 @@ export default function EPaperPageClient({
                   </div>
                 )}
 
-                <div className="mt-3 rounded-lg border border-gray-200 bg-white/90 p-3 dark:border-zinc-800 dark:bg-zinc-900/75 lg:hidden">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                      {t.storiesOnPage}
-                    </p>
-                    <p className="text-xs font-medium text-gray-700 dark:text-zinc-300">{readerPageLabel}</p>
-                  </div>
-
-                  {pageArticles.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-600 dark:border-zinc-700 dark:text-zinc-400">
-                      {t.noStories}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {pageArticles.map((article, index) => (
-                        <button
-                          key={`${article._id}-mobile`}
-                          type="button"
-                          onClick={() => setActiveArticle(article)}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
-                        >
-                          <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
-                            {t.story} {index + 1}
-                          </span>
-                          <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-zinc-100">
-                            {article.title || `${t.story} ${index + 1}`}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <details className="mt-3 rounded-lg border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
-                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-semibold text-gray-900 dark:text-zinc-100">
-                      {t.editionContents}
+                <div className="mt-3 space-y-3 lg:hidden">
+                  <details className="rounded-xl border border-gray-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/75">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          {t.storiesOnPage}
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-gray-700 dark:text-zinc-300">
+                          {readerPageLabel}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center rounded-full border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-200">
+                        {pageArticles.length} {t.stories}
+                      </span>
                     </summary>
+
+                    <div className="border-t border-gray-200 px-3 py-3 dark:border-zinc-800">
+                      {pageArticles.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-600 dark:border-zinc-700 dark:text-zinc-400">
+                          {t.noStories}
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {pageArticles.map((article, index) => (
+                            <button
+                              key={`${article._id}-mobile`}
+                              type="button"
+                              onClick={() => setActiveArticle(article)}
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
+                            >
+                              <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
+                                {t.story} {index + 1}
+                              </span>
+                              <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-zinc-100">
+                                {article.title || `${t.story} ${index + 1}`}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+
+                  <details className="rounded-xl border border-gray-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/75">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          {t.editionContents}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          {editionArticlesByPage.length === 0
+                            ? t.noStoriesEdition
+                            : `${editionArticlesByPage.length} ${t.pages}`}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center rounded-full border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-200">
+                        {editionArticlesByPage.length}
+                      </span>
+                    </summary>
+
                     <div className="border-t border-gray-200 px-3 py-3 dark:border-zinc-800">
                       {editionArticlesByPage.length === 0 ? (
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">{t.noStoriesEdition}</p>

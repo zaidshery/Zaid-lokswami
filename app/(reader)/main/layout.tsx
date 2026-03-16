@@ -39,9 +39,12 @@ export default function MainLayout({
     isMobileMenuOpen,
     setMobileMenuOpen,
     isImmersiveVideoMode,
+    isEpaperReaderOpen,
   } = useAppStore();
   const isVideosRoute = pathname?.startsWith('/main/videos') ?? false;
-  const showBottomNav = !isImmersiveVideoMode || isVideosRoute;
+  const isEpaperRoute = pathname?.startsWith('/main/epaper') ?? false;
+  const isReaderImmersiveMode = isEpaperRoute && isEpaperReaderOpen;
+  const showBottomNav = (!isImmersiveVideoMode || isVideosRoute) && !isReaderImmersiveMode;
 
 
   useEffect(() => {
@@ -59,10 +62,10 @@ export default function MainLayout({
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 overflow-x-hidden transition-colors duration-500">
       {/* Breaking News Bar (Top) */}
-      {!isImmersiveVideoMode ? <BreakingNews /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <BreakingNews /> : null}
 
       {/* Header (below breaking bar) */}
-      {!isImmersiveVideoMode ? <Header /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <Header /> : null}
 
       {/* Mobile Menu Drawer */}
       <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
@@ -75,15 +78,19 @@ export default function MainLayout({
           className={
             isImmersiveVideoMode
               ? 'pb-0 pt-0'
-              : 'pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)] pt-[7.25rem] sm:pt-[8rem] md:pt-[8.75rem] xl:pb-4'
+              : isReaderImmersiveMode
+                ? 'pb-0 pt-0'
+                : 'pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)] pt-[7.25rem] sm:pt-[8rem] md:pt-[8.75rem] xl:pb-4'
           }
         >
-          {!isImmersiveVideoMode ? <SigninRoleBanner /> : null}
+          {!isImmersiveVideoMode && !isReaderImmersiveMode ? <SigninRoleBanner /> : null}
           <Container
             className={
               isImmersiveVideoMode
                 ? 'py-0 !max-w-none !px-0'
-                : 'py-4 md:py-5 !px-3 sm:!px-5 lg:!px-6'
+                : isReaderImmersiveMode
+                  ? 'py-0 !max-w-none !px-0'
+                  : 'py-4 md:py-5 !px-3 sm:!px-5 lg:!px-6'
             }
           >
             {children}
@@ -92,15 +99,15 @@ export default function MainLayout({
       </MobileSwipeTabs>
 
       {/* Footer */}
-      {!isImmersiveVideoMode ? (
+      {!isImmersiveVideoMode && !isReaderImmersiveMode ? (
         <div className="block">
           <Footer />
         </div>
       ) : null}
 
-      {!isImmersiveVideoMode ? <DailyEpaperAlert /> : null}
-      {!isImmersiveVideoMode ? <PopupOrchestrator /> : null}
-      {!isImmersiveVideoMode ? <AiChatLauncher /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <DailyEpaperAlert /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <PopupOrchestrator /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <AiChatLauncher /> : null}
 
       {/* Bottom Navigation - Mobile + Tablet (below 1280px) */}
       {showBottomNav ? (

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Send, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { usePathname } from 'next/navigation';
 import AiChatBrandMark from './AiChatBrandMark';
 import AiChatSheet from './AiChatSheet';
 import { useAiChat } from './useAiChat';
@@ -27,6 +28,7 @@ function ChatPortal({ children }: ChatPortalProps) {
 }
 
 export default function AiChatLauncher() {
+  const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [previewDismissed, setPreviewDismissed] = useState(false);
   const chat = useAiChat({ isOpen: sheetOpen });
@@ -35,6 +37,8 @@ export default function AiChatLauncher() {
   const isLight = theme === 'light';
   const isHindi = language === 'hi';
   const previewBlocked = Boolean(popupState.activeSurface);
+  const isEpaperRoute = pathname?.startsWith('/main/epaper') ?? false;
+  const shouldShowPreview = !sheetOpen && !previewDismissed && !previewBlocked && !isEpaperRoute;
 
   const content = useMemo(
     () => ({
@@ -85,7 +89,7 @@ export default function AiChatLauncher() {
   return (
     <ChatPortal>
       <AnimatePresence>
-        {!sheetOpen && !previewDismissed && !previewBlocked ? (
+        {shouldShowPreview ? (
           <motion.div
             initial={{ opacity: 0, y: 14, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

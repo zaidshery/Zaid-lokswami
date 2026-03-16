@@ -74,6 +74,10 @@ interface AppState {
   isImmersiveVideoMode: boolean;
   setImmersiveVideoMode: (value: boolean) => void;
 
+  // E-paper reader mode
+  isEpaperReaderOpen: boolean;
+  setEpaperReaderOpen: (value: boolean) => void;
+
   // Reader auth
   currentUser: AppUser | null;
   isAuthenticated: boolean;
@@ -139,6 +143,15 @@ export const useAppStore = create<AppState>()(
           state.isImmersiveVideoMode === isImmersiveVideoMode
             ? state
             : { isImmersiveVideoMode }
+        ),
+
+      // E-paper reader mode
+      isEpaperReaderOpen: false,
+      setEpaperReaderOpen: (isEpaperReaderOpen) =>
+        set((state) =>
+          state.isEpaperReaderOpen === isEpaperReaderOpen
+            ? state
+            : { isEpaperReaderOpen }
         ),
 
       // Reader auth
