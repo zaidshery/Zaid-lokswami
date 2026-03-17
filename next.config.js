@@ -22,6 +22,7 @@ const allowedImageHosts = Array.from(new Set([...defaultImageHosts, ...extraImag
 
 const nextConfig = {
   distDir: isDevelopment ? '.next-dev' : '.next',
+  output: 'standalone',
   // Hide Next.js dev indicator (the floating "N" badge) in local dev.
   devIndicators: false,
   images: {

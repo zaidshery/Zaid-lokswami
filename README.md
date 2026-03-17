@@ -175,11 +175,13 @@ Readiness currently checks:
 ## Deployment
 
 - Set `NEXTAUTH_URL` to the production origin
+- Set `NEXT_PUBLIC_SITE_URL` to the same production origin
 - Add `https://<your-domain>/api/auth/callback/google` to the Google OAuth client
 - Keep `NEXTAUTH_SECRET` at 32+ characters
 - Use a persistent MongoDB instance
 - Configure Cloudinary if production uploads are enabled
 - `public/uploads/*` and `data/articles.json` are gitignored local/generated data
+- For Hostinger Node deployment, see `HOSTINGER_DEPLOY.md`
 
 ## Scripts
 

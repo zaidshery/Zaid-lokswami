@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getAdminDashboardData } from '@/lib/admin/dashboard';
+import { MAX_ADMIN_ARTICLES } from '@/lib/constants/adminContentLimits';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
 
@@ -19,6 +20,7 @@ type ActionCard = {
   href: string;
   icon: LucideIcon;
   tone: string;
+  isVisible?: (stats: { totalArticles: number }) => boolean;
 };
 
 function formatDate(value: string) {
@@ -39,6 +41,7 @@ const quickActions: ActionCard[] = [
     href: '/admin/articles/new',
     icon: FileText,
     tone: 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20',
+    isVisible: (stats) => stats.totalArticles < MAX_ADMIN_ARTICLES,
   },
   {
     label: 'Create Story',
@@ -72,6 +75,9 @@ const quickActions: ActionCard[] = [
 
 export default async function AdminDashboardPage() {
   const dashboard = await getAdminDashboardData();
+  const visibleQuickActions = quickActions.filter(
+    (action) => action.isVisible?.({ totalArticles: dashboard.stats.totalArticles }) ?? true
+  );
 
   const stats = [
     {
@@ -107,7 +113,7 @@ export default async function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {quickActions.map((action) => {
+        {visibleQuickActions.map((action) => {
           const Icon = action.icon;
           return (
             <Link key={action.href} href={action.href}>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, Eye, Search } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import { MAX_ADMIN_EPAPERS } from '@/lib/constants/adminContentLimits';
 import { EPAPER_CITY_OPTIONS } from '@/lib/constants/epaperCities';
 import type { EPaperRecord } from '@/lib/types/epaper';
 import { formatUiDate } from '@/lib/utils/dateFormat';
@@ -28,6 +29,7 @@ export default function AdminEPaperListPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [deleteId, setDeleteId] = useState('');
+  const canCreateEpaper = epapers.length < MAX_ADMIN_EPAPERS;
 
   const fetchEpapers = async () => {
     setLoading(true);
@@ -101,13 +103,15 @@ export default function AdminEPaperListPage() {
           <p className="text-sm text-gray-600">Manage uploads, page images, and hotspot articles.</p>
         </div>
 
-        <Link
-          href="/admin/epapers/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" />
-          New Upload
-        </Link>
+        {canCreateEpaper ? (
+          <Link
+            href="/admin/epapers/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
+          >
+            <Plus className="h-4 w-4" />
+            New Upload
+          </Link>
+        ) : null}
       </div>
 
       <div className="mb-5 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-white p-4 md:grid-cols-4">
