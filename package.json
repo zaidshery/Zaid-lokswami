@@ -15,6 +15,7 @@
     "lint:strict": "eslint app/api/admin lib/auth lib/db lib/models lib/storage --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test:auth-guards": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" scripts/test-auth-guards.ts",
+    "test:admin-credentials": "ts-node --files --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" scripts/test-admin-credentials.ts",
     "seed": "node scripts/seed.js",
     "hash-password": "ts-node --files scripts/hash-password.ts",
     "migrate:epapers": "ts-node scripts/migrate-epapers-to-v2.ts"

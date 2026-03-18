@@ -86,7 +86,6 @@ export default function HomePage() {
   );
   const heroArticles = feedArticles.slice(0, 5);
   const trendingArticles = feedArticles.filter((article) => article.isTrending);
-  const spotlightDesktop = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 4);
   const spotlightTablet = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 3);
   const latestNews = feedArticles.slice(5);
   const visibleLatestNews = latestNews.slice(0, visibleLatestNewsCount);

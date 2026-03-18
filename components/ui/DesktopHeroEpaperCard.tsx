@@ -58,6 +58,9 @@ export default function DesktopHeroEpaperCard({
             <h3 className="mt-2 max-w-full truncate whitespace-nowrap text-[1rem] font-extrabold leading-tight tracking-tight text-white">
               {title}
             </h3>
+            <p className="mt-1 truncate text-sm font-semibold text-zinc-200">
+              {editionLabel}
+            </p>
             {supportLabel ? (
               <p className="mt-2.5 max-w-[28ch] text-[11px] leading-[1.45] text-zinc-400">
                 {supportLabel}
