@@ -54,6 +54,14 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/test-db',
+        destination: '/api/health',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

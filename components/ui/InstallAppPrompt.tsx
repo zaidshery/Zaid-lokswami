@@ -110,6 +110,31 @@ function isEligiblePath(pathname: string | null) {
   );
 }
 
+async function clearLokswamiCaches() {
+  if (typeof window === 'undefined' || !('caches' in window)) {
+    return;
+  }
+
+  const cacheKeys = await window.caches.keys();
+  await Promise.all(
+    cacheKeys
+      .filter((key) => key.startsWith('lokswami-'))
+      .map((key) => window.caches.delete(key))
+  );
+}
+
+async function cleanupDevelopmentPwaState() {
+  if (!canRegisterServiceWorker()) {
+    return;
+  }
+
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations.map((registration) => registration.unregister())
+  );
+  await clearLokswamiCaches();
+}
+
 export default function InstallAppPrompt() {
   const pathname = usePathname();
   const { language } = useAppStore();
@@ -271,6 +296,12 @@ export default function InstallAppPrompt() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || !canRegisterServiceWorker()) {
+      return;
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      // Avoid stale localhost PWA state masking current dev code and routes.
+      void cleanupDevelopmentPwaState().catch(() => undefined);
       return;
     }
 
