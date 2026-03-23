@@ -65,6 +65,7 @@ Also supported:
 - `ADMIN_USERNAME` instead of `ADMIN_LOGIN_ID`
 - `JWT_SECRET` or `AUTH_SECRET`
 - `ADMIN_EMAILS`, `ADMIN_GOOGLE_LOGIN_ENABLED`
+- `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GTM_ID`
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
 - `BHASHINI_*`
@@ -176,6 +177,7 @@ Readiness currently checks:
 
 - Set `NEXTAUTH_URL` to the production origin
 - Set `NEXT_PUBLIC_SITE_URL` to the same production origin
+- Set `NEXT_PUBLIC_GTM_ID` to your Google Tag Manager container ID if you want GTM live in production
 - Add `https://<your-domain>/api/auth/callback/google` to the Google OAuth client
 - Keep `NEXTAUTH_SECRET` at 32+ characters
 - Use a persistent MongoDB instance

@@ -51,10 +51,15 @@ const SIGNIN_ROUTE = '/signin';
 const MAIN_ROUTE = '/main';
 const POST_AUTH_MARKER = '1';
 const POST_AUTH_QUERY_PARAM = 'postAuth';
+
+function normalizeOrigin(value: string | undefined) {
+  return (value || '').trim().replace(/\/+$/, '');
+}
+
 const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim() || '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || '';
 const nextAuthSecret = getJwtSecretOrNull() || '';
-const nextAuthUrl = process.env.NEXTAUTH_URL?.trim() || '';
+const nextAuthUrl = normalizeOrigin(process.env.NEXTAUTH_URL);
 const adminGoogleLoginEnabled =
   process.env.ADMIN_GOOGLE_LOGIN_ENABLED?.trim().toLowerCase() === 'true';
 const bootstrapAdminEmails = new Set(

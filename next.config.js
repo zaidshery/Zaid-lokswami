@@ -23,6 +23,9 @@ const allowedImageHosts = Array.from(new Set([...defaultImageHosts, ...extraImag
 const nextConfig = {
   distDir: isDevelopment ? '.next-dev' : '.next',
   output: 'standalone',
+  // Hostinger currently normalizes some routes to a trailing slash at the edge.
+  // Disable Next.js slash redirects so paths like /admin/ do not bounce back to /admin.
+  skipTrailingSlashRedirect: true,
   // Hide Next.js dev indicator (the floating "N" badge) in local dev.
   devIndicators: false,
   images: {

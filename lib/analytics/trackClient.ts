@@ -2,6 +2,12 @@
 
 const ANALYTICS_SESSION_KEY = 'lokswami_analytics_session_id';
 
+declare global {
+  interface Window {
+    dataLayer?: Array<Record<string, unknown>>;
+  }
+}
+
 function createSessionId() {
   const random = Math.random().toString(36).slice(2, 12);
   return `sess_${Date.now().toString(36)}${random}`;
@@ -19,6 +25,29 @@ function getSessionId() {
     return generated;
   } catch {
     return createSessionId();
+  }
+}
+
+function trackGoogleTagManagerEvent(payload: {
+  event: string;
+  page: string;
+  source: string;
+  sessionId: string;
+  metadata: Record<string, unknown>;
+}) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: payload.event,
+      lokswami_page: payload.page,
+      lokswami_source: payload.source,
+      lokswami_session_id: payload.sessionId,
+      lokswami_metadata: payload.metadata,
+    });
+  } catch {
+    // no-op
   }
 }
 
@@ -42,6 +71,8 @@ export function trackClientEvent(input: TrackClientEventInput) {
     sessionId: getSessionId(),
     metadata: input.metadata || {},
   };
+
+  trackGoogleTagManagerEvent(payload);
 
   const raw = JSON.stringify(payload);
 

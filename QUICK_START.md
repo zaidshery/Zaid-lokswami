@@ -33,6 +33,7 @@ Notes:
 - `ADMIN_USERNAME` is also supported if you prefer that name over `ADMIN_LOGIN_ID`.
 - Generate a bcrypt hash with `npm run hash-password`.
 - Google OAuth is optional for local development. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` only if you want Google sign-in.
+- Google Tag Manager is optional. Set `NEXT_PUBLIC_GTM_ID=GTM-XXXXXXX` to install the GTM container on every page.
 
 ## Current Auth Model
 

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import AuthSync from '@/components/providers/AuthSync';
@@ -36,6 +37,7 @@ const THEME_INIT_SCRIPT = `
   }
 })();
 `;
+const googleTagManagerId = process.env.NEXT_PUBLIC_GTM_ID?.trim() || '';
 
 export const metadata: Metadata = {
   title: 'Lokswami - \u092d\u093e\u0930\u0924 \u0915\u093e \u0938\u092c\u0938\u0947 \u0935\u093f\u0936\u094d\u0935\u0938\u0928\u0940\u092f \u0938\u092e\u093e\u091a\u093e\u0930 \u092a\u094d\u0932\u0947\u091f\u092b\u0949\u0930\u094d\u092e',
@@ -82,10 +84,29 @@ export default function RootLayout({
       <head>
         <meta charSet="utf-8" />
         <script id="lokswami-theme-init" dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {googleTagManagerId ? (
+          <Script id="lokswami-google-tag-manager" strategy="beforeInteractive">
+            {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','${googleTagManagerId}');`}
+          </Script>
+        ) : null}
       </head>
       <body
         className="min-h-screen bg-white text-gray-900 antialiased transition-colors duration-300 dark:bg-gray-950 dark:text-gray-50"
       >
+        {googleTagManagerId ? (
+          <noscript>
+            <iframe
+              src={`https://www.googletagmanager.com/ns.html?id=${googleTagManagerId}`}
+              height="0"
+              width="0"
+              style={{ display: 'none', visibility: 'hidden' }}
+            />
+          </noscript>
+        ) : null}
         <AuthSessionProvider>
           <ThemeProvider>
             <AuthSync />
