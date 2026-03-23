@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { FileText, Edit, Trash2, Plus, Search, Loader } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
-import { MAX_ADMIN_ARTICLES } from '@/lib/constants/adminContentLimits';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 
@@ -31,7 +30,6 @@ export default function ArticlesManagement() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const canCreateArticle = articles.length < MAX_ADMIN_ARTICLES;
 
   useEffect(() => {
     fetchArticles();
@@ -99,18 +97,16 @@ export default function ArticlesManagement() {
           <h1 className="text-3xl font-bold text-gray-900">Articles</h1>
           <p className="text-gray-600 mt-1">Manage and edit your articles</p>
         </div>
-        {canCreateArticle ? (
-          <Link href="/admin/articles/new">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="flex items-center gap-2 px-6 py-3 bg-spanish-red text-white font-medium rounded-lg hover:bg-guardsman-red transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              New Article
-            </motion.button>
-          </Link>
-        ) : null}
+        <Link href="/admin/articles/new">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="flex items-center gap-2 px-6 py-3 bg-spanish-red text-white font-medium rounded-lg hover:bg-guardsman-red transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            New Article
+          </motion.button>
+        </Link>
       </div>
 
       {/* Filters */}

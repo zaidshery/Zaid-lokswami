@@ -4,13 +4,8 @@ import Article from '@/lib/models/Article';
 import { getAdminSession } from '@/lib/auth/admin';
 import {
   createStoredArticle,
-  listAllStoredArticles,
   listStoredArticles,
 } from '@/lib/storage/articlesFile';
-import {
-  ADMIN_ARTICLE_LIMIT_ERROR,
-  MAX_ADMIN_ARTICLES,
-} from '@/lib/constants/adminContentLimits';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 const FILE_STORE_UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
 
@@ -223,16 +218,6 @@ export async function POST(req: NextRequest) {
     }
 
     const useFileStore = await shouldUseFileStore();
-    const currentTotal = useFileStore
-      ? (await listAllStoredArticles()).length
-      : await Article.countDocuments({});
-
-    if (currentTotal >= MAX_ADMIN_ARTICLES) {
-      return NextResponse.json(
-        { success: false, error: ADMIN_ARTICLE_LIMIT_ERROR },
-        { status: 400 }
-      );
-    }
 
     if (useFileStore) {
       const stored = await createStoredArticle(input);

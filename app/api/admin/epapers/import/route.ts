@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import { getAdminSession } from '@/lib/auth/admin';
-import EPaper from '@/lib/models/EPaper';
-import {
-  ADMIN_EPAPER_LIMIT_ERROR,
-  MAX_ADMIN_EPAPERS,
-} from '@/lib/constants/adminContentLimits';
 import {
   createAdminEpaperFromRemoteImport,
   mapAdminEpaper,
@@ -34,14 +29,6 @@ export async function POST(req: NextRequest) {
     }
 
     await connectDB();
-
-    const existingTotal = await EPaper.countDocuments({});
-    if (existingTotal >= MAX_ADMIN_EPAPERS) {
-      return NextResponse.json(
-        { success: false, error: ADMIN_EPAPER_LIMIT_ERROR },
-        { status: 400 }
-      );
-    }
 
     const body = await req.json().catch(() => ({}));
     const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
