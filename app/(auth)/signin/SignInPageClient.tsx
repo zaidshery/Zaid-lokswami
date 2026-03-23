@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { AlertCircle, Loader2, LogOut, Moon, Sun } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Loader2, LogOut, Moon, Sun } from 'lucide-react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import Logo from '@/components/layout/Logo';
 import { armAdminSigninBanner } from '@/lib/auth/adminBanner';
+import { COMPANY_INFO } from '@/lib/constants/company';
 import { normalizeRedirectPath } from '@/lib/auth/redirect';
 import { isAdminRole } from '@/lib/auth/roles';
 import { useAppStore } from '@/lib/store/appStore';
@@ -189,8 +190,10 @@ function AuthFormContent({
   showAdminCredentialsLogin,
   adminLoginId,
   adminPassword,
+  isAdminPasswordVisible,
   onAdminLoginIdChange,
   onAdminPasswordChange,
+  onToggleAdminPasswordVisibility,
   onGoogleSignIn,
   onAdminCredentialsSignIn,
 }: {
@@ -201,11 +204,21 @@ function AuthFormContent({
   showAdminCredentialsLogin: boolean;
   adminLoginId: string;
   adminPassword: string;
+  isAdminPasswordVisible: boolean;
   onAdminLoginIdChange: (value: string) => void;
   onAdminPasswordChange: (value: string) => void;
+  onToggleAdminPasswordVisibility: () => void;
   onGoogleSignIn: () => Promise<void>;
   onAdminCredentialsSignIn: () => Promise<void>;
 }) {
+  const forgotPasswordHref = `mailto:${COMPANY_INFO.contact.email}?subject=${encodeURIComponent(
+    'Lokswami admin password help'
+  )}&body=${encodeURIComponent(
+    `Hello Lokswami team,\n\nI need help accessing the admin account.${
+      adminLoginId.trim() ? `\n\nAdmin ID or email: ${adminLoginId.trim()}` : ''
+    }\n\nPlease assist me with password reset or login support.\n`
+  )}`;
+
   return (
     <motion.div
       variants={formContainerVariants}
@@ -301,14 +314,29 @@ function AuthFormContent({
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 Password
               </span>
-              <input
-                type="password"
-                value={adminPassword}
-                onChange={(event) => onAdminPasswordChange(event.target.value)}
-                autoComplete="current-password"
-                className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-                placeholder="Enter password"
-              />
+              <div className="relative">
+                <input
+                  type={isAdminPasswordVisible ? 'text' : 'password'}
+                  value={adminPassword}
+                  onChange={(event) => onAdminPasswordChange(event.target.value)}
+                  autoComplete="current-password"
+                  className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 pr-12 text-sm text-zinc-900 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  placeholder="Enter password"
+                />
+                <button
+                  type="button"
+                  onClick={onToggleAdminPasswordVisibility}
+                  className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                  aria-label={isAdminPasswordVisible ? 'Hide password' : 'Show password'}
+                  aria-pressed={isAdminPasswordVisible}
+                >
+                  {isAdminPasswordVisible ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </label>
 
             <motion.button
@@ -324,6 +352,21 @@ function AuthFormContent({
               ) : null}
               <span>{isCredentialSigningIn ? 'Signing in...' : 'Sign in as Admin'}</span>
             </motion.button>
+
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <a
+                href={forgotPasswordHref}
+                className="font-medium text-red-600 transition hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+              >
+                Forgot password?
+              </a>
+              <Link
+                href="/main/contact"
+                className="text-zinc-500 underline transition hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                Contact support
+              </Link>
+            </div>
           </div>
         </motion.div>
       ) : null}
@@ -421,6 +464,7 @@ function SignInPageContent({
   const [errorMessage, setErrorMessage] = useState('');
   const [adminLoginId, setAdminLoginId] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [isAdminPasswordVisible, setIsAdminPasswordVisible] = useState(false);
   const hasHandledPostAuthMount = useRef(false);
   const hasHandledSessionRedirect = useRef(false);
   const redirectParam = searchParams.get('redirect');
@@ -659,8 +703,12 @@ function SignInPageContent({
                     showAdminCredentialsLogin={showAdminCredentialsLogin}
                     adminLoginId={adminLoginId}
                     adminPassword={adminPassword}
+                    isAdminPasswordVisible={isAdminPasswordVisible}
                     onAdminLoginIdChange={setAdminLoginId}
                     onAdminPasswordChange={setAdminPassword}
+                    onToggleAdminPasswordVisibility={() =>
+                      setIsAdminPasswordVisible((current) => !current)
+                    }
                     onGoogleSignIn={handleGoogleSignIn}
                     onAdminCredentialsSignIn={handleAdminCredentialsSignIn}
                   />
@@ -694,8 +742,12 @@ function SignInPageContent({
                     showAdminCredentialsLogin={showAdminCredentialsLogin}
                     adminLoginId={adminLoginId}
                     adminPassword={adminPassword}
+                    isAdminPasswordVisible={isAdminPasswordVisible}
                     onAdminLoginIdChange={setAdminLoginId}
                     onAdminPasswordChange={setAdminPassword}
+                    onToggleAdminPasswordVisibility={() =>
+                      setIsAdminPasswordVisible((current) => !current)
+                    }
                     onGoogleSignIn={handleGoogleSignIn}
                     onAdminCredentialsSignIn={handleAdminCredentialsSignIn}
                   />
@@ -758,8 +810,12 @@ function SignInPageContent({
                 showAdminCredentialsLogin={showAdminCredentialsLogin}
                 adminLoginId={adminLoginId}
                 adminPassword={adminPassword}
+                isAdminPasswordVisible={isAdminPasswordVisible}
                 onAdminLoginIdChange={setAdminLoginId}
                 onAdminPasswordChange={setAdminPassword}
+                onToggleAdminPasswordVisibility={() =>
+                  setIsAdminPasswordVisible((current) => !current)
+                }
                 onGoogleSignIn={handleGoogleSignIn}
                 onAdminCredentialsSignIn={handleAdminCredentialsSignIn}
               />
