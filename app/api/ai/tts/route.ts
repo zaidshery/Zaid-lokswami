@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!isGeminiTtsConfigured()) {
+      console.error('AI tts unavailable: Gemini TTS is not configured. Set GEMINI_API_KEY.');
       return NextResponse.json(
         { success: false, error: 'Gemini TTS is not configured. Set GEMINI_API_KEY.' },
         { status: 501 }
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (synthesized.mode === 'unavailable') {
+      console.error('AI tts unavailable:', synthesized.reason);
       return NextResponse.json(
         { success: false, error: synthesized.reason },
         { status: 501 }
