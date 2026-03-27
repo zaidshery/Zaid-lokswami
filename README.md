@@ -192,6 +192,7 @@ Hostinger Node deployment is the supported production path for this repo.
 
 - `HOSTINGER_DEPLOY.md` for the production deployment flow
 - `DEPLOY_SMOKE_CHECKLIST.md` for the post-deploy verification pass
+- `ADMIN_RUNTIME_CHECKLIST.md` for production admin and CMS verification
 - `NEXT_SPRINT.md` for the current priority order and sprint direction
 
 ## Scripts
@@ -203,6 +204,7 @@ npm run start
 npm run lint
 npm run typecheck
 npm run test:smoke -- https://your-domain.com
+npm run test:admin-runtime -- https://your-domain.com
 npm run seed
 npm run hash-password
 npm run migrate:epapers

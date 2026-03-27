@@ -93,6 +93,7 @@ Recommended release flow:
 3. Run `npm run build:hostinger`.
 4. Start or restart with `npm run start:hostinger`.
 5. Run the smoke checks before calling the deploy complete.
+6. Run the admin runtime checks before calling admin healthy.
 
 What `build:hostinger` does:
 
@@ -116,6 +117,7 @@ After deploy, verify:
 - homepage loads
 - `/api/health` returns `status: ok`
 - admin login works
+- guest access to admin pages and admin APIs is blocked
 - uploads work
 - Google sign-in works if enabled
 - article, e-paper, breaking news, and AI listen features generate Gemini audio
@@ -158,4 +160,5 @@ EPAPER_STORAGE_UPLOADS_BASE_DIR=/absolute/path/to/writable/storage/uploads
 After deployment:
 
 1. Run `npm run test:smoke -- https://your-domain.com`
-2. Complete the manual checks in `DEPLOY_SMOKE_CHECKLIST.md`
+2. Run `npm run test:admin-runtime -- https://your-domain.com`
+3. Complete the manual checks in `DEPLOY_SMOKE_CHECKLIST.md` and `ADMIN_RUNTIME_CHECKLIST.md`

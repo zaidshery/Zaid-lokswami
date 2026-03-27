@@ -39,6 +39,16 @@ Complete these in a real browser session:
 5. Confirm the uploaded asset is saved and visible where expected.
 6. Open `/main/epaper` and confirm the latest edition still opens for readers.
 
+## Admin Runtime Follow-Up
+
+After this checklist passes, run:
+
+```bash
+npm run test:admin-runtime -- https://your-domain.com
+```
+
+Then complete the signed-in checks in `ADMIN_RUNTIME_CHECKLIST.md`.
+
 ## Upload Recommendation
 
 For the required upload smoke test, prefer one of these:
