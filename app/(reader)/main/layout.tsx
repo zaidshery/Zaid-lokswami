@@ -80,7 +80,7 @@ export default function MainLayout({
               ? 'pb-0 pt-0'
               : isReaderImmersiveMode
                 ? 'pb-0 pt-0'
-                : 'pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)] pt-[7.25rem] sm:pt-[8rem] md:pt-[8.75rem] xl:pb-4'
+                : 'pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)] pt-[8rem] sm:pt-[8.5rem] md:pt-[9rem] xl:pb-4'
           }
         >
           {!isImmersiveVideoMode && !isReaderImmersiveMode ? <SigninRoleBanner /> : null}

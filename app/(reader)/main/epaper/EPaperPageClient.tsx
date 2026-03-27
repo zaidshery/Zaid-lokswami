@@ -4,7 +4,6 @@ import Image from 'next/image';
 import {
   type TouchEvent as ReactTouchEvent,
   useCallback,
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -26,8 +25,6 @@ import {
   Plus,
   Printer,
   Type,
-  RotateCcw,
-  Search,
   Share2,
   Volume2,
   X,
@@ -55,8 +52,6 @@ import {
 } from '@/lib/utils/epaperReaderLibrary';
 import { renderPdfPagePreviewFromUrl } from '@/lib/utils/pdfThumbnailClient';
 import {
-  normalizeMetadataQuery,
-  parseArchiveMonth,
   type EPaperCityFilter,
 } from '@/lib/utils/publicEpaperFilters';
 import type { EPaperArticleRecord, EPaperRecord } from '@/lib/types/epaper';
@@ -103,8 +98,6 @@ type EPaperPageClientProps = {
   initialNextCursor: PublicCursor | null;
   initialCity: EPaperCityFilter;
   initialPublishDate: string;
-  initialArchiveMonth: string;
-  initialSearchQuery: string;
 };
 
 const COPY = {
@@ -115,10 +108,6 @@ const COPY = {
     clearDate: 'Clear',
     city: 'City',
     allCities: 'All editions',
-    archiveMonth: 'Archive month',
-    archiveSearch: 'Search editions',
-    archiveSearchPlaceholder: 'Search by title, city, or YYYY-MM-DD',
-    clearFilters: 'Clear filters',
     pages: 'pages',
     editions: 'editions',
     stories: 'stories',
@@ -189,7 +178,6 @@ const COPY = {
     moreAvailable: 'More editions available',
     loadMore: 'Load more',
     noMore: 'No more editions',
-    searchFilter: 'Search',
     saveIssue: 'Save issue',
     savedIssue: 'Issue saved',
     saveStory: 'Save story',
@@ -225,11 +213,6 @@ const COPY = {
     clearDate: 'Clear',
     city: '\u0936\u0939\u0930',
     allCities: '\u0938\u092d\u0940 \u0938\u0902\u0938\u094d\u0915\u0930\u0923',
-    archiveMonth: '\u0906\u0930\u094d\u0915\u093e\u0907\u0935 \u092e\u0939\u0940\u0928\u093e',
-    archiveSearch: '\u0908-\u092a\u0947\u092a\u0930 \u0916\u094b\u091c\u0947\u0902',
-    archiveSearchPlaceholder:
-      '\u0936\u0940\u0930\u094d\u0937\u0915, \u0936\u0939\u0930 \u092f\u093e YYYY-MM-DD \u0938\u0947 \u0916\u094b\u091c\u0947\u0902',
-    clearFilters: '\u092b\u093f\u0932\u094d\u091f\u0930 \u0939\u091f\u093e\u090f\u0902',
     pages: '\u092a\u0947\u091c',
     editions: '\u0938\u0902\u0938\u094d\u0915\u0930\u0923',
     stories: '\u0938\u094d\u091f\u094b\u0930\u0940',
@@ -309,7 +292,6 @@ const COPY = {
     moreAvailable: '\u0914\u0930 \u0938\u0902\u0938\u094d\u0915\u0930\u0923 \u0909\u092a\u0932\u092c\u094d\u0927 \u0939\u0948\u0902',
     loadMore: '\u0914\u0930 \u0932\u094b\u0921 \u0915\u0930\u0947\u0902',
     noMore: '\u0914\u0930 \u0938\u0902\u0938\u094d\u0915\u0930\u0923 \u0928\u0939\u0940\u0902 \u0939\u0948\u0902',
-    searchFilter: '\u0916\u094b\u091c',
     saveIssue: '\u0907\u0936\u094d\u092f\u0942 \u0938\u0947\u0935 \u0915\u0930\u0947\u0902',
     savedIssue: '\u0907\u0936\u094d\u092f\u0942 \u0938\u0947\u0935 \u0939\u0948',
     saveStory: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0938\u0947\u0935 \u0915\u0930\u0947\u0902',
@@ -706,30 +688,9 @@ function mergeUniquePapers(
   return merged;
 }
 
-function formatArchiveMonthLabel(month: string, language: 'en' | 'hi') {
-  const normalized = parseArchiveMonth(month);
-  if (!normalized) return month;
-
-  const [yearPart, monthPart] = normalized.split('-');
-  const date = new Date(Date.UTC(Number.parseInt(yearPart, 10), Number.parseInt(monthPart, 10) - 1, 1));
-  if (Number.isNaN(date.getTime())) return normalized;
-
-  try {
-    return new Intl.DateTimeFormat(language === 'hi' ? 'hi-IN' : 'en-IN', {
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(date);
-  } catch {
-    return normalized;
-  }
-}
-
 function buildReaderSearchParams(options: {
   city: EPaperCityFilter;
   publishDate: string;
-  archiveMonth: string;
-  query: string;
   paperId?: string;
   page?: number;
   story?: string;
@@ -742,12 +703,6 @@ function buildReaderSearchParams(options: {
 
   if (options.publishDate) {
     params.set('date', options.publishDate);
-  } else if (options.archiveMonth) {
-    params.set('month', options.archiveMonth);
-  }
-
-  if (options.query) {
-    params.set('query', options.query);
   }
 
   const paperId = String(options.paperId || '').trim();
@@ -788,8 +743,6 @@ export default function EPaperPageClient({
   initialNextCursor,
   initialCity,
   initialPublishDate,
-  initialArchiveMonth,
-  initialSearchQuery,
 }: EPaperPageClientProps) {
   const language = useAppStore((state) => state.language);
   const setEpaperReaderOpen = useAppStore((state) => state.setEpaperReaderOpen);
@@ -797,8 +750,6 @@ export default function EPaperPageClient({
   const t = COPY[language];
   const [selectedCity, setSelectedCity] = useState<EPaperCityFilter>(initialCity);
   const [selectedPublishDate, setSelectedPublishDate] = useState(initialPublishDate);
-  const [selectedArchiveMonth, setSelectedArchiveMonth] = useState(initialArchiveMonth);
-  const [searchInput, setSearchInput] = useState(initialSearchQuery);
   const [epapers, setEpapers] = useState<PublicEPaperListItem[]>(
     Array.isArray(initialItems) ? initialItems : []
   );
@@ -811,7 +762,6 @@ export default function EPaperPageClient({
   );
   const [hasInitializedListEffect, setHasInitializedListEffect] = useState(false);
   const [error, setError] = useState('');
-  const deferredSearchQuery = useDeferredValue(normalizeMetadataQuery(searchInput));
   const [readerSidebarView, setReaderSidebarView] = useState<ReaderSidebarView>('pages');
   const [readerDisplayMode, setReaderDisplayMode] = useState<'single' | 'spread'>('single');
   const [isDesktopPageRailVisible, setIsDesktopPageRailVisible] = useState(true);
@@ -866,11 +816,7 @@ export default function EPaperPageClient({
     tracking: false,
   });
   const articleAudioRef = useRef<HTMLAudioElement | null>(null);
-  const hasArchiveFilters =
-    selectedCity !== 'all' ||
-    Boolean(selectedPublishDate) ||
-    Boolean(selectedArchiveMonth) ||
-    Boolean(deferredSearchQuery);
+  const hasArchiveFilters = selectedCity !== 'all' || Boolean(selectedPublishDate);
   const syncSavedLibrary = useCallback(() => {
     setSavedPapers(readSavedEpaperPapers());
     setSavedStories(readSavedEpaperStories());
@@ -890,11 +836,6 @@ export default function EPaperPageClient({
       }
       if (selectedPublishDate) {
         query.set('date', selectedPublishDate);
-      } else if (selectedArchiveMonth) {
-        query.set('month', selectedArchiveMonth);
-      }
-      if (deferredSearchQuery) {
-        query.set('query', deferredSearchQuery);
       }
       if (cursor?.publishedAt && cursor.id) {
         query.set('cursorPublishedAt', cursor.publishedAt);
@@ -903,29 +844,11 @@ export default function EPaperPageClient({
 
       return query;
     },
-    [deferredSearchQuery, listLimit, selectedArchiveMonth, selectedCity, selectedPublishDate]
+    [listLimit, selectedCity, selectedPublishDate]
   );
-
-  const clearArchiveFilters = useCallback(() => {
-    setSelectedCity('all');
-    setSelectedPublishDate('');
-    setSelectedArchiveMonth('');
-    setSearchInput('');
-  }, []);
 
   const onPublishDateChange = useCallback((nextValue: string) => {
     setSelectedPublishDate(nextValue);
-    if (nextValue) {
-      setSelectedArchiveMonth('');
-    }
-  }, []);
-
-  const onArchiveMonthChange = useCallback((nextValue: string) => {
-    const normalized = parseArchiveMonth(nextValue);
-    setSelectedArchiveMonth(normalized);
-    if (normalized) {
-      setSelectedPublishDate('');
-    }
   }, []);
 
   useEffect(() => {
@@ -1300,8 +1223,6 @@ export default function EPaperPageClient({
     const params = buildReaderSearchParams({
       city: selectedCity,
       publishDate: selectedPublishDate,
-      archiveMonth: selectedArchiveMonth,
-      query: deferredSearchQuery,
       paperId: effectivePaperId,
       page: effectivePage,
       story: effectiveStoryToken,
@@ -1316,10 +1237,8 @@ export default function EPaperPageClient({
     activeArticle?.slug,
     activePage,
     activePaper?._id,
-    deferredSearchQuery,
     pendingPaperId,
     pendingStorySlug,
-    selectedArchiveMonth,
     selectedCity,
     selectedPublishDate,
   ]);
@@ -1490,8 +1409,6 @@ export default function EPaperPageClient({
     const params = buildReaderSearchParams({
       city: selectedCity,
       publishDate: selectedPublishDate,
-      archiveMonth: selectedArchiveMonth,
-      query: deferredSearchQuery,
       paperId: activePaper._id,
       page: activePage,
     });
@@ -1526,8 +1443,6 @@ export default function EPaperPageClient({
     const params = buildReaderSearchParams({
       city: selectedCity,
       publishDate: selectedPublishDate,
-      archiveMonth: selectedArchiveMonth,
-      query: deferredSearchQuery,
       paperId: activePaper._id,
       page: activeArticle.pageNumber || activePage,
       story: storyToken,
@@ -1609,8 +1524,6 @@ export default function EPaperPageClient({
         `/main/epaper?${buildReaderSearchParams({
           city: selectedCity,
           publishDate: selectedPublishDate,
-          archiveMonth: selectedArchiveMonth,
-          query: deferredSearchQuery,
           paperId: activePaper._id,
           page: activePage,
         }).toString()}`
@@ -1659,9 +1572,7 @@ export default function EPaperPageClient({
     activePage,
     activePaper,
     activePaperLibraryInput,
-    deferredSearchQuery,
     isPreparingOfflinePaper,
-    selectedArchiveMonth,
     selectedCity,
     selectedPublishDate,
     showReaderNotice,
@@ -2190,9 +2101,6 @@ export default function EPaperPageClient({
     selectedCity === 'all'
       ? t.allCities
       : EPAPER_CITY_OPTIONS.find((city) => city.slug === selectedCity)?.name || selectedCity;
-  const archiveMonthLabel = selectedArchiveMonth
-    ? formatArchiveMonthLabel(selectedArchiveMonth, language)
-    : '';
   const emptyStateMessage = hasArchiveFilters ? t.noPaperFiltered : t.noPaper;
   const readerPageLabel = shouldShowSpreadMode && spreadCompanionPage
     ? `${activePage}-${spreadCompanionPage.pageNumber} / ${maxReaderPage}`
@@ -2269,29 +2177,14 @@ export default function EPaperPageClient({
 
       <section className="cnp-surface p-3.5 sm:p-4 md:p-5">
         <div className="mb-4 border-b border-zinc-200/80 pb-4 dark:border-zinc-800">
-          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_auto]">
-            <label className="block">
-              <span className="sr-only">{t.archiveSearch}</span>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                <input
-                  type="search"
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder={t.archiveSearchPlaceholder}
-                  aria-label={t.archiveSearch}
-                  className="h-11 w-full rounded-xl border border-gray-300 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
-                />
-              </div>
-            </label>
-
-            <label className="block">
+          <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+            <label className="block min-w-0">
               <span className="sr-only">{t.city}</span>
               <select
                 value={selectedCity}
                 onChange={(event) => setSelectedCity(event.target.value as EPaperCityFilter)}
                 aria-label={t.city}
-                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
+                className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:h-11 sm:text-sm"
               >
                 <option value="all">{t.allCities}</option>
                 {EPAPER_CITY_OPTIONS.map((city) => (
@@ -2302,57 +2195,14 @@ export default function EPaperPageClient({
               </select>
             </label>
 
-            <label className="block">
-              <span className="sr-only">{t.archiveMonth}</span>
-              <div className="relative">
-                <input
-                  type="month"
-                  value={selectedArchiveMonth}
-                  onChange={(event) => onArchiveMonthChange(event.target.value)}
-                  aria-label={t.archiveMonth}
-                  className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 pr-9 text-sm outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
-                />
-                {selectedArchiveMonth ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedArchiveMonth('')}
-                    aria-label={t.clearFilters}
-                    className="absolute inset-y-0 right-1 inline-flex w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                ) : null}
-              </div>
-            </label>
-
-            <div className="relative">
-              <DateInputField
-                value={selectedPublishDate}
-                onChange={onPublishDateChange}
-                aria-label={t.publishDate}
-                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 pr-9 text-sm outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400"
-              />
-              {selectedPublishDate ? (
-                <button
-                  type="button"
-                  onClick={() => setSelectedPublishDate('')}
-                  aria-label={t.clearDate}
-                  className="absolute inset-y-0 right-1 inline-flex w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              ) : null}
-            </div>
-
-            <button
-              type="button"
-              onClick={clearArchiveFilters}
-              disabled={!hasArchiveFilters}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            >
-              <RotateCcw className="h-4 w-4" />
-              <span>{t.clearFilters}</span>
-            </button>
+            <DateInputField
+              value={selectedPublishDate}
+              onChange={onPublishDateChange}
+              onClear={() => setSelectedPublishDate('')}
+              clearLabel={t.clearDate}
+              ariaLabel={t.publishDate}
+              className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:h-11 sm:text-sm"
+            />
           </div>
         </div>
 
@@ -2373,18 +2223,6 @@ export default function EPaperPageClient({
             {selectedPublishDate ? (
               <span className="inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300">
                 {t.showingDate}: {formatUiDate(selectedPublishDate, selectedPublishDate)}
-              </span>
-            ) : null}
-
-            {archiveMonthLabel ? (
-              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
-                {t.archiveMonth}: {archiveMonthLabel}
-              </span>
-            ) : null}
-
-            {deferredSearchQuery ? (
-              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                {t.searchFilter}: {deferredSearchQuery}
               </span>
             ) : null}
           </div>

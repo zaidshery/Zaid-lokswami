@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { motion, useReducedMotion } from 'framer-motion';
 
 interface LogoProps {
-  size?: 'sm' | 'md' | 'lg' | 'headerMobile' | 'headerDesktop';
+  size?: 'sm' | 'md' | 'lg' | 'headerCompact' | 'headerMobile' | 'headerDesktop';
   href?: string;
 }
 
@@ -16,6 +16,7 @@ export default function Logo({ size = 'md', href }: LogoProps) {
     sm: { icon: 30, wordmarkW: 126, wordmarkH: 27, gap: 7, iconY: 0, wordmarkY: 0 },
     md: { icon: 34, wordmarkW: 158, wordmarkH: 34, gap: 8, iconY: 0, wordmarkY: 0 },
     lg: { icon: 44, wordmarkW: 200, wordmarkH: 43, gap: 10, iconY: 0, wordmarkY: 0 },
+    headerCompact: { icon: 28, wordmarkW: 112, wordmarkH: 24, gap: 6, iconY: 0, wordmarkY: 0 },
     headerMobile: { icon: 36, wordmarkW: 148, wordmarkH: 31, gap: 8, iconY: 0, wordmarkY: 0 },
     headerDesktop: { icon: 46, wordmarkW: 192, wordmarkH: 40, gap: 10, iconY: 0, wordmarkY: 0 },
   };
@@ -62,8 +63,8 @@ export default function Logo({ size = 'md', href }: LogoProps) {
             width={sizeConfig.icon}
             height={sizeConfig.icon}
             className="relative z-[1] block rounded-full object-contain drop-shadow-[0_2px_6px_rgba(220,38,38,0.35)] transition-transform duration-300 motion-safe:group-hover/logo:rotate-[2deg] motion-safe:group-hover/logo:scale-[1.02]"
-            priority={size === 'headerMobile' || size === 'headerDesktop'}
-            sizes="(max-width: 639px) 30px, (max-width: 1023px) 36px, 46px"
+            priority={size === 'headerCompact' || size === 'headerMobile' || size === 'headerDesktop'}
+            sizes="(max-width: 639px) 28px, (max-width: 1023px) 36px, 46px"
           />
         </motion.span>
 
@@ -83,9 +84,9 @@ export default function Logo({ size = 'md', href }: LogoProps) {
             alt="Lokswami"
             width={sizeConfig.wordmarkW}
             height={sizeConfig.wordmarkH}
-            className={`block max-w-full object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.18)] dark:brightness-0 dark:invert ${size === 'headerMobile' ? 'max-w-[132px]' : ''}`}
-            priority={size === 'headerMobile' || size === 'headerDesktop'}
-            sizes="(max-width: 639px) 126px, (max-width: 1023px) 148px, 192px"
+            className={`block max-w-full object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.18)] dark:brightness-0 dark:invert ${size === 'headerCompact' ? 'max-w-[108px]' : size === 'headerMobile' ? 'max-w-[132px]' : ''}`}
+            priority={size === 'headerCompact' || size === 'headerMobile' || size === 'headerDesktop'}
+            sizes="(max-width: 639px) 112px, (max-width: 1023px) 148px, 192px"
           />
           <span
             aria-hidden="true"
