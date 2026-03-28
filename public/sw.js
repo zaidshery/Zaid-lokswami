@@ -1,9 +1,7 @@
-const CACHE_NAME = 'lokswami-app-shell-v3';
+const CACHE_NAME = 'lokswami-app-shell-v4';
 const RUNTIME_CACHE_NAME = 'lokswami-runtime-v1';
 const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v1';
 const APP_SHELL_URLS = [
-  '/',
-  '/main',
   '/main/epaper',
   '/manifest.webmanifest',
   '/logo-icon-final.png',
@@ -21,7 +19,18 @@ function isRuntimeCacheable(url) {
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL_URLS))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(
+        APP_SHELL_URLS.map(async (url) => {
+          const response = await fetch(url, { cache: 'no-store' });
+          if (!response.ok) {
+            throw new Error(`Failed to precache ${url}`);
+          }
+
+          await cache.put(url, response);
+        })
+      );
+    })
   );
 });
 
@@ -68,13 +77,15 @@ self.addEventListener('fetch', (event) => {
             return preloadResponse;
           }
 
-          return await fetch(request);
-        } catch {
-          const cachedNavigation = await caches.match(request);
-          if (cachedNavigation) {
-            return cachedNavigation;
+          const networkResponse = await fetch(request);
+
+          if (networkResponse.ok && url.pathname.startsWith('/main/epaper')) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put('/main/epaper', networkResponse.clone());
           }
 
+          return networkResponse;
+        } catch {
           if (url.pathname.startsWith('/main/epaper')) {
             const cachedEpaperShell = await caches.match('/main/epaper');
             if (cachedEpaperShell) {
@@ -82,8 +93,7 @@ self.addEventListener('fetch', (event) => {
             }
           }
 
-          const cachedShell = await caches.match('/main');
-          return cachedShell || (await caches.match('/')) || Response.error();
+          return Response.error();
         }
       })()
     );
