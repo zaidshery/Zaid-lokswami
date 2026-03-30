@@ -766,6 +766,7 @@ export default function EPaperPageClient({
   const [readerDisplayMode, setReaderDisplayMode] = useState<'single' | 'spread'>('single');
   const [isDesktopPageRailVisible, setIsDesktopPageRailVisible] = useState(true);
   const [isDesktopContextRailVisible, setIsDesktopContextRailVisible] = useState(true);
+  const [isMobilePageStripVisible, setIsMobilePageStripVisible] = useState(false);
 
   const [activePaper, setActivePaper] = useState<(EPaperRecord & { articles: EPaperArticleRecord[] }) | null>(null);
   const [activePage, setActivePage] = useState(1);
@@ -1120,10 +1121,14 @@ export default function EPaperPageClient({
   }, [activeArticle?._id]);
 
   useEffect(() => {
-    if (!activePaper) return;
+    if (!activePaper) {
+      setIsMobilePageStripVisible(false);
+      return;
+    }
     setReaderSidebarView('pages');
     setIsDesktopPageRailVisible(true);
     setIsDesktopContextRailVisible(true);
+    setIsMobilePageStripVisible(false);
   }, [activePaper]);
 
   const activePageImage = useMemo(() => {
@@ -1171,7 +1176,15 @@ export default function EPaperPageClient({
     },
     [activePaper]
   );
-
+  const handlePageStripPageSelect = useCallback(
+    (nextPage: number) => {
+      navigateToPage(nextPage);
+      if (isCoarsePointer) {
+        setIsMobilePageStripVisible(false);
+      }
+    },
+    [isCoarsePointer, navigateToPage]
+  );
   const zoomPreviewOut = useCallback(() => {
     setPreviewZoom((current) =>
       Math.max(MIN_PREVIEW_ZOOM, Number((current - PREVIEW_ZOOM_STEP).toFixed(2)))
@@ -2108,8 +2121,12 @@ export default function EPaperPageClient({
   const activePaperStoryCount = activePaper?.articles.length || 0;
   const previewHeightOffset = isCoarsePointer
     ? shouldShowSpreadMode
-      ? 228
-      : 196
+      ? isMobilePageStripVisible
+        ? 208
+        : 168
+      : isMobilePageStripVisible
+        ? 176
+        : 138
     : shouldShowSpreadMode
       ? 290
       : 250;
@@ -2403,85 +2420,16 @@ export default function EPaperPageClient({
       {activePaper ? (
         <div className="fixed inset-0 z-[95] bg-black/88 p-0 backdrop-blur-sm sm:bg-black/75 sm:p-4">
           <div className="mx-auto flex h-full w-full max-w-[1480px] flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:h-[calc(100dvh-2rem)] sm:rounded-2xl">
-            <div className="border-b border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:px-4">
+            <div className="border-b border-gray-200 bg-white/95 px-2.5 py-1.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:px-4 sm:py-2.5">
               <div className="sm:hidden">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-zinc-100">
-                      {activePaper.title}
-                    </p>
-                    <p className="truncate text-xs text-gray-600 dark:text-zinc-400">
-                      {activePaper.cityName} | {formatUiDate(activePaper.publishDate, activePaper.publishDate)}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActivePaper(null);
-                      setActiveArticle(null);
-                    }}
-                    aria-label={t.close}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => goToRelativePage(-1)}
-                    aria-label={t.previous}
-                    disabled={!canGoPreviousPage}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-
-                  <span className="inline-flex h-9 shrink-0 items-center rounded-xl border border-gray-200 px-2.5 text-center text-xs font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-300">
-                    {readerPageLabel}
-                  </span>
-
-                  <label className="flex h-9 min-w-0 flex-1 items-center rounded-xl border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
-                    <select
-                      value={activePage}
-                      onChange={(event) => {
-                        const nextPage = Number.parseInt(event.target.value, 10);
-                        if (Number.isFinite(nextPage)) {
-                          navigateToPage(nextPage);
-                        }
-                      }}
-                      aria-label={t.quickJump}
-                      className="w-full bg-transparent text-xs outline-none"
-                    >
-                      {pageSummaries.map((page) => (
-                        <option key={`jump-mobile-${page.pageNumber}`} value={page.pageNumber}>
-                          {t.page} {page.pageNumber}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => goToRelativePage(1)}
-                    aria-label={t.next}
-                    disabled={!canGoNextPage}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem] gap-1">
                   <button
                     type="button"
                     onClick={handlePdfDownload}
                     disabled={!pdfUrlForOpen}
-                    className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    className="inline-flex h-8 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-white px-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
-                    <Download className="h-3.5 w-3.5" />
+                    <Download className="h-3 w-3" />
                     <span>PDF</span>
                   </button>
 
@@ -2491,94 +2439,23 @@ export default function EPaperPageClient({
                       void shareActivePaperOnWhatsApp();
                     }}
                     aria-label={t.shareWhatsApp}
-                    className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                    className="inline-flex h-8 items-center justify-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
                   >
-                    <Share2 className="h-3.5 w-3.5" />
+                    <Share2 className="h-3 w-3" />
                     <span>{t.shareWhatsApp}</span>
                   </button>
 
-                  <details className="relative">
-                    <summary className="flex h-9 cursor-pointer list-none items-center justify-center rounded-xl border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 [&::-webkit-details-marker]:hidden">
-                      {t.moreActions}
-                    </summary>
-
-                    <div className="absolute right-0 top-[calc(100%+0.45rem)] z-30 w-56 rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
-                      <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                        {t.readerTools}
-                      </p>
-
-                      <div className="space-y-1">
-                        <button
-                          type="button"
-                          onClick={handleIssueSaveToggle}
-                          disabled={!activePaperLibraryInput || isSavingIssue}
-                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                            isActivePaperSaved
-                              ? 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400'
-                              : 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40'
-                          }`}
-                        >
-                          <span>{isActivePaperSaved ? t.savedIssue : t.saveIssue}</span>
-                          {isSavingIssue ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Bookmark className={`h-3.5 w-3.5 ${isActivePaperSaved ? 'fill-current' : ''}`} />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={openPdfInNewTab}
-                          disabled={!pdfUrlForOpen}
-                          className="flex w-full items-center justify-between rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-left text-xs font-semibold text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
-                        >
-                          <span>{t.openPdf}</span>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleOfflinePaperSave();
-                          }}
-                          disabled={!activePaperLibraryInput || isPreparingOfflinePaper || isActivePaperOfflineReady}
-                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                            isActivePaperOfflineReady
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
-                              : 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/30'
-                          }`}
-                        >
-                          <span>
-                            {isPreparingOfflinePaper
-                              ? t.offlineSaving
-                              : isActivePaperOfflineReady
-                                ? t.offlineReady
-                                : t.keepOffline}
-                          </span>
-                          {isPreparingOfflinePaper ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-
-                        {canUseSpreadMode ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setReaderDisplayMode((current) =>
-                                current === 'spread' ? 'single' : 'spread'
-                              )
-                            }
-                            className="flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-3 py-2 text-left text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                          >
-                            <span>{shouldShowSpreadMode ? t.singleView : t.spreadView}</span>
-                            <Newspaper className="h-3.5 w-3.5" />
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </details>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePaper(null);
+                      setActiveArticle(null);
+                    }}
+                    aria-label={t.close}
+                    className="inline-flex h-8 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
 
@@ -2796,77 +2673,69 @@ export default function EPaperPageClient({
               </div>
             ) : null}
 
-            <div className="border-b border-gray-200 bg-white/90 px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-950/80 sm:px-4">
-              <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="border-b border-gray-200 bg-white/90 px-2.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-950/80 sm:px-4 sm:py-2.5">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                     {t.pageStrip}
                   </p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{t.tapPageToFocus}</p>
+                  <p className="text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">{t.tapPageToFocus}</p>
                 </div>
-                {canUseSpreadMode ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReaderDisplayMode((current) =>
-                        current === 'spread' ? 'single' : 'spread'
-                      )
-                    }
-                    className="inline-flex h-8 items-center rounded-full border border-gray-300 px-3 text-[11px] font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800 xl:hidden"
-                  >
-                    {shouldShowSpreadMode ? t.singleView : t.spreadView}
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsMobilePageStripVisible((current) => !current)}
+                  aria-expanded={isMobilePageStripVisible}
+                  className="inline-flex h-7 items-center rounded-full border border-gray-300 px-2.5 text-[10px] font-semibold text-gray-700 transition hover:bg-gray-100 sm:hidden dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  {t.pagesTab}
+                </button>
               </div>
 
-              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {pageSummaries.map((page) => {
-                  const isCurrentPage = page.pageNumber === activePage;
-                  const isCompanionPage =
-                    shouldShowSpreadMode && spreadCompanionPage?.pageNumber === page.pageNumber;
+              <div className={`${isMobilePageStripVisible ? 'block' : 'hidden'} sm:block`}>
+                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {pageSummaries.map((page) => {
+                    const isCurrentPage = page.pageNumber === activePage;
+                    const isCompanionPage =
+                      shouldShowSpreadMode && spreadCompanionPage?.pageNumber === page.pageNumber;
 
-                  return (
-                    <button
-                      key={`strip-${page.pageNumber}`}
-                      type="button"
-                      onClick={() => navigateToPage(page.pageNumber)}
-                      className={`group min-w-[88px] max-w-[88px] shrink-0 overflow-hidden rounded-xl border text-left transition md:min-w-[96px] md:max-w-[96px] ${
-                        isCurrentPage
-                          ? 'border-primary-500 bg-primary-50 shadow-sm dark:border-primary-400 dark:bg-primary-950/30'
-                          : isCompanionPage
-                            ? 'border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/20'
-                            : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/20'
-                      }`}
-                    >
-                      <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-900 dark:to-zinc-800">
-                        {page.imagePath ? (
-                          <Image
-                            src={page.imagePath}
-                            alt={`${t.page} ${page.pageNumber}`}
-                            fill
-                            unoptimized
-                            className="object-cover"
-                            sizes="84px"
-                          />
+                    return (
+                      <button
+                        key={`strip-${page.pageNumber}`}
+                        type="button"
+                        onClick={() => handlePageStripPageSelect(page.pageNumber)}
+                        className={`group min-w-[68px] max-w-[68px] shrink-0 overflow-hidden rounded-xl border text-left transition sm:min-w-[88px] sm:max-w-[88px] md:min-w-[96px] md:max-w-[96px] ${
+                          isCurrentPage
+                            ? 'border-primary-500 bg-primary-50 shadow-sm dark:border-primary-400 dark:bg-primary-950/30'
+                            : isCompanionPage
+                              ? 'border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/20'
+                              : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/20'
+                        }`}
+                      >
+                        <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-900 dark:to-zinc-800">
+                          {page.imagePath ? (
+                            <Image
+                              src={page.imagePath}
+                              alt={`${t.page} ${page.pageNumber}`}
+                              fill
+                              unoptimized
+                              className="object-cover"
+                              sizes="(max-width: 640px) 68px, 96px"
+                            />
                         ) : (
                           <div className="flex h-full items-center justify-center px-2 text-center text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
                             {t.page} {page.pageNumber}
                           </div>
                         )}
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent px-2 py-1 text-[10px] font-semibold text-white">
-                          {t.page} {page.pageNumber}
                         </div>
-                      </div>
-                      <div className="flex min-h-[30px] items-center px-2 py-1.5">
-                        {page.storyCount > 0 ? (
-                          <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">
-                            {page.storyCount} {t.stories}
+                        <div className="flex min-h-[28px] items-center justify-center border-t border-gray-100 bg-white px-1.5 py-1 dark:border-zinc-800 dark:bg-zinc-900">
+                          <span className="text-[10px] font-semibold text-primary-700 dark:text-primary-300">
+                            {t.page} {page.pageNumber}
                           </span>
-                        ) : null}
-                      </div>
-                    </button>
-                  );
-                })}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -2921,7 +2790,7 @@ export default function EPaperPageClient({
                 </aside>
               ) : null}
 
-              <div className={`relative min-w-0 overflow-auto overscroll-contain bg-gradient-to-b from-zinc-100 via-white to-zinc-100 p-2 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 ${readerStageBorderClassName}`}>
+              <div className={`relative min-w-0 overflow-auto overscroll-contain bg-gradient-to-b from-zinc-100 via-white to-zinc-100 p-1 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 ${readerStageBorderClassName}`}>
                 {loadingFallback ? (
                   <div className="flex h-full min-h-48 items-center justify-center">
                     <Loader2 className="h-7 w-7 animate-spin text-primary-600" />
@@ -2944,9 +2813,9 @@ export default function EPaperPageClient({
                         onClick={() => goToRelativePage(-1)}
                         aria-label={t.previous}
                         disabled={!canGoPreviousPage}
-                        className="absolute left-1 top-1/2 z-20 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-30 sm:-left-4 sm:h-12 sm:w-12 xl:-left-6"
+                        className="absolute left-0.5 top-1/2 z-20 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-30 sm:-left-4 sm:h-12 sm:w-12 xl:-left-6"
                       >
-                        <ChevronLeft className="h-5 w-5" />
+                        <ChevronLeft className="h-4 w-4" />
                       </button>
 
                       <button
@@ -2954,9 +2823,9 @@ export default function EPaperPageClient({
                         onClick={() => goToRelativePage(1)}
                         aria-label={t.next}
                         disabled={!canGoNextPage}
-                        className="absolute right-1 top-1/2 z-20 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-30 sm:-right-4 sm:h-12 sm:w-12 xl:-right-6"
+                        className="absolute right-0.5 top-1/2 z-20 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-30 sm:-right-4 sm:h-12 sm:w-12 xl:-right-6"
                       >
-                        <ChevronRight className="h-5 w-5" />
+                        <ChevronRight className="h-4 w-4" />
                       </button>
 
                       <div
@@ -3075,6 +2944,12 @@ export default function EPaperPageClient({
                           </div>
                         ) : null}
                       </div>
+
+                      <div className="pointer-events-none absolute bottom-2 left-1/2 z-20 -translate-x-1/2 sm:hidden">
+                        <div className="rounded-full bg-black/65 px-2.5 py-0.5 text-[10px] font-semibold text-white shadow-lg backdrop-blur-md">
+                          {readerPageLabel}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -3083,193 +2958,6 @@ export default function EPaperPageClient({
                   </div>
                 )}
 
-                <div className="mt-3 xl:hidden">
-                  <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/75">
-                    <div className="border-b border-gray-200 px-3 py-3 dark:border-zinc-800 sm:px-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                            {readerSidebarView === 'pages' ? t.pageOverview : t.editionContents}
-                          </p>
-                          <p className="mt-1 text-xs font-medium text-gray-700 dark:text-zinc-300">
-                            {readerSidebarSummary}
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setReaderSidebarView('pages')}
-                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                              readerSidebarView === 'pages'
-                                ? 'bg-primary-600 text-white'
-                                : 'border border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800'
-                            }`}
-                          >
-                            {t.pagesTab}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReaderSidebarView('contents')}
-                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                              readerSidebarView === 'contents'
-                                ? 'bg-primary-600 text-white'
-                                : 'border border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800'
-                            }`}
-                          >
-                            {t.contentsTab}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4 px-3 py-3 sm:px-4">
-                      {readerSidebarView === 'pages' ? (
-                        <>
-                          <div>
-                            <div className="mb-2 flex items-center justify-between gap-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                {t.pagesTab}
-                              </p>
-                              <span className="inline-flex items-center rounded-full border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-200">
-                                {readerPageLabel}
-                              </span>
-                            </div>
-
-                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                              {pageSummaries.map((page) => {
-                                const isCurrentPage = page.pageNumber === activePage;
-                                const isCompanionPage =
-                                  shouldShowSpreadMode && spreadCompanionPage?.pageNumber === page.pageNumber;
-
-                                return (
-                                  <button
-                                    key={`support-nav-${page.pageNumber}`}
-                                    type="button"
-                                    onClick={() => navigateToPage(page.pageNumber)}
-                                    className={`rounded-xl border px-3 py-2 text-left transition ${
-                                      isCurrentPage
-                                        ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-950/30'
-                                        : isCompanionPage
-                                          ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20'
-                                          : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">
-                                        {t.page} {page.pageNumber}
-                                      </span>
-                                      {page.storyCount > 0 ? (
-                                        <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">
-                                          {page.storyCount} {t.stories}
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                    <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                                      {page.imagePath ? t.openPage : t.noThumbnail}
-                                    </p>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="mb-2 flex items-center justify-between gap-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                {t.storiesOnPage}
-                              </p>
-                              {pageArticles.length > 0 ? (
-                                <span className="inline-flex items-center rounded-full border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-200">
-                                  {pageArticles.length} {t.stories}
-                                </span>
-                              ) : null}
-                            </div>
-
-                            {pageArticles.length === 0 ? (
-                              <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-600 dark:border-zinc-700 dark:text-zinc-400">
-                                {t.noStories}
-                              </p>
-                            ) : (
-                              <div className="space-y-2">
-                                {pageArticles.map((article, index) => (
-                                  <button
-                                    key={`${article._id}-mobile`}
-                                    type="button"
-                                    onClick={() => setActiveArticle(article)}
-                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-left transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
-                                  >
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
-                                          {t.story} {index + 1}
-                                        </span>
-                                        <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-zinc-100">
-                                          {article.title || `${t.story} ${index + 1}`}
-                                        </span>
-                                        {article.excerpt ? (
-                                          <span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                                            {article.excerpt}
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      ) : editionArticlesByPage.length === 0 ? (
-                        <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-600 dark:border-zinc-700 dark:text-zinc-400">
-                          {t.noStoriesEdition}
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {editionArticlesByPage.map((page) => (
-                            <div key={`mobile-contents-${page.pageNumber}`} className="space-y-2">
-                              <div className="flex items-center justify-between gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => navigateToPage(page.pageNumber)}
-                                  className="text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300"
-                                >
-                                  {t.page} {page.pageNumber}
-                                </button>
-                                <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">
-                                  {page.storyCount} {t.stories}
-                                </span>
-                              </div>
-
-                              <div className="space-y-2">
-                                {page.articles.map((article, index) => (
-                                  <button
-                                    key={`mobile-contents-article-${article._id}`}
-                                    type="button"
-                                    onClick={() => {
-                                      navigateToPage(page.pageNumber);
-                                      setActiveArticle(article);
-                                    }}
-                                    className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-left transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
-                                  >
-                                    <span className="block text-sm font-medium text-gray-900 dark:text-zinc-100">
-                                      {article.title || `${t.story} ${index + 1}`}
-                                    </span>
-                                    {article.excerpt ? (
-                                      <span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                                        {article.excerpt}
-                                      </span>
-                                    ) : null}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                </div>
               </div>
 
               {isDesktopContextRailVisible ? (
