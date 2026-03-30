@@ -91,17 +91,36 @@ Recommended release flow:
 1. Update production env values in Hostinger.
 2. Run `npm ci`.
 3. Run `npm run build:hostinger`.
-4. Start or restart with `npm run start:hostinger`.
+4. Restart with `npm run start:hostinger` or the Hostinger app restart control.
 5. Run the smoke checks before calling the deploy complete.
 6. Run the admin runtime checks before calling admin healthy.
 
+Rollback command:
+
+```bash
+npm run rollback:hostinger
+npm run start:hostinger
+```
+
+That marks the previous prepared release as pending and then promotes it on restart.
+
 What `build:hostinger` does:
 
-- builds the Next.js app
-- normalizes `next-env.d.ts` for production route types and clears stale `.next` / `.next-dev` output first
-- creates a standalone server bundle
-- copies `public/` into `.next/standalone/public`
-- copies `.next/static` into `.next/standalone/.next/static`
+- preserves the currently live legacy static bundle before clearing `.next` during the migration from the old in-place flow
+- builds the Next.js app into `.next`
+- snapshots the new `.next/static` output
+- prepares a versioned standalone release under `.hostinger/releases/<build-id>`
+- copies `public/` into that prepared release
+- merges a short overlap window of older hashed `/_next/static/*` assets into the new release so stale HTML can still resolve its chunks during rollout
+- records the prepared release in `.hostinger/release-state.json`
+
+What `start:hostinger` does now:
+
+- promotes the most recently prepared release to current only when the process starts
+- starts the promoted release from `.hostinger/releases/<build-id>/server.js`
+- prunes older release directories after promotion
+
+This avoids the old failure mode where an in-place build deleted the currently running `.next/standalone/.next/static` files before the new release was fully live.
 
 ## Hostinger hPanel Node App
 
@@ -154,6 +173,8 @@ EPAPER_STORAGE_UPLOADS_BASE_DIR=/absolute/path/to/writable/storage/uploads
 - If production uploads are important, configure Cloudinary.
 - Keep `NEXTAUTH_URL` and `NEXT_PUBLIC_SITE_URL` on the same final domain.
 - Regenerate `NEXTAUTH_SECRET` only if you are okay invalidating sessions.
+- Do not delete `.hostinger/` between deploys. It stores the active release plus recent static snapshots for safe chunk overlap.
+- If you need to tune overlap or release retention, set `HOSTINGER_STATIC_OVERLAP_RELEASES` and `HOSTINGER_RELEASE_RETENTION`.
 
 ## Quick Smoke Test
 
@@ -162,3 +183,5 @@ After deployment:
 1. Run `npm run test:smoke -- https://your-domain.com`
 2. Run `npm run test:admin-runtime -- https://your-domain.com`
 3. Complete the manual checks in `DEPLOY_SMOKE_CHECKLIST.md` and `ADMIN_RUNTIME_CHECKLIST.md`
+
+The smoke script now validates HTML asset integrity for `/signin`, `/main`, and `/main/epaper` by parsing the live HTML and checking that every referenced JS/CSS file under `/_next/static/*` returns `200` with the correct content type.

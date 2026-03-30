@@ -1,4 +1,8 @@
 const DEFAULT_TIMEOUT_MS = 15000;
+const ASSET_INTEGRITY_ROUTES = ['/signin', '/main', '/main/epaper'];
+const JAVASCRIPT_CONTENT_TYPE_PATTERN =
+  /\b(?:application|text)\/(?:javascript|x-javascript|ecmascript)\b/i;
+const CSS_CONTENT_TYPE_PATTERN = /\btext\/css\b/i;
 
 function parseArgs(argv) {
   let baseUrl = '';
@@ -62,8 +66,12 @@ async function fetchWithTimeout(url, init, timeoutMs) {
   }
 }
 
+async function readText(response) {
+  return response.text();
+}
+
 async function readJson(response) {
-  const text = await response.text();
+  const text = await readText(response);
   if (!text) return null;
 
   try {
@@ -83,7 +91,65 @@ function logPass(message) {
   console.log(`PASS ${message}`);
 }
 
-async function checkOkPage(baseUrl, path, timeoutMs) {
+function extractNextStaticAssets(html, pageUrl) {
+  const routeUrl = new URL(pageUrl);
+  const assets = new Map();
+  const attributePattern = /(?:href|src)=["']([^"']+)["']/g;
+
+  for (const match of html.matchAll(attributePattern)) {
+    const rawValue = (match[1] || '').trim();
+    if (!rawValue || !rawValue.includes('/_next/static/')) {
+      continue;
+    }
+
+    let assetUrl;
+    try {
+      assetUrl = new URL(rawValue, routeUrl);
+    } catch {
+      continue;
+    }
+
+    if (assetUrl.origin !== routeUrl.origin) {
+      continue;
+    }
+
+    const assetPath = `${assetUrl.pathname}${assetUrl.search}`;
+    const expectedType = assetUrl.pathname.endsWith('.css')
+      ? 'css'
+      : assetUrl.pathname.endsWith('.js')
+        ? 'javascript'
+        : '';
+
+    if (!expectedType) {
+      continue;
+    }
+
+    assets.set(assetPath, {
+      assetPath,
+      expectedType,
+    });
+  }
+
+  return Array.from(assets.values());
+}
+
+function matchesExpectedAssetContentType(contentType, expectedType) {
+  if (!contentType) {
+    return false;
+  }
+
+  if (expectedType === 'css') {
+    return CSS_CONTENT_TYPE_PATTERN.test(contentType);
+  }
+
+  if (expectedType === 'javascript') {
+    return JAVASCRIPT_CONTENT_TYPE_PATTERN.test(contentType);
+  }
+
+  return false;
+}
+
+async function fetchHtmlPage(baseUrl, path, timeoutMs) {
   const url = new URL(path, `${baseUrl}/`).toString();
   const response = await fetchWithTimeout(
     url,
@@ -95,7 +161,15 @@ async function checkOkPage(baseUrl, path, timeoutMs) {
   );
 
   assert(response.status === 200, `${path} returned ${response.status} instead of 200`);
-  logPass(`${path} returned 200`);
+  const contentType = response.headers.get('content-type') || '';
+  assert(
+    /\btext\/html\b/i.test(contentType),
+    `${path} returned unexpected content-type ${contentType || '(missing)'}`
+  );
+
+  const html = await readText(response);
+  logPass(`${path} returned 200 HTML`);
+  return { html, url };
 }
 
 async function checkHealth(baseUrl, timeoutMs) {
@@ -187,6 +261,69 @@ async function checkLatestEpaperPdf(baseUrl, epaperId, timeoutMs) {
   logPass(`/api/public/epapers/${epaperId}/pdf returned a redirect`);
 }
 
+async function checkAssetIntegrity(baseUrl, routePaths, timeoutMs) {
+  const assetReferences = new Map();
+
+  for (const routePath of routePaths) {
+    const { html, url } = await fetchHtmlPage(baseUrl, routePath, timeoutMs);
+    const assets = extractNextStaticAssets(html, url);
+
+    assert(
+      assets.length > 0,
+      `${routePath} did not reference any Next.js JS/CSS assets under /_next/static/`
+    );
+
+    logPass(`${routePath} referenced ${assets.length} unique Next.js JS/CSS assets`);
+
+    for (const asset of assets) {
+      const existing = assetReferences.get(asset.assetPath) || {
+        ...asset,
+        routes: [],
+      };
+      existing.routes.push(routePath);
+      assetReferences.set(asset.assetPath, existing);
+    }
+  }
+
+  const failures = [];
+
+  for (const reference of assetReferences.values()) {
+    const url = new URL(reference.assetPath, `${baseUrl}/`).toString();
+    const response = await fetchWithTimeout(
+      url,
+      {
+        redirect: 'manual',
+        headers: { accept: '*/*' },
+      },
+      timeoutMs
+    );
+
+    const contentType = response.headers.get('content-type') || '';
+
+    if (response.status !== 200) {
+      failures.push(
+        `${reference.routes.join(', ')} -> ${reference.assetPath} returned ${response.status} (${contentType || 'missing content-type'})`
+      );
+      continue;
+    }
+
+    if (!matchesExpectedAssetContentType(contentType, reference.expectedType)) {
+      failures.push(
+        `${reference.routes.join(', ')} -> ${reference.assetPath} returned content-type ${contentType || '(missing)'} instead of ${reference.expectedType}`
+      );
+    }
+  }
+
+  assert(
+    failures.length === 0,
+    `Asset integrity check failed:\n${failures.map((failure) => `- ${failure}`).join('\n')}`
+  );
+
+  logPass(
+    `Verified ${assetReferences.size} unique Next.js JS/CSS assets across ${routePaths.length} route(s)`
+  );
+}
+
 function printHelp() {
   console.log('Usage: npm run test:smoke -- https://your-domain.com');
   console.log('   or: npm run test:smoke -- --baseUrl=https://your-domain.com --timeoutMs=20000');
@@ -203,9 +340,7 @@ async function main() {
   console.log(`Smoke checking ${baseUrl}`);
 
   await checkHealth(baseUrl, timeoutMs);
-  await checkOkPage(baseUrl, '/signin', timeoutMs);
-  await checkOkPage(baseUrl, '/main', timeoutMs);
-  await checkOkPage(baseUrl, '/main/epaper', timeoutMs);
+  await checkAssetIntegrity(baseUrl, ASSET_INTEGRITY_ROUTES, timeoutMs);
   await checkAdminRedirect(baseUrl, timeoutMs);
 
   const latestEpaperId = await checkLatestEpaper(baseUrl, timeoutMs);

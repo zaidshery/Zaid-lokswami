@@ -19,14 +19,16 @@ npm run test:smoke -- https://lokswami.com
 The automated smoke script checks:
 
 - `/api/health` returns `status=ok` and `db=connected`
-- `/signin` returns `200`
-- `/main` returns `200`
-- `/main/epaper` returns `200`
+- `/signin`, `/main`, and `/main/epaper` return `200` HTML
+- every JS/CSS file referenced by those pages under `/_next/static/*` returns `200`
+- every referenced JS/CSS file returns the expected content type instead of a plain-text 404 or error page
 - guest access to `/admin` redirects to `/signin?redirect=%2Fadmin`
 - `/api/epapers/latest?limit=1` returns at least one item
 - the latest public e-paper PDF route returns a redirect URL
 
 If the script fails, stop and fix the deploy before moving on.
+
+If the failure mentions a route pointing at a missing `/_next/static/*` file, treat it as a release mismatch and redeploy before letting users back in. That is the signature of stale HTML pointing at deleted hashed assets.
 
 ## Manual Checks
 
