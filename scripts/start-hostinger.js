@@ -16,6 +16,26 @@ const {
 
 const legacyServerEntry = path.join(projectRoot, '.next', 'standalone', 'server.js');
 
+function clearMissingManagedRelease(releaseState, missingReleaseId) {
+  const nextState = {
+    ...releaseState,
+    currentReleaseId:
+      releaseState.currentReleaseId === missingReleaseId
+        ? ''
+        : releaseState.currentReleaseId,
+    pendingReleaseId:
+      releaseState.pendingReleaseId === missingReleaseId
+        ? ''
+        : releaseState.pendingReleaseId,
+    releaseHistoryIds: releaseState.releaseHistoryIds.filter(
+      (releaseId) => releaseId !== missingReleaseId
+    ),
+  };
+
+  writeReleaseState(nextState);
+  return nextState;
+}
+
 function loadProjectEnvFiles() {
   let dotenv;
 
@@ -90,17 +110,32 @@ function promotePreparedRelease(releaseState) {
 }
 
 function resolveServerEntry() {
-  const releaseState = readReleaseState();
+  let releaseState = readReleaseState();
 
   if (releaseState.pendingReleaseId || releaseState.currentReleaseId) {
-    const { releaseId } = promotePreparedRelease(releaseState);
-    if (releaseId) {
-      const serverEntry = getReleaseServerEntry(releaseId);
-      return {
-        mode: 'managed',
-        releaseId,
-        serverEntry,
-      };
+    const managedReleaseId =
+      releaseState.pendingReleaseId || releaseState.currentReleaseId;
+    const managedServerEntry = getReleaseServerEntry(managedReleaseId);
+
+    if (!exists(managedServerEntry)) {
+      console.warn(
+        [
+          `Managed Hostinger release ${managedReleaseId} is missing at startup.`,
+          `Expected server entry: ${managedServerEntry}`,
+          'Falling back to the local .next/standalone server output.',
+        ].join('\n')
+      );
+      releaseState = clearMissingManagedRelease(releaseState, managedReleaseId);
+    } else {
+      const { releaseId } = promotePreparedRelease(releaseState);
+      if (releaseId) {
+        const serverEntry = getReleaseServerEntry(releaseId);
+        return {
+          mode: 'managed',
+          releaseId,
+          serverEntry,
+        };
+      }
     }
   }
 
@@ -130,7 +165,7 @@ function main() {
   );
 
   const child = spawn(process.execPath, [target.serverEntry], {
-    cwd: projectRoot,
+    cwd: releaseRoot,
     env: process.env,
     stdio: 'inherit',
   });
