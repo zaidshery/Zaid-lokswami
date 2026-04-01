@@ -40,10 +40,12 @@ const THEME_INIT_SCRIPT = `
 const ASSET_RECOVERY_SCRIPT = `
 (() => {
   const STORAGE_KEY = 'lokswami-asset-recovery';
+  const CACHE_BUST_PARAM = '__asset_recovery';
   const RECOVERY_WINDOW_MS = 10 * 60 * 1000;
   const MAX_ATTEMPTS = 1;
   const chunkErrorPattern =
     /ChunkLoadError|Loading chunk [0-9]+ failed|CSS_CHUNK_LOAD_FAILED|Failed to fetch dynamically imported module/i;
+  let recoveryInFlight = false;
 
   const readState = () => {
     try {
@@ -80,15 +82,81 @@ const ASSET_RECOVERY_SCRIPT = `
     } catch {}
   };
 
-  const recoverFromStaleAssets = () => {
-    const state = readState();
-    if (state.attempts >= MAX_ATTEMPTS) {
+  const clearState = () => {
+    try {
+      window.sessionStorage.removeItem(STORAGE_KEY);
+    } catch {}
+  };
+
+  const clearOriginCaches = async () => {
+    if (!('caches' in window)) {
       return;
     }
 
-    writeState(state.attempts + 1);
-    window.location.reload();
+    const cacheKeys = await window.caches.keys();
+    await Promise.allSettled(cacheKeys.map((key) => window.caches.delete(key)));
   };
+
+  const unregisterServiceWorkers = async () => {
+    if (!('serviceWorker' in navigator)) {
+      return;
+    }
+
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.allSettled(
+      registrations.map((registration) => registration.unregister())
+    );
+  };
+
+  const cleanupRecoveryParam = () => {
+    try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has(CACHE_BUST_PARAM)) {
+        return;
+      }
+
+      url.searchParams.delete(CACHE_BUST_PARAM);
+      const cleanUrl = \`\${url.pathname}\${url.search}\${url.hash}\` || '/';
+      window.history.replaceState(window.history.state, '', cleanUrl);
+    } catch {}
+  };
+
+  const buildRecoveryUrl = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set(CACHE_BUST_PARAM, String(Date.now()));
+    return url.toString();
+  };
+
+  const recoverFromStaleAssets = () => {
+    const state = readState();
+    if (recoveryInFlight || state.attempts >= MAX_ATTEMPTS) {
+      return;
+    }
+
+    recoveryInFlight = true;
+    writeState(state.attempts + 1);
+    const nextUrl = buildRecoveryUrl();
+
+    Promise.allSettled([unregisterServiceWorkers(), clearOriginCaches()]).finally(() => {
+      window.location.replace(nextUrl);
+    });
+  };
+
+  window.addEventListener(
+    'load',
+    () => {
+      try {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has(CACHE_BUST_PARAM)) {
+          return;
+        }
+
+        clearState();
+        cleanupRecoveryParam();
+      } catch {}
+    },
+    { once: true }
+  );
 
   window.addEventListener(
     'error',
