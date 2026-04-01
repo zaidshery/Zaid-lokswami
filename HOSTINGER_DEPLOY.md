@@ -87,6 +87,9 @@ npm run build
 npm start
 ```
 
+Do not replace the start command with `next start` or `node .next/standalone/server.js`.
+Those paths bypass the managed Hostinger release overlap and can bring back stale-chunk 404s after deploys.
+
 Equivalent explicit Hostinger aliases still work:
 
 ```bash
@@ -128,6 +131,7 @@ What `start:hostinger` does now:
 - promotes the most recently prepared release to current only when the process starts
 - starts the promoted release from `.hostinger/releases/<build-id>/server.js`
 - prunes older release directories after promotion
+- keeps a wider default overlap of older hashed `/_next/static/*` assets so stale tabs can recover after deploys
 
 This avoids the old failure mode where an in-place build deleted the currently running `.next/standalone/.next/static` files before the new release was fully live.
 

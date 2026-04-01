@@ -37,6 +37,89 @@ const THEME_INIT_SCRIPT = `
   }
 })();
 `;
+const ASSET_RECOVERY_SCRIPT = `
+(() => {
+  const STORAGE_KEY = 'lokswami-asset-recovery';
+  const RECOVERY_WINDOW_MS = 10 * 60 * 1000;
+  const MAX_ATTEMPTS = 1;
+  const chunkErrorPattern =
+    /ChunkLoadError|Loading chunk [0-9]+ failed|CSS_CHUNK_LOAD_FAILED|Failed to fetch dynamically imported module/i;
+
+  const readState = () => {
+    try {
+      const raw = window.sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        return { attempts: 0, timestamp: 0 };
+      }
+
+      const parsed = JSON.parse(raw);
+      const attempts = Number(parsed?.attempts) || 0;
+      const timestamp = Number(parsed?.timestamp) || 0;
+
+      if (!timestamp || Date.now() - timestamp > RECOVERY_WINDOW_MS) {
+        window.sessionStorage.removeItem(STORAGE_KEY);
+        return { attempts: 0, timestamp: 0 };
+      }
+
+      return { attempts, timestamp };
+    } catch {
+      return { attempts: 0, timestamp: 0 };
+    }
+  };
+
+  const writeState = (attempts) => {
+    try {
+      window.sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          attempts,
+          timestamp: Date.now(),
+          path: window.location.pathname,
+        })
+      );
+    } catch {}
+  };
+
+  const recoverFromStaleAssets = () => {
+    const state = readState();
+    if (state.attempts >= MAX_ATTEMPTS) {
+      return;
+    }
+
+    writeState(state.attempts + 1);
+    window.location.reload();
+  };
+
+  window.addEventListener(
+    'error',
+    (event) => {
+      const target = event.target;
+
+      if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement) {
+        const assetUrl = target.src || target.href || '';
+        if (assetUrl.includes('/_next/static/')) {
+          recoverFromStaleAssets();
+          return;
+        }
+      }
+
+      const message = String(event.message || '');
+      if (chunkErrorPattern.test(message)) {
+        recoverFromStaleAssets();
+      }
+    },
+    true
+  );
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    const message = String(reason?.message || reason || '');
+    if (chunkErrorPattern.test(message)) {
+      recoverFromStaleAssets();
+    }
+  });
+})();
+`;
 const googleTagManagerId = process.env.NEXT_PUBLIC_GTM_ID?.trim() || '';
 
 export const metadata: Metadata = {
@@ -84,6 +167,10 @@ export default function RootLayout({
       <head>
         <meta charSet="utf-8" />
         <script id="lokswami-theme-init" dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script
+          id="lokswami-asset-recovery"
+          dangerouslySetInnerHTML={{ __html: ASSET_RECOVERY_SCRIPT }}
+        />
         {googleTagManagerId ? (
           <Script id="lokswami-google-tag-manager" strategy="beforeInteractive">
             {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
