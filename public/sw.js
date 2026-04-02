@@ -106,7 +106,7 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache Next.js build assets. Old cached HTML plus deleted hashed chunks
   // is exactly the failure mode that causes ChunkLoadError after deploys.
-  if (url.pathname.startsWith('/_next/')) {
+  if (url.pathname.startsWith('/_next/') || url.pathname.startsWith('/next/')) {
     return;
   }
 

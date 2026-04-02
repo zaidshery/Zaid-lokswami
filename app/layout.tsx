@@ -165,7 +165,10 @@ const ASSET_RECOVERY_SCRIPT = `
 
       if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement) {
         const assetUrl = target.src || target.href || '';
-        if (assetUrl.includes('/_next/static/')) {
+        if (
+          assetUrl.includes('/_next/static/') ||
+          assetUrl.includes('/next/static/')
+        ) {
           recoverFromStaleAssets();
           return;
         }

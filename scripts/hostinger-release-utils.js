@@ -6,10 +6,10 @@ const hostingerRoot = path.join(projectRoot, '.hostinger');
 const releasesDir = path.join(hostingerRoot, 'releases');
 const staticSnapshotsDir = path.join(hostingerRoot, 'static-snapshots');
 const releaseStatePath = path.join(hostingerRoot, 'release-state.json');
-// Keep a wider overlap window so older browser tabs can still load hashed
+// Keep a larger overlap window so older browser tabs can still load hashed
 // assets while users refresh onto the newest release after deploys.
-const DEFAULT_STATIC_OVERLAP_RELEASES = 7;
-const DEFAULT_RELEASE_RETENTION = 10;
+const DEFAULT_STATIC_OVERLAP_RELEASES = 21;
+const DEFAULT_RELEASE_RETENTION = 30;
 
 function ensureDir(targetPath) {
   fs.mkdirSync(targetPath, { recursive: true });

@@ -48,6 +48,15 @@ const nextConfig = {
         ],
       },
       {
+        source: '/next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
         source: '/sw.js',
         headers: [
           {
@@ -96,6 +105,10 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      {
+        source: '/next/static/:path*',
+        destination: '/_next/static/:path*',
+      },
       {
         source: '/api/test-db',
         destination: '/api/health',

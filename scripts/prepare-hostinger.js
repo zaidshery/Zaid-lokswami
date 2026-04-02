@@ -102,9 +102,13 @@ function main() {
     lastPreparedAt: new Date().toISOString(),
   });
 
+  const snapshotRetentionCount = Math.max(
+    releaseRetentionCount,
+    overlapReleaseCount + 2
+  );
   const snapshotIdsToKeep = dedupeStrings([
     releaseId,
-    ...getRecentSnapshotIds(releaseRetentionCount, preferredSnapshotIds),
+    ...getRecentSnapshotIds(snapshotRetentionCount, preferredSnapshotIds),
   ]).filter((snapshotId) => exists(getStaticSnapshotDir(snapshotId)));
   const removedSnapshotIds = pruneDirectories(
     staticSnapshotsDir,
