@@ -57,6 +57,15 @@ const nextConfig = {
         ],
       },
       {
+        source: '/__next_static__/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
         source: '/sw.js',
         headers: [
           {
@@ -107,6 +116,10 @@ const nextConfig = {
     return [
       {
         source: '/next/static/:path*',
+        destination: '/_next/static/:path*',
+      },
+      {
+        source: '/__next_static__/:path*',
         destination: '/_next/static/:path*',
       },
       {

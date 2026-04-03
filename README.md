@@ -189,7 +189,7 @@ Hostinger Node deployment is the supported production path for this repo.
 - Do not swap production start to `next start` or `node .next/standalone/server.js`, because that bypasses the managed Hostinger release flow
 - `npm run build:hostinger` and `npm run start:hostinger` remain as explicit aliases for the same Hostinger flow
 - Roll back to the previous prepared Hostinger release with `npm run rollback:hostinger` and then `npm run start:hostinger`
-- The Hostinger flow now stages versioned releases in `.hostinger/releases/*` and keeps a short overlap of older hashed `/_next/static/*` assets to prevent post-deploy `ChunkLoadError` crashes
+- The Hostinger flow now stages versioned releases in `.hostinger/releases/*`, rebuilds a shared `.hostinger/shared-next-static/` bundle, and keeps an overlap of older hashed `/_next/static/*` assets to prevent post-deploy `ChunkLoadError` and `text/plain` asset 404 crashes
 - `npm run test:smoke -- https://your-domain.com` now checks live HTML asset integrity, not just status codes
 - See `HOSTINGER_DEPLOY.md` for the full server checklist
 

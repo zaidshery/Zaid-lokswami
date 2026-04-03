@@ -19,6 +19,7 @@ const {
   releasesDir,
   removeDirectory,
   resolvePositiveInteger,
+  sharedStaticDir,
   staticSnapshotsDir,
   writeReleaseState,
 } = require('./hostinger-release-utils');
@@ -52,11 +53,12 @@ function main() {
     releasesDir,
     `${releaseId}.tmp-${process.pid}`
   );
+  const tempSharedStaticDir = path.join(
+    hostingerRoot,
+    `shared-next-static.tmp-${process.pid}`
+  );
   const nextStaticSnapshotDir = getStaticSnapshotDir(releaseId);
-  const preferredSnapshotIds = dedupeStrings([
-    releaseState.currentReleaseId,
-    'legacy-live',
-  ]);
+  const preferredSnapshotIds = dedupeStrings([releaseState.currentReleaseId]);
   const overlapSnapshotIds = getRecentSnapshotIds(
     Math.max(0, overlapReleaseCount - 1),
     preferredSnapshotIds
@@ -110,6 +112,31 @@ function main() {
     releaseId,
     ...getRecentSnapshotIds(snapshotRetentionCount, preferredSnapshotIds),
   ]).filter((snapshotId) => exists(getStaticSnapshotDir(snapshotId)));
+
+  removeDirectory(tempSharedStaticDir);
+  copyDirectory(staticSourceDir, tempSharedStaticDir);
+
+  let mergedSharedStaticFileCount = 0;
+  for (const snapshotId of snapshotIdsToKeep) {
+    if (snapshotId === releaseId) {
+      continue;
+    }
+
+    const snapshotDir = getStaticSnapshotDir(snapshotId);
+    if (!exists(snapshotDir)) {
+      continue;
+    }
+
+    mergedSharedStaticFileCount += mergeDirectory(
+      snapshotDir,
+      tempSharedStaticDir,
+      { overwrite: false }
+    );
+  }
+
+  removeDirectory(sharedStaticDir);
+  require('fs').renameSync(tempSharedStaticDir, sharedStaticDir);
+
   const removedSnapshotIds = pruneDirectories(
     staticSnapshotsDir,
     snapshotIdsToKeep
@@ -121,6 +148,8 @@ function main() {
       `- release dir: ${releaseDir}`,
       `- preserved static overlap snapshots: ${overlapSnapshotIds.length}`,
       `- merged fallback asset files: ${mergedFallbackFileCount}`,
+      `- shared static bundle: ${sharedStaticDir}`,
+      `- merged shared fallback asset files: ${mergedSharedStaticFileCount}`,
       removedSnapshotIds.length > 0
         ? `- pruned old static snapshots: ${removedSnapshotIds.join(', ')}`
         : '',

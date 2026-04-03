@@ -4,11 +4,10 @@
   "private": true,
   "scripts": {
     "clean:next": "node scripts/clean-next-artifacts.js",
-    "preserve:hostinger": "node scripts/preserve-hostinger-static.js",
     "prepare:next:dev": "node scripts/sync-next-env-dist.js .next-dev",
     "prepare:next:prod": "node scripts/sync-next-env-dist.js .next",
     "predev": "npm run prepare:next:dev && npm run clean:next",
-    "prebuild": "npm run prepare:next:prod && npm run preserve:hostinger && npm run clean:next",
+    "prebuild": "npm run prepare:next:prod && npm run clean:next",
     "dev": "next dev",
     "build": "npm run build:next && node scripts/prepare-hostinger.js",
     "build:hostinger": "npm run build",

@@ -118,22 +118,22 @@ That marks the previous prepared release as pending and then promotes it on rest
 
 What `build:hostinger` does:
 
-- preserves the currently live legacy static bundle before clearing `.next` during the migration from the old in-place flow
 - builds the Next.js app into `.next`
 - snapshots the new `.next/static` output
 - prepares a versioned standalone release under `.hostinger/releases/<build-id>`
 - copies `public/` into that prepared release
 - merges a short overlap window of older hashed `/_next/static/*` assets into the new release so stale HTML can still resolve its chunks during rollout
+- rebuilds a shared `.hostinger/shared-next-static` bundle so any managed release can answer recent hashed asset requests
 - records the prepared release in `.hostinger/release-state.json`
 
 What `start:hostinger` does now:
 
 - promotes the most recently prepared release to current only when the process starts
-- starts the promoted release from `.hostinger/releases/<build-id>/server.js`
+- starts the promoted release behind a small proxy that serves `/_next/static/*` and `/__next_static__/*` from the shared overlap-aware bundle
 - prunes older release directories after promotion
 - keeps a wider default overlap of older hashed `/_next/static/*` assets so stale tabs can recover after deploys
 
-This avoids the old failure mode where an in-place build deleted the currently running `.next/standalone/.next/static` files before the new release was fully live.
+This avoids the old failure mode where an in-place build deleted the currently running `.next/standalone/.next/static` files before the new release was fully live, and it also keeps mixed-release requests from turning chunk misses into `text/plain` 404s when Hostinger briefly routes HTML and asset requests to different release generations.
 
 Important for Hostinger auto-deploy:
 
@@ -199,6 +199,7 @@ EPAPER_STORAGE_UPLOADS_BASE_DIR=/absolute/path/to/writable/storage/uploads
 - Keep `NEXTAUTH_URL` and `NEXT_PUBLIC_SITE_URL` on the same final domain.
 - Regenerate `NEXTAUTH_SECRET` only if you are okay invalidating sessions.
 - Do not delete `.hostinger/` between deploys. It stores the active release plus recent static snapshots for safe chunk overlap.
+- Do not delete `.hostinger/shared-next-static/`. The startup proxy uses it as the shared asset surface for both `/_next/static/*` and `/__next_static__/*`.
 - If you need to tune overlap or release retention, set `HOSTINGER_STATIC_OVERLAP_RELEASES` and `HOSTINGER_RELEASE_RETENTION`.
 
 ## Quick Smoke Test

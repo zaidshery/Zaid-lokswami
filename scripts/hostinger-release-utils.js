@@ -5,6 +5,7 @@ const projectRoot = process.cwd();
 const hostingerRoot = path.join(projectRoot, '.hostinger');
 const releasesDir = path.join(hostingerRoot, 'releases');
 const staticSnapshotsDir = path.join(hostingerRoot, 'static-snapshots');
+const sharedStaticDir = path.join(hostingerRoot, 'shared-next-static');
 const releaseStatePath = path.join(hostingerRoot, 'release-state.json');
 // Keep a larger overlap window so older browser tabs can still load hashed
 // assets while users refresh onto the newest release after deploys.
@@ -242,6 +243,7 @@ module.exports = {
   releaseStatePath,
   removeDirectory,
   resolvePositiveInteger,
+  sharedStaticDir,
   staticSnapshotsDir,
   writeReleaseState,
 };
