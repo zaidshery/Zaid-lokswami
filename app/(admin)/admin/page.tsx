@@ -93,18 +93,6 @@ function formatNewsroomRoleLabel(role: string) {
   }
 }
 
-function formatSourceLabel(source: 'mongodb' | 'file' | 'hybrid') {
-  switch (source) {
-    case 'mongodb':
-      return 'MongoDB live data';
-    case 'file':
-      return 'Local file store';
-    case 'hybrid':
-    default:
-      return 'MongoDB + file-store fallback';
-  }
-}
-
 function getWorkflowToneClass(status: string) {
   switch (status) {
     case 'published':
@@ -298,11 +286,11 @@ function LeadershipHeroSection({
             Super Admin
           </div>
           <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
-            Lokswami Leadership Deck
+            Leadership Dashboard
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-            A cleaner control surface for release readiness, blocked operations, reporting health,
-            team coverage, and growth movement across the newsroom.
+            Track release readiness, blocked operations, reporting health, team coverage, and
+            growth across the newsroom.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -325,7 +313,7 @@ function LeadershipHeroSection({
         <div className="grid gap-4">
           <div className="admin-shell-surface rounded-[28px] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-              Immediate Focus
+              Priority Alerts
             </p>
             <div className="mt-4 space-y-3">
               {focusPoints.map((point) => (
@@ -1193,9 +1181,9 @@ function getQuickActions(role: string): QuickAction[] {
     case 'reporter':
       return [
         {
-          label: 'Start Article',
+          label: 'Start Story',
           description: 'Create a new story draft and send it into review.',
-          href: '/admin/articles/new',
+          href: '/admin/stories/new',
           icon: FileText,
           tone: 'bg-blue-500/10 text-blue-600',
         },
@@ -1207,9 +1195,9 @@ function getQuickActions(role: string): QuickAction[] {
           tone: 'bg-amber-500/10 text-amber-600',
         },
         {
-          label: 'My Articles',
-          description: 'Open your personal article desk view.',
-          href: '/admin/articles?scope=mine',
+          label: 'Stories',
+          description: 'Open your stories desk view.',
+          href: '/admin/stories',
           icon: FileText,
           tone: 'bg-rose-500/10 text-rose-600',
         },
@@ -1340,15 +1328,16 @@ export default async function AdminDashboardPage() {
     redirect('/signin?redirect=/admin');
   }
 
+  const usesLeadershipDashboardData = admin.role === 'super_admin' || admin.role === 'admin';
   const [baseDashboard, myWork, baseReviewQueue, superAdminDashboard] = await Promise.all([
-    admin.role === 'super_admin' ? Promise.resolve(null) : getAdminDashboardData(),
+    usesLeadershipDashboardData ? Promise.resolve(null) : getAdminDashboardData(),
     canViewPage(admin.role, 'my_work') ? getMyWorkOverview(admin) : Promise.resolve(null),
-    admin.role === 'super_admin'
+    usesLeadershipDashboardData
       ? Promise.resolve(null)
       : canViewPage(admin.role, 'review_queue')
         ? getReviewQueueOverview()
         : Promise.resolve(null),
-    admin.role === 'super_admin' ? getSuperAdminDashboardData() : Promise.resolve(null),
+    usesLeadershipDashboardData ? getSuperAdminDashboardData() : Promise.resolve(null),
   ]);
 
   const dashboard = (superAdminDashboard?.dashboard ?? baseDashboard)!;
@@ -1606,17 +1595,13 @@ export default async function AdminDashboardPage() {
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
                   {isReporterDeskRole(admin.role)
-                    ? 'Your landing page is now focused on drafts, submissions, and assigned article work instead of generic CMS totals.'
+                    ? 'See your drafts, submissions, and assigned article work first.'
                     : admin.role === 'copy_editor'
-                      ? 'Your dashboard now centers the editorial queue, your copy desk workload, and e-paper production pressure instead of generic content counts.'
+                      ? 'See the editorial queue, your copy desk workload, and e-paper production pressure first.'
                       : admin.role === 'admin'
-                        ? 'Your dashboard now highlights queue pressure, publish-ready work, edition production, inbox load, and editorial operations instead of a generic site summary.'
-                        : 'Your dashboard is now a monitoring surface for newsroom output and live workflow pressure.'}
+                        ? 'See queue pressure, publish-ready work, edition production, inbox load, and editorial operations first.'
+                        : 'See newsroom output and live workflow pressure at a glance.'}
                 </p>
-              </div>
-              <div className={`${SOFT_CARD_CLASS} px-4 py-3 text-sm`}>
-                <p className="font-semibold text-[var(--admin-shell-text)]">Data Source</p>
-                <p className="mt-1">{formatSourceLabel(dashboard.source)}</p>
               </div>
             </div>
           </section>
@@ -1718,31 +1703,29 @@ export default async function AdminDashboardPage() {
       ) : null}
 
       {admin.role === 'admin' ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr,1fr]">
-          <div className="space-y-6">
-            <WorkflowListSection
-              title="Ready To Publish"
-              description="Approved content and ready editions waiting for release decisions."
-              href="/admin/content-queue"
-              linkLabel="Open Content Queue"
-              items={readyToPublishItems}
-              emptyMessage="No content or editions are waiting for publish decisions right now."
-            />
-            <WorkflowListSection
-              title="Live Review Queue"
-              description="Current queue pressure still moving through editorial and production workflow."
-              href="/admin/assignments"
-              linkLabel="Open Assignments"
-              items={activeReviewItems}
-              emptyMessage="The live review queue is clear right now."
-            />
-          </div>
-          <InboxSnapshot counts={dashboard.inbox} />
-        </div>
-      ) : null}
-
-      {admin.role === 'super_admin' ? (
         <>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr,1fr]">
+            <div className="space-y-6">
+              <WorkflowListSection
+                title="Ready To Publish"
+                description="Approved content and ready editions waiting for release decisions."
+                href="/admin/content-queue"
+                linkLabel="Open Content Queue"
+                items={readyToPublishItems}
+                emptyMessage="No content or editions are waiting for publish decisions right now."
+              />
+              <WorkflowListSection
+                title="Live Review Queue"
+                description="Current queue pressure still moving through editorial and production workflow."
+                href="/admin/assignments"
+                linkLabel="Open Assignments"
+                items={activeReviewItems}
+                emptyMessage="The live review queue is clear right now."
+              />
+            </div>
+            <InboxSnapshot counts={dashboard.inbox} />
+          </div>
+
           <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[1.18fr,0.95fr,0.9fr]">
             <div className="space-y-6">
               <DecisionCenterSection
@@ -1757,7 +1740,6 @@ export default async function AdminDashboardPage() {
                 linkLabel="Open Newsroom Overview"
                 items={superAdminOverviewItems}
                 emptyMessage="No live workflow items are waiting in the newsroom right now."
-                className="rounded-[32px] border-zinc-200/80 bg-white/92 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.38)] dark:border-white/10 dark:bg-zinc-950/60"
               />
             </div>
 
@@ -1780,17 +1762,16 @@ export default async function AdminDashboardPage() {
 
             <div className="space-y-6">
               <QualityWatchlistSection items={qualityWatchlist} />
-              <TeamHealthSection
-                summary={teamHealth}
-                className="rounded-[32px] border-zinc-200/80 bg-white/92 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.38)] dark:border-white/10 dark:bg-zinc-950/60"
-              />
-              <InboxSnapshot
-                counts={dashboard.inbox}
-                className="rounded-[32px] border-zinc-200/80 bg-white/92 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.38)] dark:border-white/10 dark:bg-zinc-950/60"
-              />
             </div>
           </div>
         </>
+      ) : null}
+
+      {admin.role === 'super_admin' ? (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr,1fr]">
+          <TeamHealthSection summary={teamHealth} />
+          <InboxSnapshot counts={dashboard.inbox} />
+        </div>
       ) : null}
 
       {!['reporter', 'copy_editor', 'admin', 'super_admin'].includes(admin.role) ? (

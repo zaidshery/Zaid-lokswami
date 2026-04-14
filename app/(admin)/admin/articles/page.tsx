@@ -8,7 +8,6 @@ import { useSearchParams } from 'next/navigation';
 import {
   Edit,
   FileText,
-  ListFilter,
   Loader,
   Plus,
   RefreshCw,
@@ -111,16 +110,10 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 const PANEL_CLASS = 'admin-shell-surface-strong rounded-[30px] p-6';
 
-const SOFT_CARD_CLASS =
-  'admin-shell-surface-muted rounded-[24px] p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.14)] dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.35)]';
-
 const METRIC_CARD_CLASS = 'admin-shell-surface rounded-[26px] p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.16)]';
 
 const EMPTY_STATE_CLASS =
   'rounded-[24px] border border-dashed border-[color:var(--admin-shell-border-strong)] bg-[color:var(--admin-shell-surface-muted)] p-6 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]';
-
-const META_CHIP_CLASS =
-  'admin-shell-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]';
 
 const FILTER_INPUT_CLASS =
   'w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-4 py-3 text-sm text-[color:var(--admin-shell-text)] outline-none transition-colors placeholder:text-[color:var(--admin-shell-text-muted)] focus:border-red-400/40';
@@ -485,32 +478,14 @@ export default function ArticlesManagement() {
               Article Desk
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-              A cleaner desk for drafts, review flow, publish readiness, and article voice operations.
-              Use scope, status, and category filters to move between personal work, live review, and published output.
+              Manage drafts, review flow, publish readiness, and article voice operations from one
+              desk.
             </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <div className={META_CHIP_CLASS}>
-                <span>Visible</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{counts.total}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Needs Review</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{counts.needsReview}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Ready</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{counts.readyToPublish}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Drafts</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{counts.drafts}</strong>
-              </div>
-            </div>
           </div>
 
           <div className={PANEL_CLASS}>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-              Desk Actions
+              Actions
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
           {adminRole ? (
@@ -533,13 +508,13 @@ export default function ArticlesManagement() {
             href="/admin/ai?ttsVariant=article_full&ttsSourceType=article"
             className={SECONDARY_BUTTON_CLASS}
           >
-            Article TTS Ops
+            Article TTS
           </Link>
           <Link
             href="/admin/ai?ttsVariant=breaking_headline&ttsSourceType=article"
             className={DANGER_BUTTON_CLASS}
           >
-            Breaking TTS Ops
+            Breaking TTS
           </Link>
             </div>
             {canCreateArticles ? (
@@ -550,16 +525,6 @@ export default function ArticlesManagement() {
                 </Link>
               </div>
             ) : null}
-            <div className="mt-4 space-y-3">
-              <div className={SOFT_CARD_CLASS}>
-                <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                  Current desk scope
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-                  {scopeOptions.find((option) => option.value === selectedScope)?.label || 'All Articles'}
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -607,7 +572,7 @@ export default function ArticlesManagement() {
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr),repeat(3,minmax(0,0.4fr)),auto]">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr),repeat(2,minmax(0,0.4fr)),auto]">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
@@ -644,11 +609,6 @@ export default function ArticlesManagement() {
                 </option>
               ))}
             </select>
-
-            <div className={cx(SOFT_CARD_CLASS, 'flex items-center gap-2 text-sm text-[color:var(--admin-shell-text-muted)]')}>
-              <ListFilter className="h-4 w-4" />
-              {counts.drafts} drafts / {counts.rejected} rejected
-            </div>
 
             <button
               type="button"
@@ -820,15 +780,13 @@ export default function ArticlesManagement() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Link href={`/admin/articles/${article._id}/edit`}>
-                      <motion.button
-                        whileHover={{ scale: 1.06 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="rounded-2xl p-2.5 text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/10"
-                        title="Open desk"
-                      >
-                        <Edit className="h-5 w-5" />
-                      </motion.button>
+                    <Link
+                      href={`/admin/articles/${article._id}/edit`}
+                      className="rounded-2xl p-2.5 text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/10"
+                      aria-label="Edit article"
+                      title="Edit article"
+                    >
+                      <Edit className="h-5 w-5" />
                     </Link>
 
                     {canDeleteArticles ? (

@@ -236,16 +236,6 @@ export default async function AdminMyWorkPage() {
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
               {getIntro(admin.role)}
             </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {contextStats.map((stat) => (
-                <div key={stat.label} className={META_CHIP_CLASS}>
-                  <span>{stat.label}</span>
-                  <strong className="text-[color:var(--admin-shell-text)]">
-                    {formatNumber(stat.value)}
-                  </strong>
-                </div>
-              ))}
-            </div>
           </div>
           <Link
             href={isReporterDeskRole(admin.role) ? '/admin/articles/new' : '/admin/review-queue'}
@@ -280,18 +270,15 @@ export default async function AdminMyWorkPage() {
       </section>
 
       <section className={PANEL_CLASS}>
-        <div className="flex items-center justify-between gap-4">
+        <div>
           <div>
             <h2 className="text-xl font-bold text-[color:var(--admin-shell-text)]">
-              Workflow Items
+              Current Work
             </h2>
             <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
               Your current ownership and assignment view across content and edition production.
             </p>
           </div>
-          <Link href="/admin/my-work" className="admin-shell-toolbar-btn rounded-full px-3 py-2 text-sm font-semibold">
-            Refresh My Work
-          </Link>
         </div>
 
         <div className="mt-6 space-y-3">

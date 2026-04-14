@@ -29,6 +29,7 @@ import {
   getLeadershipReportPresetCollection,
   type LeadershipReport,
 } from '@/lib/admin/leadershipReports';
+import { buildAnalyticsLiveChartsSnapshot } from '@/lib/admin/analyticsLiveCharts';
 import {
   buildLeadershipReportEscalations,
   buildLeadershipReportHealthAlerts,
@@ -44,6 +45,7 @@ import { formatUserRoleLabel } from '@/lib/auth/roles';
 import { listLeadershipReportSchedules } from '@/lib/storage/leadershipReportSchedulesFile';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
+import AnalyticsLiveCharts from './AnalyticsLiveCharts';
 import AnalyticsShareActions from './AnalyticsShareActions';
 import LeadershipReportDeliveryPanel from './LeadershipReportDeliveryPanel';
 import LeadershipReportActions from './LeadershipReportActions';
@@ -236,6 +238,20 @@ const ANALYTICS_VIEW_PRESETS: AnalyticsViewPreset[] = [
     compare: 'off',
   },
 ];
+
+const SUPER_ADMIN_PRIMARY_TABS: AnalyticsTab[] = [
+  'overview',
+  'newsroom_ops',
+  'growth',
+  'system_health',
+];
+
+const SUPER_ADMIN_QUICK_VIEW_PRESETS = [
+  'leadership_overview',
+  'release_watch',
+  'growth_watch',
+  'system_watch',
+] as const;
 
 function readSearchParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -634,10 +650,20 @@ function AnalyticsHeroSection({
               </div>
             </div>
             <div className="mt-4 space-y-3">
-              <div className={cx(ANALYTICS_SOFT_CARD_CLASS, 'text-sm leading-6 text-[color:var(--admin-shell-text)]')}>
+              <div
+                className={cx(
+                  ANALYTICS_SOFT_CARD_CLASS,
+                  'text-sm leading-6 text-[color:var(--admin-shell-text)]'
+                )}
+              >
                 Switch between operations, audience, growth, and system views without leaving the analytics surface.
               </div>
-              <div className={cx(ANALYTICS_SOFT_CARD_CLASS, 'text-sm leading-6 text-[color:var(--admin-shell-text)]')}>
+              <div
+                className={cx(
+                  ANALYTICS_SOFT_CARD_CLASS,
+                  'text-sm leading-6 text-[color:var(--admin-shell-text)]'
+                )}
+              >
                 Save views, compare periods, export reports, and manage leadership delivery from one cleaner control layer.
               </div>
             </div>
@@ -863,10 +889,12 @@ function GrowthAnalyticsSections({
   analytics,
   compare,
   growthInsights,
+  isCompact,
 }: {
   analytics: AnalyticsCenterData;
   compare: AnalyticsCompareMode;
   growthInsights: ReturnType<typeof buildBusinessGrowthInsights>;
+  isCompact?: boolean;
 }) {
   return (
     <>
@@ -987,242 +1015,246 @@ function GrowthAnalyticsSections({
         </section>
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className={ANALYTICS_PANEL_CLASS}>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Best Converting Path</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            The audience path converting best across the current reporting window.
-          </p>
+      {isCompact ? null : (
+        <>
+          <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <section className={ANALYTICS_PANEL_CLASS}>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Best Converting Path</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                The audience path converting best across the current reporting window.
+              </p>
 
-          <div className="mt-6">
-            {growthInsights.bestPath ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-                      {growthInsights.bestPath.label}
-                    </p>
-                    <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-200">
-                      {growthInsights.bestPath.channel} / {growthInsights.bestPath.section}
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-950 dark:text-emerald-100">
-                    {formatPercent(growthInsights.bestPath.overallConversionRate)} conversion
-                  </span>
-                </div>
-                <p className="mt-4 text-sm text-emerald-800 dark:text-emerald-100">
-                  {growthInsights.bestPath.conversionSessions}/{growthInsights.bestPath.sessions} sessions converted from{' '}
-                  {growthInsights.bestPath.device} on {growthInsights.bestPath.pageType}.
-                </p>
-              </div>
-            ) : (
-              <div className={ANALYTICS_EMPTY_STATE_CLASS}>
-                Best-path performance will appear once path-level conversion tracking has enough data.
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className={ANALYTICS_PANEL_CLASS}>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Weakest Converting Path</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            The audience path that is getting traffic but needs the most conversion improvement.
-          </p>
-
-          <div className="mt-6">
-            {growthInsights.riskPath ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-5 dark:border-red-500/20 dark:bg-red-500/10">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-red-900 dark:text-red-100">
-                      {growthInsights.riskPath.label}
-                    </p>
-                    <p className="mt-1 text-xs text-red-700 dark:text-red-200">
-                      {growthInsights.riskPath.channel} / {growthInsights.riskPath.section}
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 dark:border-red-400/30 dark:bg-red-950 dark:text-red-100">
-                    {formatPercent(growthInsights.riskPath.overallConversionRate)} conversion
-                  </span>
-                </div>
-                <p className="mt-4 text-sm text-red-800 dark:text-red-100">
-                  {growthInsights.riskPath.conversionSessions}/{growthInsights.riskPath.sessions} sessions converted from{' '}
-                  {growthInsights.riskPath.device} on {growthInsights.riskPath.pageType}.
-                </p>
-              </div>
-            ) : (
-              <div className={ANALYTICS_EMPTY_STATE_CLASS}>
-                Weak-path performance will appear once path-level conversion tracking has enough data.
-              </div>
-            )}
-          </div>
-        </section>
-      </section>
-
-      <section className={ANALYTICS_PANEL_CLASS}>
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-              Growth Opportunity Matrix
-            </h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              High-reach sections and channels where improving conversion or reversing momentum would create the biggest business upside.
-            </p>
-          </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Sorted by opportunity score from reach, conversion gap, and trend softening.
-          </p>
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {growthInsights.opportunities.length ? (
-            growthInsights.opportunities.map((item) => (
-              <div
-                key={item.id}
-                className={ANALYTICS_SOFT_CARD_CLASS}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        {item.label}
-                      </p>
-                      <span className={ANALYTICS_META_CHIP_CLASS}>
-                        {item.kind}
+              <div className="mt-6">
+                {growthInsights.bestPath ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                          {growthInsights.bestPath.label}
+                        </p>
+                        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-200">
+                          {growthInsights.bestPath.channel} / {growthInsights.bestPath.section}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-950 dark:text-emerald-100">
+                        {formatPercent(growthInsights.bestPath.overallConversionRate)} conversion
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      Reach {formatNumber(item.reach)} / Sessions {formatNumber(item.sessions)}
+                    <p className="mt-4 text-sm text-emerald-800 dark:text-emerald-100">
+                      {growthInsights.bestPath.conversionSessions}/{growthInsights.bestPath.sessions} sessions converted from{' '}
+                      {growthInsights.bestPath.device} on {growthInsights.bestPath.pageType}.
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${getLeadershipMetricToneClass(
-                        item.tone === 'good' ? 'good' : item.tone === 'watch' ? 'watch' : 'critical'
-                      )}`}
-                    >
-                      {item.tone === 'good' ? 'Opportunity' : item.tone === 'watch' ? 'Watch' : 'Critical'}
-                    </span>
-                    <span className={cx(ANALYTICS_META_CHIP_CLASS, 'text-xs')}>
-                      Score {formatNumber(item.opportunityScore)}
-                    </span>
+                ) : (
+                  <div className={ANALYTICS_EMPTY_STATE_CLASS}>
+                    Best-path performance will appear once path-level conversion tracking has enough data.
                   </div>
-                </div>
-                <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">{item.detail}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                  <span
-                    className={`rounded-full border px-3 py-1 font-semibold ${getDeltaToneClass(
-                      item.momentumDelta,
-                      'higher_better'
-                    )}`}
-                    >
-                      Momentum {formatDelta(item.momentumDelta)}
-                    </span>
-                  <span className={cx(ANALYTICS_META_CHIP_CLASS, 'text-xs')}>
-                    Conversion {formatPercent(item.conversionRate)}
-                  </span>
-                  <span
-                    className={`rounded-full border px-3 py-1 font-semibold ${getDeltaToneClass(
-                      item.conversionDelta,
-                      'higher_better'
-                    )}`}
-                  >
-                    Conversion Delta {formatDelta(item.conversionDelta)} pts
-                  </span>
-                </div>
+                )}
               </div>
-            ))
-          ) : (
-            <div className={cx(ANALYTICS_EMPTY_STATE_CLASS, 'xl:col-span-2')}>
-              The opportunity matrix will appear once compare-period audience and conversion history is available.
+            </section>
+
+            <section className={ANALYTICS_PANEL_CLASS}>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Weakest Converting Path</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                The audience path that is getting traffic but needs the most conversion improvement.
+              </p>
+
+              <div className="mt-6">
+                {growthInsights.riskPath ? (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 p-5 dark:border-red-500/20 dark:bg-red-500/10">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-red-900 dark:text-red-100">
+                          {growthInsights.riskPath.label}
+                        </p>
+                        <p className="mt-1 text-xs text-red-700 dark:text-red-200">
+                          {growthInsights.riskPath.channel} / {growthInsights.riskPath.section}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-semibold text-red-700 dark:border-red-400/30 dark:bg-red-950 dark:text-red-100">
+                        {formatPercent(growthInsights.riskPath.overallConversionRate)} conversion
+                      </span>
+                    </div>
+                    <p className="mt-4 text-sm text-red-800 dark:text-red-100">
+                      {growthInsights.riskPath.conversionSessions}/{growthInsights.riskPath.sessions} sessions converted from{' '}
+                      {growthInsights.riskPath.device} on {growthInsights.riskPath.pageType}.
+                    </p>
+                  </div>
+                ) : (
+                  <div className={ANALYTICS_EMPTY_STATE_CLASS}>
+                    Weak-path performance will appear once path-level conversion tracking has enough data.
+                  </div>
+                )}
+              </div>
+            </section>
+          </section>
+
+          <section className={ANALYTICS_PANEL_CLASS}>
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                  Growth Opportunity Matrix
+                </h2>
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                  High-reach sections and channels where improving conversion or reversing momentum would create the biggest business upside.
+                </p>
+              </div>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Sorted by opportunity score from reach, conversion gap, and trend softening.
+              </p>
             </div>
-          )}
-        </div>
-      </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className={ANALYTICS_PANEL_CLASS}>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Section Momentum</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            Reader sections gaining or losing page-view momentum across the comparison window.
-          </p>
-
-          <div className="mt-6 space-y-3">
-            {compare === 'previous' && analytics.audienceAnalytics.current.sectionTrends.length ? (
-              analytics.audienceAnalytics.current.sectionTrends.map((section) => (
-                <div
-                  key={section.label}
-                  className={ANALYTICS_SOFT_CARD_CLASS}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        {section.label}
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        Current {formatNumber(section.currentEvents)} / Previous {formatNumber(section.previousEvents)} page views
-                      </p>
+            <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {growthInsights.opportunities.length ? (
+                growthInsights.opportunities.map((item) => (
+                  <div
+                    key={item.id}
+                    className={ANALYTICS_SOFT_CARD_CLASS}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                            {item.label}
+                          </p>
+                          <span className={ANALYTICS_META_CHIP_CLASS}>
+                            {item.kind}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          Reach {formatNumber(item.reach)} / Sessions {formatNumber(item.sessions)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold ${getLeadershipMetricToneClass(
+                            item.tone === 'good' ? 'good' : item.tone === 'watch' ? 'watch' : 'critical'
+                          )}`}
+                        >
+                          {item.tone === 'good' ? 'Opportunity' : item.tone === 'watch' ? 'Watch' : 'Critical'}
+                        </span>
+                        <span className={cx(ANALYTICS_META_CHIP_CLASS, 'text-xs')}>
+                          Score {formatNumber(item.opportunityScore)}
+                        </span>
+                      </div>
                     </div>
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${getDeltaToneClass(
-                        section.deltaEvents,
-                        'higher_better'
-                      )}`}
-                    >
-                      {formatDelta(section.deltaEvents)}
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className={ANALYTICS_EMPTY_STATE_CLASS}>
-                Section momentum appears when `Previous Period` compare is enabled and audience history exists.
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className={ANALYTICS_PANEL_CLASS}>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Acquisition Momentum</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            Which acquisition channels are improving or weakening across the selected periods.
-          </p>
-
-          <div className="mt-6 space-y-3">
-            {compare === 'previous' && analytics.audienceAnalytics.current.channelTrends.length ? (
-              analytics.audienceAnalytics.current.channelTrends.map((channel) => (
-                <div
-                  key={channel.label}
-                  className={ANALYTICS_SOFT_CARD_CLASS}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        {channel.label}
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        Current {formatNumber(channel.currentEvents)} / Previous {formatNumber(channel.previousEvents)} events
-                      </p>
+                    <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">{item.detail}</p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      <span
+                        className={`rounded-full border px-3 py-1 font-semibold ${getDeltaToneClass(
+                          item.momentumDelta,
+                          'higher_better'
+                        )}`}
+                      >
+                        Momentum {formatDelta(item.momentumDelta)}
+                      </span>
+                      <span className={cx(ANALYTICS_META_CHIP_CLASS, 'text-xs')}>
+                        Conversion {formatPercent(item.conversionRate)}
+                      </span>
+                      <span
+                        className={`rounded-full border px-3 py-1 font-semibold ${getDeltaToneClass(
+                          item.conversionDelta,
+                          'higher_better'
+                        )}`}
+                      >
+                        Conversion Delta {formatDelta(item.conversionDelta)} pts
+                      </span>
                     </div>
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${getDeltaToneClass(
-                        channel.deltaEvents,
-                        'higher_better'
-                      )}`}
-                    >
-                      {formatDelta(channel.deltaEvents)}
-                    </span>
                   </div>
+                ))
+              ) : (
+                <div className={cx(ANALYTICS_EMPTY_STATE_CLASS, 'xl:col-span-2')}>
+                  The opportunity matrix will appear once compare-period audience and conversion history is available.
                 </div>
-              ))
-            ) : (
-              <div className={ANALYTICS_EMPTY_STATE_CLASS}>
-                Acquisition momentum appears when `Previous Period` compare is enabled and audience history exists.
+              )}
+            </div>
+          </section>
+
+          <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <section className={ANALYTICS_PANEL_CLASS}>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Section Momentum</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                Reader sections gaining or losing page-view momentum across the comparison window.
+              </p>
+
+              <div className="mt-6 space-y-3">
+                {compare === 'previous' && analytics.audienceAnalytics.current.sectionTrends.length ? (
+                  analytics.audienceAnalytics.current.sectionTrends.map((section) => (
+                    <div
+                      key={section.label}
+                      className={ANALYTICS_SOFT_CARD_CLASS}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                            {section.label}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            Current {formatNumber(section.currentEvents)} / Previous {formatNumber(section.previousEvents)} page views
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold ${getDeltaToneClass(
+                            section.deltaEvents,
+                            'higher_better'
+                          )}`}
+                        >
+                          {formatDelta(section.deltaEvents)}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className={ANALYTICS_EMPTY_STATE_CLASS}>
+                    Section momentum appears when `Previous Period` compare is enabled and audience history exists.
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </section>
-      </section>
+            </section>
+
+            <section className={ANALYTICS_PANEL_CLASS}>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Acquisition Momentum</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                Which acquisition channels are improving or weakening across the selected periods.
+              </p>
+
+              <div className="mt-6 space-y-3">
+                {compare === 'previous' && analytics.audienceAnalytics.current.channelTrends.length ? (
+                  analytics.audienceAnalytics.current.channelTrends.map((channel) => (
+                    <div
+                      key={channel.label}
+                      className={ANALYTICS_SOFT_CARD_CLASS}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                            {channel.label}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            Current {formatNumber(channel.currentEvents)} / Previous {formatNumber(channel.previousEvents)} events
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold ${getDeltaToneClass(
+                            channel.deltaEvents,
+                            'higher_better'
+                          )}`}
+                        >
+                          {formatDelta(channel.deltaEvents)}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className={ANALYTICS_EMPTY_STATE_CLASS}>
+                    Acquisition momentum appears when `Previous Period` compare is enabled and audience history exists.
+                  </div>
+                )}
+              </div>
+            </section>
+          </section>
+        </>
+      )}
     </>
   );
 }
@@ -1487,6 +1519,7 @@ export default async function AdminAnalyticsPage({
   const contentFilter = parseContentFilter(readSearchParam(params.content));
   const range = parseRange(readSearchParam(params.range));
   const compare = parseCompare(readSearchParam(params.compare));
+  const isSuperAdminView = admin.role === 'super_admin';
   const showLeadershipBriefings = admin.role === 'super_admin' || admin.role === 'admin';
   const [
     analytics,
@@ -1535,6 +1568,24 @@ export default async function AdminAnalyticsPage({
   const previousPeriod = analytics.comparison.previousPeriod;
   const shareHref = buildAnalyticsHref(params, {});
   const exportHref = buildAnalyticsExportHref(params);
+  const superAdminPrimaryTabs = ANALYTICS_TABS.filter((tab) =>
+    SUPER_ADMIN_PRIMARY_TABS.includes(tab.id)
+  );
+  const visibleTabs =
+    isSuperAdminView && !superAdminPrimaryTabs.some((tab) => tab.id === activeTab)
+      ? ANALYTICS_TABS.filter(
+          (tab) => SUPER_ADMIN_PRIMARY_TABS.includes(tab.id) || tab.id === activeTab
+        )
+      : isSuperAdminView
+        ? superAdminPrimaryTabs
+        : ANALYTICS_TABS;
+  const visiblePresets = isSuperAdminView
+    ? ANALYTICS_VIEW_PRESETS.filter((preset) =>
+        SUPER_ADMIN_QUICK_VIEW_PRESETS.includes(
+          preset.id as (typeof SUPER_ADMIN_QUICK_VIEW_PRESETS)[number]
+        )
+      )
+    : ANALYTICS_VIEW_PRESETS;
   const audienceDeltas = analytics.audienceAnalytics.deltas;
   const activePresetId =
     ANALYTICS_VIEW_PRESETS.find((preset) =>
@@ -1564,6 +1615,7 @@ export default async function AdminAnalyticsPage({
     pathConversionLaggards:
       analytics.audienceAnalytics.current.pathConversionLaggards,
   });
+  const liveChartsSnapshot = buildAnalyticsLiveChartsSnapshot(analytics);
 
   const filteredQueueItems = currentReviewItems.filter(
     (item) => matchesContentFilter(item, contentFilter) && matchesNewsroomFocus(item, focus)
@@ -1596,16 +1648,16 @@ export default async function AdminAnalyticsPage({
 
   const overviewMetrics: AnalyticsMetricCard[] = [
     {
-      label: 'Total Content',
+      label: 'Content Inventory',
       value: analytics.contentInventory.total,
-      detail: 'Articles, stories, videos, and e-paper editions currently under platform management.',
+      detail: 'Total articles, videos, and e-paper editions under platform oversight.',
       icon: Layers3,
       tone: 'bg-blue-500/10 text-blue-600',
     },
     {
-      label: 'Queue Pressure',
+      label: 'Workflow Pressure',
       value: currentQueueMetrics.queuePressure,
-      detail: `Combined editorial and edition work updated during ${analytics.timeWindow.label.toLowerCase()}.`,
+      detail: 'Editorial and edition work currently needing desk attention.',
       icon: TimerReset,
       tone: 'bg-violet-500/10 text-violet-600',
     },
@@ -1619,21 +1671,21 @@ export default async function AdminAnalyticsPage({
     {
       label: 'Blocked Editions',
       value: currentBlockedEditions.length,
-      detail: `E-paper editions still blocked by QA, extraction issues, or coverage gaps in ${analytics.timeWindow.label.toLowerCase()}.`,
+      detail: 'E-paper editions still blocked by QA, hotspot, or extraction issues.',
       icon: AlertTriangle,
       tone: 'bg-orange-500/10 text-orange-600',
     },
     {
-      label: 'Quality Alerts',
-      value: currentLowQualityPages.length,
-      detail: `Pages flagged for OCR, hotspot, or QA attention during ${analytics.timeWindow.label.toLowerCase()}.`,
-      icon: Newspaper,
+      label: 'Inbox Escalations',
+      value: analytics.dashboard.inbox.new,
+      detail: 'Reader or operations messages still waiting for leadership visibility.',
+      icon: MessageSquareMore,
       tone: 'bg-red-500/10 text-red-600',
     },
     {
-      label: 'Active Team',
+      label: 'Team Coverage',
       value: analytics.teamHealth.totals.active,
-      detail: 'Currently active admin-side team members available across the newsroom.',
+      detail: 'Active admin-side team members currently available across the desk.',
       icon: UserCog,
       tone: 'bg-cyan-500/10 text-cyan-600',
     },
@@ -1862,6 +1914,16 @@ export default async function AdminAnalyticsPage({
       tone: 'bg-orange-500/10 text-orange-600',
     },
   ];
+  const superAdminOverviewMetrics = overviewMetrics;
+  const superAdminNewsroomMetrics = newsroomMetrics.filter(
+    (metric) => metric.label !== 'Queue Volume'
+  );
+  const superAdminGrowthMetrics = growthMetrics.filter(
+    (metric) => metric.label !== 'Opportunities'
+  );
+  const superAdminSystemMetrics = systemMetrics.filter(
+    (metric) => metric.label !== 'Enabled Surfaces'
+  );
 
   const contentTypeTrendRows = previousPeriod
     ? [
@@ -1958,7 +2020,7 @@ export default async function AdminAnalyticsPage({
       />
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-8">
-        {ANALYTICS_TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <TabLink
             key={tab.id}
             href={buildAnalyticsHref(params, { tab: tab.id })}
@@ -1970,82 +2032,176 @@ export default async function AdminAnalyticsPage({
         ))}
       </section>
 
-      <section className={ANALYTICS_PANEL_CLASS}>
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Saved Views</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              One-click leadership views for the most common analytics questions.
-            </p>
-          </div>
-          <Link
-            href="/admin/analytics?tab=overview&focus=all&content=all&range=30d&compare=off"
-            className={ANALYTICS_LINK_CLASS}
-          >
-            Reset To Default
-          </Link>
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {ANALYTICS_VIEW_PRESETS.map((preset) => (
-            <PresetLink
-              key={preset.id}
-              href={buildAnalyticsPresetHref(preset)}
-              label={preset.label}
-              description={preset.description}
-              active={activePresetId === preset.id}
-            />
-          ))}
-        </div>
-      </section>
-
-      {showLeadershipBriefings ? (
-        <section className="space-y-4">
-          <div className={ANALYTICS_PANEL_CLASS}>
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                  Leadership Briefings
-                </h2>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                  Ready-made daily, weekly, and monthly management briefings built from the live
-                  analytics foundation. Each briefing can be opened as a preset dashboard view or
-                  downloaded as a markdown report for sharing.
-                </p>
-              </div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Built from newsroom, audience, e-paper, team, and system-health signals.
+      {isSuperAdminView ? (
+        <section className={ANALYTICS_PANEL_CLASS}>
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                Quick Views
+              </h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                Jump between the main executive views and share the current page without adding
+                extra panels above the data.
               </p>
             </div>
+            <AnalyticsShareActions shareHref={shareHref} exportHref={exportHref} />
           </div>
 
-          <div className="grid grid-cols-1 gap-6">
-            {leadershipReports.map((report) => (
-              <LeadershipReportCard key={report.id} report={report} />
+          <div className="mt-6 flex flex-wrap gap-2">
+            {visiblePresets.map((preset) => (
+              <FilterChip
+                key={preset.id}
+                href={buildAnalyticsPresetHref(preset)}
+                label={preset.label}
+                active={activePresetId === preset.id}
+              />
+            ))}
+            <Link
+              href="/admin/analytics?tab=overview&focus=all&content=all&range=30d&compare=off"
+              className={ANALYTICS_LINK_CLASS}
+            >
+              Reset To Default
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <section className={ANALYTICS_PANEL_CLASS}>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Saved Views</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                One-click leadership views for the most common analytics questions.
+              </p>
+            </div>
+            <Link
+              href="/admin/analytics?tab=overview&focus=all&content=all&range=30d&compare=off"
+              className={ANALYTICS_LINK_CLASS}
+            >
+              Reset To Default
+            </Link>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {visiblePresets.map((preset) => (
+              <PresetLink
+                key={preset.id}
+                href={buildAnalyticsPresetHref(preset)}
+                label={preset.label}
+                description={preset.description}
+                active={activePresetId === preset.id}
+              />
             ))}
           </div>
         </section>
-      ) : null}
+      )}
 
       {showLeadershipBriefings ? (
-        <LeadershipReportDeliveryPanel
-          initialSchedules={leadershipSchedules}
-          initialHistory={leadershipRunHistory}
-          initialAlertNotifications={leadershipAlertNotifications}
-          initialCriticalAlertState={leadershipCriticalAlertState}
-          initialHealthAlerts={leadershipHealthAlerts}
-          initialEscalations={leadershipEscalations}
-          emailDeliveryConfigured={leadershipRuntime?.emailDeliveryConfigured ?? false}
-        />
+        isSuperAdminView ? (
+          <section className={ANALYTICS_PANEL_CLASS}>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                  Reports & Delivery
+                </h2>
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                  Keep reporting tools available, but collapsed until you need them.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className={ANALYTICS_META_CHIP_CLASS}>
+                  Reports {leadershipReports.length}
+                </span>
+                <span className={ANALYTICS_META_CHIP_CLASS}>
+                  Schedules {leadershipSchedules.length}
+                </span>
+                <span className={ANALYTICS_META_CHIP_CLASS}>
+                  Health Alerts {leadershipHealthAlerts.length}
+                </span>
+                <span className={ANALYTICS_META_CHIP_CLASS}>
+                  Escalations {leadershipEscalations.length}
+                </span>
+              </div>
+            </div>
+
+            <details className="mt-6 rounded-[24px] border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-[color:var(--admin-shell-text)]">
+                Open Briefing Reports
+              </summary>
+              <div className="mt-4 grid grid-cols-1 gap-6">
+                {leadershipReports.map((report) => (
+                  <LeadershipReportCard key={report.id} report={report} />
+                ))}
+              </div>
+            </details>
+
+            <details className="mt-4 rounded-[24px] border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-[color:var(--admin-shell-text)]">
+                Open Delivery Controls
+              </summary>
+              <div className="mt-4">
+                <LeadershipReportDeliveryPanel
+                  initialSchedules={leadershipSchedules}
+                  initialHistory={leadershipRunHistory}
+                  initialAlertNotifications={leadershipAlertNotifications}
+                  initialCriticalAlertState={leadershipCriticalAlertState}
+                  initialHealthAlerts={leadershipHealthAlerts}
+                  initialEscalations={leadershipEscalations}
+                  emailDeliveryConfigured={leadershipRuntime?.emailDeliveryConfigured ?? false}
+                />
+              </div>
+            </details>
+          </section>
+        ) : (
+          <>
+            <section className="space-y-4">
+              <div className={ANALYTICS_PANEL_CLASS}>
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                      Leadership Briefings
+                    </h2>
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                      Ready-made daily, weekly, and monthly management briefings built from the live
+                      analytics foundation. Each briefing can be opened as a preset dashboard view or
+                      downloaded as a markdown report for sharing.
+                    </p>
+                  </div>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Built from newsroom, audience, e-paper, team, and system-health signals.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {leadershipReports.map((report) => (
+                  <LeadershipReportCard key={report.id} report={report} />
+                ))}
+              </div>
+            </section>
+
+            <LeadershipReportDeliveryPanel
+              initialSchedules={leadershipSchedules}
+              initialHistory={leadershipRunHistory}
+              initialAlertNotifications={leadershipAlertNotifications}
+              initialCriticalAlertState={leadershipCriticalAlertState}
+              initialHealthAlerts={leadershipHealthAlerts}
+              initialEscalations={leadershipEscalations}
+              emailDeliveryConfigured={leadershipRuntime?.emailDeliveryConfigured ?? false}
+            />
+          </>
+        )
       ) : null}
 
       <section className={ANALYTICS_PANEL_CLASS}>
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Filter Bar</h2>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+              {isSuperAdminView ? 'Controls' : 'Filter Bar'}
+            </h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              Focus the analytics view by date window, comparison, newsroom signal, and content
-              type.
+              {isSuperAdminView
+                ? 'Change the time window and comparison first. Open advanced filters only when needed.'
+                : 'Focus the analytics view by date window, comparison, newsroom signal, and content type.'}
             </p>
           </div>
           <div className="space-y-4 xl:max-w-4xl">
@@ -2079,40 +2235,83 @@ export default async function AdminAnalyticsPage({
                 ))}
               </div>
             </div>
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                Signal Focus
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {FOCUS_OPTIONS.map((option) => (
-                  <FilterChip
-                    key={option.id}
-                    href={buildAnalyticsHref(params, { focus: option.id })}
-                    label={option.label}
-                    active={focus === option.id}
-                  />
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                Content Filter
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {CONTENT_FILTER_OPTIONS.map((option) => (
-                  <FilterChip
-                    key={option.id}
-                    href={buildAnalyticsHref(params, { content: option.id })}
-                    label={option.label}
-                    active={contentFilter === option.id}
-                  />
-                ))}
-              </div>
-            </div>
+            {isSuperAdminView ? (
+              <details className="rounded-[24px] border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-[color:var(--admin-shell-text)]">
+                  Advanced Filters
+                </summary>
+                <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Signal Focus
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {FOCUS_OPTIONS.map((option) => (
+                        <FilterChip
+                          key={option.id}
+                          href={buildAnalyticsHref(params, { focus: option.id })}
+                          label={option.label}
+                          active={focus === option.id}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Content Filter
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {CONTENT_FILTER_OPTIONS.map((option) => (
+                        <FilterChip
+                          key={option.id}
+                          href={buildAnalyticsHref(params, { content: option.id })}
+                          label={option.label}
+                          active={contentFilter === option.id}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </details>
+            ) : (
+              <>
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Signal Focus
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {FOCUS_OPTIONS.map((option) => (
+                      <FilterChip
+                        key={option.id}
+                        href={buildAnalyticsHref(params, { focus: option.id })}
+                        label={option.label}
+                        active={focus === option.id}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Content Filter
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {CONTENT_FILTER_OPTIONS.map((option) => (
+                      <FilterChip
+                        key={option.id}
+                        href={buildAnalyticsHref(params, { content: option.id })}
+                        label={option.label}
+                        active={contentFilter === option.id}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </section>
 
+      {!isSuperAdminView ? (
       <section className={ANALYTICS_PANEL_CLASS}>
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -2156,13 +2355,19 @@ export default async function AdminAnalyticsPage({
           </div>
         </div>
       </section>
+      ) : null}
 
+      {!isSuperAdminView || compare === 'previous' ? (
       <section className={ANALYTICS_PANEL_CLASS}>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Compare Panel</h2>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+              {isSuperAdminView ? 'Period Deltas' : 'Compare Panel'}
+            </h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              Dedicated period-over-period cards for the leadership signals that matter most.
+              {isSuperAdminView
+                ? 'Period-over-period movement for the leadership signals that matter most.'
+                : 'Dedicated period-over-period cards for the leadership signals that matter most.'}
             </p>
           </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -2178,7 +2383,9 @@ export default async function AdminAnalyticsPage({
           ))}
         </div>
       </section>
+      ) : null}
 
+      {!isSuperAdminView ? (
       <section className={ANALYTICS_PANEL_CLASS}>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
@@ -2191,80 +2398,138 @@ export default async function AdminAnalyticsPage({
           <AnalyticsShareActions shareHref={shareHref} exportHref={exportHref} />
         </div>
       </section>
+      ) : null}
 
       {activeTab === 'overview' ? (
         <>
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-            {overviewMetrics.map((metric) => (
+            {(isSuperAdminView ? superAdminOverviewMetrics : overviewMetrics).map((metric) => (
               <MetricCard key={metric.label} metric={metric} />
             ))}
           </section>
+
+          <AnalyticsLiveCharts
+            initialSnapshot={liveChartsSnapshot}
+            activeTab={activeTab}
+            range={range}
+            compare={compare}
+          />
 
           <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr,1fr]">
             <WorkflowList
               title="Decision-Ready Items"
               description={`Content and edition work already cleared for publish or leadership release decisions in ${analytics.timeWindow.label.toLowerCase()}.`}
-              items={filteredReadyItems.slice(0, 6)}
+              items={filteredReadyItems.slice(0, isSuperAdminView ? 4 : 6)}
               emptyMessage="No publish-ready items match the current filters."
             />
 
             <section className={ANALYTICS_PANEL_CLASS}>
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Operational Summary</h2>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                {isSuperAdminView ? 'Leadership Focus' : 'Operational Summary'}
+              </h2>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                A quick read on where leadership attention should go next.
+                {isSuperAdminView
+                  ? 'Keep the right-side panel focused on active blockers, risk, and team readiness.'
+                  : 'A quick read on where leadership attention should go next.'}
               </p>
 
-              <div className="mt-6 grid grid-cols-2 gap-4">
-                <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Queue Mix
-                  </p>
-                  <div className="mt-3 space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
-                    <p>Articles: {formatNumber(currentQueueMetrics.queueByType.article)}</p>
-                    <p>Stories: {formatNumber(currentQueueMetrics.queueByType.story)}</p>
-                    <p>Videos: {formatNumber(currentQueueMetrics.queueByType.video)}</p>
-                    <p>Editions: {formatNumber(currentQueueMetrics.queueByType.epaper)}</p>
+              {isSuperAdminView ? (
+                <>
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    <span className={ANALYTICS_META_CHIP_CLASS}>
+                      Review Volume {formatNumber(currentQueueMetrics.reviewVolume)}
+                    </span>
+                    <span className={ANALYTICS_META_CHIP_CLASS}>
+                      Active Team {formatNumber(analytics.teamHealth.totals.active)}
+                    </span>
+                    <span className={ANALYTICS_META_CHIP_CLASS}>
+                      Quality Alerts {formatNumber(currentLowQualityPages.length)}
+                    </span>
                   </div>
-                </div>
-                <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Team Signals
-                  </p>
-                  <div className="mt-3 space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
-                    <p>Active: {formatNumber(analytics.teamHealth.totals.active)}</p>
-                    <p>Inactive: {formatNumber(analytics.teamHealth.totals.inactive)}</p>
-                    <p>Never signed in: {formatNumber(analytics.teamHealth.totals.neverLoggedIn)}</p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="mt-5 space-y-3">
-                {currentBlockedEditions.length ? (
-                  currentBlockedEditions.slice(0, 4).map((edition) => (
-                    <Link
-                      key={edition.epaperId}
-                      href={edition.editHref}
-                      className={cx('block transition-colors hover:border-zinc-300/90 hover:bg-zinc-100/80 dark:hover:border-white/15 dark:hover:bg-white/[0.06]', ANALYTICS_SOFT_CARD_CLASS)}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                            {edition.title}
-                          </p>
-                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                            {edition.cityName} / {edition.blockerCount} blocker{edition.blockerCount === 1 ? '' : 's'}
-                          </p>
-                        </div>
-                        <WorkflowPill status={edition.productionStatus} />
+                  <div className="mt-5 space-y-3">
+                    {currentBlockedEditions.length ? (
+                      currentBlockedEditions.slice(0, 3).map((edition) => (
+                        <Link
+                          key={edition.epaperId}
+                          href={edition.editHref}
+                          className={cx('block transition-colors hover:border-zinc-300/90 hover:bg-zinc-100/80 dark:hover:border-white/15 dark:hover:bg-white/[0.06]', ANALYTICS_SOFT_CARD_CLASS)}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                                {edition.title}
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                {edition.cityName} / {edition.blockerCount} blocker{edition.blockerCount === 1 ? '' : 's'}
+                              </p>
+                            </div>
+                            <WorkflowPill status={edition.productionStatus} />
+                          </div>
+                        </Link>
+                      ))
+                    ) : (
+                      <div className={ANALYTICS_EMPTY_STATE_CLASS}>
+                        No blocked editions are active right now.
                       </div>
-                    </Link>
-                  ))
-                ) : (
-                  <div className={ANALYTICS_EMPTY_STATE_CLASS}>
-                    No blocked editions are active right now.
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-6 grid grid-cols-2 gap-4">
+                    <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Queue Mix
+                      </p>
+                      <div className="mt-3 space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
+                        <p>Articles: {formatNumber(currentQueueMetrics.queueByType.article)}</p>
+                        <p>Stories: {formatNumber(currentQueueMetrics.queueByType.story)}</p>
+                        <p>Videos: {formatNumber(currentQueueMetrics.queueByType.video)}</p>
+                        <p>Editions: {formatNumber(currentQueueMetrics.queueByType.epaper)}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Team Signals
+                      </p>
+                      <div className="mt-3 space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
+                        <p>Active: {formatNumber(analytics.teamHealth.totals.active)}</p>
+                        <p>Inactive: {formatNumber(analytics.teamHealth.totals.inactive)}</p>
+                        <p>Never signed in: {formatNumber(analytics.teamHealth.totals.neverLoggedIn)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    {currentBlockedEditions.length ? (
+                      currentBlockedEditions.slice(0, 4).map((edition) => (
+                        <Link
+                          key={edition.epaperId}
+                          href={edition.editHref}
+                          className={cx('block transition-colors hover:border-zinc-300/90 hover:bg-zinc-100/80 dark:hover:border-white/15 dark:hover:bg-white/[0.06]', ANALYTICS_SOFT_CARD_CLASS)}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                                {edition.title}
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                {edition.cityName} / {edition.blockerCount} blocker{edition.blockerCount === 1 ? '' : 's'}
+                              </p>
+                            </div>
+                            <WorkflowPill status={edition.productionStatus} />
+                          </div>
+                        </Link>
+                      ))
+                    ) : (
+                      <div className={ANALYTICS_EMPTY_STATE_CLASS}>
+                        No blocked editions are active right now.
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </section>
           </section>
         </>
@@ -2277,6 +2542,13 @@ export default async function AdminAnalyticsPage({
               <MetricCard key={metric.label} metric={metric} />
             ))}
           </section>
+
+          <AnalyticsLiveCharts
+            initialSnapshot={liveChartsSnapshot}
+            activeTab={activeTab}
+            range={range}
+            compare={compare}
+          />
 
           <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <section className={ANALYTICS_PANEL_CLASS}>
@@ -2910,51 +3182,91 @@ export default async function AdminAnalyticsPage({
       {activeTab === 'newsroom_ops' ? (
         <>
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {newsroomMetrics.map((metric) => (
+            {(isSuperAdminView ? superAdminNewsroomMetrics : newsroomMetrics).map((metric) => (
               <MetricCard key={metric.label} metric={metric} />
             ))}
           </section>
+
+          <AnalyticsLiveCharts
+            initialSnapshot={liveChartsSnapshot}
+            activeTab={activeTab}
+            range={range}
+            compare={compare}
+          />
 
           <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr,1fr]">
             <WorkflowList
               title="Filtered Workflow Queue"
               description="Live newsroom items filtered by the current signal focus and content type."
-              items={filteredQueueItems.slice(0, 10)}
+              items={filteredQueueItems.slice(0, isSuperAdminView ? 6 : 10)}
               emptyMessage="No workflow items match the current filters."
             />
 
             <section className={ANALYTICS_PANEL_CLASS}>
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Queue Composition</h2>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                {isSuperAdminView ? 'Queue Snapshot' : 'Queue Composition'}
+              </h2>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                The current review queue split across content types and release readiness.
+                {isSuperAdminView
+                  ? 'Keep the right side as a short summary and send deeper workflow work to the review queue.'
+                  : 'The current review queue split across content types and release readiness.'}
               </p>
 
-              <div className="mt-6 grid grid-cols-2 gap-4">
-                <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    By Type
-                  </p>
-                  <div className="mt-3 space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
-                    <p>Articles: {formatNumber(currentQueueMetrics.queueByType.article)}</p>
-                    <p>Stories: {formatNumber(currentQueueMetrics.queueByType.story)}</p>
-                    <p>Videos: {formatNumber(currentQueueMetrics.queueByType.video)}</p>
-                    <p>Editions: {formatNumber(currentQueueMetrics.queueByType.epaper)}</p>
+              {isSuperAdminView ? (
+                <>
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    <span className={ANALYTICS_META_CHIP_CLASS}>
+                      Articles {formatNumber(currentQueueMetrics.queueByType.article)}
+                    </span>
+                    <span className={ANALYTICS_META_CHIP_CLASS}>
+                      Stories {formatNumber(currentQueueMetrics.queueByType.story)}
+                    </span>
+                    <span className={ANALYTICS_META_CHIP_CLASS}>
+                      Videos {formatNumber(currentQueueMetrics.queueByType.video)}
+                    </span>
+                    <span className={ANALYTICS_META_CHIP_CLASS}>
+                      Editions {formatNumber(currentQueueMetrics.queueByType.epaper)}
+                    </span>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Release Status
+                    </p>
+                    <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-200">
+                      {formatNumber(currentQueueMetrics.readyDecisions)} ready decisions and{' '}
+                      {formatNumber(submittedCount)} newly submitted items are active in this window.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                  <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      By Type
+                    </p>
+                    <div className="mt-3 space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
+                      <p>Articles: {formatNumber(currentQueueMetrics.queueByType.article)}</p>
+                      <p>Stories: {formatNumber(currentQueueMetrics.queueByType.story)}</p>
+                      <p>Videos: {formatNumber(currentQueueMetrics.queueByType.video)}</p>
+                      <p>Editions: {formatNumber(currentQueueMetrics.queueByType.epaper)}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      By Stage
+                    </p>
+                    <div className="mt-3 space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
+                      <p>Submitted: {formatNumber(countItemsByStatuses(currentReviewItems, ['submitted']))}</p>
+                      <p>Assigned: {formatNumber(countItemsByStatuses(currentReviewItems, ['assigned']))}</p>
+                      <p>In review: {formatNumber(countItemsByStatuses(currentReviewItems, ['in_review']))}</p>
+                      <p>Copy edit: {formatNumber(countItemsByStatuses(currentReviewItems, ['copy_edit']))}</p>
+                      <p>Changes requested: {formatNumber(countItemsByStatuses(currentReviewItems, ['changes_requested']))}</p>
+                      <p>Ready for approval: {formatNumber(countItemsByStatuses(currentReadyItems, ['ready_for_approval']))}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-950">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    By Stage
-                  </p>
-                  <div className="mt-3 space-y-1 text-sm text-zinc-700 dark:text-zinc-200">
-                    <p>Submitted: {formatNumber(countItemsByStatuses(currentReviewItems, ['submitted']))}</p>
-                    <p>Assigned: {formatNumber(countItemsByStatuses(currentReviewItems, ['assigned']))}</p>
-                    <p>In review: {formatNumber(countItemsByStatuses(currentReviewItems, ['in_review']))}</p>
-                    <p>Copy edit: {formatNumber(countItemsByStatuses(currentReviewItems, ['copy_edit']))}</p>
-                    <p>Changes requested: {formatNumber(countItemsByStatuses(currentReviewItems, ['changes_requested']))}</p>
-                    <p>Ready for approval: {formatNumber(countItemsByStatuses(currentReadyItems, ['ready_for_approval']))}</p>
-                  </div>
-                </div>
-              </div>
+              )}
 
               <div className="mt-5 space-y-3">
                 <Link
@@ -2976,6 +3288,13 @@ export default async function AdminAnalyticsPage({
               <MetricCard key={metric.label} metric={metric} />
             ))}
           </section>
+
+          <AnalyticsLiveCharts
+            initialSnapshot={liveChartsSnapshot}
+            activeTab={activeTab}
+            range={range}
+            compare={compare}
+          />
 
           <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr,1fr]">
             {focus === 'quality' ? (
@@ -3110,6 +3429,13 @@ export default async function AdminAnalyticsPage({
             ))}
           </section>
 
+          <AnalyticsLiveCharts
+            initialSnapshot={liveChartsSnapshot}
+            activeTab={activeTab}
+            range={range}
+            compare={compare}
+          />
+
           <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr,1.1fr]">
             <section className={ANALYTICS_PANEL_CLASS}>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Role Coverage</h2>
@@ -3191,15 +3517,23 @@ export default async function AdminAnalyticsPage({
       {activeTab === 'growth' ? (
         <>
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {growthMetrics.map((metric) => (
+            {(isSuperAdminView ? superAdminGrowthMetrics : growthMetrics).map((metric) => (
               <MetricCard key={metric.label} metric={metric} />
             ))}
           </section>
+
+          <AnalyticsLiveCharts
+            initialSnapshot={liveChartsSnapshot}
+            activeTab={activeTab}
+            range={range}
+            compare={compare}
+          />
 
           <GrowthAnalyticsSections
             analytics={analytics}
             compare={compare}
             growthInsights={growthInsights}
+            isCompact={isSuperAdminView}
           />
         </>
       ) : null}
@@ -3218,6 +3552,13 @@ export default async function AdminAnalyticsPage({
                 <MetricCard key={metric.label} metric={metric} />
               ))}
           </section>
+
+          <AnalyticsLiveCharts
+            initialSnapshot={liveChartsSnapshot}
+            activeTab={activeTab}
+            range={range}
+            compare={compare}
+          />
 
           <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
             <section className={ANALYTICS_PANEL_CLASS}>
@@ -3369,10 +3710,17 @@ export default async function AdminAnalyticsPage({
       {activeTab === 'system_health' ? (
         <>
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {systemMetrics.map((metric) => (
+            {(isSuperAdminView ? superAdminSystemMetrics : systemMetrics).map((metric) => (
               <MetricCard key={metric.label} metric={metric} />
             ))}
           </section>
+
+          <AnalyticsLiveCharts
+            initialSnapshot={liveChartsSnapshot}
+            activeTab={activeTab}
+            range={range}
+            compare={compare}
+          />
 
           <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr,1.1fr]">
             <section className={ANALYTICS_PANEL_CLASS}>
@@ -3418,24 +3766,6 @@ export default async function AdminAnalyticsPage({
 
             <section className="space-y-6">
               <section className={ANALYTICS_PANEL_CLASS}>
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Runtime Signals</h2>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                  Quick configuration and storage signals for the current platform runtime.
-                </p>
-
-                <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {analytics.systemHealth.runtimeSignals.map((signal) => (
-                    <RuntimeSignalPill
-                      key={signal.label}
-                      label={signal.label}
-                      value={signal.value}
-                      tone={signal.tone}
-                    />
-                  ))}
-                </div>
-              </section>
-
-              <section className={ANALYTICS_PANEL_CLASS}>
                 <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Platform Risks</h2>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                   Leadership-facing issues that may affect stability, release flow, or service availability.
@@ -3458,45 +3788,119 @@ export default async function AdminAnalyticsPage({
                   )}
                 </div>
               </section>
+
+              {isSuperAdminView ? (
+                <details className="rounded-[24px] border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-[color:var(--admin-shell-text)]">
+                    Runtime Details
+                  </summary>
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {analytics.systemHealth.runtimeSignals.map((signal) => (
+                      <RuntimeSignalPill
+                        key={signal.label}
+                        label={signal.label}
+                        value={signal.value}
+                        tone={signal.tone}
+                      />
+                    ))}
+                  </div>
+                </details>
+              ) : (
+                <section className={ANALYTICS_PANEL_CLASS}>
+                  <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Runtime Signals</h2>
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                    Quick configuration and storage signals for the current platform runtime.
+                  </p>
+
+                  <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {analytics.systemHealth.runtimeSignals.map((signal) => (
+                      <RuntimeSignalPill
+                        key={signal.label}
+                        label={signal.label}
+                        value={signal.value}
+                        tone={signal.tone}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
             </section>
           </section>
 
-          <section className={ANALYTICS_PANEL_CLASS}>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Recent TTS Failures</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              The latest failure events captured for the shared TTS pipeline in the selected time window.
-            </p>
+          {isSuperAdminView ? (
+            <details className={ANALYTICS_PANEL_CLASS}>
+              <summary className="cursor-pointer text-sm font-semibold text-[color:var(--admin-shell-text)]">
+                Recent TTS Failures
+              </summary>
 
-            <div className="mt-6 space-y-3">
-              {analytics.systemHealth.recentFailures.length ? (
-                analytics.systemHealth.recentFailures.map((failure) => (
-                  <div
-                    key={failure.id}
-                    className={ANALYTICS_SOFT_CARD_CLASS}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                          {failure.message}
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                          {formatStatusLabel(failure.action)} / {formatContentTypeLabel(failure.sourceType)} /{' '}
-                          {formatStatusLabel(failure.variant)}
-                        </p>
-                      </div>
-                      <div className="text-right text-xs text-zinc-500 dark:text-zinc-400">
-                        {formatUiDate(failure.createdAt, failure.createdAt)}
+              <div className="mt-4 space-y-3">
+                {analytics.systemHealth.recentFailures.length ? (
+                  analytics.systemHealth.recentFailures.map((failure) => (
+                    <div
+                      key={failure.id}
+                      className={ANALYTICS_SOFT_CARD_CLASS}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                            {failure.message}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            {formatStatusLabel(failure.action)} / {formatContentTypeLabel(failure.sourceType)} /{' '}
+                            {formatStatusLabel(failure.variant)}
+                          </p>
+                        </div>
+                        <div className="text-right text-xs text-zinc-500 dark:text-zinc-400">
+                          {formatUiDate(failure.createdAt, failure.createdAt)}
+                        </div>
                       </div>
                     </div>
+                  ))
+                ) : (
+                  <div className={ANALYTICS_EMPTY_STATE_CLASS}>
+                    No TTS failures were recorded in this time window.
                   </div>
-                ))
-              ) : (
-                <div className={ANALYTICS_EMPTY_STATE_CLASS}>
-                  No TTS failures were recorded in this time window.
-                </div>
-              )}
-            </div>
-          </section>
+                )}
+              </div>
+            </details>
+          ) : (
+            <section className={ANALYTICS_PANEL_CLASS}>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Recent TTS Failures</h2>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                The latest failure events captured for the shared TTS pipeline in the selected time window.
+              </p>
+
+              <div className="mt-6 space-y-3">
+                {analytics.systemHealth.recentFailures.length ? (
+                  analytics.systemHealth.recentFailures.map((failure) => (
+                    <div
+                      key={failure.id}
+                      className={ANALYTICS_SOFT_CARD_CLASS}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                            {failure.message}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            {formatStatusLabel(failure.action)} / {formatContentTypeLabel(failure.sourceType)} /{' '}
+                            {formatStatusLabel(failure.variant)}
+                          </p>
+                        </div>
+                        <div className="text-right text-xs text-zinc-500 dark:text-zinc-400">
+                          {formatUiDate(failure.createdAt, failure.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className={ANALYTICS_EMPTY_STATE_CLASS}>
+                    No TTS failures were recorded in this time window.
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
         </>
       ) : null}
     </div>

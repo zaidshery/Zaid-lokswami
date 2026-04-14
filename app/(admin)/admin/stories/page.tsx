@@ -82,9 +82,6 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 const PANEL_CLASS = 'admin-shell-surface-strong rounded-[30px] p-6';
 
-const SOFT_CARD_CLASS =
-  'admin-shell-surface-muted rounded-[24px] p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.14)] dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.35)]';
-
 const METRIC_CARD_CLASS = 'admin-shell-surface rounded-[26px] p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.16)]';
 
 const EMPTY_STATE_CLASS =
@@ -106,7 +103,7 @@ const DANGER_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20';
 
 function formatWorkflowStatus(status: StatusFilter) {
-  if (status === 'all') return 'All Status';
+  if (status === 'all') return 'All statuses';
   return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
@@ -174,10 +171,6 @@ export default function StoriesManagementPage() {
   const deskDescription = isReporterFlow
     ? 'Track the story cards you created or that are assigned to you. Save drafts, submit for review, and follow status changes without leaving the desk.'
     : 'Manage fullscreen story cards through the newsroom workflow with a cleaner desk for review, readiness, and publishing.';
-  const scopeTitle = isReporterFlow ? 'Reporter story scope' : 'Story coverage';
-  const scopeDescription = isReporterFlow
-    ? 'This desk only surfaces story cards you own directly or that are assigned to you.'
-    : 'Visual cards, priority handling, and publish workflow now stay in one shared desk.';
 
   useEffect(() => {
     const load = async () => {
@@ -285,29 +278,11 @@ export default function StoriesManagementPage() {
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
               {deskDescription}
             </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <div className={META_CHIP_CLASS}>
-                <span>Drafts</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{summary.drafts}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Review</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{summary.review}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Ready</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{summary.ready}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Published</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{summary.published}</strong>
-              </div>
-            </div>
           </div>
 
           <div className={PANEL_CLASS}>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-              Desk Actions
+              Actions
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               {canAccessMyWork ? (
@@ -326,16 +301,6 @@ export default function StoriesManagementPage() {
                   New Story
                 </Link>
               ) : null}
-            </div>
-            <div className="mt-4 space-y-3">
-              <div className={SOFT_CARD_CLASS}>
-                <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                  {scopeTitle}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-                  {scopeDescription}
-                </p>
-              </div>
             </div>
           </div>
         </div>
@@ -394,7 +359,7 @@ export default function StoriesManagementPage() {
           >
             {categories.map((category) => (
               <option key={category} value={category}>
-                {category === 'all' ? 'All Categories' : category}
+                {category === 'all' ? 'All categories' : category}
               </option>
             ))}
           </select>
@@ -493,14 +458,12 @@ export default function StoriesManagementPage() {
 
                   <div className="flex flex-row items-start justify-end gap-2 md:flex-col">
                     {canOpenDesk ? (
-                      <Link href={`/admin/stories/${story._id}/edit`}>
-                        <button
-                          type="button"
-                          className={SECONDARY_BUTTON_CLASS}
-                        >
-                          Open Desk
-                          <ArrowRight className="h-4 w-4" />
-                        </button>
+                      <Link
+                        href={`/admin/stories/${story._id}/edit`}
+                        className={SECONDARY_BUTTON_CLASS}
+                      >
+                        Open Desk
+                        <ArrowRight className="h-4 w-4" />
                       </Link>
                     ) : null}
 

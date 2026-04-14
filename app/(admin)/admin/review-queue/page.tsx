@@ -103,17 +103,17 @@ export default async function AdminReviewQueuePage() {
       <section className="relative overflow-hidden rounded-[36px] border border-[color:var(--admin-shell-border)] bg-[radial-gradient(circle_at_top_left,rgba(185,28,28,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.08),transparent_28%),var(--admin-bg-depth)] p-8 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] lg:p-10">
         <div className="pointer-events-none absolute -right-10 top-0 h-48 w-48 rounded-full bg-red-500/10 blur-3xl dark:bg-red-500/14" />
         <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/14" />
-        <div className="relative grid gap-8 xl:grid-cols-[1.2fr,0.8fr]">
+        <div className="relative">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
               {formatUserRoleLabel(admin.role)}
             </div>
             <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
-              Shared Review Queue
+              Review Queue
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-              Articles, stories, videos, inbox triage, and e-paper production now surface together so
-              the desk can see review pressure, publish blockers, and edition readiness in one cleaner view.
+              See active review work across articles, stories, videos, inbox triage, and e-paper
+              production in one place.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <div className={META_CHIP_CLASS}>
@@ -133,32 +133,6 @@ export default async function AdminReviewQueuePage() {
                 <strong className="text-[color:var(--admin-shell-text)]">
                   {formatNumber(dashboard.inbox.new)}
                 </strong>
-              </div>
-            </div>
-          </div>
-
-          <div className={PANEL_CLASS}>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-              Desk Priorities
-            </p>
-            <div className="mt-4 space-y-3">
-              <div className={SOFT_CARD_CLASS}>
-                <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                  Review flow and production risk stay together here.
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-                  Use this page to spot what needs editorial action first, then jump into the right desk.
-                </p>
-              </div>
-              <div className={SOFT_CARD_CLASS}>
-                <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                  Strongest active signal
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-                  {epaperInsights.blockedEditions.length
-                    ? `${formatNumber(epaperInsights.blockedEditions.length)} blocked edition(s) still need publish-readiness cleanup.`
-                    : 'No blocked editions are active right now.'}
-                </p>
               </div>
             </div>
           </div>
@@ -201,7 +175,7 @@ export default async function AdminReviewQueuePage() {
       </section>
 
       <section className={PANEL_CLASS}>
-        <div className="flex items-center justify-between gap-4">
+        <div>
           <div>
             <h2 className="text-xl font-bold text-[color:var(--admin-shell-text)]">
               Live Newsroom Queue
@@ -210,9 +184,6 @@ export default async function AdminReviewQueuePage() {
               Mixed workflow and production items currently waiting on editorial or production desk action.
             </p>
           </div>
-          <Link href="/admin/review-queue" className="admin-shell-toolbar-btn rounded-full px-3 py-2 text-sm font-semibold">
-            Refresh Queue
-          </Link>
         </div>
 
         <div className="mt-6 space-y-3">

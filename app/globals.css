@@ -28,20 +28,20 @@
     --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
     --dur-fast: 180ms;
     --dur-base: 240ms;
-    --admin-bg: #f5f1e9;
-    --admin-bg-depth: #ede4d8;
-    --admin-shell-surface: rgba(255, 250, 243, 0.88);
-    --admin-shell-surface-strong: rgba(255, 252, 247, 0.96);
-    --admin-shell-surface-muted: rgba(247, 241, 232, 0.82);
-    --admin-shell-border: rgba(92, 70, 46, 0.12);
-    --admin-shell-border-strong: rgba(92, 70, 46, 0.18);
-    --admin-shell-text: #17130f;
-    --admin-shell-text-muted: #6a6056;
-    --admin-shell-shadow: 0 18px 48px rgba(67, 44, 26, 0.08);
-    --admin-shell-shadow-strong: 0 30px 70px rgba(67, 44, 26, 0.13);
-    --admin-shell-active: #181512;
-    --admin-shell-active-text: #fff8ef;
-    --admin-shell-accent: #b91c1c;
+    --admin-bg: #f8f9fb;
+    --admin-bg-depth: #f0f1f5;
+    --admin-shell-surface: rgba(255, 255, 255, 0.92);
+    --admin-shell-surface-strong: rgba(255, 255, 255, 0.98);
+    --admin-shell-surface-muted: rgba(243, 244, 248, 0.90);
+    --admin-shell-border: rgba(15, 23, 42, 0.10);
+    --admin-shell-border-strong: rgba(15, 23, 42, 0.16);
+    --admin-shell-text: #0f1419;
+    --admin-shell-text-muted: #6b7280;
+    --admin-shell-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    --admin-shell-shadow-strong: 0 20px 56px rgba(15, 23, 42, 0.12);
+    --admin-shell-active: #111827;
+    --admin-shell-active-text: #ffffff;
+    --admin-shell-accent: #dc2626;
   }
   
   html {
@@ -769,8 +769,8 @@
   .admin-shell {
     color: var(--admin-shell-text);
     background:
-      radial-gradient(circle at 12% 0%, rgba(184, 75, 37, 0.12), transparent 26%),
-      radial-gradient(circle at 88% 0%, rgba(199, 146, 78, 0.12), transparent 22%),
+      radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.06), transparent 26%),
+      radial-gradient(circle at 88% 0%, rgba(99, 102, 241, 0.06), transparent 22%),
       linear-gradient(180deg, var(--admin-bg-depth) 0%, var(--admin-bg) 100%);
   }
 

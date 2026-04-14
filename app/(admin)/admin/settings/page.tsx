@@ -13,53 +13,22 @@ export default function SettingsPage() {
         <div className="relative grid gap-8 xl:grid-cols-[1.25fr,0.85fr]">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-              Super Admin
+              Settings
             </div>
             <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
               Platform Settings
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-              System governance, deployment readiness, leadership-report automation, and shared
-              runtime controls in one calmer control surface.
+              Manage deployment safeguards, leadership reports, and shared runtime settings.
             </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <div className="admin-shell-surface rounded-2xl px-4 py-4 shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--admin-shell-text-muted)]">
-                  Controls
-                </p>
-                <p className="mt-1 text-lg font-black text-[color:var(--admin-shell-text)]">3</p>
-              </div>
-              <div className="admin-shell-surface rounded-2xl px-4 py-4 shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--admin-shell-text-muted)]">
-                  Focus
-                </p>
-                <p className="mt-1 text-lg font-black text-[color:var(--admin-shell-text)]">Governance</p>
-              </div>
-              <div className="admin-shell-surface rounded-2xl px-4 py-4 shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--admin-shell-text-muted)]">
-                  Runtime
-                </p>
-                <p className="mt-1 text-lg font-black text-[color:var(--admin-shell-text)]">Shared Ops</p>
-              </div>
-            </div>
           </div>
 
           <div className="grid gap-4">
             <div className="admin-shell-surface rounded-[28px] p-5 backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-                What Lives Here
+              <p className="text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+                Use the links below when you need diagnostics, audit history, or system-health
+                context while changing settings.
               </p>
-              <div className="mt-4 space-y-3">
-                <div className="admin-shell-surface-muted rounded-2xl px-4 py-3 text-sm leading-6 text-[color:var(--admin-shell-text)]">
-                  Deployment safeguards and production-readiness checks.
-                </div>
-                <div className="admin-shell-surface-muted rounded-2xl px-4 py-3 text-sm leading-6 text-[color:var(--admin-shell-text)]">
-                  Leadership report automation and delivery controls.
-                </div>
-                <div className="admin-shell-surface-muted rounded-2xl px-4 py-3 text-sm leading-6 text-[color:var(--admin-shell-text)]">
-                  Shared TTS runtime settings used across newsroom operations.
-                </div>
-              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <Link
@@ -69,7 +38,7 @@ export default function SettingsPage() {
                 <div className="mb-3 inline-flex rounded-2xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-300">
                   <AlertTriangle className="h-5 w-5" />
                 </div>
-                Operations
+                Diagnostics
               </Link>
               <Link
                 href="/admin/audit-log"
@@ -87,7 +56,7 @@ export default function SettingsPage() {
                 <div className="mb-3 inline-flex rounded-2xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-300">
                   <Activity className="h-5 w-5" />
                 </div>
-                Health
+                System Health
               </Link>
             </div>
           </div>

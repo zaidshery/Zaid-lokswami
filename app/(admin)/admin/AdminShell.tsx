@@ -101,6 +101,7 @@ const SUPER_ADMIN_ITEMS: SidebarItem[] = [
 
 const ADMIN_ITEMS: SidebarItem[] = [
   { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
+  { icon: BarChart3, labelEn: 'Analytics', labelHi: HI.analytics, href: '/admin/analytics' },
   { icon: FileText, labelEn: 'Review Queue', labelHi: HI.reviewQueue, href: '/admin/review-queue' },
   { icon: ClipboardList, labelEn: 'Assignments', labelHi: HI.assignments, href: '/admin/assignments' },
   { icon: FolderOpen, labelEn: 'Content Queue', labelHi: HI.contentQueue, href: '/admin/content-queue' },
@@ -133,8 +134,7 @@ const COPY_EDITOR_ITEMS: SidebarItem[] = [
 const REPORTER_ITEMS: SidebarItem[] = [
   { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
   { icon: FileText, labelEn: 'My Work', labelHi: HI.myWork, href: '/admin/my-work' },
-  { icon: FileText, labelEn: 'My Articles', labelHi: HI.myArticles, href: '/admin/articles?scope=mine' },
-  { icon: FileText, labelEn: 'My Stories', labelHi: HI.stories, href: '/admin/stories' },
+  { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
   { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
 ];
 

@@ -104,7 +104,7 @@ export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
   newsroom_settings: ['super_admin', 'admin'],
   revenue: ['super_admin'],
   team: ['super_admin', 'admin'],
-  analytics: ['super_admin'],
+  analytics: ['super_admin', 'admin'],
   audit_log: ['super_admin'],
   permission_review: ['super_admin'],
   operations_diagnostics: ['super_admin'],

@@ -319,7 +319,7 @@ export default function CreateStoryPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-900">Caption</label>
+              <label className="mb-2 block text-sm font-medium text-gray-900">Video Script</label>
               <textarea
                 name="caption"
                 value={formData.caption}
@@ -331,20 +331,22 @@ export default function CreateStoryPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Story Type
-                </label>
-                <select
-                  name="mediaType"
-                  value={formData.mediaType}
-                  onChange={handleInputChange}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                >
-                  <option value="image">Image Story</option>
-                  <option value="video">Video Story</option>
-                </select>
-              </div>
+              {!isReporterFlow ? (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-900">
+                    Story Type
+                  </label>
+                  <select
+                    name="mediaType"
+                    value={formData.mediaType}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                  >
+                    <option value="image">Image Story</option>
+                    <option value="video">Video Story</option>
+                  </select>
+                </div>
+              ) : null}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-900">
@@ -387,11 +389,11 @@ export default function CreateStoryPage() {
                 <span className="flex flex-col items-center gap-1 text-center">
                   <ImageIcon className="h-5 w-5 text-gray-500" />
                   <span className="text-sm font-medium text-gray-700">Click to upload</span>
-                  <span className="text-xs text-gray-500">PNG/JPG/WebP up to 5MB</span>
+                  <span className="text-xs text-gray-500">Images/Videos - All formats up to 5MB</span>
                 </span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   onChange={handleThumbnailFileChange}
                   className="hidden"
                 />
@@ -425,57 +427,84 @@ export default function CreateStoryPage() {
               </div>
             ) : null}
 
+            {!isReporterFlow ? (
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      Link URL (optional)
+                    </label>
+                    <input
+                      type="text"
+                      name="linkUrl"
+                      value={formData.linkUrl}
+                      onChange={handleInputChange}
+                      placeholder="/main/article/123 or https://..."
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      Link Label
+                    </label>
+                    <input
+                      type="text"
+                      name="linkLabel"
+                      value={formData.linkLabel}
+                      onChange={handleInputChange}
+                      placeholder="Read Full Story"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      Author
+                    </label>
+                    <input
+                      type="text"
+                      name="author"
+                      value={formData.author}
+                      onChange={handleInputChange}
+                      placeholder={defaultAuthor}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      Duration (sec)
+                    </label>
+                    <input
+                      type="number"
+                      name="durationSeconds"
+                      value={formData.durationSeconds}
+                      onChange={handleInputChange}
+                      min="2"
+                      max="180"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">Priority</label>
+                    <input
+                      type="number"
+                      name="priority"
+                      value={formData.priority}
+                      onChange={handleInputChange}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : null}
+
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Link URL (optional)
-                </label>
-                <input
-                  type="text"
-                  name="linkUrl"
-                  value={formData.linkUrl}
-                  onChange={handleInputChange}
-                  placeholder="/main/article/123 or https://..."
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Link Label
-                </label>
-                <input
-                  type="text"
-                  name="linkLabel"
-                  value={formData.linkLabel}
-                  onChange={handleInputChange}
-                  placeholder="Read Full Story"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Author
-                </label>
-                <input
-                  type="text"
-                  name="author"
-                  value={formData.author}
-                  onChange={handleInputChange}
-                  placeholder={defaultAuthor}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                />
-                {isReporterFlow ? (
-                  <p className="mt-2 text-xs text-gray-500">
-                    Your reporter byline is prefilled from the signed-in session.
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-gray-900">
                   Location Tag
                 </label>
@@ -488,80 +517,57 @@ export default function CreateStoryPage() {
                   className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
                 />
               </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Duration (sec)
-                </label>
-                <input
-                  type="number"
-                  name="durationSeconds"
-                  value={formData.durationSeconds}
-                  onChange={handleInputChange}
-                  min="2"
-                  max="180"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">Priority</label>
-                <input
-                  type="number"
-                  name="priority"
-                  value={formData.priority}
-                  onChange={handleInputChange}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                />
-              </div>
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Reporter Submission</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Capture source and desk context before this story enters review.
-                </p>
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Source Info
-                </label>
-                <textarea
-                  name="sourceInfo"
-                  value={formData.sourceInfo}
-                  onChange={handleInputChange}
-                  rows={3}
-                  placeholder="Who supplied this story, clip, or visual?"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                />
-              </div>
-              <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="sourceConfidential"
-                  checked={formData.sourceConfidential}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                />
-                <span className="text-sm text-gray-700">
-                  Source is confidential and should remain internal
-                </span>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-900">
+                Reporter Notes
               </label>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Reporter Notes
-                </label>
-                <textarea
-                  name="reporterNotes"
-                  value={formData.reporterNotes}
-                  onChange={handleInputChange}
-                  rows={3}
-                  placeholder="Editing notes, verification context, or publishing hints."
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                />
-              </div>
+              <textarea
+                name="reporterNotes"
+                value={formData.reporterNotes}
+                onChange={handleInputChange}
+                rows={3}
+                placeholder="Editing notes, verification context, or publishing hints."
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+              />
             </div>
+
+            {!isReporterFlow ? (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Source Information</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Capture source and desk context before this story enters review.
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-900">
+                    Source Info
+                  </label>
+                  <textarea
+                    name="sourceInfo"
+                    value={formData.sourceInfo}
+                    onChange={handleInputChange}
+                    rows={3}
+                    placeholder="Who supplied this story, clip, or visual?"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                  />
+                </div>
+                <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="sourceConfidential"
+                    checked={formData.sourceConfidential}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Source is confidential and should remain internal
+                  </span>
+                </label>
+              </div>
+            ) : null}
 
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
               Draft keeps the story private, submit sends it into review, and publish is only shown for desk roles with release authority.
