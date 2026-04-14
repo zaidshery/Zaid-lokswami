@@ -29,7 +29,7 @@ npm run build:hostinger
 
 ## Vercel Project Settings
 
-When importing `zaidshery/Zaid-Lokswami-2` into Vercel, use:
+When importing `zaidshery/Zaid-lokswami` into Vercel, use:
 
 - Framework Preset: `Next.js`
 - Root Directory: `.`
@@ -38,6 +38,8 @@ When importing `zaidshery/Zaid-Lokswami-2` into Vercel, use:
 - Production Branch: `main`
 
 `build:vercel` currently points to the same CI-safe production build as `build:ci`.
+
+If you already have an older Vercel project named `zaid-lokswami-2`, reconnect its Git repository to `zaidshery/Zaid-lokswami` or create a fresh Vercel project from the canonical repo.
 
 ## Required Production Environment Variables
 

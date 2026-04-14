@@ -205,7 +205,7 @@ Hostinger Node deployment is the supported production path for this repo.
 - `npm run test:smoke -- https://your-domain.com` now checks live HTML asset integrity, not just status codes
 - See `HOSTINGER_DEPLOY.md` for the full server checklist
 
-Vercel is also supported for the `Zaid-Lokswami-2` GitHub repo with Git-based CI/CD.
+Vercel is also supported for the `zaidshery/Zaid-lokswami` GitHub repo with Git-based CI/CD.
 
 - GitHub Actions handles CI with lint, typecheck, tests, and a CI-safe production build
 - Vercel should use `npm run build:vercel` as the build command
