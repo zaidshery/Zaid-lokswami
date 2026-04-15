@@ -8,7 +8,6 @@ import {
   TrendingUp,
   ArrowRight,
   Flame,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ArrowUpRight,
@@ -18,6 +17,7 @@ import HeroCarousel from '@/components/ui/HeroCarousel';
 import StoriesRail from '@/components/ui/StoriesRail';
 import NewsCard from '@/components/ui/NewsCard';
 import DesktopHeroEpaperCard from '@/components/ui/DesktopHeroEpaperCard';
+import NewsPoll from '@/components/ui/NewsPoll';
 import { articles as mockArticles, type Article } from '@/lib/mock/data';
 import { categoryMatches, fetchMergedLiveArticles } from '@/lib/content/liveArticles';
 import {
@@ -258,9 +258,6 @@ export default function HomePage() {
     language === 'hi' && latestEpaper?.citySlug
       ? HI_EPAPER_CITY_LABELS[latestEpaper.citySlug] || epaperCity
       : epaperCity;
-  const epaperDateLabel = latestEpaper?.publishDate
-    ? formatUiDate(latestEpaper.publishDate, latestEpaper.publishDate)
-    : '';
   const desktopHeroEpaperDateLabel = formatDesktopHeroDate(latestEpaper?.publishDate, language);
   const isDesktopHeroEpaperToday = Boolean(
     latestEpaper?.publishDate && latestEpaper.publishDate === getLocalDateKey()
@@ -278,13 +275,6 @@ export default function HomePage() {
       : latestEpaper?.cityName.trim()
         ? `${epaperCity} Edition`
         : "Today's digital edition";
-  const epaperSupportLabel =
-    language === 'hi'
-      ? '\u0906\u091c \u0915\u093e \u092a\u0942\u0930\u093e \u0905\u0902\u0915 \u090f\u0915 \u091f\u0948\u092a \u092e\u0947\u0902 \u092a\u0922\u093c\u0947\u0902'
-      : "Open today's full edition in one tap";
-  const epaperPagesLabel = latestEpaper?.pageCount
-    ? `${latestEpaper.pageCount} ${language === 'hi' ? '\u092a\u0947\u091c' : 'pages'}`
-    : '';
   const desktopHeroEpaperTitle =
     language === 'hi'
       ? '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940'
@@ -524,89 +514,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-xl border border-red-500/20 bg-[linear-gradient(145deg,#17171c_0%,#101118_58%,#5f1118_130%)] p-4 text-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] sm:rounded-2xl sm:p-5">
-            <div className="absolute inset-x-0 top-0 h-[3px] bg-[linear-gradient(90deg,#ef4444_0%,#f97316_48%,#f8fafc_100%)]" />
-            <div className="pointer-events-none absolute -right-10 -bottom-10 h-36 w-36 rounded-full bg-red-600/18 blur-3xl" />
-            <div className="pointer-events-none absolute right-20 top-10 h-20 w-20 rounded-full bg-white/6 blur-2xl" />
-            <div className="pointer-events-none absolute inset-y-6 right-[9rem] hidden w-px bg-white/10 sm:block md:right-[11rem] lg:right-[10rem] xl:right-[11rem]" />
-
-            <div className="relative grid grid-cols-[minmax(0,1fr)_132px] gap-4 max-[359px]:grid-cols-[minmax(0,1fr)_118px] max-[359px]:gap-3 sm:grid-cols-[minmax(0,1fr)_156px] md:grid-cols-[minmax(0,1fr)_184px] lg:grid-cols-[minmax(0,1fr)_168px] xl:grid-cols-[minmax(0,1fr)_184px] sm:gap-5">
-              <div className="flex min-w-0 flex-col justify-between py-1">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white shadow-sm">
-                      {language === 'hi' ? '\u0906\u091c \u0915\u093e \u0905\u0902\u0915' : "Today's Edition"}
-                    </span>
-                    {epaperDateLabel ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/8 px-2.5 py-1 text-[10px] font-semibold text-zinc-200">
-                        <CalendarDays className="h-3.5 w-3.5 text-red-300" />
-                        {epaperDateLabel}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div className="mt-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-zinc-400">
-                      {language === 'hi' ? '\u0921\u093f\u091c\u093f\u091f\u0932 \u090f\u0921\u093f\u0936\u0928' : 'Digital Edition'}
-                    </p>
-                    <h3 className="mt-2 inline-flex items-center gap-2 text-[1.7rem] font-black tracking-tight text-white sm:text-[1.95rem] md:text-[2.1rem] lg:text-[1.85rem] xl:text-[2.05rem]">
-                      <Newspaper className="h-[18px] w-[18px] text-red-300" />
-                      {language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
-                    </h3>
-                    <p className="mt-2 text-[1.05rem] font-semibold leading-tight text-zinc-100 sm:text-[1.22rem] md:text-[1.3rem] lg:text-[1.15rem] xl:text-[1.28rem]">
-                      {epaperEditionLabel}
-                    </p>
-                    <p className="mt-2 max-w-[26ch] text-[13px] leading-relaxed text-zinc-300 sm:text-sm md:max-w-[30ch] lg:max-w-[22ch] xl:max-w-[24ch]">
-                      {epaperSupportLabel}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <Link
-                    href={epaperHref}
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-zinc-950 shadow-[0_14px_30px_rgba(255,255,255,0.12)] transition-all hover:-translate-y-0.5 hover:bg-red-50 sm:px-5 sm:text-sm"
-                  >
-                    {language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930 \u0916\u094b\u0932\u0947\u0902' : 'Open E-Paper'}
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                  {epaperPagesLabel ? (
-                    <span className="text-[11px] font-semibold text-zinc-300 sm:text-xs">
-                      {epaperPagesLabel}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              <Link
-                href={epaperHref}
-                className="group relative block w-full self-center justify-self-end"
-                aria-label={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930 \u0915\u0935\u0930 \u0926\u0947\u0916\u0947\u0902' : 'View e-paper cover'}
-              >
-                <div className="pointer-events-none absolute left-3 right-2 top-4 aspect-[3/4] rounded-[1rem] border border-white/10 bg-white/6 opacity-60 rotate-[8deg]" />
-                <div className="pointer-events-none absolute left-1 right-4 top-2 aspect-[3/4] rounded-[1rem] border border-white/10 bg-black/20 opacity-70 -rotate-[6deg]" />
-                <div className="pointer-events-none absolute inset-x-2 bottom-0 top-6 rounded-[1.3rem] bg-black/35 blur-xl" />
-                <div className="relative overflow-hidden rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] p-2.5 shadow-[0_18px_38px_rgba(0,0,0,0.28)] transition-transform duration-300 group-hover:-translate-y-1">
-                  <div className="relative aspect-[3/4] overflow-hidden rounded-[1rem] bg-white">
-                    <Image
-                      src={epaperThumbnail}
-                      alt={epaperThumbnailAlt}
-                      fill
-                      className="object-contain p-1.5 transition-transform duration-500 group-hover:scale-[1.03]"
-                      sizes="(max-width: 359px) 118px, (max-width: 639px) 132px, (max-width: 767px) 156px, (max-width: 1023px) 184px, (max-width: 1279px) 168px, 184px"
-                    />
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300">
-                    <span>{language === 'hi' ? '\u092b\u094d\u0930\u0902\u091f \u092a\u0947\u091c' : 'Front Page'}</span>
-                    <ArrowUpRight className="h-3.5 w-3.5 text-red-300" />
-                  </div>
-                </div>
-                <span className="absolute left-3 top-3 rounded-full bg-red-600/95 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
-                  {language === 'hi' ? '\u0915\u0935\u0930' : 'Cover'}
-                </span>
-              </Link>
-            </div>
-          </div>
+          <NewsPoll />
         </aside>
       </div>
       <section className="relative mt-[var(--section-gap)] cnp-surface overflow-hidden px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">

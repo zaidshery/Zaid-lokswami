@@ -700,9 +700,9 @@
 
   .epaper-premium-aurora {
     background:
-      radial-gradient(circle at 16% 24%, rgba(255, 255, 255, 0.14), transparent 18%),
-      radial-gradient(circle at 76% 12%, rgba(249, 115, 22, 0.3), transparent 26%),
-      radial-gradient(circle at 82% 74%, rgba(239, 68, 68, 0.22), transparent 30%);
+      radial-gradient(circle at 16% 24%, rgba(255, 255, 255, 0.48), transparent 18%),
+      radial-gradient(circle at 76% 12%, rgba(249, 115, 22, 0.14), transparent 26%),
+      radial-gradient(circle at 82% 74%, rgba(239, 68, 68, 0.12), transparent 30%);
     filter: blur(24px);
     animation: epaperPremiumAurora 11s ease-in-out infinite alternate;
     transform: translate3d(0, 0, 0);
@@ -713,14 +713,33 @@
     background:
       radial-gradient(
         240px circle at var(--epaper-spotlight-x, 72%) var(--epaper-spotlight-y, 26%),
+        rgba(255, 255, 255, 0.52),
+        rgba(255, 255, 255, 0.2) 22%,
+        transparent 60%
+      );
+    mix-blend-mode: soft-light;
+    opacity: 0.86;
+    transition: opacity 180ms ease;
+    will-change: background;
+  }
+
+  html.dark .epaper-premium-aurora {
+    background:
+      radial-gradient(circle at 16% 24%, rgba(255, 255, 255, 0.14), transparent 18%),
+      radial-gradient(circle at 76% 12%, rgba(249, 115, 22, 0.3), transparent 26%),
+      radial-gradient(circle at 82% 74%, rgba(239, 68, 68, 0.22), transparent 30%);
+  }
+
+  html.dark .epaper-premium-spotlight {
+    background:
+      radial-gradient(
+        240px circle at var(--epaper-spotlight-x, 72%) var(--epaper-spotlight-y, 26%),
         rgba(255, 255, 255, 0.16),
         rgba(255, 255, 255, 0.08) 20%,
         transparent 60%
       );
     mix-blend-mode: screen;
     opacity: 0.72;
-    transition: opacity 180ms ease;
-    will-change: background;
   }
 
   .epaper-premium-button {

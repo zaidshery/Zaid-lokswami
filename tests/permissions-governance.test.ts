@@ -58,9 +58,13 @@ describe('governance permission helpers', () => {
 
   it('keeps leadership controls narrower than normal analytics access', () => {
     expect(canViewPage(superAdmin.role, 'analytics')).toBe(true);
+    expect(canViewPage(superAdmin.role, 'polls')).toBe(true);
     expect(canViewPage(superAdmin.role, 'revenue')).toBe(true);
     expect(canViewPage(admin.role, 'analytics')).toBe(true);
+    expect(canViewPage(admin.role, 'polls')).toBe(true);
     expect(canViewPage(admin.role, 'revenue')).toBe(false);
+    expect(canViewPage(copyEditor.role, 'polls')).toBe(false);
+    expect(canViewPage(reporter.role, 'polls')).toBe(false);
     expect(canViewPage(admin.role, 'newsroom_settings')).toBe(true);
     expect(canManageLeadershipReports(superAdmin.role)).toBe(true);
     expect(canManageLeadershipReports(admin.role)).toBe(false);

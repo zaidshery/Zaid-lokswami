@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { signOut, useSession } from 'next-auth/react';
+import { signOut } from 'next-auth/react';
 import {
   Activity,
   ClipboardList,
@@ -17,6 +17,7 @@ import {
   LogOut,
   Moon,
   Newspaper,
+  ListChecks,
   Settings,
   Settings2,
   ShieldCheck,
@@ -61,6 +62,7 @@ const HI = {
   articles: '\u0932\u0947\u0916',
   myArticles: '\u092e\u0947\u0930\u0947 \u0932\u0947\u0916',
   categories: '\u0936\u094d\u0930\u0947\u0923\u093f\u092f\u093e\u0901',
+  polls: '\u092a\u094b\u0932\u094d\u0938',
   stories: '\u0938\u094d\u091f\u094b\u0930\u0940\u091c\u093c',
   videos: '\u0935\u0940\u0921\u093f\u092f\u094b',
   epapers: '\u0908-\u092a\u0947\u092a\u0930',
@@ -82,6 +84,7 @@ const HI = {
 const SUPER_ADMIN_ITEMS: SidebarItem[] = [
   { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
   { icon: BarChart3, labelEn: 'Analytics', labelHi: HI.analytics, href: '/admin/analytics' },
+  { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls' },
   { icon: BarChart3, labelEn: 'Revenue', labelHi: HI.revenue, href: '/admin/revenue' },
   { icon: ClipboardList, labelEn: 'Audit Log', labelHi: HI.auditLog, href: '/admin/audit-log' },
   {
@@ -108,6 +111,7 @@ const ADMIN_ITEMS: SidebarItem[] = [
   { icon: BellRing, labelEn: 'Push Alerts', labelHi: HI.pushAlerts, href: '/admin/push-alerts' },
   { icon: UserCog, labelEn: 'Team', labelHi: HI.team, href: '/admin/team' },
   { icon: FileText, labelEn: 'Articles', labelHi: HI.articles, href: '/admin/articles' },
+  { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls' },
   { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
   { icon: Video, labelEn: 'Videos', labelHi: HI.videos, href: '/admin/videos' },
   { icon: Newspaper, labelEn: 'E-Papers', labelHi: HI.epapers, href: '/admin/epapers' },
@@ -235,7 +239,6 @@ export default function AdminShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: session } = useSession();
   const [isHydrated, setIsHydrated] = useState(false);
   const { theme, setTheme, language, toggleLanguage } = useAppStore();
 
@@ -244,11 +247,9 @@ export default function AdminShell({
   }, []);
 
   const resolvedUser = {
-    name: isHydrated ? session?.user?.name ?? initialUser.name ?? null : initialUser.name ?? null,
-    email: isHydrated ? session?.user?.email ?? initialUser.email ?? null : initialUser.email ?? null,
-    role: (isHydrated ? session?.user?.role ?? initialUser.role : initialUser.role) as
-      | UserRole
-      | undefined,
+    name: initialUser.name ?? null,
+    email: initialUser.email ?? null,
+    role: initialUser.role as UserRole | undefined,
   };
   const isHindi = isHydrated ? language === 'hi' : true;
   const effectiveTheme = isHydrated ? theme : 'dark';
@@ -292,7 +293,7 @@ export default function AdminShell({
         </Link>
       </div>
 
-      <nav className="space-y-2 p-4">
+      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4 pb-24">
         {sidebarItems.map((item) => (
           <Link
             key={`${item.href}-${item.labelEn}`}
@@ -319,7 +320,7 @@ export default function AdminShell({
         ))}
       </nav>
 
-      <div className="absolute bottom-0 left-0 right-0 border-t border-[color:var(--admin-shell-border)] p-4">
+      <div className="border-t border-[color:var(--admin-shell-border)] p-4">
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-[color:var(--admin-shell-text-muted)] transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
@@ -338,7 +339,7 @@ export default function AdminShell({
       className="admin-shell flex min-h-screen text-[color:var(--admin-shell-text)] transition-colors"
     >
       <aside
-        className="admin-shell-surface-strong fixed bottom-0 left-0 top-0 z-40 w-[272px] border-r border-[color:var(--admin-shell-border-strong)]"
+        className="admin-shell-surface-strong fixed bottom-0 left-0 top-0 z-40 flex w-[272px] flex-col overflow-hidden border-r border-[color:var(--admin-shell-border-strong)]"
       >
         {sidebarContent}
       </aside>
