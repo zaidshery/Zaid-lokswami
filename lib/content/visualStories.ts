@@ -1,6 +1,15 @@
 import type { Article, Story } from '@/lib/mock/data';
+import {
+  createStoryMediaAsset,
+  derivePrimaryStoryMedia,
+  normalizeStoryMediaAssets,
+  type StoryMediaAsset,
+} from '@/lib/content/storyMedia';
 
-export type VisualStory = Story & { href?: string };
+export type VisualStory = Story & {
+  href?: string;
+  mediaAssets: StoryMediaAsset[];
+};
 
 const USE_REMOTE_DEMO_MEDIA =
   process.env.NEXT_PUBLIC_USE_REMOTE_DEMO_MEDIA === 'true';
@@ -63,6 +72,80 @@ function buildStoryTitle(article: Article) {
   return title.length > 48 ? `${title.slice(0, 48).trim()}...` : title;
 }
 
+function buildFallbackMediaAssets(options: {
+  storyId: string;
+  thumbnail: string;
+  mediaType: 'image' | 'video';
+  mediaUrl: string;
+}) {
+  const thumbnail = normalizeStoryThumbnail(options.thumbnail);
+  const mediaUrl = options.mediaUrl.trim();
+  const assets: StoryMediaAsset[] = [];
+
+  if (thumbnail) {
+    assets.push(
+      createStoryMediaAsset({
+        id: `${options.storyId}-image-fallback`,
+        kind: 'image',
+        url: thumbnail,
+        key: '',
+        mimeType: '',
+        sizeBytes: 0,
+        storageProvider: '',
+        originalFileName: '',
+        order: 0,
+      })
+    );
+  }
+
+  if (options.mediaType === 'video' && mediaUrl) {
+    assets.push(
+      createStoryMediaAsset({
+        id: `${options.storyId}-video-fallback`,
+        kind: 'video',
+        url: mediaUrl,
+        key: '',
+        mimeType: mediaUrl.toLowerCase().endsWith('.mp4') ? 'video/mp4' : '',
+        sizeBytes: 0,
+        storageProvider: '',
+        originalFileName: '',
+        order: assets.length,
+      })
+    );
+  } else if (!assets.length && mediaUrl) {
+    assets.push(
+      createStoryMediaAsset({
+        id: `${options.storyId}-primary-image-fallback`,
+        kind: 'image',
+        url: normalizeStoryThumbnail(mediaUrl),
+        key: '',
+        mimeType: '',
+        sizeBytes: 0,
+        storageProvider: '',
+        originalFileName: '',
+        order: 0,
+      })
+    );
+  }
+
+  return assets;
+}
+
+function normalizeVisualStoryMediaAssets(input: unknown) {
+  const normalized = normalizeStoryMediaAssets(input).map((asset) => ({
+    ...asset,
+    url: asset.kind === 'image' ? normalizeStoryThumbnail(asset.url) : asset.url.trim(),
+  }));
+
+  return normalized
+    .filter((asset) => Boolean(asset.url))
+    .sort((left, right) => left.order - right.order)
+    .map((asset, index) => ({
+      ...asset,
+      order: index,
+    }));
+}
+
 export function buildVisualStoriesFromArticles(
   articles: Article[],
   limit = 10
@@ -90,6 +173,19 @@ export function buildVisualStoriesFromArticles(
       thumbnail: image,
       mediaType: 'image',
       mediaUrl: image,
+      mediaAssets: [
+        createStoryMediaAsset({
+          id: `story-${article.id}-image`,
+          kind: 'image',
+          url: image,
+          key: '',
+          mimeType: 'image/jpeg',
+          sizeBytes: 0,
+          storageProvider: '',
+          originalFileName: '',
+          order: 0,
+        }),
+      ],
       linkLabel: 'Read Story',
       category: article.category,
       author: article.author?.name || 'Desk',
@@ -124,6 +220,7 @@ type ApiStory = {
   views?: number;
   publishedAt?: string;
   isPublished?: boolean;
+  mediaAssets?: unknown;
 };
 
 function parseVideoHostFromUrl(value: string) {
@@ -207,16 +304,25 @@ export function mapLiveStoriesToVisualStories(
       const linkUrl = (row.linkUrl || '').trim();
       const rawMediaUrl = (row.mediaUrl || '').trim();
       const inferredThumb = toStableYouTubeThumbnail(rawMediaUrl || linkUrl);
-      const thumbnail =
-        normalizeStoryThumbnail(row.thumbnail || '') ||
-        normalizeStoryThumbnail(inferredThumb);
       const mediaType = normalizeMediaType(row.mediaType, rawMediaUrl, linkUrl);
       const mediaSource =
         mediaType === 'video' ? rawMediaUrl || linkUrl : rawMediaUrl;
-      const mediaUrl =
-        mediaType === 'video'
-          ? (mediaSource || '').trim()
-          : normalizeStoryThumbnail(mediaSource || '') || thumbnail;
+      const mediaAssets = normalizeVisualStoryMediaAssets(row.mediaAssets);
+      const effectiveMediaAssets = mediaAssets.length
+        ? mediaAssets
+        : buildFallbackMediaAssets({
+            storyId: id,
+            thumbnail: String(row.thumbnail || '').trim() || inferredThumb,
+            mediaType,
+            mediaUrl: mediaSource || '',
+          });
+      const derivedPrimary = derivePrimaryStoryMedia(
+        effectiveMediaAssets,
+        normalizeStoryThumbnail(row.thumbnail || '') ||
+          normalizeStoryThumbnail(inferredThumb)
+      );
+      const thumbnail = derivedPrimary.thumbnail;
+      const mediaUrl = derivedPrimary.mediaUrl;
       const isPublished = row.isPublished === false ? false : true;
 
       if (!id || !title || !thumbnail || !isPublished) return null;
@@ -226,8 +332,9 @@ export function mapLiveStoriesToVisualStories(
         title,
         caption: (row.caption || '').trim(),
         thumbnail,
-        mediaType,
+        mediaType: derivedPrimary.mediaType,
         mediaUrl,
+        mediaAssets: effectiveMediaAssets,
         linkUrl,
         linkLabel: (row.linkLabel || '').trim(),
         category: (row.category || 'General').trim(),

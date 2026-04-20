@@ -422,6 +422,25 @@
     margin-top: 1.25rem;
   }
 
+  .article-rich-content figure {
+    margin: 1.25rem 0;
+  }
+
+  .article-rich-content figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.82rem;
+    color: #52525b;
+  }
+
+  html.dark .article-rich-content figcaption {
+    color: #a1a1aa;
+  }
+
+  .article-rich-content .article-image-source {
+    display: inline;
+    font-weight: 600;
+  }
+
   .article-rich-content ul,
   .article-rich-content ol {
     padding-left: 1.3rem;
@@ -502,6 +521,64 @@
     width: 100%;
     overflow-x: auto;
     border-collapse: collapse;
+  }
+
+  .article-rich-content table th,
+  .article-rich-content table td {
+    border: 1px solid rgba(113, 113, 122, 0.22);
+    padding: 0.7rem 0.85rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .article-rich-content table th {
+    background: rgba(244, 244, 245, 0.9);
+    font-weight: 700;
+  }
+
+  html.dark .article-rich-content table th,
+  html.dark .article-rich-content table td {
+    border-color: rgba(161, 161, 170, 0.2);
+  }
+
+  html.dark .article-rich-content table th {
+    background: rgba(39, 39, 42, 0.95);
+  }
+
+  .article-rich-content .article-resource-card {
+    margin: 1.25rem 0;
+    border: 1px solid rgba(234, 88, 12, 0.18);
+    background: rgba(255, 247, 237, 0.9);
+    border-radius: 0.9rem;
+    padding: 1rem 1.1rem;
+  }
+
+  html.dark .article-rich-content .article-resource-card {
+    border-color: rgba(251, 146, 60, 0.24);
+    background: rgba(67, 20, 7, 0.28);
+  }
+
+  .article-rich-content .article-resource-card-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #c2410c;
+  }
+
+  html.dark .article-rich-content .article-resource-card-title {
+    color: #fdba74;
+  }
+
+  .article-rich-content .article-resource-card-description {
+    margin-top: 0.45rem;
+    font-size: 0.92rem;
+    color: #52525b;
+  }
+
+  html.dark .article-rich-content .article-resource-card-description {
+    color: #d4d4d8;
   }
 
   .article-rich-content pre,

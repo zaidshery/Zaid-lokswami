@@ -8,6 +8,17 @@ import {
   type ReporterMeta,
 } from '@/lib/content/newsroomMetadata';
 import {
+  normalizeStoryMediaAssets,
+  type StoryMediaAsset,
+} from '@/lib/content/storyMedia';
+import {
+  createEmptyStoryVideoProduction,
+  normalizeLinkedArticleStatus,
+  normalizeStoryVideoProduction,
+  type LinkedArticleStatus,
+  type StoryVideoProduction,
+} from '@/lib/content/newsroomPublishing';
+import {
   createWorkflowMeta,
   isWorkflowCommentKind,
   isWorkflowPriority,
@@ -49,6 +60,11 @@ export interface StoredStory {
   thumbnail: string;
   mediaType: 'image' | 'video';
   mediaUrl: string;
+  mediaKey: string;
+  mediaSizeBytes: number;
+  mediaMimeType: string;
+  storageProvider: string;
+  mediaAssets: StoryMediaAsset[];
   linkUrl: string;
   linkLabel: string;
   category: string;
@@ -62,6 +78,9 @@ export interface StoredStory {
   workflow: StoredWorkflowMeta;
   reporterMeta: ReporterMeta;
   copyEditorMeta: CopyEditorMeta;
+  linkedArticleId: string;
+  linkedArticleStatus: LinkedArticleStatus;
+  videoProduction: StoryVideoProduction;
 }
 
 export interface CreateStoryInput {
@@ -70,6 +89,11 @@ export interface CreateStoryInput {
   thumbnail: string;
   mediaType?: 'image' | 'video';
   mediaUrl?: string;
+  mediaKey?: string;
+  mediaSizeBytes?: number;
+  mediaMimeType?: string;
+  storageProvider?: string;
+  mediaAssets?: StoryMediaAsset[];
   linkUrl?: string;
   linkLabel?: string;
   category?: string;
@@ -82,6 +106,9 @@ export interface CreateStoryInput {
   workflow?: Partial<StoredWorkflowMeta>;
   reporterMeta?: Partial<ReporterMeta>;
   copyEditorMeta?: Partial<CopyEditorMeta>;
+  linkedArticleId?: string;
+  linkedArticleStatus?: LinkedArticleStatus;
+  videoProduction?: Partial<StoryVideoProduction>;
 }
 
 const dataDir = path.resolve(process.cwd(), 'data');
@@ -197,6 +224,13 @@ function normalizeStoredStory(input: unknown): StoredStory | null {
     thumbnail,
     mediaType: source.mediaType === 'video' ? 'video' : 'image',
     mediaUrl: typeof source.mediaUrl === 'string' ? source.mediaUrl.trim() : '',
+    mediaKey: typeof source.mediaKey === 'string' ? source.mediaKey.trim() : '',
+    mediaSizeBytes: Number.isFinite(Number(source.mediaSizeBytes))
+      ? Math.max(0, Number(source.mediaSizeBytes))
+      : 0,
+    mediaMimeType: typeof source.mediaMimeType === 'string' ? source.mediaMimeType.trim() : '',
+    storageProvider: typeof source.storageProvider === 'string' ? source.storageProvider.trim() : '',
+    mediaAssets: normalizeStoryMediaAssets(source.mediaAssets),
     linkUrl: typeof source.linkUrl === 'string' ? source.linkUrl.trim() : '',
     linkLabel: typeof source.linkLabel === 'string' ? source.linkLabel.trim() : '',
     category: typeof source.category === 'string' && source.category.trim() ? source.category.trim() : 'General',
@@ -213,6 +247,10 @@ function normalizeStoredStory(input: unknown): StoredStory | null {
     workflow: normalizeWorkflowMeta(source.workflow, isPublished),
     reporterMeta: normalizeReporterMeta(source.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(source.copyEditorMeta),
+    linkedArticleId:
+      typeof source.linkedArticleId === 'string' ? source.linkedArticleId.trim() : '',
+    linkedArticleStatus: normalizeLinkedArticleStatus(source.linkedArticleStatus),
+    videoProduction: normalizeStoryVideoProduction(source.videoProduction),
   };
 }
 
@@ -318,6 +356,14 @@ export async function createStoredStory(input: CreateStoryInput) {
     thumbnail: input.thumbnail,
     mediaType: input.mediaType === 'video' ? 'video' : 'image',
     mediaUrl: input.mediaUrl || '',
+    mediaKey: input.mediaKey || '',
+    mediaSizeBytes:
+      input.mediaSizeBytes !== undefined && Number.isFinite(Number(input.mediaSizeBytes))
+        ? Math.max(0, Number(input.mediaSizeBytes))
+        : 0,
+    mediaMimeType: input.mediaMimeType || '',
+    storageProvider: input.storageProvider || '',
+    mediaAssets: normalizeStoryMediaAssets(input.mediaAssets),
     linkUrl: input.linkUrl || '',
     linkLabel: input.linkLabel || '',
     category: input.category || 'General',
@@ -331,6 +377,13 @@ export async function createStoredStory(input: CreateStoryInput) {
     workflow: normalizeWorkflowMeta(input.workflow, isPublished),
     reporterMeta: normalizeReporterMeta(input.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(input.copyEditorMeta),
+    linkedArticleId:
+      typeof input.linkedArticleId === 'string' ? input.linkedArticleId.trim() : '',
+    linkedArticleStatus: normalizeLinkedArticleStatus(input.linkedArticleStatus),
+    videoProduction:
+      input.videoProduction !== undefined
+        ? normalizeStoryVideoProduction(input.videoProduction)
+        : createEmptyStoryVideoProduction(),
   };
 
   all.push(story);
@@ -380,6 +433,24 @@ export async function updateStoredStory(
       updates.views !== undefined && Number.isFinite(updates.views)
         ? Number(updates.views)
         : current.views,
+    mediaKey:
+      typeof updates.mediaKey === 'string' ? updates.mediaKey.trim() : current.mediaKey,
+    mediaSizeBytes:
+      updates.mediaSizeBytes !== undefined && Number.isFinite(Number(updates.mediaSizeBytes))
+        ? Math.max(0, Number(updates.mediaSizeBytes))
+        : current.mediaSizeBytes,
+    mediaMimeType:
+      typeof updates.mediaMimeType === 'string'
+        ? updates.mediaMimeType.trim()
+        : current.mediaMimeType,
+    storageProvider:
+      typeof updates.storageProvider === 'string'
+        ? updates.storageProvider.trim()
+        : current.storageProvider,
+    mediaAssets:
+      updates.mediaAssets !== undefined
+        ? normalizeStoryMediaAssets(updates.mediaAssets)
+        : current.mediaAssets,
     isPublished: nextIsPublished,
     updatedAt: updates.updatedAt || new Date().toISOString(),
     workflow:
@@ -397,6 +468,21 @@ export async function updateStoredStory(
             ...updates.copyEditorMeta,
           })
         : current.copyEditorMeta,
+    linkedArticleId:
+      typeof updates.linkedArticleId === 'string'
+        ? updates.linkedArticleId.trim()
+        : current.linkedArticleId,
+    linkedArticleStatus:
+      updates.linkedArticleStatus !== undefined
+        ? normalizeLinkedArticleStatus(updates.linkedArticleStatus)
+        : current.linkedArticleStatus,
+    videoProduction:
+      updates.videoProduction !== undefined
+        ? normalizeStoryVideoProduction({
+            ...current.videoProduction,
+            ...updates.videoProduction,
+          })
+        : current.videoProduction,
   };
 
   all[index] = next;

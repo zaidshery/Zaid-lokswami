@@ -87,28 +87,48 @@ describe('governance permission helpers', () => {
     expect(canCreateContent(reporter.role, 'article')).toBe(true);
     expect(canCreateContent(reporter.role, 'story')).toBe(true);
     expect(canCreateContent(reporter.role, 'video')).toBe(false);
+    expect(canCreateContent(copyEditor.role, 'article')).toBe(true);
     expect(canCreateContent(copyEditor.role, 'story')).toBe(false);
     expect(canCreateContent(admin.role, 'video')).toBe(true);
+  });
+
+  it('routes social outbox access to desk roles only', () => {
+    expect(canViewPage(admin.role, 'social_posts')).toBe(true);
+    expect(canViewPage(copyEditor.role, 'social_posts')).toBe(true);
+    expect(canViewPage(reporter.role, 'social_posts')).toBe(false);
   });
 
   it('lets reporters work only on their own content transitions', () => {
     expect(canReadContent(reporter, baseContent)).toBe(true);
     expect(canEditContent(reporter, baseContent)).toBe(true);
+    expect(
+      canEditContent(reporter, { ...baseContent, workflowStatus: 'submitted' })
+    ).toBe(false);
     expect(canTransitionContent(reporter, baseContent, 'submit')).toBe(true);
+    expect(
+      canTransitionContent(reporter, { ...baseContent, workflowStatus: 'submitted' }, 'submit')
+    ).toBe(false);
     expect(canTransitionContent(reporter, { ...baseContent, createdById: reporter.id }, 'approve')).toBe(false);
   });
 
   it('lets copy editors work only on assigned review items', () => {
-    expect(canReadContent(copyEditor, baseContent)).toBe(true);
-    expect(canEditContent(copyEditor, baseContent)).toBe(true);
-    expect(canTransitionContent(copyEditor, baseContent, 'start_review')).toBe(true);
-    expect(canTransitionContent(copyEditor, baseContent, 'move_to_copy_edit')).toBe(true);
-    expect(canTransitionContent(copyEditor, baseContent, 'request_changes')).toBe(true);
-    expect(canTransitionContent(copyEditor, baseContent, 'mark_ready_for_approval')).toBe(true);
-    expect(canTransitionContent(copyEditor, baseContent, 'approve')).toBe(false);
-    expect(canTransitionContent(copyEditor, baseContent, 'reject')).toBe(false);
-    expect(canTransitionContent(copyEditor, baseContent, 'publish')).toBe(false);
-    expect(canEditContent(copyEditor, { ...baseContent, assignedToId: 'someone-else' })).toBe(false);
+    const assignedContent = { ...baseContent, workflowStatus: 'assigned' as const };
+
+    expect(canReadContent(copyEditor, assignedContent)).toBe(true);
+    expect(canEditContent(copyEditor, assignedContent)).toBe(true);
+    expect(
+      canEditContent(copyEditor, { ...assignedContent, workflowStatus: 'ready_for_approval' })
+    ).toBe(false);
+    expect(canTransitionContent(copyEditor, assignedContent, 'start_review')).toBe(true);
+    expect(canTransitionContent(copyEditor, assignedContent, 'move_to_copy_edit')).toBe(true);
+    expect(canTransitionContent(copyEditor, assignedContent, 'request_changes')).toBe(true);
+    expect(canTransitionContent(copyEditor, assignedContent, 'mark_ready_for_approval')).toBe(true);
+    expect(canTransitionContent(copyEditor, assignedContent, 'approve')).toBe(false);
+    expect(canTransitionContent(copyEditor, assignedContent, 'reject')).toBe(false);
+    expect(canTransitionContent(copyEditor, assignedContent, 'publish')).toBe(false);
+    expect(
+      canEditContent(copyEditor, { ...assignedContent, assignedToId: 'someone-else' })
+    ).toBe(false);
   });
 
   it('keeps admin and super admin fully operational on workflow actions', () => {

@@ -1,10 +1,19 @@
 import mongoose from 'mongoose';
-import { WorkflowMetaSchema } from '@/lib/models/schemas/workflow';
+import {
+  WorkflowActorRefSchema,
+  WorkflowMetaSchema,
+} from '@/lib/models/schemas/workflow';
 import {
   CopyEditorMetaSchema,
   ReporterMetaSchema,
 } from '@/lib/models/schemas/newsroom';
 import type { CopyEditorMeta, ReporterMeta } from '@/lib/content/newsroomMetadata';
+import {
+  createEmptyStoryVideoProduction,
+  type LinkedArticleStatus,
+  type StoryVideoProduction,
+} from '@/lib/content/newsroomPublishing';
+import type { StoryMediaAsset } from '@/lib/content/storyMedia';
 import type { WorkflowMeta } from '@/lib/workflow/types';
 
 export interface IStory {
@@ -14,6 +23,11 @@ export interface IStory {
   thumbnail: string;
   mediaType: 'image' | 'video';
   mediaUrl: string;
+  mediaKey: string;
+  mediaSizeBytes: number;
+  mediaMimeType: string;
+  storageProvider: string;
+  mediaAssets: StoryMediaAsset[];
   linkUrl: string;
   linkLabel: string;
   category: string;
@@ -27,10 +41,45 @@ export interface IStory {
   workflow: WorkflowMeta;
   reporterMeta: ReporterMeta;
   copyEditorMeta: CopyEditorMeta;
+  linkedArticleId: string;
+  linkedArticleStatus: LinkedArticleStatus;
+  videoProduction: StoryVideoProduction;
   embedding: number[];
   embeddingGeneratedAt: Date | null;
   aiSummary: string;
 }
+
+const StoryMediaAssetSchema = new mongoose.Schema<StoryMediaAsset>(
+  {
+    id: { type: String, required: true, trim: true },
+    kind: { type: String, enum: ['image', 'video'], required: true },
+    url: { type: String, required: true, trim: true },
+    key: { type: String, default: '', trim: true },
+    mimeType: { type: String, default: '', trim: true },
+    sizeBytes: { type: Number, default: 0, min: 0 },
+    storageProvider: { type: String, default: '', trim: true },
+    originalFileName: { type: String, default: '', trim: true },
+    order: { type: Number, default: 0, min: 0 },
+    createdAt: { type: String, default: () => new Date().toISOString() },
+  },
+  { _id: false }
+);
+
+const StoryVideoProductionSchema = new mongoose.Schema<StoryVideoProduction>(
+  {
+    status: {
+      type: String,
+      enum: ['not_started', 'editing', 'qa_review', 'ready_to_publish', 'published'],
+      default: 'not_started',
+    },
+    assignedTo: { type: WorkflowActorRefSchema, default: null },
+    editorNotes: { type: String, default: '' },
+    masterExportUrl: { type: String, default: '' },
+    thumbnailUrl: { type: String, default: '' },
+    updatedAt: { type: String, default: null },
+  },
+  { _id: false }
+);
 
 const StorySchema = new mongoose.Schema<IStory>({
   title: { type: String, required: true, maxlength: 140 },
@@ -38,6 +87,11 @@ const StorySchema = new mongoose.Schema<IStory>({
   thumbnail: { type: String, required: true },
   mediaType: { type: String, enum: ['image', 'video'], default: 'image' },
   mediaUrl: { type: String, default: '' },
+  mediaKey: { type: String, default: '' },
+  mediaSizeBytes: { type: Number, default: 0, min: 0 },
+  mediaMimeType: { type: String, default: '' },
+  storageProvider: { type: String, default: '' },
+  mediaAssets: { type: [StoryMediaAssetSchema], default: [] },
   linkUrl: { type: String, default: '' },
   linkLabel: { type: String, default: '' },
   category: { type: String, default: 'General' },
@@ -51,6 +105,16 @@ const StorySchema = new mongoose.Schema<IStory>({
   workflow: { type: WorkflowMetaSchema, default: () => ({}) },
   reporterMeta: { type: ReporterMetaSchema, default: () => ({}) },
   copyEditorMeta: { type: CopyEditorMetaSchema, default: () => ({}) },
+  linkedArticleId: { type: String, default: '' },
+  linkedArticleStatus: {
+    type: String,
+    enum: ['not_created', 'draft', 'submitted', 'published'],
+    default: 'not_created',
+  },
+  videoProduction: {
+    type: StoryVideoProductionSchema,
+    default: () => createEmptyStoryVideoProduction(),
+  },
   embedding: { type: [Number], default: [], select: false },
   embeddingGeneratedAt: { type: Date, default: null },
   aiSummary: { type: String, default: '' },

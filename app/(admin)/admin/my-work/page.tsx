@@ -90,13 +90,13 @@ function getLinkCards(role: string): LinkCard[] {
 
   if (isReporter) {
     cards.unshift({
-      title: 'Create Article',
-      description: 'Start a new article draft and keep momentum moving.',
-      href: '/admin/articles/new',
-      icon: FileText,
-      tone: 'bg-rose-500/10 text-rose-600',
+      title: 'Create Story',
+      description: 'Start a new story draft with reporter media, source notes, and desk handoff details.',
+      href: '/admin/stories/new',
+      icon: Video,
+      tone: 'bg-fuchsia-500/10 text-fuchsia-600',
     });
-    cards.splice(2, 0, {
+    cards.splice(1, 0, {
       title: 'My Stories',
       description: 'Open the story desk for the cards you created or that are assigned to you.',
       href: '/admin/stories',
@@ -238,10 +238,10 @@ export default async function AdminMyWorkPage() {
             </p>
           </div>
           <Link
-            href={isReporterDeskRole(admin.role) ? '/admin/articles/new' : '/admin/review-queue'}
+            href={isReporterDeskRole(admin.role) ? '/admin/stories/new' : '/admin/review-queue'}
             className="admin-shell-toolbar-btn inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold"
           >
-            {isReporterDeskRole(admin.role) ? 'Create Article' : 'Open Review Queue'}
+            {isReporterDeskRole(admin.role) ? 'Create Story' : 'Open Review Queue'}
           </Link>
         </div>
       </section>

@@ -11,6 +11,10 @@ import {
   type ReporterMeta,
 } from '@/lib/content/newsroomMetadata';
 import {
+  normalizeArticleSourceType,
+  type ArticleSourceType,
+} from '@/lib/content/newsroomPublishing';
+import {
   createWorkflowMeta,
   isWorkflowCommentKind,
   isWorkflowPriority,
@@ -88,6 +92,9 @@ export interface StoredArticle {
   workflow: StoredWorkflowMeta;
   reporterMeta: ReporterMeta;
   copyEditorMeta: CopyEditorMeta;
+  sourceType: ArticleSourceType;
+  sourceStoryId: string;
+  sourceStoryTitle: string;
 }
 
 export interface CreateArticleInput {
@@ -103,6 +110,9 @@ export interface CreateArticleInput {
   workflow?: Partial<StoredWorkflowMeta>;
   reporterMeta?: Partial<ReporterMeta>;
   copyEditorMeta?: Partial<CopyEditorMeta>;
+  sourceType?: ArticleSourceType;
+  sourceStoryId?: string;
+  sourceStoryTitle?: string;
 }
 
 type UpdateArticleInput = Partial<CreateArticleInput> & {
@@ -328,6 +338,13 @@ function normalizeStoredArticle(input: unknown): StoredArticle | null {
     workflow: normalizeWorkflowMeta(source.workflow),
     reporterMeta: normalizeReporterMeta(source.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(source.copyEditorMeta),
+    sourceType: normalizeArticleSourceType(source.sourceType),
+    sourceStoryId:
+      typeof source.sourceStoryId === 'string' ? source.sourceStoryId.trim() : '',
+    sourceStoryTitle:
+      typeof source.sourceStoryTitle === 'string'
+        ? source.sourceStoryTitle.trim()
+        : '',
   };
 }
 
@@ -402,6 +419,14 @@ export async function getStoredArticleById(id: string) {
   return all.find((item) => item._id === id) || null;
 }
 
+export async function findStoredArticleBySourceStoryId(sourceStoryId: string) {
+  const normalized = sourceStoryId.trim();
+  if (!normalized) return null;
+
+  const all = await readAllArticles();
+  return all.find((item) => item.sourceStoryId === normalized) || null;
+}
+
 export async function listStoredArticleRevisions(id: string) {
   const article = await getStoredArticleById(id);
   if (!article) return null;
@@ -434,6 +459,13 @@ export async function createStoredArticle(input: CreateArticleInput) {
     workflow: normalizeWorkflowMeta(input.workflow),
     reporterMeta: normalizeReporterMeta(input.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(input.copyEditorMeta),
+    sourceType: normalizeArticleSourceType(input.sourceType),
+    sourceStoryId:
+      typeof input.sourceStoryId === 'string' ? input.sourceStoryId.trim() : '',
+    sourceStoryTitle:
+      typeof input.sourceStoryTitle === 'string'
+        ? input.sourceStoryTitle.trim()
+        : '',
   };
 
   all.push(article);
@@ -488,6 +520,18 @@ export async function updateStoredArticle(
             ...updates.copyEditorMeta,
           })
         : current.copyEditorMeta,
+    sourceType:
+      updates.sourceType !== undefined
+        ? normalizeArticleSourceType(updates.sourceType)
+        : current.sourceType,
+    sourceStoryId:
+      typeof updates.sourceStoryId === 'string'
+        ? updates.sourceStoryId.trim()
+        : current.sourceStoryId,
+    sourceStoryTitle:
+      typeof updates.sourceStoryTitle === 'string'
+        ? updates.sourceStoryTitle.trim()
+        : current.sourceStoryTitle,
   };
 
   const hasContentChange =

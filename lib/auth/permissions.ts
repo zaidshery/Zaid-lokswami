@@ -26,6 +26,7 @@ export const ADMIN_PAGE_KEYS = [
   'videos',
   'video_create',
   'video_edit',
+  'social_posts',
   'epapers',
   'epaper_create',
   'epaper_edit',
@@ -85,7 +86,7 @@ export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
   push_alerts: ['super_admin', 'admin'],
   copy_desk: ['super_admin', 'admin', 'copy_editor'],
   articles: ['super_admin', 'admin', 'reporter', 'copy_editor'],
-  article_create: ['super_admin', 'admin', 'reporter'],
+  article_create: ['super_admin', 'admin', 'reporter', 'copy_editor'],
   article_edit: ['super_admin', 'admin', 'reporter', 'copy_editor'],
   stories: ['super_admin', 'admin', 'reporter', 'copy_editor'],
   story_create: ['super_admin', 'admin', 'reporter'],
@@ -93,6 +94,7 @@ export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
   videos: ['super_admin', 'admin', 'copy_editor'],
   video_create: ['super_admin', 'admin'],
   video_edit: ['super_admin', 'admin', 'copy_editor'],
+  social_posts: ['super_admin', 'admin', 'copy_editor'],
   epapers: ['super_admin', 'admin', 'copy_editor'],
   epaper_create: ['super_admin', 'admin'],
   epaper_edit: ['super_admin', 'admin', 'copy_editor'],
@@ -129,6 +131,7 @@ export const PAGE_LABELS: Record<AdminPageKey, string> = {
   videos: 'Videos',
   video_create: 'Create Video',
   video_edit: 'Edit Video',
+  social_posts: 'Social Posts',
   epapers: 'E-Papers',
   epaper_create: 'Create E-Paper',
   epaper_edit: 'Edit E-Paper',
@@ -147,6 +150,13 @@ export const PAGE_LABELS: Record<AdminPageKey, string> = {
   permission_review: 'Permission Review',
   operations_diagnostics: 'Operations Diagnostics',
 };
+
+const REPORTER_EDITABLE_WORKFLOW_STATUSES: WorkflowStatus[] = ['draft', 'changes_requested'];
+const COPY_EDITOR_EDITABLE_WORKFLOW_STATUSES: WorkflowStatus[] = [
+  'assigned',
+  'in_review',
+  'copy_edit',
+];
 
 function matchesActor(user: PermissionUser, actorId: string | null | undefined): boolean {
   if (!actorId) return false;
@@ -297,14 +307,22 @@ export function canEditContent(
 ): boolean {
   if (!user) return false;
 
+  const workflowStatus = resolveWorkflowStatus(content);
+
   switch (user.role) {
     case 'super_admin':
     case 'admin':
       return true;
     case 'reporter':
-      return isOwnContent(user, content) || isAssignedContent(user, content);
+      return (
+        Boolean(workflowStatus && REPORTER_EDITABLE_WORKFLOW_STATUSES.includes(workflowStatus)) &&
+        (isOwnContent(user, content) || isAssignedContent(user, content))
+      );
     case 'copy_editor':
-      return isAssignedContent(user, content);
+      return (
+        Boolean(workflowStatus && COPY_EDITOR_EDITABLE_WORKFLOW_STATUSES.includes(workflowStatus)) &&
+        isAssignedContent(user, content)
+      );
     default:
       return false;
   }
@@ -339,6 +357,10 @@ export function canCreateContent(
     return true;
   }
 
+  if (role === 'copy_editor') {
+    return contentType === 'article';
+  }
+
   if (isReporterDeskRole(role)) {
     return contentType === 'article' || contentType === 'story';
   }
@@ -360,6 +382,8 @@ export function canTransitionContent(
 ): boolean {
   if (!user) return false;
 
+  const workflowStatus = resolveWorkflowStatus(content);
+
   if (isSuperAdminRole(user.role) || user.role === 'admin') {
     return true;
   }
@@ -379,6 +403,7 @@ export function canTransitionContent(
   if (isReporterDeskRole(user.role)) {
     return (
       action === 'submit' &&
+      Boolean(workflowStatus && REPORTER_EDITABLE_WORKFLOW_STATUSES.includes(workflowStatus)) &&
       (isOwnContent(user, content) || isAssignedContent(user, content))
     );
   }

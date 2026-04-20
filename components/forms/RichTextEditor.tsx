@@ -3,14 +3,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Bold,
+  ImagePlus,
   Italic,
   Link2,
   List,
   ListOrdered,
+  MessageSquareQuote,
   Redo2,
+  Table2,
   Underline,
   Undo2,
 } from 'lucide-react';
+import { getAuthHeader } from '@/lib/auth/clientToken';
+import {
+  buildArticleImageFigureHtml,
+  buildArticleQuoteHtml,
+  buildArticleResourceCardHtml,
+  buildArticleTableHtml,
+  normalizeArticleEditorLinkUrl,
+} from '@/lib/utils/articleEditorTemplates';
 import { extractYouTubeVideoId } from '@/lib/utils/youtube';
 
 interface RichTextEditorProps {
@@ -25,7 +36,9 @@ export default function RichTextEditor({
   placeholder = 'Write your article content here...',
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const inlineImageInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [isUploadingInlineImage, setIsUploadingInlineImage] = useState(false);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -45,11 +58,11 @@ export default function RichTextEditor({
     onChange(editorRef.current?.innerHTML || '');
   };
 
-  const normalizeLinkUrl = (input: string) => {
-    const value = input.trim();
-    if (!value) return '';
-    if (/^(https?:\/\/|mailto:|tel:)/i.test(value)) return value;
-    return `https://${value}`;
+  const insertHtml = (html: string) => {
+    if (!html) return;
+    document.execCommand('insertHTML', false, html);
+    handleInput();
+    editorRef.current?.focus();
   };
 
   const insertLink = () => {
@@ -57,7 +70,7 @@ export default function RichTextEditor({
     const rawUrl = window.prompt('Enter link URL');
     if (!rawUrl) return;
 
-    const normalizedUrl = normalizeLinkUrl(rawUrl);
+    const normalizedUrl = normalizeArticleEditorLinkUrl(rawUrl);
     if (!normalizedUrl) return;
 
     const selection = window.getSelection();
@@ -128,6 +141,121 @@ export default function RichTextEditor({
     document.execCommand('insertText', false, shortcode);
     handleInput();
     editorRef.current?.focus();
+  };
+
+  const triggerInlineImageUpload = () => {
+    inlineImageInputRef.current?.click();
+  };
+
+  const handleInlineImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.toLowerCase().startsWith('image/')) {
+      window.alert('Please choose a JPG, PNG, or WebP image.');
+      event.target.value = '';
+      return;
+    }
+
+    setIsUploadingInlineImage(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('purpose', 'image');
+
+      const response = await fetch('/api/admin/upload', {
+        method: 'POST',
+        headers: {
+          ...getAuthHeader(),
+        },
+        body,
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            success?: boolean;
+            error?: string;
+            data?: {
+              url?: string;
+              secureUrl?: string;
+            };
+          }
+        | null;
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || 'Failed to upload inline image');
+      }
+
+      const imageUrl = String(payload.data?.secureUrl || payload.data?.url || '').trim();
+      if (!imageUrl) {
+        throw new Error('Inline image upload returned an empty URL');
+      }
+
+      const altText = window.prompt('Alt text for this image', file.name.replace(/\.[^.]+$/, '')) || '';
+      const caption = window.prompt('Caption (optional)') || '';
+      const sourceName = window.prompt('Image source / credit (optional)') || '';
+      const sourceUrl = sourceName
+        ? window.prompt('Image source link (optional)') || ''
+        : '';
+
+      insertHtml(
+        buildArticleImageFigureHtml({
+          src: imageUrl,
+          alt: altText,
+          caption,
+          sourceName,
+          sourceUrl,
+        })
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Failed to upload inline image');
+    } finally {
+      setIsUploadingInlineImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const insertResourceCard = () => {
+    if (typeof window === 'undefined') return;
+    const title = window.prompt('Resource title', 'Source / Reference') || '';
+    if (!title.trim()) return;
+    const url = window.prompt('Resource link (optional)') || '';
+    const description = window.prompt('Short note (optional)') || '';
+
+    insertHtml(
+      buildArticleResourceCardHtml({
+        title,
+        url,
+        description,
+      })
+    );
+  };
+
+  const insertTable = () => {
+    if (typeof window === 'undefined') return;
+    const columns = Number.parseInt(window.prompt('How many columns?', '3') || '3', 10);
+    const rows = Number.parseInt(window.prompt('How many body rows?', '3') || '3', 10);
+    insertHtml(
+      buildArticleTableHtml({
+        columns,
+        rows,
+      })
+    );
+  };
+
+  const insertQuote = () => {
+    if (typeof window === 'undefined') return;
+    const quote = window.prompt('Quote text');
+    if (!quote?.trim()) return;
+    const attribution = window.prompt('Quote attribution (optional)') || '';
+
+    insertHtml(
+      buildArticleQuoteHtml({
+        quote,
+        attribution,
+      })
+    );
   };
 
   return (
@@ -211,6 +339,42 @@ export default function RichTextEditor({
         >
           H3
         </button>
+        <button
+          type="button"
+          onClick={insertQuote}
+          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          title="Insert Quote"
+        >
+          <MessageSquareQuote className="w-4 h-4" />
+        </button>
+
+        <div className="w-px bg-gray-300 mx-1" />
+
+        <button
+          type="button"
+          onClick={triggerInlineImageUpload}
+          disabled={isUploadingInlineImage}
+          className="p-2 hover:bg-gray-200 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          title="Upload Inline Image"
+        >
+          <ImagePlus className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={insertResourceCard}
+          className="px-2.5 py-2 hover:bg-gray-200 rounded transition-colors text-sm font-semibold"
+          title="Insert Resource Callout"
+        >
+          Resource
+        </button>
+        <button
+          type="button"
+          onClick={insertTable}
+          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          title="Insert Table"
+        >
+          <Table2 className="w-4 h-4" />
+        </button>
 
         <div className="w-px bg-gray-300 mx-1" />
 
@@ -261,6 +425,13 @@ export default function RichTextEditor({
       </div>
 
       <div className="relative">
+        <input
+          ref={inlineImageInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/jpg"
+          onChange={handleInlineImageUpload}
+          className="hidden"
+        />
         <div
           ref={editorRef}
           contentEditable
@@ -284,7 +455,15 @@ export default function RichTextEditor({
       <div className="bg-gray-50 border-t border-gray-200 px-4 py-2 text-xs text-gray-500">
         <span>{value.length} characters</span>
         <span className="mx-2">|</span>
-        <span>Paste a YouTube link or use the YouTube button to insert inline video</span>
+        <span>
+          Use H2/H3, Quote, Image, Resource, Table, Link, and YouTube tools for richer stories
+        </span>
+        {isUploadingInlineImage ? (
+          <>
+            <span className="mx-2">|</span>
+            <span className="font-semibold text-spanish-red">Uploading image...</span>
+          </>
+        ) : null}
       </div>
     </div>
   );

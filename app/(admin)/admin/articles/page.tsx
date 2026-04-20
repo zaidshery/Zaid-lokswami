@@ -31,6 +31,9 @@ type Article = {
   summary: string;
   category: string;
   author: string;
+  sourceType?: 'story' | 'direct';
+  sourceStoryId?: string;
+  sourceStoryTitle?: string;
   publishedAt?: string;
   updatedAt?: string;
   views: number;
@@ -233,6 +236,7 @@ export default function ArticlesManagement() {
   const canCreateArticles =
     adminRole === 'super_admin' ||
     adminRole === 'admin' ||
+    adminRole === 'copy_editor' ||
     isReporterDeskRole(adminRole);
   const canDeleteArticles = adminRole === 'super_admin' || adminRole === 'admin';
 
@@ -517,11 +521,11 @@ export default function ArticlesManagement() {
             Breaking TTS
           </Link>
             </div>
-            {canCreateArticles ? (
+            {canCreateArticles && !isReporterDeskRole(adminRole) ? (
               <div className="mt-4">
                 <Link href="/admin/articles/new" className={PRIMARY_BUTTON_CLASS}>
                   <Plus className="h-4 w-4" />
-                  New Article
+                  Create Direct Article
                 </Link>
               </div>
             ) : null}
@@ -678,6 +682,9 @@ export default function ArticlesManagement() {
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <h3 className="truncate text-xl font-semibold text-[color:var(--admin-shell-text)]">{article.title}</h3>
                       <WorkflowPill status={workflowStatus} />
+                      <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
+                        {article.sourceType === 'story' ? 'From Story' : 'Direct Desk'}
+                      </span>
                       {article.isBreaking ? (
                         <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
                           Breaking
@@ -695,6 +702,9 @@ export default function ArticlesManagement() {
                     <div className="flex flex-wrap gap-3 text-xs text-[color:var(--admin-shell-text-muted)]">
                       <span>By {article.author}</span>
                       <span>{article.category}</span>
+                      {article.sourceType === 'story' && article.sourceStoryTitle ? (
+                        <span>Source: {article.sourceStoryTitle}</span>
+                      ) : null}
                       {article.workflow?.assignedTo?.name ? (
                         <span>Assigned to {article.workflow.assignedTo.name}</span>
                       ) : null}
@@ -716,6 +726,18 @@ export default function ArticlesManagement() {
                     {article.workflow?.scheduledFor ? (
                       <div className="mt-4 rounded-[20px] border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
                         Scheduled for {formatUiDate(article.workflow.scheduledFor, article.workflow.scheduledFor)}
+                      </div>
+                    ) : null}
+
+                    {article.sourceType === 'story' && article.sourceStoryId ? (
+                      <div className="mt-4 rounded-[20px] border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
+                        Linked to source story.&nbsp;
+                        <Link
+                          href={`/admin/stories/${article.sourceStoryId}/edit`}
+                          className="font-semibold underline"
+                        >
+                          Open source story
+                        </Link>
                       </div>
                     ) : null}
 

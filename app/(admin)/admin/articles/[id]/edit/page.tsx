@@ -37,6 +37,7 @@ import {
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { normalizeBreakingTtsMetadata, type BreakingTtsMetadata } from '@/lib/types/breaking';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
+import { buildDefaultArticlePermalink } from '@/lib/utils/articleEditorTemplates';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import {
   ARTICLE_IMAGE_UPLOAD_GUIDE,
@@ -106,6 +107,9 @@ type ArticleFormState = {
   seoDescription: string;
   ogImage: string;
   canonicalUrl: string;
+  sourceType: 'story' | 'direct';
+  sourceStoryId: string;
+  sourceStoryTitle: string;
 };
 
 type ArticleSeo = {
@@ -238,6 +242,9 @@ const EMPTY_FORM: ArticleFormState = {
   seoDescription: '',
   ogImage: '',
   canonicalUrl: '',
+  sourceType: 'direct',
+  sourceStoryId: '',
+  sourceStoryTitle: '',
 };
 
 const EMPTY_WORKFLOW: WorkflowState = {
@@ -482,6 +489,10 @@ export default function EditArticle() {
   const params = useParams<{ id: string }>();
   const routeId = Array.isArray(params?.id) ? params.id[0] || '' : params?.id || '';
   const articleId = decodeURIComponent(routeId);
+  const defaultPermalink = useMemo(
+    () => buildDefaultArticlePermalink(articleId),
+    [articleId]
+  );
   const draftStorageKey = `${DRAFT_STORAGE_PREFIX}${articleId}`;
 
   const [formData, setFormData] = useState<ArticleFormState>(EMPTY_FORM);
@@ -819,6 +830,9 @@ export default function EditArticle() {
         image?: string;
         isBreaking?: boolean;
         isTrending?: boolean;
+        sourceType?: 'story' | 'direct';
+        sourceStoryId?: string;
+        sourceStoryTitle?: string;
         seo?: ArticleSeo;
         reporterMeta?: ArticleReporterMeta;
         copyEditorMeta?: ArticleCopyEditorMeta;
@@ -850,6 +864,9 @@ export default function EditArticle() {
         seoDescription: article.seo?.metaDescription || '',
         ogImage: article.seo?.ogImage || '',
         canonicalUrl: article.seo?.canonicalUrl || '',
+        sourceType: article.sourceType === 'story' ? 'story' : 'direct',
+        sourceStoryId: article.sourceStoryId || '',
+        sourceStoryTitle: article.sourceStoryTitle || '',
       };
 
       const nextWorkflow = normalizeWorkflowState(article.workflow);
@@ -1085,6 +1102,9 @@ export default function EditArticle() {
         image?: string;
         isBreaking?: boolean;
         isTrending?: boolean;
+        sourceType?: 'story' | 'direct';
+        sourceStoryId?: string;
+        sourceStoryTitle?: string;
         seo?: ArticleSeo;
         reporterMeta?: ArticleReporterMeta;
         copyEditorMeta?: ArticleCopyEditorMeta;
@@ -1116,6 +1136,9 @@ export default function EditArticle() {
         seoDescription: article.seo?.metaDescription || '',
         ogImage: article.seo?.ogImage || '',
         canonicalUrl: article.seo?.canonicalUrl || '',
+        sourceType: article.sourceType === 'story' ? 'story' : 'direct',
+        sourceStoryId: article.sourceStoryId || '',
+        sourceStoryTitle: article.sourceStoryTitle || '',
       };
       const restoredWorkflow = normalizeWorkflowState(article.workflow);
 
@@ -1488,6 +1511,30 @@ export default function EditArticle() {
             </div>
           ) : null}
 
+          {formData.sourceType === 'story' && formData.sourceStoryId ? (
+            <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Source Story Link
+                  </p>
+                  <p className="mt-1 font-semibold">
+                    {formData.sourceStoryTitle || 'Linked story package'}
+                  </p>
+                  <p className="mt-1 text-emerald-800/80">
+                    This article stays connected to the story package reporters submitted.
+                  </p>
+                </div>
+                <Link
+                  href={`/admin/stories/${formData.sourceStoryId}/edit`}
+                  className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                >
+                  Open Source Story
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mb-6 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
             <p className="font-medium">Draft & Revision Tools</p>
             <p className="mt-1 text-blue-800">
@@ -1803,6 +1850,26 @@ export default function EditArticle() {
                 placeholder="Canonical URL"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
               />
+              <div className="-mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                <span>
+                  Leave empty to use the default public article permalink. Override it only when
+                  the article needs a preferred external URL.
+                </span>
+                {defaultPermalink ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((current) => ({
+                        ...current,
+                        canonicalUrl: defaultPermalink,
+                      }))
+                    }
+                    className="rounded-full border border-gray-300 bg-white px-3 py-1 font-semibold text-gray-700 hover:bg-gray-100"
+                  >
+                    Use Default Permalink
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div>
@@ -1831,6 +1898,24 @@ export default function EditArticle() {
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Article Content <span className="text-red-500">*</span>
               </label>
+              <div className="mb-3 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900 sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <p className="font-semibold">Headings</p>
+                  <p className="mt-1">Use H2 and H3 to split dense reporting into readable sections.</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Inline Images</p>
+                  <p className="mt-1">Upload inline article images with caption and source credit from the toolbar.</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Resources & Tables</p>
+                  <p className="mt-1">Drop in source cards, quotes, and tables when the article needs evidence or comparisons.</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Permalink</p>
+                  <p className="mt-1">Canonical URL in SEO Settings controls the preferred permalink for this published article.</p>
+                </div>
+              </div>
               <p className="mb-2 text-xs text-gray-500">
                 Tip: Paste a YouTube link on its own line or use the YouTube button in the toolbar.
               </p>

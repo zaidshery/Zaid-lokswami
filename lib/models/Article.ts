@@ -5,6 +5,10 @@ import {
   ReporterMetaSchema,
 } from '@/lib/models/schemas/newsroom';
 import type { CopyEditorMeta, ReporterMeta } from '@/lib/content/newsroomMetadata';
+import {
+  normalizeArticleSourceType,
+  type ArticleSourceType,
+} from '@/lib/content/newsroomPublishing';
 import type { WorkflowMeta } from '@/lib/workflow/types';
 
 export interface IArticleSeo {
@@ -59,6 +63,9 @@ export interface IArticle {
   workflow: WorkflowMeta;
   reporterMeta: ReporterMeta;
   copyEditorMeta: CopyEditorMeta;
+  sourceType: ArticleSourceType;
+  sourceStoryId: string;
+  sourceStoryTitle: string;
   embedding: number[];
   embeddingGeneratedAt: Date | null;
   aiSummary: string;
@@ -124,6 +131,13 @@ const ArticleSchema = new mongoose.Schema<IArticle>({
   workflow: { type: WorkflowMetaSchema, default: () => ({}) },
   reporterMeta: { type: ReporterMetaSchema, default: () => ({}) },
   copyEditorMeta: { type: CopyEditorMetaSchema, default: () => ({}) },
+  sourceType: {
+    type: String,
+    enum: ['story', 'direct'],
+    default: normalizeArticleSourceType(undefined),
+  },
+  sourceStoryId: { type: String, default: '' },
+  sourceStoryTitle: { type: String, default: '' },
   embedding: { type: [Number], default: [], select: false },
   embeddingGeneratedAt: { type: Date, default: null },
   aiSummary: { type: String, default: '' },
@@ -133,6 +147,7 @@ ArticleSchema.index({ publishedAt: -1, _id: -1 });
 ArticleSchema.index({ 'workflow.status': 1, publishedAt: -1, _id: -1 });
 ArticleSchema.index({ 'workflow.createdBy.id': 1, 'workflow.status': 1, updatedAt: -1 });
 ArticleSchema.index({ 'workflow.assignedTo.id': 1, 'workflow.status': 1, updatedAt: -1 });
+ArticleSchema.index({ sourceStoryId: 1, updatedAt: -1 });
 
 export default mongoose.models.Article || mongoose.model('Article', ArticleSchema);
 

@@ -9,9 +9,14 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle,
+  Download,
   Image as ImageIcon,
   Loader2,
+  Play,
   Save,
+  Trash2,
+  Upload,
+  X,
 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import {
@@ -24,14 +29,32 @@ import {
   canTransitionContent,
   type ContentTransitionAction,
 } from '@/lib/auth/permissions';
+import { getStoryEditCapabilities } from '@/lib/auth/storyEditing';
 import {
   isAdminRole,
-  isCopyEditorRole,
   isReporterDeskRole,
   type AdminRole,
 } from '@/lib/auth/roles';
+import {
+  countStoryMediaAssets,
+  createStoryMediaAsset,
+  derivePrimaryStoryMedia,
+  getTotalStoryVideoBytes,
+  normalizeStoryMediaAssets,
+  validateStoryMediaAssets,
+  STORY_MAX_IMAGE_COUNT,
+  STORY_MAX_TOTAL_VIDEO_BYTES,
+  STORY_MAX_VIDEO_COUNT,
+  type StoryMediaAsset,
+} from '@/lib/content/storyMedia';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
+import {
+  formatStoryVideoSize,
+  getStoryVideoDisplayName,
+  uploadFileToSignedUrl,
+  validateStoryVideoFile,
+} from '@/lib/utils/storyVideoUploadClient';
 import {
   buildWorkflowFeedbackSummary,
   type WorkflowFeedbackTone,
@@ -45,6 +68,10 @@ interface StoryFormData {
   thumbnail: string;
   mediaType: 'image' | 'video';
   mediaUrl: string;
+  mediaKey: string;
+  mediaSizeBytes: number;
+  mediaMimeType: string;
+  storageProvider: string;
   linkUrl: string;
   linkLabel: string;
   category: string;
@@ -129,9 +156,144 @@ type AssignableUserOption = {
   role: AdminRole;
 };
 
+type PreviewAssetState = {
+  asset: StoryMediaAsset;
+  title: string;
+};
+
 const categories = ['General', ...NEWS_CATEGORIES.map((category) => category.nameEn)];
 const THUMBNAIL_MAX_SIZE = 5 * 1024 * 1024;
+const SPACES_STORAGE_PROVIDER = 'do-spaces';
+const STORY_MAX_TOTAL_VIDEO_MB = Math.round(STORY_MAX_TOTAL_VIDEO_BYTES / (1024 * 1024));
 const WORKFLOW_PRIORITIES: WorkflowPriority[] = ['low', 'normal', 'high', 'urgent'];
+
+function isAllowedImageFile(file: File) {
+  const mime = file.type.trim().toLowerCase();
+  return (
+    mime === 'image/jpeg' ||
+    mime === 'image/jpg' ||
+    mime === 'image/png' ||
+    mime === 'image/webp'
+  );
+}
+
+function truncateMediaLabel(value: string, maxLength = 16) {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength - 1).trim()}...`;
+}
+
+function getMediaAssetLabel(asset: StoryMediaAsset) {
+  const fallback =
+    asset.kind === 'video'
+      ? getStoryVideoDisplayName(asset.url)
+      : `image-${asset.order + 1}`;
+
+  return asset.originalFileName || fallback;
+}
+
+type StoryMediaTileProps = {
+  asset: StoryMediaAsset;
+  kindLabel: string;
+  onPreview: () => void;
+  replaceLabel?: string;
+  removeLabel?: string;
+  replaceInputId?: string;
+  accept?: string;
+  onReplace?: (event: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+  onRemove?: () => void;
+};
+
+function StoryMediaTile({
+  asset,
+  kindLabel,
+  onPreview,
+  replaceLabel,
+  removeLabel,
+  replaceInputId,
+  accept,
+  onReplace,
+  onRemove,
+}: StoryMediaTileProps) {
+  const label = getMediaAssetLabel(asset);
+  const sizeLabel = formatStoryVideoSize(asset.sizeBytes);
+  const canEditTile = Boolean(
+    replaceLabel && removeLabel && replaceInputId && accept && onReplace && onRemove
+  );
+
+  return (
+    <div className="w-[88px] shrink-0 sm:w-24">
+      <button
+        type="button"
+        onClick={onPreview}
+        className="group relative block aspect-square w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md"
+        title={label}
+      >
+        {asset.kind === 'image' ? (
+          <img
+            src={asset.url}
+            alt={label}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <>
+            <video
+              src={asset.url}
+              muted
+              playsInline
+              preload="metadata"
+              className="h-full w-full bg-black object-cover"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/15">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white shadow-sm">
+                <Play className="h-4 w-4 fill-current" />
+              </span>
+            </div>
+          </>
+        )}
+
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-2 pb-2 pt-6 text-left">
+          <span className="block truncate text-[10px] font-semibold uppercase tracking-wide text-white/90">
+            {kindLabel}
+          </span>
+          <span className="block truncate text-[10px] text-white/80">{sizeLabel}</span>
+        </div>
+      </button>
+
+      <div className="mt-2 space-y-1">
+        <p className="truncate text-[11px] font-medium text-gray-700" title={label}>
+          {truncateMediaLabel(label)}
+        </p>
+        {canEditTile ? (
+          <div className="flex items-center gap-1">
+            <label
+              htmlFor={replaceInputId}
+              className="flex-1 cursor-pointer rounded-lg border border-gray-200 bg-white px-2 py-1 text-center text-[10px] font-semibold text-gray-700 transition-colors hover:bg-gray-100"
+            >
+              {replaceLabel}
+            </label>
+            <input
+              id={replaceInputId}
+              type="file"
+              accept={accept}
+              className="hidden"
+              onChange={onReplace}
+            />
+            <button
+              type="button"
+              onClick={onRemove}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+              aria-label={removeLabel}
+              title={removeLabel}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 const STATUS_TO_ACTION: Partial<Record<WorkflowStatus, ContentTransitionAction>> = {
   submitted: 'submit',
@@ -167,6 +329,10 @@ const initialFormData: StoryFormData = {
   thumbnail: '',
   mediaType: 'image',
   mediaUrl: '',
+  mediaKey: '',
+  mediaSizeBytes: 0,
+  mediaMimeType: '',
+  storageProvider: '',
   linkUrl: '',
   linkLabel: '',
   category: 'General',
@@ -202,10 +368,15 @@ const EMPTY_WORKFLOW: WorkflowState = {
   comments: [],
 };
 
-function buildFormSnapshot(formData: StoryFormData, thumbnailPreview: string) {
+function buildFormSnapshot(
+  formData: StoryFormData,
+  thumbnailPreview: string,
+  mediaAssets: StoryMediaAsset[]
+) {
   return JSON.stringify({
     ...formData,
     thumbnailPreview: thumbnailPreview.trim(),
+    mediaAssets,
   });
 }
 
@@ -236,6 +407,73 @@ function formatNewsroomRoleLabel(role: AdminRole | undefined) {
     default:
       return 'Team';
   }
+}
+
+function parseDownloadFileNameFromDisposition(value: string | null) {
+  const header = String(value || '').trim();
+  if (!header) return '';
+
+  const utfMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) {
+    try {
+      return decodeURIComponent(utfMatch[1]).trim();
+    } catch {
+      return utfMatch[1].trim();
+    }
+  }
+
+  const asciiMatch = header.match(/filename="?([^";]+)"?/i);
+  return asciiMatch?.[1]?.trim() || '';
+}
+
+function getInitialStoryMediaAssets(story: Record<string, unknown>) {
+  const normalized = normalizeStoryMediaAssets(story.mediaAssets);
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  const fallbackThumbnail = String(story.thumbnail || '').trim();
+  const fallbackMediaUrl = String(story.mediaUrl || '').trim();
+  const fallbackMediaType = story.mediaType === 'video' ? 'video' : 'image';
+  const assets: StoryMediaAsset[] = [];
+
+  if (fallbackThumbnail) {
+    assets.push(
+      createStoryMediaAsset({
+        id: 'legacy-image',
+        kind: 'image',
+        url: fallbackThumbnail,
+        key: '',
+        mimeType: '',
+        sizeBytes: 0,
+        storageProvider: '',
+        originalFileName: '',
+        order: 0,
+        createdAt: new Date(0).toISOString(),
+      })
+    );
+  }
+
+  if (fallbackMediaUrl && fallbackMediaType === 'video') {
+    assets.push(
+      createStoryMediaAsset({
+        id: 'legacy-video',
+        kind: 'video',
+        url: fallbackMediaUrl,
+        key: String(story.mediaKey || ''),
+        mimeType: String(story.mediaMimeType || '').toLowerCase(),
+        sizeBytes: Number.isFinite(Number(story.mediaSizeBytes))
+          ? Math.max(0, Number(story.mediaSizeBytes))
+          : 0,
+        storageProvider: String(story.storageProvider || ''),
+        originalFileName: '',
+        order: assets.length,
+        createdAt: new Date(0).toISOString(),
+      })
+    );
+  }
+
+  return assets;
 }
 
 function getWorkflowToneClass(status: WorkflowStatus) {
@@ -371,8 +609,13 @@ export default function EditStoryPage() {
   const storyId = decodeURIComponent(routeId);
 
   const [formData, setFormData] = useState<StoryFormData>(initialFormData);
+  const [mediaAssets, setMediaAssets] = useState<StoryMediaAsset[]>([]);
+  const [usesMediaCollection, setUsesMediaCollection] = useState(false);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState('');
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [savedFormSnapshot, setSavedFormSnapshot] = useState('');
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -391,10 +634,25 @@ export default function EditStoryPage() {
   const [runningWorkflowAction, setRunningWorkflowAction] = useState<ContentTransitionAction | ''>('');
   const [storyActivity, setStoryActivity] = useState<StoryActivityItem[]>([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
+  const [downloadingAsset, setDownloadingAsset] = useState<'' | 'thumbnail' | 'media'>('');
+  const [previewAsset, setPreviewAsset] = useState<PreviewAssetState | null>(null);
 
+  const mediaCounts = useMemo(() => countStoryMediaAssets(mediaAssets), [mediaAssets]);
+  const imageAssets = useMemo(
+    () => mediaAssets.filter((asset) => asset.kind === 'image'),
+    [mediaAssets]
+  );
+  const videoAssets = useMemo(
+    () => mediaAssets.filter((asset) => asset.kind === 'video'),
+    [mediaAssets]
+  );
+  const primaryMedia = useMemo(
+    () => derivePrimaryStoryMedia(mediaAssets, formData.thumbnail.trim()),
+    [formData.thumbnail, mediaAssets]
+  );
   const previewThumbnail = useMemo(
-    () => thumbnailPreview || formData.thumbnail.trim(),
-    [formData.thumbnail, thumbnailPreview]
+    () => thumbnailPreview || (usesMediaCollection ? primaryMedia.thumbnail : formData.thumbnail.trim()),
+    [formData.thumbnail, primaryMedia.thumbnail, thumbnailPreview, usesMediaCollection]
   );
 
   const permissionUser = useMemo(() => {
@@ -422,16 +680,33 @@ export default function EditStoryPage() {
     [formData.author, workflow]
   );
 
-  const canUseWorkflowDesk = canManageWorkflowAssignments(permissionUser?.role);
-  const canSaveStory = Boolean(permissionUser);
-  const canEditCopyDeskMeta = Boolean(
-    permissionUser?.role &&
-      (permissionUser.role === 'admin' ||
-        permissionUser.role === 'super_admin' ||
-        isCopyEditorRole(permissionUser.role))
+  const storyEditCapabilities = useMemo(
+    () => getStoryEditCapabilities(permissionUser, workflowPermissionRecord),
+    [permissionUser, workflowPermissionRecord]
   );
+  const canUseWorkflowDesk = canManageWorkflowAssignments(permissionUser?.role);
+  const canSaveStory = storyEditCapabilities.canSaveStory;
+  const canEditCommonFields = storyEditCapabilities.canEditCommonFields;
+  const canEditLinkFields = storyEditCapabilities.canEditLinkFields;
+  const canEditMediaFields = storyEditCapabilities.canEditMediaFields;
+  const canEditReporterFields = storyEditCapabilities.canEditReporterFields;
+  const canEditCopyDeskMeta = storyEditCapabilities.canEditCopyDeskFields;
+  const canEditAdminFields = storyEditCapabilities.canEditAdminFields;
+  const canReplaceStoryVideo = storyEditCapabilities.canReplaceStoryVideo;
+  const canUseManualVideoUrl = storyEditCapabilities.canUseManualVideoUrl;
+  const canDownloadStoryAssets = storyEditCapabilities.canDownloadStoryAssets;
   const isReporterView = isReporterDeskRole(permissionUser?.role);
-  const hasUnsavedChanges = Boolean(thumbnailFile) || buildFormSnapshot(formData, previewThumbnail) !== savedFormSnapshot;
+  const hasUnsavedChanges =
+    Boolean(thumbnailFile) ||
+    buildFormSnapshot(formData, previewThumbnail, mediaAssets) !== savedFormSnapshot;
+  const showCopyDeskSection = canEditCopyDeskMeta || Boolean(
+    formData.copyEditorNotes.trim() ||
+      formData.returnForChangesReason.trim() ||
+      formData.proofreadComplete ||
+      formData.factCheckStatus !== 'pending' ||
+      formData.headlineStatus !== 'pending' ||
+      formData.imageOptimizationStatus !== 'pending'
+  );
 
   const availableWorkflowActions = useMemo(() => {
     if (!permissionUser) return [] as ContentTransitionAction[];
@@ -505,6 +780,10 @@ export default function EditStoryPage() {
         thumbnail: String(story.thumbnail || ''),
         mediaType: story.mediaType === 'video' ? 'video' : 'image',
         mediaUrl: String(story.mediaUrl || ''),
+        mediaKey: String(story.mediaKey || ''),
+        mediaSizeBytes: Number(story.mediaSizeBytes || 0),
+        mediaMimeType: String(story.mediaMimeType || ''),
+        storageProvider: String(story.storageProvider || ''),
         linkUrl: String(story.linkUrl || ''),
         linkLabel: String(story.linkLabel || ''),
         category: String(story.category || 'General'),
@@ -541,11 +820,21 @@ export default function EditStoryPage() {
         views: String(story.views ?? 0),
       } satisfies StoryFormData;
       const nextWorkflow = normalizeWorkflowState(story.workflow);
+      const nextMediaAssets = getInitialStoryMediaAssets(story);
 
       setFormData(nextForm);
+      setMediaAssets(nextMediaAssets);
+      setUsesMediaCollection(nextMediaAssets.length > 0);
       setThumbnailFile(null);
-      setThumbnailPreview(String(story.thumbnail || ''));
-      setSavedFormSnapshot(buildFormSnapshot(nextForm, String(story.thumbnail || '')));
+      setVideoUploadProgress(0);
+      setThumbnailPreview('');
+      setSavedFormSnapshot(
+        buildFormSnapshot(
+          nextForm,
+          derivePrimaryStoryMedia(nextMediaAssets, String(story.thumbnail || '')).thumbnail,
+          nextMediaAssets
+        )
+      );
       setWorkflow(nextWorkflow);
       setWorkflowPriority(nextWorkflow.priority);
       setWorkflowAssigneeId(nextWorkflow.assignedTo?.id || '');
@@ -635,23 +924,165 @@ export default function EditStoryPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
-    }));
+    setFormData((prev) => {
+      const nextValue = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+
+      if (name === 'mediaType' && nextValue !== 'video' && !usesMediaCollection) {
+        setVideoUploadProgress(0);
+        return {
+          ...prev,
+          mediaType: 'image',
+          mediaUrl: '',
+          mediaKey: '',
+          mediaSizeBytes: 0,
+          mediaMimeType: '',
+          storageProvider: '',
+        };
+      }
+
+      if (name === 'mediaUrl') {
+        return {
+          ...prev,
+          mediaUrl: String(nextValue || '').trim(),
+          mediaKey: '',
+          mediaSizeBytes: 0,
+          mediaMimeType: '',
+          storageProvider: '',
+        };
+      }
+
+      return {
+        ...prev,
+        [name]: nextValue,
+      };
+    });
+  };
+
+  const replaceMediaAsset = (assetId: string, nextAsset: StoryMediaAsset) => {
+    setUsesMediaCollection(true);
+    setMediaAssets((current) =>
+      current.map((asset) =>
+        asset.id === assetId ? { ...nextAsset, id: asset.id, order: asset.order } : asset
+      )
+    );
+    setPreviewAsset((current) =>
+      current?.asset.id === assetId
+        ? {
+            asset: { ...nextAsset, id: assetId },
+            title: nextAsset.kind === 'video' ? 'Story video preview' : 'Story photo preview',
+          }
+        : current
+    );
+  };
+
+  const removeMediaAsset = (assetId: string) => {
+    setUsesMediaCollection(true);
+    setMediaAssets((current) =>
+      current
+        .filter((asset) => asset.id !== assetId)
+        .map((asset, index) => ({
+          ...asset,
+          order: index,
+        }))
+    );
+    setPreviewAsset((current) => (current?.asset.id === assetId ? null : current));
+  };
+
+  const uploadImageFile = async (file: File, order: number) => {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('purpose', 'image');
+
+    const response = await fetch('/api/admin/upload', {
+      method: 'POST',
+      headers: {
+        ...getAuthHeader(),
+      },
+      body,
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to upload image.');
+    }
+
+    return createStoryMediaAsset({
+      kind: 'image',
+      url: String(data.data?.url || ''),
+      key: '',
+      mimeType: file.type || 'image/jpeg',
+      sizeBytes: file.size,
+      storageProvider: 'cloudinary',
+      originalFileName: file.name,
+      order,
+    });
   };
 
   const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (canEditMediaFields) {
+      if (imageAssets.length + files.length > STORY_MAX_IMAGE_COUNT) {
+        setError(`You can upload up to ${STORY_MAX_IMAGE_COUNT} images per story.`);
+        e.target.value = '';
+        return;
+      }
+
+      for (const file of files) {
+        if (!isAllowedImageFile(file)) {
+          setError('Photos must be JPG, PNG, or WEBP files.');
+          e.target.value = '';
+          return;
+        }
+
+        if (file.size > THUMBNAIL_MAX_SIZE) {
+          setError('Image size must be less than 5MB.');
+          e.target.value = '';
+          return;
+        }
+      }
+
+      setError('');
+      setIsUploadingImages(true);
+      setUsesMediaCollection(true);
+      void (async () => {
+        try {
+          const nextAssets: StoryMediaAsset[] = [];
+          for (const file of files) {
+            const uploaded = await uploadImageFile(file, imageAssets.length + nextAssets.length);
+            nextAssets.push(uploaded);
+          }
+          setMediaAssets((current) => [...current, ...nextAssets]);
+          setSuccess('Images uploaded successfully. Save the story to persist the updated gallery.');
+        } catch (uploadError) {
+          setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload image.');
+        } finally {
+          setIsUploadingImages(false);
+          e.target.value = '';
+        }
+      })();
+      return;
+    }
+
+    if (!canEditCommonFields) {
+      setError('This story package is read-only at the current workflow stage.');
+      e.target.value = '';
+      return;
+    }
+
+    const [file] = files;
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
+    if (!isAllowedImageFile(file)) {
       setError('Thumbnail must be an image file');
+      e.target.value = '';
       return;
     }
 
     if (file.size > THUMBNAIL_MAX_SIZE) {
       setError('Thumbnail image size must be less than 5MB');
+      e.target.value = '';
       return;
     }
 
@@ -665,7 +1096,48 @@ export default function EditStoryPage() {
     reader.readAsDataURL(file);
   };
 
+  const replaceImageAsset = async (assetId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEditMediaFields) {
+      setError('Only reporters on editable drafts or admins can replace uploaded images.');
+      e.target.value = '';
+      return;
+    }
+
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!isAllowedImageFile(file)) {
+      setError('Photos must be JPG, PNG, or WEBP files.');
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > THUMBNAIL_MAX_SIZE) {
+      setError('Image size must be less than 5MB.');
+      e.target.value = '';
+      return;
+    }
+
+    setError('');
+    setIsUploadingImages(true);
+    try {
+      const assetIndex = imageAssets.findIndex((asset) => asset.id === assetId);
+      const uploaded = await uploadImageFile(file, assetIndex >= 0 ? imageAssets[assetIndex].order : 0);
+      replaceMediaAsset(assetId, uploaded);
+      setSuccess('Image replaced successfully. Save the story to keep the new file.');
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to replace image.');
+    } finally {
+      setIsUploadingImages(false);
+      e.target.value = '';
+    }
+  };
+
   const uploadThumbnail = async () => {
+    if (!canEditCommonFields) {
+      throw new Error('This story package is read-only at the current workflow stage.');
+    }
+
     if (!thumbnailFile) return formData.thumbnail.trim();
 
     setIsUploadingThumbnail(true);
@@ -693,6 +1165,239 @@ export default function EditStoryPage() {
     }
   };
 
+  const uploadStoryVideo = async (file: File, order: number) => {
+    if (!canReplaceStoryVideo) {
+      throw new Error('Only reporters on editable drafts or admins can replace the uploaded story video.');
+    }
+
+    setIsUploadingVideo(true);
+    setVideoUploadProgress(0);
+    setError('');
+
+    try {
+      const initResponse = await fetch('/api/admin/uploads/story-video/init', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          storyId,
+          fileName: file.name,
+          fileType: file.type || 'video/mp4',
+          fileSize: file.size,
+        }),
+      });
+      const initPayload = (await initResponse.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          mediaKey?: string;
+          uploadUrl?: string;
+          uploadHeaders?: Record<string, string>;
+        };
+      };
+
+      if (!initResponse.ok || !initPayload.success || !initPayload.data?.uploadUrl || !initPayload.data.mediaKey) {
+        throw new Error(initPayload.error || 'Failed to initialize video upload.');
+      }
+
+      await uploadFileToSignedUrl({
+        file,
+        uploadUrl: initPayload.data.uploadUrl,
+        uploadHeaders: initPayload.data.uploadHeaders,
+        onProgress: setVideoUploadProgress,
+      });
+
+      const completeResponse = await fetch('/api/admin/uploads/story-video/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          mediaKey: initPayload.data.mediaKey,
+          expectedSize: file.size,
+          expectedFileType: file.type || 'video/mp4',
+          expectedFileName: file.name,
+        }),
+      });
+      const completePayload = (await completeResponse.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          mediaUrl?: string;
+          mediaKey?: string;
+          mediaSizeBytes?: number;
+          mediaMimeType?: string;
+          storageProvider?: string;
+        };
+      };
+
+      if (!completeResponse.ok || !completePayload.success || !completePayload.data?.mediaUrl) {
+        throw new Error(completePayload.error || 'Failed to verify uploaded video.');
+      }
+
+      const uploadedAsset = createStoryMediaAsset({
+        kind: 'video',
+        url: String(completePayload.data?.mediaUrl || ''),
+        key: String(completePayload.data?.mediaKey || ''),
+        mimeType: String(completePayload.data?.mediaMimeType || 'video/mp4'),
+        sizeBytes: Number(completePayload.data?.mediaSizeBytes || file.size),
+        storageProvider: String(completePayload.data?.storageProvider || SPACES_STORAGE_PROVIDER),
+        originalFileName: file.name,
+        order,
+      });
+      setSuccess('Video uploaded successfully. Save the story to persist the new video.');
+      return uploadedAsset;
+    } catch (uploadError) {
+      setVideoUploadProgress(0);
+      throw uploadError;
+    } finally {
+      setIsUploadingVideo(false);
+    }
+  };
+
+  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canReplaceStoryVideo) {
+      setError('Only reporters on editable drafts or admins can replace the uploaded story video.');
+      e.target.value = '';
+      return;
+    }
+
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (videoAssets.length + files.length > STORY_MAX_VIDEO_COUNT) {
+      setError(`You can upload up to ${STORY_MAX_VIDEO_COUNT} videos per story.`);
+      e.target.value = '';
+      return;
+    }
+
+    for (const file of files) {
+      const validationError = validateStoryVideoFile(file);
+      if (validationError) {
+        setError(validationError);
+        e.target.value = '';
+        return;
+      }
+    }
+
+    const currentVideoBytes = getTotalStoryVideoBytes(videoAssets);
+    const nextVideoBytes = files.reduce((total, file) => total + file.size, currentVideoBytes);
+    if (nextVideoBytes > STORY_MAX_TOTAL_VIDEO_BYTES) {
+      setError(`Total video size must stay within ${STORY_MAX_TOTAL_VIDEO_MB} MB per story.`);
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const nextAssets: StoryMediaAsset[] = [];
+      for (const file of files) {
+        const uploaded = await uploadStoryVideo(file, videoAssets.length + nextAssets.length);
+        nextAssets.push(uploaded);
+      }
+      setMediaAssets((current) => [...current, ...nextAssets]);
+      setUsesMediaCollection(true);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload video.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const replaceVideoAsset = async (assetId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canReplaceStoryVideo) {
+      setError('Only reporters on editable drafts or admins can replace the uploaded story video.');
+      e.target.value = '';
+      return;
+    }
+
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validationError = validateStoryVideoFile(file);
+    if (validationError) {
+      setError(validationError);
+      e.target.value = '';
+      return;
+    }
+
+    const existingAsset = videoAssets.find((asset) => asset.id === assetId);
+    const currentVideoBytes = getTotalStoryVideoBytes(videoAssets);
+    const nextVideoBytes = currentVideoBytes - (existingAsset?.sizeBytes || 0) + file.size;
+    if (nextVideoBytes > STORY_MAX_TOTAL_VIDEO_BYTES) {
+      setError(`Total video size must stay within ${STORY_MAX_TOTAL_VIDEO_MB} MB per story.`);
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const assetIndex = videoAssets.findIndex((asset) => asset.id === assetId);
+      const uploaded = await uploadStoryVideo(file, assetIndex >= 0 ? videoAssets[assetIndex].order : 0);
+      replaceMediaAsset(assetId, uploaded);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload video.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleDownloadAsset = useCallback(
+    async (asset: 'thumbnail' | 'media') => {
+      if (!canDownloadStoryAssets) {
+        setError('You can only download story assets that belong to your workflow scope.');
+        return;
+      }
+
+      setDownloadingAsset(asset);
+      setError('');
+
+      try {
+        const response = await fetch(
+          `/api/admin/stories/${encodeURIComponent(storyId)}/download?asset=${asset}`,
+          {
+            headers: {
+              ...getAuthHeader(),
+            },
+            cache: 'no-store',
+          }
+        );
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { error?: string };
+          throw new Error(payload.error || 'Failed to download the selected story asset.');
+        }
+
+        const blob = await response.blob();
+        const fileName =
+          parseDownloadFileNameFromDisposition(response.headers.get('content-disposition')) ||
+          `story-${storyId}-${asset}`;
+        const blobUrl = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = blobUrl;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(blobUrl);
+
+        setSuccess(
+          asset === 'thumbnail' ? 'Thumbnail downloaded successfully.' : 'Story media downloaded successfully.'
+        );
+      } catch (downloadError) {
+        setError(
+          downloadError instanceof Error
+            ? downloadError.message
+            : 'Failed to download the selected story asset.'
+        );
+      } finally {
+        setDownloadingAsset('');
+      }
+    },
+    [canDownloadStoryAssets, storyId]
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -700,13 +1405,35 @@ export default function EditStoryPage() {
     setIsSaving(true);
 
     try {
+      if (!canSaveStory) {
+        setError('This story is read-only in the current workflow stage.');
+        setIsSaving(false);
+        return;
+      }
+
       if (!formData.title.trim()) {
         setError('Story title is required');
         setIsSaving(false);
         return;
       }
 
-      const thumbnail = await uploadThumbnail();
+      if (isUploadingVideo || isUploadingImages || isUploadingThumbnail) {
+        setError('Please wait for all uploads to finish.');
+        setIsSaving(false);
+        return;
+      }
+
+      const shouldUseMediaCollection = canEditMediaFields && usesMediaCollection;
+      const mediaValidationError = validateStoryMediaAssets(mediaAssets, {
+        requireCompletePackage: isReporterView || shouldUseMediaCollection,
+      });
+      if (mediaValidationError) {
+        setError(mediaValidationError);
+        setIsSaving(false);
+        return;
+      }
+
+      const thumbnail = shouldUseMediaCollection ? primaryMedia.thumbnail : await uploadThumbnail();
       if (!thumbnail) {
         setError('Please provide a story thumbnail');
         setIsSaving(false);
@@ -735,10 +1462,68 @@ export default function EditStoryPage() {
         return;
       }
 
-      if (formData.mediaType === 'video' && !formData.mediaUrl.trim()) {
-        setError('Video media URL is required for video stories');
+      if (!shouldUseMediaCollection && formData.mediaType === 'video' && !formData.mediaUrl.trim()) {
+        setError(
+          canUseManualVideoUrl
+            ? 'Please upload a story video or provide a video URL.'
+            : 'Please upload a story video before saving.'
+        );
         setIsSaving(false);
         return;
+      }
+
+      const payload: Record<string, unknown> = {};
+
+      if (canEditCommonFields) {
+        payload.title = formData.title.trim();
+        payload.caption = formData.caption.trim();
+        payload.thumbnail = thumbnail.trim();
+        payload.category = formData.category;
+        payload.durationSeconds = durationSeconds;
+      }
+
+      if (canEditMediaFields) {
+        if (shouldUseMediaCollection) {
+          payload.mediaAssets = mediaAssets;
+        } else {
+          payload.mediaType = formData.mediaType;
+          payload.mediaUrl = formData.mediaUrl.trim();
+          payload.mediaKey = formData.mediaKey;
+          payload.mediaSizeBytes = formData.mediaSizeBytes;
+          payload.mediaMimeType = formData.mediaMimeType;
+          payload.storageProvider = formData.storageProvider;
+        }
+      }
+
+      if (canEditLinkFields) {
+        payload.linkUrl = formData.linkUrl.trim();
+        payload.linkLabel = formData.linkLabel.trim();
+      }
+
+      if (canEditReporterFields) {
+        payload.reporterMeta = {
+          locationTag: formData.locationTag,
+          sourceInfo: formData.sourceInfo,
+          sourceConfidential: formData.sourceConfidential,
+          reporterNotes: formData.reporterNotes,
+        };
+      }
+
+      if (canEditCopyDeskMeta) {
+        payload.copyEditorMeta = {
+          proofreadComplete: formData.proofreadComplete,
+          factCheckStatus: formData.factCheckStatus,
+          headlineStatus: formData.headlineStatus,
+          imageOptimizationStatus: formData.imageOptimizationStatus,
+          copyEditorNotes: formData.copyEditorNotes,
+          returnForChangesReason: formData.returnForChangesReason,
+        };
+      }
+
+      if (canEditAdminFields) {
+        payload.author = formData.author.trim() || 'Desk';
+        payload.priority = priority;
+        payload.views = views;
       }
 
       const response = await fetch(`/api/admin/stories/${storyId}`, {
@@ -747,34 +1532,7 @@ export default function EditStoryPage() {
           'Content-Type': 'application/json',
           ...getAuthHeader(),
         },
-        body: JSON.stringify({
-          title: formData.title.trim(),
-          caption: formData.caption.trim(),
-          thumbnail: thumbnail.trim(),
-          mediaType: formData.mediaType,
-          mediaUrl: formData.mediaUrl.trim(),
-          linkUrl: formData.linkUrl.trim(),
-          linkLabel: formData.linkLabel.trim(),
-          category: formData.category,
-          author: formData.author.trim() || 'Desk',
-          reporterMeta: {
-            locationTag: formData.locationTag,
-            sourceInfo: formData.sourceInfo,
-            sourceConfidential: formData.sourceConfidential,
-            reporterNotes: formData.reporterNotes,
-          },
-          copyEditorMeta: {
-            proofreadComplete: formData.proofreadComplete,
-            factCheckStatus: formData.factCheckStatus,
-            headlineStatus: formData.headlineStatus,
-            imageOptimizationStatus: formData.imageOptimizationStatus,
-            copyEditorNotes: formData.copyEditorNotes,
-            returnForChangesReason: formData.returnForChangesReason,
-          },
-          durationSeconds,
-          priority,
-          views,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -782,7 +1540,14 @@ export default function EditStoryPage() {
         throw new Error(data.error || 'Failed to update story');
       }
 
-      setSuccess('Story updated successfully.');
+      setSuccess(
+        [
+          'Story updated successfully.',
+          data.usage?.alertTriggered ? data.usage.message : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      );
       await fetchStory();
       await fetchStoryActivity();
     } catch (err) {
@@ -924,6 +1689,12 @@ export default function EditStoryPage() {
             <div className="mb-6 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
               <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
               <p className="text-sm">{success}</p>
+            </div>
+          ) : null}
+
+          {!canSaveStory ? (
+            <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+              This story is read-only right now. Reporters can edit drafts or stories returned for changes, copy editors can edit assigned review items, and admins can edit at any stage.
             </div>
           ) : null}
 
@@ -1150,6 +1921,7 @@ export default function EditStoryPage() {
                 value={formData.title}
                 onChange={handleInputChange}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                disabled={!canEditCommonFields}
                 required
               />
             </div>
@@ -1162,11 +1934,12 @@ export default function EditStoryPage() {
                 onChange={handleInputChange}
                 rows={3}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                disabled={!canEditCommonFields}
               />
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {!isReporterView ? (
+              {canEditAdminFields && !usesMediaCollection ? (
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-900">
                     Story Type
@@ -1176,6 +1949,7 @@ export default function EditStoryPage() {
                     value={formData.mediaType}
                     onChange={handleInputChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditAdminFields}
                   >
                     <option value="image">Image Story</option>
                     <option value="video">Video Story</option>
@@ -1192,6 +1966,7 @@ export default function EditStoryPage() {
                   value={formData.category}
                   onChange={handleInputChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                  disabled={!canEditCommonFields}
                 >
                   {categories.map((category) => (
                     <option key={category} value={category}>
@@ -1202,65 +1977,305 @@ export default function EditStoryPage() {
               </div>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-900">Thumbnail URL</label>
-              <input
-                type="url"
-                name="thumbnail"
-                value={formData.thumbnail}
-                onChange={handleInputChange}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-              />
-            </div>
+            {!canEditMediaFields ? (
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-900">Thumbnail URL</label>
+                  <input
+                    type="url"
+                    name="thumbnail"
+                    value={formData.thumbnail}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditCommonFields}
+                  />
+                </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-900">
-                Replace Thumbnail (image)
-              </label>
-              <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-4 py-5 transition-colors hover:border-primary-600 hover:bg-gray-50">
-                <span className="flex flex-col items-center gap-1 text-center">
-                  <ImageIcon className="h-5 w-5 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">Click to upload</span>
-                  <span className="text-xs text-gray-500">Images/Videos - All formats up to 5MB</span>
-                </span>
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  onChange={handleThumbnailFileChange}
-                  className="hidden"
-                />
-              </label>
-            </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-900">
+                    Replace Thumbnail (image)
+                  </label>
+                  <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-4 py-5 transition-colors hover:border-primary-600 hover:bg-gray-50">
+                    <span className="flex flex-col items-center gap-1 text-center">
+                      <ImageIcon className="h-5 w-5 text-gray-500" />
+                      <span className="text-sm font-medium text-gray-700">Click to upload</span>
+                      <span className="text-xs text-gray-500">JPG, PNG, or WEBP up to 5MB</span>
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleThumbnailFileChange}
+                      className="hidden"
+                      disabled={!canEditCommonFields || isUploadingThumbnail}
+                    />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900">Story Images</label>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Upload up to {STORY_MAX_IMAGE_COUNT} JPG, PNG, or WEBP files. The first image becomes the cover thumbnail.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700">
+                    Images: {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
+                  </span>
+                </div>
 
-            {previewThumbnail ? (
-              <div className="overflow-hidden rounded-lg border border-gray-200">
-                {/* Admin preview supports blob/object URLs from file input. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewThumbnail}
-                  alt="Story thumbnail preview"
-                  className="h-64 w-full object-cover"
-                />
-              </div>
-            ) : null}
-
-            {formData.mediaType === 'video' ? (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Video URL <span className="text-red-500">*</span>
+                <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-4 py-5 transition-colors hover:border-primary-600 hover:bg-white">
+                  <span className="flex flex-col items-center gap-1 text-center">
+                    <ImageIcon className="h-5 w-5 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">
+                      {isUploadingImages ? 'Uploading image...' : 'Add photos'}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      Reporters can review, replace, or delete images before saving.
+                    </span>
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleThumbnailFileChange}
+                    className="hidden"
+                    disabled={!canEditMediaFields || isUploadingImages || mediaCounts.images >= STORY_MAX_IMAGE_COUNT}
+                  />
                 </label>
-                <input
-                  type="url"
-                  name="mediaUrl"
-                  value={formData.mediaUrl}
-                  onChange={handleInputChange}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                  required
-                />
+
+                {imageAssets.length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {imageAssets.map((asset) => (
+                      <StoryMediaTile
+                        key={asset.id}
+                        asset={asset}
+                        kindLabel="Image"
+                        replaceLabel="Replace"
+                        removeLabel="Delete"
+                        replaceInputId={`replace-image-${asset.id}`}
+                        accept="image/*"
+                        onPreview={() =>
+                          setPreviewAsset({
+                            asset,
+                            title: asset.order === 0 ? 'Cover image preview' : 'Story photo preview',
+                          })
+                        }
+                        onReplace={(event) => void replaceImageAsset(asset.id, event)}
+                        onRemove={() => removeMediaAsset(asset.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-200 bg-white p-4 text-xs text-gray-500">
+                    Uploaded images will appear here so the reporter can review, replace, or remove them.
+                  </div>
+                )}
+
+                {canDownloadStoryAssets && previewThumbnail ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadAsset('thumbnail')}
+                    className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={downloadingAsset === 'thumbnail'}
+                  >
+                    {downloadingAsset === 'thumbnail' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {downloadingAsset === 'thumbnail' ? 'Downloading...' : 'Download Cover Image'}
+                  </button>
+                ) : null}
+              </div>
+            )}
+
+            {!canEditMediaFields && imageAssets.length > 0 ? (
+              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900">Story Images</label>
+                    <p className="mt-1 text-xs text-gray-500">
+                      This gallery is read-only at your current workflow stage.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700">
+                    Images: {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {imageAssets.map((asset) => (
+                    <StoryMediaTile
+                      key={asset.id}
+                      asset={asset}
+                      kindLabel="Image"
+                      onPreview={() =>
+                        setPreviewAsset({
+                          asset,
+                          title: asset.order === 0 ? 'Cover image preview' : 'Story photo preview',
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+                {canDownloadStoryAssets && previewThumbnail ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadAsset('thumbnail')}
+                    className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={downloadingAsset === 'thumbnail'}
+                  >
+                    {downloadingAsset === 'thumbnail' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {downloadingAsset === 'thumbnail' ? 'Downloading...' : 'Download Thumbnail'}
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
-            {!isReporterView ? (
+            {isReporterView || canEditMediaFields || formData.mediaType === 'video' || videoAssets.length > 0 || Boolean(formData.mediaUrl) ? (
+              <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      Story Videos (MP4)
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      Uploads go directly to DigitalOcean Spaces. Allowed size: 1 MB to 100 MB each, 500 MB total per story.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700">
+                    Videos: {mediaCounts.videos}/{STORY_MAX_VIDEO_COUNT}
+                  </span>
+                </div>
+
+                <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-4 py-5 transition-colors hover:border-primary-600 hover:bg-white">
+                  <span className="flex flex-col items-center gap-1 text-center">
+                    <Upload className="h-5 w-5 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">
+                      {isUploadingVideo
+                        ? 'Uploading video...'
+                        : canReplaceStoryVideo
+                          ? 'Add MP4 videos'
+                          : 'Uploaded story video'}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {canReplaceStoryVideo
+                        ? 'Use this for direct reporter uploads from phone or desktop.'
+                        : 'Video replacement is limited to reporters on editable drafts and admins.'}
+                    </span>
+                  </span>
+                  <input
+                    type="file"
+                    accept="video/mp4,.mp4"
+                    multiple
+                    onChange={(event) => void handleVideoFileChange(event)}
+                    className="hidden"
+                    disabled={
+                      isUploadingVideo ||
+                      !canReplaceStoryVideo ||
+                      mediaCounts.videos >= STORY_MAX_VIDEO_COUNT
+                    }
+                  />
+                </label>
+
+                {isUploadingVideo ? (
+                  <div className="space-y-2">
+                    <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+                      <div
+                        className="h-full rounded-full bg-primary-600 transition-[width] duration-200"
+                        style={{ width: `${videoUploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      Upload progress: {videoUploadProgress}%
+                    </p>
+                  </div>
+                ) : null}
+
+                {videoAssets.length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {videoAssets.map((asset) => (
+                      <StoryMediaTile
+                        key={asset.id}
+                        asset={asset}
+                        kindLabel="Video"
+                        replaceLabel={canReplaceStoryVideo ? 'Replace' : undefined}
+                        removeLabel={canReplaceStoryVideo ? 'Delete' : undefined}
+                        replaceInputId={canReplaceStoryVideo ? `replace-video-${asset.id}` : undefined}
+                        accept={canReplaceStoryVideo ? 'video/mp4,.mp4' : undefined}
+                        onPreview={() =>
+                          setPreviewAsset({
+                            asset,
+                            title: 'Story video preview',
+                          })
+                        }
+                        onReplace={
+                          canReplaceStoryVideo
+                            ? (event) => void replaceVideoAsset(asset.id, event)
+                            : undefined
+                        }
+                        onRemove={canReplaceStoryVideo ? () => removeMediaAsset(asset.id) : undefined}
+                      />
+                    ))}
+                  </div>
+                ) : !usesMediaCollection && formData.mediaUrl ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                    <p className="font-medium">
+                      Uploaded video ready: {getStoryVideoDisplayName(formData.mediaUrl)}
+                    </p>
+                    <p className="mt-1 text-xs text-emerald-800">
+                      {formatStoryVideoSize(formData.mediaSizeBytes)} via {formData.storageProvider || 'external storage'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-200 bg-white p-4 text-xs text-gray-500">
+                    Uploaded videos will appear here so the reporter can review, replace, or remove them.
+                  </div>
+                )}
+
+                {canDownloadStoryAssets && (videoAssets.length > 0 || (!usesMediaCollection && formData.mediaUrl)) ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadAsset('media')}
+                    className="inline-flex w-fit items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={downloadingAsset === 'media'}
+                  >
+                    {downloadingAsset === 'media' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {downloadingAsset === 'media' ? 'Downloading...' : 'Download Primary Story Video'}
+                  </button>
+                ) : null}
+
+                {canUseManualVideoUrl && formData.mediaType === 'video' && !usesMediaCollection ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      Video URL <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="url"
+                      name="mediaUrl"
+                      value={formData.mediaUrl}
+                      onChange={handleInputChange}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Admins can still paste a manual video URL during the transition.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {canEditLinkFields || Boolean(formData.linkUrl.trim() || formData.linkLabel.trim()) ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-900">
@@ -1272,6 +2287,7 @@ export default function EditStoryPage() {
                     value={formData.linkUrl}
                     onChange={handleInputChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditLinkFields}
                   />
                 </div>
 
@@ -1285,6 +2301,7 @@ export default function EditStoryPage() {
                     value={formData.linkLabel}
                     onChange={handleInputChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditLinkFields}
                   />
                 </div>
               </div>
@@ -1302,6 +2319,7 @@ export default function EditStoryPage() {
                   onChange={handleInputChange}
                   placeholder="Bhopal, MP"
                   className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                  disabled={!canEditReporterFields}
                 />
               </div>
             </div>
@@ -1316,6 +2334,7 @@ export default function EditStoryPage() {
                     value={formData.author}
                     onChange={handleInputChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditAdminFields}
                   />
                 </div>
 
@@ -1331,6 +2350,7 @@ export default function EditStoryPage() {
                     min="2"
                     max="180"
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditCommonFields}
                   />
                 </div>
 
@@ -1342,6 +2362,7 @@ export default function EditStoryPage() {
                     value={formData.priority}
                     onChange={handleInputChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditAdminFields}
                   />
                 </div>
 
@@ -1354,46 +2375,47 @@ export default function EditStoryPage() {
                     onChange={handleInputChange}
                     min="0"
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditAdminFields}
                   />
                 </div>
               </div>
             ) : null}
 
-            {!isReporterView ? (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Source Information</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Source and handoff details that move with this story through the desk.
-                  </p>
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-900">
-                    Source Info
-                  </label>
-                  <textarea
-                    name="sourceInfo"
-                    value={formData.sourceInfo}
-                    onChange={handleInputChange}
-                    rows={3}
-                    placeholder="Source, bureau, agency, or submission background."
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                  />
-                </div>
-                <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="sourceConfidential"
-                    checked={formData.sourceConfidential}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                  />
-                  <span className="text-sm text-gray-700">
-                    Source is confidential and should remain internal
-                  </span>
-                </label>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Source Information</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Source and handoff details that move with this story through the desk.
+                </p>
               </div>
-            ) : null}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-900">
+                  Source Info
+                </label>
+                <textarea
+                  name="sourceInfo"
+                  value={formData.sourceInfo}
+                  onChange={handleInputChange}
+                  rows={3}
+                  placeholder="Source, bureau, agency, or submission background."
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                  disabled={!canEditReporterFields}
+                />
+              </div>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="sourceConfidential"
+                  checked={formData.sourceConfidential}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                  disabled={!canEditReporterFields}
+                />
+                <span className="text-sm text-gray-700">
+                  Source is confidential and should remain internal
+                </span>
+              </label>
+            </div>
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-900">
@@ -1406,10 +2428,11 @@ export default function EditStoryPage() {
                 rows={3}
                 placeholder="Desk notes, context, verification leads, or packaging hints."
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                disabled={!canEditReporterFields}
               />
             </div>
 
-            {canEditCopyDeskMeta ? (
+            {showCopyDeskSection ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Copy Editor Review</p>
@@ -1424,6 +2447,7 @@ export default function EditStoryPage() {
                     checked={formData.proofreadComplete}
                     onChange={handleInputChange}
                     className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                    disabled={!canEditCopyDeskMeta}
                   />
                   <span className="text-sm text-gray-700">
                     Proofread is complete and ready for desk review
@@ -1439,6 +2463,7 @@ export default function EditStoryPage() {
                       value={formData.factCheckStatus}
                       onChange={handleInputChange}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                      disabled={!canEditCopyDeskMeta}
                     >
                       {FACT_CHECK_STATUSES.map((status) => (
                         <option key={status} value={status}>
@@ -1456,6 +2481,7 @@ export default function EditStoryPage() {
                       value={formData.headlineStatus}
                       onChange={handleInputChange}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                      disabled={!canEditCopyDeskMeta}
                     >
                       {HEADLINE_STATUSES.map((status) => (
                         <option key={status} value={status}>
@@ -1473,6 +2499,7 @@ export default function EditStoryPage() {
                       value={formData.imageOptimizationStatus}
                       onChange={handleInputChange}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                      disabled={!canEditCopyDeskMeta}
                     >
                       {IMAGE_OPTIMIZATION_STATUSES.map((status) => (
                         <option key={status} value={status}>
@@ -1493,6 +2520,7 @@ export default function EditStoryPage() {
                     rows={3}
                     placeholder="Visual cleanup, headline direction, and fact-check notes."
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditCopyDeskMeta}
                   />
                 </div>
                 <div>
@@ -1510,6 +2538,7 @@ export default function EditStoryPage() {
                         : 'Explain what must go back to the reporter before approval.'
                     }
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditCopyDeskMeta}
                   />
                 </div>
               </div>
@@ -1591,13 +2620,13 @@ export default function EditStoryPage() {
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="submit"
-                  disabled={isSaving || isUploadingThumbnail}
+                  disabled={isSaving || isUploadingThumbnail || isUploadingImages || isUploadingVideo}
                   className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isSaving || isUploadingThumbnail ? (
+                  {isSaving || isUploadingThumbnail || isUploadingImages || isUploadingVideo ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      {isUploadingThumbnail ? 'Uploading...' : 'Saving...'}
+                      {isUploadingThumbnail || isUploadingImages || isUploadingVideo ? 'Uploading...' : 'Saving...'}
                     </>
                   ) : (
                     <>
@@ -1622,6 +2651,48 @@ export default function EditStoryPage() {
           </form>
         </div>
       </motion.div>
+
+      {previewAsset ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-3xl rounded-2xl bg-white p-4 shadow-2xl">
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900">{previewAsset.title}</p>
+                <p className="truncate text-xs text-gray-500" title={getMediaAssetLabel(previewAsset.asset)}>
+                  {getMediaAssetLabel(previewAsset.asset)} - {formatStoryVideoSize(previewAsset.asset.sizeBytes)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewAsset(null)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-100"
+                aria-label="Close preview"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl bg-gray-950">
+              {previewAsset.asset.kind === 'image' ? (
+                <img
+                  src={previewAsset.asset.url}
+                  alt={getMediaAssetLabel(previewAsset.asset)}
+                  className="max-h-[75vh] w-full object-contain"
+                />
+              ) : (
+                <video
+                  src={previewAsset.asset.url}
+                  controls
+                  autoPlay
+                  preload="metadata"
+                  className="max-h-[75vh] w-full bg-black"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
+

@@ -8,6 +8,10 @@ const updateStoredArticleMock = vi.fn();
 const connectDBMock = vi.fn();
 const ensureBreakingTtsForArticleMock = vi.fn();
 const recordArticleActivityMock = vi.fn();
+const getPrimaryArticleForStoryMock = vi.fn();
+const getStoryRecordForArticleLinkingMock = vi.fn();
+const syncStoryLinkedArticleMock = vi.fn();
+const validateStoryForArticleCreationMock = vi.fn();
 
 vi.mock('@/lib/auth/admin', () => ({
   getAdminSession: getAdminSessionMock,
@@ -39,10 +43,20 @@ vi.mock('@/lib/server/articleActivity', () => ({
   recordArticleActivity: recordArticleActivityMock,
 }));
 
+vi.mock('@/lib/server/newsroomStoryLinks', () => ({
+  getPrimaryArticleForStory: getPrimaryArticleForStoryMock,
+  getStoryRecordForArticleLinking: getStoryRecordForArticleLinkingMock,
+  syncStoryLinkedArticle: syncStoryLinkedArticleMock,
+  validateStoryForArticleCreation: validateStoryForArticleCreationMock,
+}));
+
 describe('/api/admin/articles route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.MONGODB_URI;
+    validateStoryForArticleCreationMock.mockReturnValue(null);
+    getPrimaryArticleForStoryMock.mockResolvedValue(null);
+    syncStoryLinkedArticleMock.mockResolvedValue(undefined);
   });
 
   it('returns 401 when no admin session exists', async () => {
@@ -136,5 +150,113 @@ describe('/api/admin/articles route', () => {
     expect(createStoredArticleMock).not.toHaveBeenCalled();
     expect(recordArticleActivityMock).not.toHaveBeenCalled();
     expect(ensureBreakingTtsForArticleMock).not.toHaveBeenCalled();
+  });
+
+  it('allows copy editors to create linked articles from approved stories', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'copy-1',
+      email: 'copy@example.com',
+      name: 'Copy Editor',
+      role: 'copy_editor',
+    });
+    getStoryRecordForArticleLinkingMock.mockResolvedValue({
+      _id: 'story-1',
+      title: 'Reporter Story Title',
+      workflow: { status: 'approved' },
+    });
+    createStoredArticleMock.mockResolvedValue({
+      _id: 'article-2',
+      title: 'Desk article',
+      sourceType: 'story',
+      sourceStoryId: 'story-1',
+      sourceStoryTitle: 'Reporter Story Title',
+      workflow: { status: 'submitted', createdBy: { id: 'copy-1' } },
+    });
+
+    const { POST } = await import('@/app/api/admin/articles/route');
+    const response = await POST(
+      new Request('http://localhost/api/admin/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: 'submit',
+          title: 'Desk article',
+          summary: 'Story summary',
+          content: 'Story body',
+          image: 'https://cdn.example.com/story.jpg',
+          category: 'General',
+          author: 'Copy Editor',
+          sourceStoryId: 'story-1',
+        }),
+      }) as unknown as NextRequest
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(getStoryRecordForArticleLinkingMock).toHaveBeenCalledWith({
+      useFileStore: true,
+      storyId: 'story-1',
+    });
+    expect(createStoredArticleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceType: 'story',
+        sourceStoryId: 'story-1',
+        sourceStoryTitle: 'Reporter Story Title',
+      })
+    );
+    expect(syncStoryLinkedArticleMock).toHaveBeenCalledWith({
+      useFileStore: true,
+      storyId: 'story-1',
+      articleId: 'article-2',
+      articleStatus: 'submitted',
+    });
+    expect(payload).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        _id: 'article-2',
+        sourceType: 'story',
+      }),
+    });
+  });
+
+  it('prevents duplicate primary linked articles for the same story', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk Admin',
+      role: 'admin',
+    });
+    getStoryRecordForArticleLinkingMock.mockResolvedValue({
+      _id: 'story-1',
+      title: 'Reporter Story Title',
+      workflow: { status: 'approved' },
+    });
+    getPrimaryArticleForStoryMock.mockResolvedValue({ _id: 'article-1' });
+
+    const { POST } = await import('@/app/api/admin/articles/route');
+    const response = await POST(
+      new Request('http://localhost/api/admin/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: 'draft',
+          title: 'Desk article',
+          summary: 'Story summary',
+          content: 'Story body',
+          image: 'https://cdn.example.com/story.jpg',
+          category: 'General',
+          author: 'Desk Admin',
+          sourceStoryId: 'story-1',
+        }),
+      }) as unknown as NextRequest
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload).toEqual({
+      success: false,
+      error: 'A primary linked article already exists for this story.',
+    });
+    expect(createStoredArticleMock).not.toHaveBeenCalled();
   });
 });

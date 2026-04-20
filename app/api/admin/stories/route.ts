@@ -3,11 +3,23 @@ import connectDB from '@/lib/db/mongoose';
 import Story from '@/lib/models/Story';
 import { getAdminSession } from '@/lib/auth/admin';
 import {
+  createEmptyCopyEditorMeta,
   normalizeCopyEditorMeta,
   normalizeReporterMeta,
   validateCopyEditorMeta,
   validateReporterMeta,
 } from '@/lib/content/newsroomMetadata';
+import {
+  derivePrimaryStoryMedia,
+  normalizeStoryMediaAssets,
+  validateStoryMediaAssets,
+  type StoryMediaAsset,
+} from '@/lib/content/storyMedia';
+import {
+  createEmptyStoryVideoProduction,
+  normalizeLinkedArticleStatus,
+  normalizeStoryVideoProduction,
+} from '@/lib/content/newsroomPublishing';
 import {
   canCreateContent,
   canReadContent,
@@ -17,10 +29,16 @@ import {
   createStoredStory,
   listStoredStories,
 } from '@/lib/storage/storiesFile';
+import { getStoryVideoMonthlyUsageSummary } from '@/lib/server/storyVideoUsage';
 import {
   buildStoryActivityMessage,
   recordStoryActivity,
 } from '@/lib/server/storyActivity';
+import {
+  STORY_VIDEO_MAX_BYTES,
+  STORY_VIDEO_MIN_BYTES,
+  STORY_VIDEO_STORAGE_PROVIDER,
+} from '@/lib/storage/storyVideoUpload';
 import {
   resolveStoryWorkflow,
   toWorkflowActorRef,
@@ -46,10 +64,18 @@ type StoryLike = {
   thumbnail?: string;
   mediaType?: 'image' | 'video';
   mediaUrl?: string;
+  mediaKey?: string;
+  mediaSizeBytes?: number;
+  mediaMimeType?: string;
+  storageProvider?: string;
+  mediaAssets?: StoryMediaAsset[];
   linkUrl?: string;
   linkLabel?: string;
   category?: string;
   durationSeconds?: number;
+  linkedArticleId?: string;
+  linkedArticleStatus?: string;
+  videoProduction?: unknown;
 };
 
 function parsePositiveInt(value: string | null, fallback: number, max = 200) {
@@ -95,15 +121,28 @@ function normalizeCreateIntent(value: unknown, legacyPublished: boolean): Create
   return legacyPublished ? 'publish' : 'draft';
 }
 
+function normalizeMediaSizeBytes(value: unknown) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return parsed;
+}
+
 function normalizeStoryInput(body: unknown) {
   const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
 
   const title = typeof source.title === 'string' ? source.title.trim() : '';
   const caption = typeof source.caption === 'string' ? source.caption.trim() : '';
   const thumbnail = typeof source.thumbnail === 'string' ? source.thumbnail.trim() : '';
+  const mediaAssets = normalizeStoryMediaAssets(source.mediaAssets);
+  const derivedPrimary = derivePrimaryStoryMedia(mediaAssets, thumbnail);
   const mediaType: 'image' | 'video' =
     source.mediaType === 'video' ? 'video' : 'image';
   const mediaUrl = typeof source.mediaUrl === 'string' ? source.mediaUrl.trim() : '';
+  const mediaKey = typeof source.mediaKey === 'string' ? source.mediaKey.trim() : '';
+  const mediaMimeType = typeof source.mediaMimeType === 'string' ? source.mediaMimeType.trim().toLowerCase() : '';
+  const storageProvider =
+    typeof source.storageProvider === 'string' ? source.storageProvider.trim() : '';
+  const mediaSizeBytes = normalizeMediaSizeBytes(source.mediaSizeBytes);
   const linkUrl = typeof source.linkUrl === 'string' ? source.linkUrl.trim() : '';
   const linkLabel = typeof source.linkLabel === 'string' ? source.linkLabel.trim() : '';
   const category = typeof source.category === 'string' ? source.category.trim() : 'General';
@@ -122,9 +161,14 @@ function normalizeStoryInput(body: unknown) {
   return {
     title,
     caption,
-    thumbnail,
-    mediaType,
-    mediaUrl,
+    thumbnail: derivedPrimary.thumbnail || thumbnail,
+    mediaType: mediaAssets.length > 0 ? derivedPrimary.mediaType : mediaType,
+    mediaUrl: mediaAssets.length > 0 ? derivedPrimary.mediaUrl : mediaUrl,
+    mediaKey: mediaAssets.length > 0 ? derivedPrimary.mediaKey : mediaKey,
+    mediaSizeBytes: mediaAssets.length > 0 ? derivedPrimary.mediaSizeBytes : mediaSizeBytes,
+    mediaMimeType: mediaAssets.length > 0 ? derivedPrimary.mediaMimeType : mediaMimeType,
+    storageProvider: mediaAssets.length > 0 ? derivedPrimary.storageProvider : storageProvider,
+    mediaAssets,
     linkUrl,
     linkLabel,
     category: category || 'General',
@@ -139,7 +183,39 @@ function normalizeStoryInput(body: unknown) {
   };
 }
 
-function validateStoryInput(input: ReturnType<typeof normalizeStoryInput>) {
+function getReporterDisplayName(
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>,
+  fallbackAuthor: string
+) {
+  const sessionName = user.name.trim();
+  if (sessionName) return sessionName;
+  const emailPrefix = user.email.trim().split('@')[0];
+  return emailPrefix || fallbackAuthor || 'Desk';
+}
+
+function sanitizeCreateInputForUser(
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>,
+  input: ReturnType<typeof normalizeStoryInput>
+) {
+  if (user.role !== 'reporter') {
+    return input;
+  }
+
+  return {
+    ...input,
+    author: getReporterDisplayName(user, input.author),
+    linkUrl: '',
+    linkLabel: '',
+    priority: 0,
+    views: 0,
+    copyEditorMeta: createEmptyCopyEditorMeta(),
+  };
+}
+
+function validateStoryInput(
+  input: ReturnType<typeof normalizeStoryInput>,
+  options: { requireMediaPackage?: boolean } = {}
+) {
   if (!input.title || !input.thumbnail) {
     return 'Title and thumbnail are required';
   }
@@ -154,6 +230,38 @@ function validateStoryInput(input: ReturnType<typeof normalizeStoryInput>) {
 
   if (input.mediaType === 'video' && !input.mediaUrl) {
     return 'Media URL is required for video stories';
+  }
+
+  const mediaAssetsError = validateStoryMediaAssets(input.mediaAssets, {
+    requireCompletePackage: options.requireMediaPackage,
+  });
+  if (mediaAssetsError) {
+    return mediaAssetsError;
+  }
+
+  if (
+    input.storageProvider &&
+    input.storageProvider !== STORY_VIDEO_STORAGE_PROVIDER
+  ) {
+    return 'Unsupported story video storage provider';
+  }
+
+  if (input.storageProvider === STORY_VIDEO_STORAGE_PROVIDER) {
+    if (input.mediaType !== 'video') {
+      return 'DigitalOcean Spaces media can only be attached to video stories';
+    }
+
+    if (!input.mediaKey) {
+      return 'Uploaded story videos must include a storage key';
+    }
+
+    if (input.mediaSizeBytes < STORY_VIDEO_MIN_BYTES || input.mediaSizeBytes > STORY_VIDEO_MAX_BYTES) {
+      return 'Uploaded video must be between 1 MB and 100 MB';
+    }
+
+    if (input.mediaMimeType !== 'video/mp4') {
+      return 'Uploaded story videos must be MP4 files';
+    }
   }
 
   if (input.linkUrl.length > 500) {
@@ -229,6 +337,13 @@ function resolveStoryRecord(story: StoryLike, createdBy?: ReturnType<typeof toWo
   return {
     ...story,
     isPublished: workflow.status === 'published',
+    linkedArticleId:
+      typeof story.linkedArticleId === 'string' ? story.linkedArticleId.trim() : '',
+    linkedArticleStatus: normalizeLinkedArticleStatus(story.linkedArticleStatus),
+    videoProduction:
+      story.videoProduction !== undefined
+        ? normalizeStoryVideoProduction(story.videoProduction)
+        : createEmptyStoryVideoProduction(),
     workflow,
   };
 }
@@ -423,8 +538,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const input = normalizeStoryInput(body);
-    const validationError = validateStoryInput(input);
+    const rawInput = normalizeStoryInput(body);
+    const input = sanitizeCreateInputForUser(user, rawInput);
+    const validationError = validateStoryInput(input, {
+      requireMediaPackage: user.role === 'reporter' || input.mediaAssets.length > 0,
+    });
     const intent = normalizeCreateIntent((body as Record<string, unknown>)?.intent, input.isPublished);
     const workflow = buildInitialWorkflow(intent, user);
 
@@ -481,8 +599,15 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      const usage = await getStoryVideoMonthlyUsageSummary();
+
       return NextResponse.json(
-        { success: true, data: resolveStoryRecord(stored), message: 'Story created successfully' },
+        {
+          success: true,
+          data: resolveStoryRecord(stored),
+          message: 'Story created successfully',
+          usage,
+        },
         { status: 201 }
       );
     }
@@ -511,11 +636,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const usage = await getStoryVideoMonthlyUsageSummary();
+
     return NextResponse.json(
       {
         success: true,
         data: resolveStoryRecord(saved.toObject()),
         message: 'Story created successfully',
+        usage,
       },
       { status: 201 }
     );

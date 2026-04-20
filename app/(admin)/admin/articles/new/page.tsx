@@ -5,11 +5,18 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { ArrowLeft, Upload, AlertCircle, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import {
+  ArrowLeft,
+  Link2,
+  Loader2,
+  Upload,
+  AlertCircle,
+  CheckCircle,
+  Image as ImageIcon,
+} from 'lucide-react';
 import RichTextEditor from '@/components/forms/RichTextEditor';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthHeader } from '@/lib/auth/clientToken';
-import { isReporterDeskRole } from '@/lib/auth/roles';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
@@ -40,6 +47,23 @@ type ArticleFormState = {
   seoDescription: string;
   ogImage: string;
   canonicalUrl: string;
+};
+
+type SourceStoryRecord = {
+  _id: string;
+  title: string;
+  caption: string;
+  category: string;
+  author: string;
+  thumbnail: string;
+  linkedArticleId?: string;
+  linkedArticleStatus?: string;
+  reporterMeta?: {
+    locationTag?: string;
+    sourceInfo?: string;
+    sourceConfidential?: boolean;
+    reporterNotes?: string;
+  } | null;
 };
 
 const EMPTY_FORM: ArticleFormState = {
@@ -75,6 +99,7 @@ function isValidAbsoluteHttpUrl(value: string) {
 
 export default function UploadArticle() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [formData, setFormData] = useState<ArticleFormState>(EMPTY_FORM);
 
@@ -95,6 +120,10 @@ export default function UploadArticle() {
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
   const [imageQualityNote, setImageQualityNote] = useState('');
+  const [sourceStory, setSourceStory] = useState<SourceStoryRecord | null>(null);
+  const [isLoadingSourceStory, setIsLoadingSourceStory] = useState(false);
+  const [sourceStoryError, setSourceStoryError] = useState('');
+  const [sourcePrefillApplied, setSourcePrefillApplied] = useState(false);
 
   const previewContentHtml = useMemo(() => {
     const source = formData.content.trim() || formData.summary.trim();
@@ -104,14 +133,16 @@ export default function UploadArticle() {
     return renderArticleRichContent(source);
   }, [formData.content, formData.summary]);
 
-  const isReporterFlow = isReporterDeskRole(session?.user?.role);
+  const sourceStoryId = searchParams.get('sourceStoryId')?.trim() || '';
+  const canPublishImmediately =
+    session?.user?.role === 'admin' || session?.user?.role === 'super_admin';
   const canCreateCategories =
     session?.user?.role === 'admin' || session?.user?.role === 'super_admin';
-  const submitLabel = isReporterFlow ? 'Submit Article' : 'Publish Article';
-  const submitVerb = isReporterFlow ? 'Submitting' : 'Publishing';
-  const successMessage = isReporterFlow
-    ? 'Article submitted for review! Redirecting...'
-    : 'Article published successfully! Redirecting...';
+  const submitLabel = canPublishImmediately ? 'Publish Article' : 'Submit Article';
+  const submitVerb = canPublishImmediately ? 'Publishing' : 'Submitting';
+  const successMessage = canPublishImmediately
+    ? 'Article published successfully! Redirecting...'
+    : 'Article submitted for review! Redirecting...';
 
   const persistDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -292,6 +323,91 @@ export default function UploadArticle() {
     );
   }, [session?.user?.name]);
 
+  useEffect(() => {
+    if (!sourceStoryId) {
+      setSourceStory(null);
+      setSourceStoryError('');
+      setSourcePrefillApplied(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadSourceStory = async () => {
+      setIsLoadingSourceStory(true);
+      setSourceStoryError('');
+      try {
+        const response = await fetch(`/api/admin/stories/${encodeURIComponent(sourceStoryId)}`, {
+          headers: {
+            ...getAuthHeader(),
+          },
+          cache: 'no-store',
+        });
+        const data = (await response.json().catch(() => ({}))) as {
+          success?: boolean;
+          error?: string;
+          data?: SourceStoryRecord;
+        };
+
+        if (!response.ok || !data.success || !data.data) {
+          throw new Error(data.error || 'Failed to load source story');
+        }
+
+        if (!isMounted) return;
+        setSourceStory(data.data);
+      } catch (err) {
+        if (!isMounted) return;
+        setSourceStoryError(
+          err instanceof Error ? err.message : 'Failed to load source story'
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingSourceStory(false);
+        }
+      }
+    };
+
+    void loadSourceStory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [sourceStoryId]);
+
+  useEffect(() => {
+    if (!sourceStory || sourcePrefillApplied) return;
+
+    setFormData((current) => ({
+      ...current,
+      title: current.title.trim() ? current.title : sourceStory.title || '',
+      summary: current.summary.trim() ? current.summary : sourceStory.caption || '',
+      category:
+        current.category.trim() && current.category !== EMPTY_FORM.category
+          ? current.category
+          : sourceStory.category || current.category,
+      author: current.author.trim() ? current.author : sourceStory.author || current.author,
+      locationTag:
+        current.locationTag.trim()
+          ? current.locationTag
+          : sourceStory.reporterMeta?.locationTag || '',
+      sourceInfo:
+        current.sourceInfo.trim()
+          ? current.sourceInfo
+          : sourceStory.reporterMeta?.sourceInfo || '',
+      sourceConfidential:
+        current.sourceConfidential || Boolean(sourceStory.reporterMeta?.sourceConfidential),
+      reporterNotes:
+        current.reporterNotes.trim()
+          ? current.reporterNotes
+          : sourceStory.reporterMeta?.reporterNotes || '',
+    }));
+
+    if (!imagePreview.trim() && sourceStory.thumbnail.trim()) {
+      setImagePreview(sourceStory.thumbnail);
+    }
+    setSourcePrefillApplied(true);
+  }, [imagePreview, sourcePrefillApplied, sourceStory]);
+
   const uploadImage = async () => {
     if (!imageFile) return imagePreview;
 
@@ -369,7 +485,7 @@ export default function UploadArticle() {
           ...getAuthHeader(),
         },
         body: JSON.stringify({
-          intent: isReporterFlow ? 'submit' : 'publish',
+          intent: canPublishImmediately ? 'publish' : 'submit',
           title: formData.title,
           summary: formData.summary,
           content: formData.content,
@@ -390,6 +506,7 @@ export default function UploadArticle() {
             ogImage: resolvedOgImage,
             canonicalUrl: formData.canonicalUrl,
           },
+          ...(sourceStoryId ? { sourceStoryId } : {}),
         }),
       });
 
@@ -434,8 +551,62 @@ export default function UploadArticle() {
         className="max-w-3xl mx-auto"
       >
         <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Article</h1>
-          <p className="text-gray-600 mb-8">Write and publish a new article with rich formatting</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {sourceStoryId ? 'Create Article From Story' : 'Create Direct Desk Article'}
+          </h1>
+          <p className="text-gray-600 mb-8">
+            {sourceStoryId
+              ? 'Turn the approved story package into a polished website article.'
+              : 'Write a professional desk article and send it through approval.'}
+          </p>
+
+          {isLoadingSourceStory ? (
+            <div className="mb-6 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading source story...
+            </div>
+          ) : null}
+
+          {sourceStoryError ? (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {sourceStoryError}
+            </div>
+          ) : null}
+
+          {sourceStory ? (
+            <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Source Story
+                  </p>
+                  <p className="mt-1 text-base font-semibold">{sourceStory.title}</p>
+                  <p className="mt-1 text-emerald-800/80">
+                    This article will stay linked to the approved story package.
+                  </p>
+                </div>
+                <Link
+                  href={`/admin/stories/${sourceStory._id}/edit`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  Open Source Story
+                </Link>
+              </div>
+              {sourceStory.linkedArticleId ? (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  A linked article already exists for this story. Opening another one from the
+                  same source will be blocked.{' '}
+                  <Link
+                    href={`/admin/articles/${sourceStory.linkedArticleId}/edit`}
+                    className="font-semibold underline"
+                  >
+                    Open linked article
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {error && (
             <motion.div
@@ -588,6 +759,10 @@ export default function UploadArticle() {
                   placeholder="https://example.com/main/article/slug"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Leave empty to use the default public article permalink after publish. You can
+                  override it here for migrated or syndicated stories.
+                </p>
               </div>
             </div>
 
@@ -646,6 +821,24 @@ export default function UploadArticle() {
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Article Content <span className="text-red-500">*</span>
               </label>
+              <div className="mb-3 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900 sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <p className="font-semibold">Headings</p>
+                  <p className="mt-1">Use H2 and H3 buttons to break long copy into clean sections.</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Inline Images</p>
+                  <p className="mt-1">Use the image button to upload an article image with caption and source credit.</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Resources & Tables</p>
+                  <p className="mt-1">Add source cards, comparison tables, quotes, and hyperlinks directly in the editor.</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Permalink</p>
+                  <p className="mt-1">Canonical URL in SEO Settings controls the preferred permalink when you need one.</p>
+                </div>
+              </div>
               <p className="mb-2 text-xs text-gray-500">
                 Tip: Paste a YouTube link on its own line or use the YouTube button in the editor toolbar.
               </p>
@@ -913,7 +1106,11 @@ export default function UploadArticle() {
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                disabled={isLoading || isLoadingImage}
+                disabled={
+                  isLoading ||
+                  isLoadingImage ||
+                  Boolean(sourceStory?.linkedArticleId)
+                }
                 className="flex-1 flex items-center justify-center gap-2 py-3 bg-spanish-red text-white font-medium rounded-lg hover:bg-guardsman-red transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading || isLoadingImage ? (

@@ -99,6 +99,46 @@ function getYouTubeEmbedUrl(value: string, muted: boolean) {
   return `https://www.youtube.com/embed/${safeId}?${params.toString()}`;
 }
 
+function getStoryAssets(story: VisualStory | undefined) {
+  if (!story) return [];
+  if (Array.isArray(story.mediaAssets) && story.mediaAssets.length > 0) {
+    return story.mediaAssets;
+  }
+
+  const assets = [];
+  if (story.thumbnail) {
+    assets.push({
+      id: `${story.id}-fallback-image`,
+      kind: 'image' as const,
+      url: story.thumbnail,
+      key: '',
+      mimeType: '',
+      sizeBytes: 0,
+      storageProvider: '',
+      originalFileName: '',
+      order: 0,
+      createdAt: new Date(0).toISOString(),
+    });
+  }
+
+  if (story.mediaType === 'video' && story.mediaUrl) {
+    assets.push({
+      id: `${story.id}-fallback-video`,
+      kind: 'video' as const,
+      url: story.mediaUrl,
+      key: '',
+      mimeType: '',
+      sizeBytes: 0,
+      storageProvider: '',
+      originalFileName: '',
+      order: assets.length,
+      createdAt: new Date(0).toISOString(),
+    });
+  }
+
+  return assets;
+}
+
 export default function StoryViewer({
   stories,
   initialIndex,
@@ -108,6 +148,7 @@ export default function StoryViewer({
   variant = 'story',
 }: StoryViewerProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -125,25 +166,34 @@ export default function StoryViewer({
   );
 
   const activeStory = stories[activeIndex];
+  const activeStoryAssets = useMemo(() => getStoryAssets(activeStory), [activeStory]);
+  const activeAsset = activeStoryAssets[activeMediaIndex] || activeStoryAssets[0];
+  const activeStoryImageFallback =
+    activeStoryAssets.find((asset) => asset.kind === 'image')?.url ||
+    activeStory?.thumbnail ||
+    '';
+  const progressItems = activeStoryAssets.length ? activeStoryAssets : [null];
   const storyHref = (activeStory?.href || activeStory?.linkUrl || '').trim();
   const hasStoryHref = Boolean(storyHref);
   const ctaLabel = (activeStory?.linkLabel || '').trim() || 'Read Full Story';
   const effectiveMuted = variant === 'reel' ? (isMuted || !hasUnlockedAudioRef.current) : isMuted;
   const youtubeEmbedUrl = useMemo(
-    () => getYouTubeEmbedUrl(activeStory?.mediaUrl || '', effectiveMuted),
-    [activeStory?.mediaUrl, effectiveMuted]
+    () => getYouTubeEmbedUrl(activeAsset?.url || '', effectiveMuted),
+    [activeAsset?.url, effectiveMuted]
   );
   const isYouTubeStory = Boolean(youtubeEmbedUrl);
   const canUseNativeVideo =
-    activeStory?.mediaType === 'video' &&
-    Boolean(activeStory.mediaUrl) &&
-    !mediaErrors[activeStory.id] &&
+    activeAsset?.kind === 'video' &&
+    Boolean(activeAsset.url) &&
+    !mediaErrors[activeAsset.id] &&
     !isYouTubeStory;
 
   const durationMs = useMemo(() => {
-    const fallback = normalizeDurationSeconds(activeStory?.durationSeconds) * 1000;
+    const fallback = normalizeDurationSeconds(
+      activeAsset?.kind === 'video' ? activeStory?.durationSeconds ?? 8 : 6
+    ) * 1000;
     if (
-      activeStory?.mediaType === 'video' &&
+      activeAsset?.kind === 'video' &&
       !isYouTubeStory &&
       videoDurationMs &&
       videoDurationMs > 1000
@@ -151,21 +201,28 @@ export default function StoryViewer({
       return videoDurationMs;
     }
     return fallback;
-  }, [activeStory?.durationSeconds, activeStory?.mediaType, isYouTubeStory, videoDurationMs]);
+  }, [activeAsset?.kind, activeStory?.durationSeconds, isYouTubeStory, videoDurationMs]);
   const elapsedMs = Math.round(progress * durationMs);
 
   const goToIndex = useCallback(
-    (index: number) => {
+    (index: number, mediaIndex = 0) => {
       if (!stories.length) return;
       const bounded = Math.max(0, Math.min(index, stories.length - 1));
       setActiveIndex(bounded);
+      const nextStory = stories[bounded];
+      const nextAssets = getStoryAssets(nextStory);
+      const boundedMediaIndex = Math.max(
+        0,
+        Math.min(mediaIndex, Math.max(nextAssets.length - 1, 0))
+      );
+      setActiveMediaIndex(boundedMediaIndex);
       setProgress(0);
       setVideoDurationMs(null);
     },
-    [stories.length]
+    [stories]
   );
 
-  const goNext = useCallback(() => {
+  const goNextStory = useCallback(() => {
     if (!stories.length) return;
     if (activeIndex >= stories.length - 1) {
       onClose();
@@ -174,10 +231,37 @@ export default function StoryViewer({
     goToIndex(activeIndex + 1);
   }, [activeIndex, goToIndex, onClose, stories.length]);
 
-  const goPrev = useCallback(() => {
+  const goPrevStory = useCallback(() => {
     if (!stories.length) return;
     goToIndex(activeIndex - 1);
   }, [activeIndex, goToIndex, stories.length]);
+
+  const goNextFrame = useCallback(() => {
+    if (!stories.length || !activeStory) return;
+    if (activeMediaIndex < activeStoryAssets.length - 1) {
+      setActiveMediaIndex((prev) => prev + 1);
+      setProgress(0);
+      setVideoDurationMs(null);
+      return;
+    }
+    goNextStory();
+  }, [activeMediaIndex, activeStory, activeStoryAssets.length, goNextStory, stories.length]);
+
+  const goPrevFrame = useCallback(() => {
+    if (!stories.length) return;
+    if (activeMediaIndex > 0) {
+      setActiveMediaIndex((prev) => prev - 1);
+      setProgress(0);
+      setVideoDurationMs(null);
+      return;
+    }
+    if (activeIndex <= 0) {
+      return;
+    }
+    const previousStory = stories[activeIndex - 1];
+    const previousAssets = getStoryAssets(previousStory);
+    goToIndex(activeIndex - 1, Math.max(previousAssets.length - 1, 0));
+  }, [activeIndex, activeMediaIndex, goToIndex, stories]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -229,19 +313,19 @@ export default function StoryViewer({
       }
       if (event.key === 'ArrowRight') {
         event.preventDefault();
-        goNext();
+        goNextFrame();
       }
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        goPrev();
+        goPrevFrame();
       }
       if (event.key === 'ArrowDown' && variant === 'reel') {
         event.preventDefault();
-        goNext();
+        goNextStory();
       }
       if (event.key === 'ArrowUp' && variant === 'reel') {
         event.preventDefault();
-        goPrev();
+        goPrevStory();
       }
       if (event.key === ' ') {
         event.preventDefault();
@@ -251,7 +335,7 @@ export default function StoryViewer({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [goNext, goPrev, isOpen, onClose, variant]);
+  }, [goNextFrame, goNextStory, goPrevFrame, goPrevStory, isOpen, onClose, variant]);
 
   useEffect(() => {
     if (!isOpen || variant !== 'reel') return;
@@ -264,15 +348,15 @@ export default function StoryViewer({
 
       event.preventDefault();
       if (event.deltaY > 0) {
-        goNext();
+        goNextStory();
       } else {
-        goPrev();
+        goPrevStory();
       }
     };
 
     window.addEventListener('wheel', onWheel, { passive: false });
     return () => window.removeEventListener('wheel', onWheel);
-  }, [goNext, goPrev, isOpen, variant]);
+  }, [goNextStory, goPrevStory, isOpen, variant]);
 
   useEffect(() => {
     if (!isOpen || !activeStory || isPaused || canUseNativeVideo) return;
@@ -284,7 +368,7 @@ export default function StoryViewer({
         const next = Math.min(1, prev + step);
         if (next >= 1 && !hasAdvanced) {
           hasAdvanced = true;
-          window.setTimeout(() => goNext(), 0);
+          window.setTimeout(() => goNextFrame(), 0);
         }
         return next;
       });
@@ -294,15 +378,16 @@ export default function StoryViewer({
   }, [
     activeStory,
     activeStory?.id,
+    activeAsset?.id,
     canUseNativeVideo,
     durationMs,
-    goNext,
+    goNextFrame,
     isOpen,
     isPaused,
   ]);
 
   useEffect(() => {
-    if (!isOpen || activeStory?.mediaType !== 'video' || isYouTubeStory) return;
+    if (!isOpen || activeAsset?.kind !== 'video' || isYouTubeStory) return;
     const video = videoRef.current;
     if (!video) return;
     video.muted = effectiveMuted;
@@ -315,10 +400,10 @@ export default function StoryViewer({
         setIsPaused(true);
       });
     }
-  }, [activeStory?.id, activeStory?.mediaType, effectiveMuted, isOpen, isPaused, isYouTubeStory]);
+  }, [activeAsset?.id, activeAsset?.kind, effectiveMuted, isOpen, isPaused, isYouTubeStory]);
 
   useEffect(() => {
-    if (!isOpen || activeStory?.mediaType !== 'video' || !isYouTubeStory) return;
+    if (!isOpen || activeAsset?.kind !== 'video' || !isYouTubeStory) return;
     if (isPaused) {
       sendYouTubeCommand('pauseVideo');
       return;
@@ -326,8 +411,8 @@ export default function StoryViewer({
     sendYouTubeCommand(effectiveMuted ? 'mute' : 'unMute');
     sendYouTubeCommand('playVideo');
   }, [
-    activeStory?.id,
-    activeStory?.mediaType,
+    activeAsset?.id,
+    activeAsset?.kind,
     effectiveMuted,
     isOpen,
     isPaused,
@@ -355,8 +440,8 @@ export default function StoryViewer({
     if (variant === 'reel') {
       if (absDy > 56 && absDy > absDx) {
         event.preventDefault();
-        if (dy < 0) goNext();
-        if (dy > 0) goPrev();
+        if (dy < 0) goNextStory();
+        if (dy > 0) goPrevStory();
         return;
       }
       return;
@@ -368,14 +453,14 @@ export default function StoryViewer({
     }
 
     if (absDx > 40 && absDx > absDy) {
-      if (dx < 0) goNext();
-      if (dx > 0) goPrev();
+      if (dx < 0) goNextFrame();
+      if (dx > 0) goPrevFrame();
     }
   };
 
   const onMediaError = () => {
-    if (!activeStory) return;
-    setMediaErrors((prev) => ({ ...prev, [activeStory.id]: true }));
+    if (!activeAsset) return;
+    setMediaErrors((prev) => ({ ...prev, [activeAsset.id]: true }));
   };
 
   const onVideoMetadata = () => {
@@ -428,7 +513,7 @@ export default function StoryViewer({
     window.prompt('Copy link', targetUrl);
   }, [activeStory, storyHref]);
 
-  const canMuteStory = activeStory.mediaType === 'video';
+  const canMuteStory = activeAsset?.kind === 'video';
   const togglePlayPause = () => setIsPaused((prev) => !prev);
   const toggleMuted = () => {
     if (!canMuteStory) return;
@@ -478,10 +563,9 @@ export default function StoryViewer({
             onTouchEnd={onTouchEnd}
           >
             <div className="absolute inset-0">
-              {activeStory.mediaType === 'video' &&
-              isYouTubeStory ? (
+              {activeAsset?.kind === 'video' && isYouTubeStory ? (
                 <iframe
-                  key={`${activeStory.id}-youtube`}
+                  key={`${activeStory.id}-${activeAsset?.id || 'youtube'}-youtube`}
                   ref={iframeRef}
                   src={youtubeEmbedUrl}
                   className="h-full w-full"
@@ -499,41 +583,45 @@ export default function StoryViewer({
                 />
               ) : canUseNativeVideo ? (
                 <video
+                  key={`${activeStory.id}-${activeAsset?.id || 'video'}-native`}
                   ref={(el) => {
                     videoRef.current = el;
                     if (el && variant === 'reel') {
                       el.defaultMuted = true;
                     }
                   }}
-                  src={activeStory.mediaUrl}
+                  src={activeAsset?.url}
                   className="h-full w-full object-cover"
-                  poster={activeStory.thumbnail}
+                  poster={activeStoryImageFallback}
                   preload="metadata"
                   playsInline
                   autoPlay
                   muted={effectiveMuted}
-                  onEnded={goNext}
+                  onEnded={goNextFrame}
                   onError={onMediaError}
                   onLoadedMetadata={onVideoMetadata}
                   onTimeUpdate={onVideoTimeUpdate}
                 />
-              ) : mediaErrors[activeStory.id] ? (
+              ) : activeAsset && mediaErrors[activeAsset.id] ? (
                 <div className="relative h-full w-full">
-                  <Image
-                    src={activeStory.thumbnail}
-                    alt={activeStory.title}
-                    fill
-                    className="object-cover"
-                    sizes="100vw"
-                    priority
-                  />
+                  {activeStoryImageFallback ? (
+                    <Image
+                      src={activeStoryImageFallback}
+                      alt={activeStory.title}
+                      fill
+                      className="object-cover"
+                      sizes="100vw"
+                      priority
+                    />
+                  ) : null}
                   <div className="absolute inset-0 flex items-center justify-center bg-black/55 px-8 text-center">
                     <p className="text-lg font-semibold text-zinc-100">{activeStory.title}</p>
                   </div>
                 </div>
               ) : (
                 <Image
-                  src={activeStory.thumbnail}
+                  key={`${activeStory.id}-${activeAsset?.id || 'image'}-image`}
+                  src={activeAsset?.url || activeStoryImageFallback}
                   alt={activeStory.title}
                   fill
                   className="object-cover"
@@ -559,25 +647,27 @@ export default function StoryViewer({
                     : 'px-3 pb-2 pt-3 sm:px-4 sm:pt-4'
                 }`}
               >
-                {variant !== 'reel' ? (
-                  <div className="flex gap-1">
-                    {stories.map((story, index) => {
-                      const width =
-                        index < activeIndex ? 100 : index === activeIndex ? progress * 100 : 0;
-                      return (
+                <div className="flex gap-1">
+                  {progressItems.map((asset, index) => {
+                    const width =
+                      index < activeMediaIndex
+                        ? 100
+                        : index === activeMediaIndex
+                          ? progress * 100
+                          : 0;
+                    return (
+                      <div
+                        key={`story-progress-${asset?.id || index}`}
+                        className="h-1 flex-1 overflow-hidden rounded-full bg-white/25"
+                      >
                         <div
-                          key={`story-progress-${story.id}`}
-                          className="h-1 flex-1 overflow-hidden rounded-full bg-white/25"
-                        >
-                          <div
-                            className="h-full rounded-full bg-white transition-[width] duration-100"
-                            style={{ width: `${width}%` }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
+                          className="h-full rounded-full bg-white transition-[width] duration-100"
+                          style={{ width: `${width}%` }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
 
                 {variant === 'reel' ? (
                   <div className="mt-3 flex justify-end text-white">
@@ -597,12 +687,13 @@ export default function StoryViewer({
                         {activeStory.category || 'Visual Story'}
                       </p>
                       <p className="truncate text-xs text-white/80">
-                        {activeStory.author || 'Desk'} / {activeIndex + 1}/{stories.length}
+                        {activeStory.author || 'Desk'} / Story {activeIndex + 1}/{stories.length}
+                        {activeStoryAssets.length > 1 ? ` / Media ${activeMediaIndex + 1}/${activeStoryAssets.length}` : ''}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {activeStory.mediaType === 'video' && !isYouTubeStory ? (
+                      {canMuteStory && !isYouTubeStory ? (
                         <button
                           type="button"
                           onClick={() => setIsMuted((prev) => !prev)}
@@ -641,8 +732,8 @@ export default function StoryViewer({
                 <button
                   type="button"
                   className="h-full w-full bg-transparent"
-                  onClick={goPrev}
-                  aria-label="Previous story"
+                  onClick={goPrevFrame}
+                  aria-label="Previous media"
                 />
                 {variant === 'reel' ? (
                   <>
@@ -655,16 +746,16 @@ export default function StoryViewer({
                     <button
                       type="button"
                       className="h-full w-full bg-transparent"
-                      onClick={goNext}
-                      aria-label="Next story"
+                      onClick={goNextFrame}
+                      aria-label="Next media"
                     />
                   </>
                 ) : (
                   <button
                     type="button"
                     className="h-full w-full bg-transparent"
-                    onClick={goNext}
-                    aria-label="Next story"
+                    onClick={goNextFrame}
+                    aria-label="Next media"
                   />
                 )}
               </div>
@@ -732,12 +823,15 @@ export default function StoryViewer({
                 </div>
 
                 <div className="pointer-events-none absolute bottom-[max(1.25rem,calc(env(safe-area-inset-bottom)+0.35rem))] left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/25 bg-black/45 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur md:text-xs">
+                  Story {activeIndex + 1}/{stories.length}
+                  {activeStoryAssets.length > 1 ? ` / Media ${activeMediaIndex + 1}/${activeStoryAssets.length}` : ''}
+                  {' / '}
                   {formatTimeLabel(elapsedMs)} / {formatTimeLabel(durationMs)}
                 </div>
 
                 <button
                   type="button"
-                  onClick={goPrev}
+                  onClick={goPrevStory}
                   className="absolute right-3 top-24 z-20 hidden rounded-full border border-white/40 bg-black/35 p-2 text-white backdrop-blur transition hover:bg-black/55 md:block"
                   aria-label="Previous story"
                 >
@@ -746,7 +840,7 @@ export default function StoryViewer({
 
                 <button
                   type="button"
-                  onClick={goNext}
+                  onClick={goNextStory}
                   className="absolute right-3 bottom-28 z-20 hidden rounded-full border border-white/40 bg-black/35 p-2 text-white backdrop-blur transition hover:bg-black/55 md:block"
                   aria-label="Next story"
                 >
@@ -757,18 +851,18 @@ export default function StoryViewer({
               <>
                 <button
                   type="button"
-                  onClick={goPrev}
+                  onClick={goPrevFrame}
                   className="absolute left-2 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border border-white/40 bg-black/35 p-2 text-white backdrop-blur transition hover:bg-black/55 md:block"
-                  aria-label="Previous story"
+                  aria-label="Previous media"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
 
                 <button
                   type="button"
-                  onClick={goNext}
+                  onClick={goNextFrame}
                   className="absolute right-2 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border border-white/40 bg-black/35 p-2 text-white backdrop-blur transition hover:bg-black/55 md:block"
-                  aria-label="Next story"
+                  aria-label="Next media"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>

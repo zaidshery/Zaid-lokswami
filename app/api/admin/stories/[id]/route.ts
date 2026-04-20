@@ -15,12 +15,23 @@ import {
   validateReporterMeta,
 } from '@/lib/content/newsroomMetadata';
 import {
+  derivePrimaryStoryMedia,
+  normalizeStoryMediaAssets,
+  validateStoryMediaAssets,
+} from '@/lib/content/storyMedia';
+import {
+  createEmptyStoryVideoProduction,
+  normalizeLinkedArticleStatus,
+  normalizeStoryVideoProduction,
+} from '@/lib/content/newsroomPublishing';
+import {
   canDeleteContent,
   canEditContent,
   canReadContent,
   canTransitionContent,
   type ContentTransitionAction,
 } from '@/lib/auth/permissions';
+import { getBlockedStoryUpdateFields } from '@/lib/auth/storyEditing';
 import {
   buildStoryActivityMessage,
   recordStoryActivity,
@@ -31,6 +42,12 @@ import {
   getStoredStoryById,
   updateStoredStory,
 } from '@/lib/storage/storiesFile';
+import { getStoryVideoMonthlyUsageSummary } from '@/lib/server/storyVideoUsage';
+import {
+  STORY_VIDEO_MAX_BYTES,
+  STORY_VIDEO_MIN_BYTES,
+  STORY_VIDEO_STORAGE_PROVIDER,
+} from '@/lib/storage/storyVideoUpload';
 import {
   applyStoryWorkflowAction,
   resolveStoryWorkflow,
@@ -47,6 +64,15 @@ type LeanStoryRecord = Record<string, unknown> & {
   workflow?: Record<string, unknown> | null;
   publishedAt?: string | Date;
   updatedAt?: string | Date;
+  mediaType?: 'image' | 'video';
+  mediaKey?: string;
+  mediaSizeBytes?: number;
+  mediaMimeType?: string;
+  storageProvider?: string;
+  mediaAssets?: unknown;
+  linkedArticleId?: string;
+  linkedArticleStatus?: string;
+  videoProduction?: unknown;
 };
 
 type WorkflowActionBody = {
@@ -79,6 +105,46 @@ function toBoundedDuration(value: unknown) {
   return Math.max(2, Math.min(180, parsed));
 }
 
+function normalizeMediaSizeBytes(value: unknown) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function validateStoryVideoMetadata(input: {
+  mediaType: string;
+  mediaKey: string;
+  mediaSizeBytes: number;
+  mediaMimeType: string;
+  storageProvider: string;
+}) {
+  if (!input.storageProvider) {
+    return null;
+  }
+
+  if (input.storageProvider !== STORY_VIDEO_STORAGE_PROVIDER) {
+    return 'Unsupported story video storage provider';
+  }
+
+  if (input.mediaType !== 'video') {
+    return 'DigitalOcean Spaces media can only be attached to video stories';
+  }
+
+  if (!input.mediaKey) {
+    return 'Uploaded story videos must include a storage key';
+  }
+
+  if (input.mediaSizeBytes < STORY_VIDEO_MIN_BYTES || input.mediaSizeBytes > STORY_VIDEO_MAX_BYTES) {
+    return 'Uploaded video must be between 1 MB and 100 MB';
+  }
+
+  if (input.mediaMimeType !== 'video/mp4') {
+    return 'Uploaded story videos must be MP4 files';
+  }
+
+  return null;
+}
+
 function normalizeStoryUpdate(body: unknown) {
   const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
   const updates: Record<string, unknown> = {};
@@ -87,6 +153,16 @@ function normalizeStoryUpdate(body: unknown) {
   if (typeof source.caption === 'string') updates.caption = source.caption.trim();
   if (typeof source.thumbnail === 'string') updates.thumbnail = source.thumbnail.trim();
   if (typeof source.mediaUrl === 'string') updates.mediaUrl = source.mediaUrl.trim();
+  if (typeof source.mediaKey === 'string') updates.mediaKey = source.mediaKey.trim();
+  if (typeof source.mediaMimeType === 'string') {
+    updates.mediaMimeType = source.mediaMimeType.trim().toLowerCase();
+  }
+  if (typeof source.storageProvider === 'string') {
+    updates.storageProvider = source.storageProvider.trim();
+  }
+  if (source.mediaAssets !== undefined) {
+    updates.mediaAssets = normalizeStoryMediaAssets(source.mediaAssets);
+  }
   if (typeof source.linkUrl === 'string') updates.linkUrl = source.linkUrl.trim();
   if (typeof source.linkLabel === 'string') updates.linkLabel = source.linkLabel.trim();
   if (typeof source.category === 'string') updates.category = source.category.trim();
@@ -110,6 +186,12 @@ function normalizeStoryUpdate(body: unknown) {
     const duration = toBoundedDuration(source.durationSeconds);
     if (duration === null) return { updates: null, error: 'Invalid duration' };
     updates.durationSeconds = duration;
+  }
+
+  if (source.mediaSizeBytes !== undefined) {
+    const mediaSizeBytes = normalizeMediaSizeBytes(source.mediaSizeBytes);
+    if (mediaSizeBytes === null) return { updates: null, error: 'Invalid video size' };
+    updates.mediaSizeBytes = mediaSizeBytes;
   }
 
   if (source.priority !== undefined) {
@@ -181,6 +263,101 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '';
 }
 
+function getCurrentStoryMediaAssets(story: {
+  mediaAssets?: unknown;
+  thumbnail?: unknown;
+  mediaType?: unknown;
+  mediaUrl?: unknown;
+  mediaKey?: unknown;
+  mediaSizeBytes?: unknown;
+  mediaMimeType?: unknown;
+  storageProvider?: unknown;
+}) {
+  const normalized = normalizeStoryMediaAssets(story.mediaAssets);
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  const fallbackThumbnail = typeof story.thumbnail === 'string' ? story.thumbnail.trim() : '';
+  const fallbackMediaUrl = typeof story.mediaUrl === 'string' ? story.mediaUrl.trim() : '';
+  const fallbackMediaType = story.mediaType === 'video' ? 'video' : 'image';
+  const assets = [];
+
+  if (fallbackThumbnail) {
+    assets.push({
+      id: 'legacy-image',
+      kind: 'image' as const,
+      url: fallbackThumbnail,
+      key: '',
+      mimeType: '',
+      sizeBytes: 0,
+      storageProvider: '',
+      originalFileName: '',
+      order: 0,
+      createdAt: new Date(0).toISOString(),
+    });
+  }
+
+  if (fallbackMediaUrl && fallbackMediaType === 'video') {
+    assets.push({
+      id: 'legacy-video',
+      kind: 'video' as const,
+      url: fallbackMediaUrl,
+      key: typeof story.mediaKey === 'string' ? story.mediaKey.trim() : '',
+      mimeType:
+        typeof story.mediaMimeType === 'string' ? story.mediaMimeType.trim().toLowerCase() : '',
+      sizeBytes: Number.isFinite(Number(story.mediaSizeBytes))
+        ? Math.max(0, Number(story.mediaSizeBytes))
+        : 0,
+      storageProvider:
+        typeof story.storageProvider === 'string' ? story.storageProvider.trim() : '',
+      originalFileName: '',
+      order: assets.length,
+      createdAt: new Date(0).toISOString(),
+    });
+  }
+
+  return assets;
+}
+
+function applyDerivedStoryMediaUpdates(
+  updates: Record<string, unknown>,
+  currentStory: {
+    mediaAssets?: unknown;
+    thumbnail?: unknown;
+    mediaType?: unknown;
+    mediaUrl?: unknown;
+    mediaKey?: unknown;
+    mediaSizeBytes?: unknown;
+    mediaMimeType?: unknown;
+    storageProvider?: unknown;
+  }
+) {
+  if (!Object.prototype.hasOwnProperty.call(updates, 'mediaAssets')) {
+    return normalizeStoryMediaAssets(currentStory.mediaAssets);
+  }
+
+  const mediaAssets = normalizeStoryMediaAssets(updates.mediaAssets);
+  const thumbnailFallback =
+    typeof updates.thumbnail === 'string'
+      ? updates.thumbnail
+      : typeof currentStory.thumbnail === 'string'
+        ? currentStory.thumbnail
+        : '';
+  const primary = derivePrimaryStoryMedia(mediaAssets, thumbnailFallback);
+
+  updates.mediaAssets = mediaAssets;
+  updates.thumbnail = primary.thumbnail;
+  updates.mediaType = primary.mediaType;
+  updates.mediaUrl = primary.mediaUrl;
+  updates.mediaKey = primary.mediaKey;
+  updates.mediaSizeBytes = primary.mediaSizeBytes;
+  updates.mediaMimeType = primary.mediaMimeType;
+  updates.storageProvider = primary.storageProvider;
+
+  return mediaAssets;
+}
+
 async function shouldUseFileStore() {
   if (!process.env.MONGODB_URI) return true;
 
@@ -221,6 +398,9 @@ function resolveStoryResponse(
     workflow?: unknown;
     publishedAt?: unknown;
     updatedAt?: unknown;
+    linkedArticleId?: string;
+    linkedArticleStatus?: unknown;
+    videoProduction?: unknown;
   }
 ) {
   const workflow = resolveStoryWorkflow({
@@ -236,6 +416,13 @@ function resolveStoryResponse(
   return {
     ...story,
     isPublished: workflow.status === 'published',
+    linkedArticleId:
+      typeof story.linkedArticleId === 'string' ? story.linkedArticleId.trim() : '',
+    linkedArticleStatus: normalizeLinkedArticleStatus(story.linkedArticleStatus),
+    videoProduction:
+      story.videoProduction !== undefined
+        ? normalizeStoryVideoProduction(story.videoProduction)
+        : createEmptyStoryVideoProduction(),
     workflow,
   };
 }
@@ -275,6 +462,28 @@ function compactMetadata(value: Record<string, unknown>) {
       return true;
     })
   );
+}
+
+function formatBlockedFieldLabel(field: string) {
+  switch (field) {
+    case 'reporterMeta':
+      return 'reporter source fields';
+    case 'copyEditorMeta':
+      return 'copy desk review fields';
+    case 'mediaUrl':
+    case 'mediaKey':
+    case 'mediaSizeBytes':
+    case 'mediaMimeType':
+    case 'storageProvider':
+    case 'mediaType':
+    case 'mediaAssets':
+      return 'story video fields';
+    case 'linkUrl':
+    case 'linkLabel':
+      return 'story link fields';
+    default:
+      return field.replace(/([A-Z])/g, ' $1').toLowerCase();
+  }
 }
 
 async function resolveAssignee(assignedToId: string) {
@@ -683,6 +892,54 @@ export async function PUT(
         );
       }
 
+      const blockedFields = getBlockedStoryUpdateFields(
+        user,
+        buildStoryPermissionRecord(currentStory),
+        Object.keys(updates)
+      );
+      if (blockedFields.length > 0) {
+        const blockedLabels = [...new Set(blockedFields.map((field) => formatBlockedFieldLabel(field)))];
+        return NextResponse.json(
+          {
+            success: false,
+            error: `You cannot edit ${blockedLabels.join(', ')} in the current workflow stage.`,
+          },
+          { status: 403 }
+        );
+      }
+
+      const nextMediaAssets = applyDerivedStoryMediaUpdates(updates, currentStory);
+      const mediaAssetsError = validateStoryMediaAssets(nextMediaAssets, {
+        requireCompletePackage: user.role === 'reporter' || nextMediaAssets.length > 0,
+      });
+      if (mediaAssetsError) {
+        return NextResponse.json({ success: false, error: mediaAssetsError }, { status: 400 });
+      }
+
+      const metadataError = validateStoryVideoMetadata({
+        mediaType:
+          typeof updates.mediaType === 'string' ? updates.mediaType : currentStory.mediaType,
+        mediaKey:
+          typeof updates.mediaKey === 'string'
+            ? updates.mediaKey
+            : String(currentStory.mediaKey || '').trim(),
+        mediaSizeBytes:
+          typeof updates.mediaSizeBytes === 'number'
+            ? updates.mediaSizeBytes
+            : Number(currentStory.mediaSizeBytes || 0),
+        mediaMimeType:
+          typeof updates.mediaMimeType === 'string'
+            ? updates.mediaMimeType
+            : String(currentStory.mediaMimeType || '').trim().toLowerCase(),
+        storageProvider:
+          typeof updates.storageProvider === 'string'
+            ? updates.storageProvider
+            : String(currentStory.storageProvider || '').trim(),
+      });
+      if (metadataError) {
+        return NextResponse.json({ success: false, error: metadataError }, { status: 400 });
+      }
+
       const publishedState =
         typeof updates.isPublished === 'boolean' ? Boolean(updates.isPublished) : undefined;
       const nextWorkflow = applyLegacyPublishCompatibility(
@@ -721,12 +978,15 @@ export async function PUT(
         metadata: {
           changedFields: Object.keys(updates),
         },
-      });
+        });
+
+      const usage = await getStoryVideoMonthlyUsageSummary();
 
       return NextResponse.json({
         success: true,
         data: resolveStoryResponse(story),
         message: 'Story updated successfully',
+        usage,
       });
     }
 
@@ -749,6 +1009,56 @@ export async function PUT(
         { success: false, error: 'Forbidden' },
         { status: 403 }
       );
+    }
+
+    const blockedFields = getBlockedStoryUpdateFields(
+      user,
+      buildStoryPermissionRecord(current),
+      Object.keys(updates)
+    );
+    if (blockedFields.length > 0) {
+      const blockedLabels = [...new Set(blockedFields.map((field) => formatBlockedFieldLabel(field)))];
+      return NextResponse.json(
+        {
+          success: false,
+          error: `You cannot edit ${blockedLabels.join(', ')} in the current workflow stage.`,
+        },
+        { status: 403 }
+      );
+    }
+
+    const nextMediaAssets = applyDerivedStoryMediaUpdates(updates, current);
+    const mediaAssetsError = validateStoryMediaAssets(nextMediaAssets, {
+      requireCompletePackage: user.role === 'reporter' || nextMediaAssets.length > 0,
+    });
+    if (mediaAssetsError) {
+      return NextResponse.json({ success: false, error: mediaAssetsError }, { status: 400 });
+    }
+
+    const metadataError = validateStoryVideoMetadata({
+      mediaType:
+        typeof updates.mediaType === 'string'
+          ? updates.mediaType
+          : String(current.mediaType === 'video' ? 'video' : 'image'),
+      mediaKey:
+        typeof updates.mediaKey === 'string'
+          ? updates.mediaKey
+          : String(current.mediaKey || '').trim(),
+      mediaSizeBytes:
+        typeof updates.mediaSizeBytes === 'number'
+          ? updates.mediaSizeBytes
+          : Number(current.mediaSizeBytes || 0),
+      mediaMimeType:
+        typeof updates.mediaMimeType === 'string'
+          ? updates.mediaMimeType
+          : String(current.mediaMimeType || '').trim().toLowerCase(),
+      storageProvider:
+        typeof updates.storageProvider === 'string'
+          ? updates.storageProvider
+          : String(current.storageProvider || '').trim(),
+    });
+    if (metadataError) {
+      return NextResponse.json({ success: false, error: metadataError }, { status: 400 });
     }
 
     const publishedState =
@@ -787,10 +1097,13 @@ export async function PUT(
       },
     });
 
+    const usage = await getStoryVideoMonthlyUsageSummary();
+
     return NextResponse.json({
       success: true,
       data: resolveStoryResponse(story.toObject()),
       message: 'Story updated successfully',
+      usage,
     });
   } catch (error: unknown) {
     console.error('Error updating story:', error);

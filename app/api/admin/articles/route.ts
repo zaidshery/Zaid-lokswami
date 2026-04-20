@@ -23,9 +23,18 @@ import {
   updateStoredArticle,
 } from '@/lib/storage/articlesFile';
 import {
+  normalizeArticleSourceType,
+} from '@/lib/content/newsroomPublishing';
+import {
   buildArticleActivityMessage,
   recordArticleActivity,
 } from '@/lib/server/articleActivity';
+import {
+  getPrimaryArticleForStory,
+  getStoryRecordForArticleLinking,
+  syncStoryLinkedArticle,
+  validateStoryForArticleCreation,
+} from '@/lib/server/newsroomStoryLinks';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
   resolveArticleWorkflow,
@@ -43,6 +52,9 @@ type ArticleLike = {
   publishedAt?: string | Date;
   updatedAt?: string | Date;
   workflow?: unknown;
+  sourceType?: string;
+  sourceStoryId?: string;
+  sourceStoryTitle?: string;
 };
 
 const REVIEW_QUEUE_STATUSES = new Set([
@@ -259,6 +271,13 @@ function normalizeArticleInput(body: unknown) {
     seo,
     reporterMeta: normalizeReporterMeta(source.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(source.copyEditorMeta),
+    sourceStoryId:
+      typeof source.sourceStoryId === 'string' ? source.sourceStoryId.trim() : '',
+    sourceType: normalizeArticleSourceType(
+      typeof source.sourceStoryId === 'string' && source.sourceStoryId.trim()
+        ? 'story'
+        : source.sourceType
+    ),
   };
 }
 
@@ -448,6 +467,7 @@ export async function POST(req: NextRequest) {
     const input = normalizeArticleInput(body);
     const validationError = validateArticleInput(input);
     const workflow = buildInitialWorkflow(intent, user);
+    const useFileStore = await shouldUseFileStore();
 
     if (
       intent === 'publish' &&
@@ -477,11 +497,55 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const useFileStore = await shouldUseFileStore();
+    let sourceStoryTitle = '';
+    if (input.sourceStoryId) {
+      if (user.role === 'reporter') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Reporters cannot create linked articles directly from approved stories.',
+          },
+          { status: 403 }
+        );
+      }
+
+      const sourceStory = await getStoryRecordForArticleLinking({
+        useFileStore,
+        storyId: input.sourceStoryId,
+      });
+      const storyValidationError = validateStoryForArticleCreation(sourceStory);
+      if (storyValidationError) {
+        return NextResponse.json(
+          { success: false, error: storyValidationError },
+          { status: 400 }
+        );
+      }
+
+      const existingPrimaryArticle = await getPrimaryArticleForStory({
+        useFileStore,
+        storyId: input.sourceStoryId,
+      });
+      if (existingPrimaryArticle) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'A primary linked article already exists for this story.',
+          },
+          { status: 409 }
+        );
+      }
+
+      sourceStoryTitle =
+        sourceStory && typeof sourceStory.title === 'string'
+          ? sourceStory.title.trim()
+          : '';
+    }
 
     if (useFileStore) {
       const stored = await createStoredArticle({
         ...input,
+        sourceType: input.sourceStoryId ? 'story' : input.sourceType,
+        sourceStoryTitle,
         workflow: {
           ...workflow,
           submittedAt: workflow.submittedAt?.toISOString() || null,
@@ -525,11 +589,22 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      if (stored.sourceStoryId) {
+        await syncStoryLinkedArticle({
+          useFileStore,
+          storyId: stored.sourceStoryId,
+          articleId: stored._id,
+          articleStatus: stored.workflow.status,
+        });
+      }
+
       return NextResponse.json({ success: true, data: stored }, { status: 201 });
     }
 
     const article = new Article({
       ...input,
+      sourceType: input.sourceStoryId ? 'story' : input.sourceType,
+      sourceStoryTitle,
       views: 0,
       publishedAt: new Date(),
       updatedAt: new Date(),
@@ -568,6 +643,15 @@ export async function POST(req: NextRequest) {
         createdById: workflow.createdBy?.id || '',
       },
     });
+
+    if (article.sourceStoryId) {
+      await syncStoryLinkedArticle({
+        useFileStore,
+        storyId: article.sourceStoryId,
+        articleId: String(article._id),
+        articleStatus: workflow.status,
+      });
+    }
 
     return NextResponse.json({ success: true, data: article }, { status: 201 });
   } catch (error: unknown) {

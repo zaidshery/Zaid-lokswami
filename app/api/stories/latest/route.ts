@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
+import { normalizeStoryMediaAssets } from '@/lib/content/storyMedia';
 import Story from '@/lib/models/Story';
 import { listAllStoredStories } from '@/lib/storage/storiesFile';
 
@@ -23,6 +24,7 @@ type PublicStoryItem = {
   views: number;
   publishedAt: string;
   isPublished: boolean;
+  mediaAssets: ReturnType<typeof normalizeStoryMediaAssets>;
 };
 
 function parseLimit(raw: string | null) {
@@ -84,6 +86,7 @@ function mapStoryItem(input: Record<string, unknown>): PublicStoryItem | null {
     views: Math.max(0, Math.floor(toFiniteNumber(input.views, 0))),
     publishedAt: toIsoDate(input.publishedAt),
     isPublished: input.isPublished === false ? false : true,
+    mediaAssets: normalizeStoryMediaAssets(input.mediaAssets),
   };
 }
 
@@ -130,7 +133,7 @@ export async function GET(req: NextRequest) {
 
     const docs = await Story.find({ isPublished: true })
       .select(
-        '_id title caption thumbnail mediaType mediaUrl linkUrl linkLabel category author durationSeconds priority views publishedAt isPublished'
+        '_id title caption thumbnail mediaType mediaUrl linkUrl linkLabel category author durationSeconds priority views publishedAt isPublished mediaAssets'
       )
       .sort({ priority: -1, publishedAt: -1, _id: -1 })
       .limit(limit)

@@ -16,6 +16,7 @@ import {
   validateCopyEditorMeta,
   validateReporterMeta,
 } from '@/lib/content/newsroomMetadata';
+import { normalizeArticleSourceType } from '@/lib/content/newsroomPublishing';
 import {
   canDeleteContent,
   canEditContent,
@@ -37,6 +38,10 @@ import {
   buildArticleActivityMessage,
   recordArticleActivity,
 } from '@/lib/server/articleActivity';
+import {
+  clearStoryLinkedArticle,
+  syncStoryLinkedArticle,
+} from '@/lib/server/newsroomStoryLinks';
 import {
   normalizeHotspot,
   resolveUniqueSlug,
@@ -69,6 +74,9 @@ type LeanArticleRecord = Record<string, unknown> & {
   workflow?: Record<string, unknown> | null;
   publishedAt?: string | Date;
   updatedAt?: string | Date;
+  sourceType?: string;
+  sourceStoryId?: string;
+  sourceStoryTitle?: string;
 };
 
 const WORKFLOW_ACTIONS = new Set<ContentTransitionAction>([
@@ -126,6 +134,13 @@ function resolveArticleResponse(
 ) {
   return {
     ...article,
+    sourceType: normalizeArticleSourceType(article.sourceType),
+    sourceStoryId:
+      typeof article.sourceStoryId === 'string' ? article.sourceStoryId.trim() : '',
+    sourceStoryTitle:
+      typeof article.sourceStoryTitle === 'string'
+        ? article.sourceStoryTitle.trim()
+        : '',
     workflow: resolveArticleWorkflow({
       workflow:
         typeof article.workflow === 'object' && article.workflow
@@ -808,6 +823,15 @@ export async function PATCH(
             }),
           });
 
+          if (article.sourceStoryId) {
+            await syncStoryLinkedArticle({
+              useFileStore: true,
+              storyId: article.sourceStoryId,
+              articleId: id,
+              articleStatus: nextWorkflow.status,
+            });
+          }
+
           return NextResponse.json({
             success: true,
             data: article,
@@ -919,6 +943,15 @@ export async function PATCH(
             comment: actionBody.comment?.trim() || '',
           }),
         });
+
+        if (typeof article.sourceStoryId === 'string' && article.sourceStoryId.trim()) {
+          await syncStoryLinkedArticle({
+            useFileStore: false,
+            storyId: article.sourceStoryId,
+            articleId: id,
+            articleStatus: nextWorkflow.status,
+          });
+        }
 
         return NextResponse.json({
           success: true,
@@ -1367,6 +1400,13 @@ export async function DELETE(
       if (existing?.breakingTts?.audioUrl) {
         await deleteStoredBreakingAudio(existing.breakingTts.audioUrl).catch(() => undefined);
       }
+      if (existing.sourceStoryId) {
+        await clearStoryLinkedArticle({
+          useFileStore: true,
+          storyId: existing.sourceStoryId,
+          articleId: id,
+        });
+      }
       return NextResponse.json({
         success: true,
         message: 'Article deleted successfully',
@@ -1396,6 +1436,16 @@ export async function DELETE(
           : '';
       if (audioUrl) {
         await deleteStoredBreakingAudio(audioUrl).catch(() => undefined);
+      }
+      if (
+        typeof deletedArticle?.sourceStoryId === 'string' &&
+        deletedArticle.sourceStoryId.trim()
+      ) {
+        await clearStoryLinkedArticle({
+          useFileStore: false,
+          storyId: deletedArticle.sourceStoryId,
+          articleId: id,
+        });
       }
       return NextResponse.json({
         success: true,

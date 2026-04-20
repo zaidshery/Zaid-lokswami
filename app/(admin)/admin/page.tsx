@@ -28,6 +28,11 @@ import {
   type SuperAdminActionGroup,
   type SuperAdminGrowthHighlight,
 } from '@/lib/admin/superAdminDashboard';
+import {
+  getNewsroomPipelineAnalytics,
+  normalizeNewsroomPipelineFilters,
+  type NewsroomPipelineAnalytics,
+} from '@/lib/admin/newsroomPipeline';
 import type { TeamHealthSummary } from '@/lib/admin/teamHealth';
 import { getAdminSession } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
@@ -42,6 +47,8 @@ type QuickAction = {
   icon: LucideIcon;
   tone: string;
 };
+
+type PageSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 type StatCardConfig = {
   label: string;
@@ -190,6 +197,349 @@ function StatCard({ stat }: { stat: StatCardConfig }) {
       </div>
       <p className="mt-4 text-sm text-[color:var(--admin-shell-text-muted)]">{stat.note}</p>
     </div>
+  );
+}
+
+function formatRate(count: number, total: number) {
+  if (total <= 0) return '0%';
+  return `${Math.round((count / total) * 100)}%`;
+}
+
+function resolveSingleSearchParam(value: string | string[] | undefined) {
+  return typeof value === 'string' ? value : Array.isArray(value) ? value[0] : undefined;
+}
+
+function getPipelineRangeLabel(range: NewsroomPipelineAnalytics['filters']['applied']['range']) {
+  switch (range) {
+    case '7d':
+      return 'Last 7 days';
+    case '30d':
+      return 'Last 30 days';
+    case '90d':
+      return 'Last 90 days';
+    case '365d':
+      return 'Last 365 days';
+    case 'all':
+    default:
+      return 'All time';
+  }
+}
+
+function PipelineMetricCard({
+  label,
+  count,
+  total,
+  note,
+  icon: Icon,
+}: {
+  label: string;
+  count: number;
+  total: number;
+  note: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <div className={METRIC_CARD_CLASS}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+            {label}
+          </p>
+          <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
+            {formatNumber(count)}
+          </p>
+          <p className="mt-1 text-xs font-medium text-[color:var(--admin-shell-text-muted)]">
+            {formatRate(count, total)}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-red-500/10 p-3 text-red-600 dark:bg-red-500/15 dark:text-red-300">
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+      <p className="mt-4 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">{note}</p>
+    </div>
+  );
+}
+
+function NewsroomPipelineFiltersBar({
+  analytics,
+}: {
+  analytics: NewsroomPipelineAnalytics;
+}) {
+  const activeFilters = [
+    getPipelineRangeLabel(analytics.filters.applied.range),
+    analytics.filters.applied.category
+      ? `Category: ${analytics.filters.applied.category}`
+      : null,
+    analytics.filters.applied.reporter
+      ? `Reporter: ${analytics.filters.applied.reporter}`
+      : null,
+  ].filter(Boolean) as string[];
+
+  return (
+    <div className={SOFT_CARD_CLASS}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+            Filters
+          </p>
+          <h3 className="mt-2 text-lg font-bold text-[color:var(--admin-shell-text)]">
+            Inspect pipeline health by period, category, and reporter
+          </h3>
+          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
+            Narrow the pipeline to one desk lane so bottlenecks are easier to spot and act on quickly.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {activeFilters.map((filter) => (
+            <span
+              key={filter}
+              className="rounded-full border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]"
+            >
+              {filter}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <form
+        action="/admin"
+        method="get"
+        className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-[1fr,1fr,1fr,auto,auto] lg:items-end"
+      >
+        <label className="space-y-2 text-sm font-medium text-[color:var(--admin-shell-text)]">
+          <span>Time Window</span>
+          <select
+            name="pipelineRange"
+            defaultValue={analytics.filters.applied.range}
+            className="admin-shell-input w-full rounded-2xl px-4 py-3 text-sm"
+          >
+            <option value="all">All time</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="365d">Last 365 days</option>
+          </select>
+        </label>
+
+        <label className="space-y-2 text-sm font-medium text-[color:var(--admin-shell-text)]">
+          <span>Category</span>
+          <select
+            name="pipelineCategory"
+            defaultValue={analytics.filters.applied.category}
+            className="admin-shell-input w-full rounded-2xl px-4 py-3 text-sm"
+          >
+            <option value="">All categories</option>
+            {analytics.filters.options.categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2 text-sm font-medium text-[color:var(--admin-shell-text)]">
+          <span>Reporter / Desk Owner</span>
+          <select
+            name="pipelineReporter"
+            defaultValue={analytics.filters.applied.reporter}
+            className="admin-shell-input w-full rounded-2xl px-4 py-3 text-sm"
+          >
+            <option value="">All reporters</option>
+            {analytics.filters.options.reporters.map((reporter) => (
+              <option key={reporter} value={reporter}>
+                {reporter}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="submit"
+          className="admin-shell-toolbar-btn inline-flex min-h-[52px] items-center justify-center rounded-2xl px-5 text-sm font-semibold"
+        >
+          Apply Filters
+        </button>
+
+        <Link
+          href="/admin"
+          className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-[color:var(--admin-shell-border)] px-5 text-sm font-semibold text-[color:var(--admin-shell-text-muted)] transition-colors hover:text-[color:var(--admin-shell-text)]"
+        >
+          Reset
+        </Link>
+      </form>
+    </div>
+  );
+}
+
+function NewsroomPipelineSection({
+  analytics,
+}: {
+  analytics: NewsroomPipelineAnalytics;
+}) {
+  const approvedBase = analytics.pipeline.approvedStories;
+  const statusCards = [
+    {
+      label: 'Approved Stories',
+      count: analytics.pipeline.approvedStories,
+      note: 'Story packages cleared by the newsroom and ready to become outputs.',
+      icon: CheckCircle2,
+    },
+    {
+      label: 'Linked Articles',
+      count: analytics.pipeline.linkedArticleCreated,
+      note: 'Approved stories that already have a primary linked website article.',
+      icon: FileText,
+    },
+    {
+      label: 'Published Articles',
+      count: analytics.pipeline.linkedArticlePublished,
+      note: 'Linked stories whose primary article is already live to readers.',
+      icon: ArrowUpRight,
+    },
+    {
+      label: 'Video Ready',
+      count: analytics.pipeline.videoReady,
+      note: 'Stories with final edited exports ready for distribution and social drafting.',
+      icon: Video,
+    },
+    {
+      label: 'Social Published',
+      count: analytics.pipeline.socialPublished,
+      note: 'Stories that already have at least one published social-media distribution record.',
+      icon: BarChart3,
+    },
+  ];
+
+  const bottlenecks = [
+    {
+      label: 'Awaiting Article',
+      value: analytics.bottlenecks.awaitingArticle,
+      note: 'Approved stories without a linked article yet.',
+    },
+    {
+      label: 'Awaiting Video',
+      value: analytics.bottlenecks.awaitingVideo,
+      note: 'Linked stories that still need video production to start.',
+    },
+    {
+      label: 'Awaiting Social Drafts',
+      value: analytics.bottlenecks.awaitingSocialDrafts,
+      note: 'Video-ready stories that have not generated outbox drafts yet.',
+    },
+    {
+      label: 'Awaiting Social Publish',
+      value: analytics.bottlenecks.awaitingSocialPublish,
+      note: 'Stories with drafts in the outbox but no published platform post yet.',
+    },
+  ];
+
+  return (
+    <section className={PANEL_CLASS}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-600">
+            Newsroom Pipeline
+          </p>
+          <h2 className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
+            Story To Article To Video To Social
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+            One place to see how approved reporter stories are being converted into website
+            articles, edited video outputs, and social distribution.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+          <span className="rounded-full border border-[color:var(--admin-shell-border)] px-3 py-2">
+            Source: {analytics.source}
+          </span>
+          <span className="rounded-full border border-[color:var(--admin-shell-border)] px-3 py-2">
+            Submitted Stories: {formatNumber(analytics.pipeline.storiesSubmitted)}
+          </span>
+          <span className="rounded-full border border-[color:var(--admin-shell-border)] px-3 py-2">
+            Fully Distributed: {formatNumber(analytics.pipeline.fullyDistributed)}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <NewsroomPipelineFiltersBar analytics={analytics} />
+      </div>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-5">
+        {statusCards.map((card) => (
+          <PipelineMetricCard
+            key={card.label}
+            label={card.label}
+            count={card.count}
+            total={approvedBase}
+            note={card.note}
+            icon={card.icon}
+          />
+        ))}
+      </div>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr,0.8fr]">
+        <div className={SOFT_CARD_CLASS}>
+          <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
+            Pipeline Bottlenecks
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {bottlenecks.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+                  {item.label}
+                </p>
+                <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
+                  {formatNumber(item.value)}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+                  {item.note}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className={SOFT_CARD_CLASS}>
+          <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
+            Social Outbox Status
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {Object.entries(analytics.socialStatuses).map(([status, value]) => (
+              <div
+                key={status}
+                className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+                  {formatStatusLabel(status)}
+                </p>
+                <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
+                  {formatNumber(value)}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-[color:var(--admin-shell-text-muted)]">
+            <div className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em]">Linked Articles</p>
+              <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
+                {formatNumber(analytics.totals.linkedArticles)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em]">Direct Articles</p>
+              <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
+                {formatNumber(analytics.totals.directArticles)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1322,14 +1672,25 @@ function getQuickActions(role: string): QuickAction[] {
   }
 }
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams?: PageSearchParams;
+}) {
   const admin = await getAdminSession();
   if (!admin) {
     redirect('/signin?redirect=/admin');
   }
 
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const newsroomPipelineFilters = normalizeNewsroomPipelineFilters({
+    range: resolveSingleSearchParam(resolvedSearchParams.pipelineRange),
+    category: resolveSingleSearchParam(resolvedSearchParams.pipelineCategory),
+    reporter: resolveSingleSearchParam(resolvedSearchParams.pipelineReporter),
+  });
+
   const usesLeadershipDashboardData = admin.role === 'super_admin' || admin.role === 'admin';
-  const [baseDashboard, myWork, baseReviewQueue, superAdminDashboard] = await Promise.all([
+  const [baseDashboard, myWork, baseReviewQueue, superAdminDashboard, newsroomPipeline] = await Promise.all([
     usesLeadershipDashboardData ? Promise.resolve(null) : getAdminDashboardData(),
     canViewPage(admin.role, 'my_work') ? getMyWorkOverview(admin) : Promise.resolve(null),
     usesLeadershipDashboardData
@@ -1338,6 +1699,9 @@ export default async function AdminDashboardPage() {
         ? getReviewQueueOverview()
         : Promise.resolve(null),
     usesLeadershipDashboardData ? getSuperAdminDashboardData() : Promise.resolve(null),
+    admin.role === 'admin' || admin.role === 'super_admin'
+      ? getNewsroomPipelineAnalytics(newsroomPipelineFilters)
+      : Promise.resolve(null),
   ]);
 
   const dashboard = (superAdminDashboard?.dashboard ?? baseDashboard)!;
@@ -1627,6 +1991,10 @@ export default async function AdminDashboardPage() {
           )
         )}
       </section>
+
+      {newsroomPipeline && (admin.role === 'admin' || admin.role === 'super_admin') ? (
+        <NewsroomPipelineSection analytics={newsroomPipeline} />
+      ) : null}
 
       {isReporterDeskRole(admin.role) ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -21,6 +21,7 @@ import {
   Settings,
   Settings2,
   ShieldCheck,
+  Share2,
   Sun,
   UserCog,
   Video,
@@ -65,6 +66,7 @@ const HI = {
   polls: '\u092a\u094b\u0932\u094d\u0938',
   stories: '\u0938\u094d\u091f\u094b\u0930\u0940\u091c\u093c',
   videos: '\u0935\u0940\u0921\u093f\u092f\u094b',
+  socialPosts: '\u0938\u094b\u0936\u0932 \u092a\u094b\u0938\u094d\u091f',
   epapers: '\u0908-\u092a\u0947\u092a\u0930',
   media: '\u092e\u0940\u0921\u093f\u092f\u093e',
   analytics: '\u090f\u0928\u093e\u0932\u093f\u091f\u093f\u0915\u094d\u0938',
@@ -114,6 +116,7 @@ const ADMIN_ITEMS: SidebarItem[] = [
   { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls' },
   { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
   { icon: Video, labelEn: 'Videos', labelHi: HI.videos, href: '/admin/videos' },
+  { icon: Share2, labelEn: 'Social Posts', labelHi: HI.socialPosts, href: '/admin/social-posts' },
   { icon: Newspaper, labelEn: 'E-Papers', labelHi: HI.epapers, href: '/admin/epapers' },
   { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
   {
@@ -132,6 +135,7 @@ const COPY_EDITOR_ITEMS: SidebarItem[] = [
   { icon: FileText, labelEn: 'Articles', labelHi: HI.articles, href: '/admin/articles' },
   { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
   { icon: Video, labelEn: 'Videos', labelHi: HI.videos, href: '/admin/videos' },
+  { icon: Share2, labelEn: 'Social Posts', labelHi: HI.socialPosts, href: '/admin/social-posts' },
   { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
 ];
 
