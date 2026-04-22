@@ -61,6 +61,12 @@ import {
 } from '@/lib/workflow/feedback';
 import { getAllowedWorkflowTransitions } from '@/lib/workflow/transitions';
 import type { WorkflowPriority, WorkflowStatus } from '@/lib/workflow/types';
+import {
+  CmsEditorCanvas,
+  CmsEditorColumns,
+  CmsEditorMain,
+  CmsEditorSidebar,
+} from '@/components/admin/CmsEditorLayout';
 
 interface StoryFormData {
   title: string;
@@ -1660,8 +1666,8 @@ export default function EditStoryPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mx-auto max-w-4xl"
       >
+        <CmsEditorCanvas>
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -1698,218 +1704,9 @@ export default function EditStoryPage() {
             </div>
           ) : null}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Workflow</p>
-                  <p className="mt-1 text-sm text-gray-700">
-                    Move this story through the newsroom queue without leaving the editor.
-                  </p>
-                </div>
-                <WorkflowPill status={workflow.status} />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Created By</p>
-                  <p className="mt-1 text-sm font-medium text-gray-900">
-                    {workflow.createdBy?.name || workflow.createdBy?.email || 'Unknown'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Assigned To</p>
-                  <p className="mt-1 text-sm font-medium text-gray-900">
-                    {workflow.assignedTo?.name || workflow.assignedTo?.email || 'Unassigned'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Reviewed By</p>
-                  <p className="mt-1 text-sm font-medium text-gray-900">
-                    {workflow.reviewedBy?.name || workflow.reviewedBy?.email || 'Not started'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Priority</p>
-                  <p className="mt-1 text-sm font-medium capitalize text-gray-900">{workflowPriority}</p>
-                </div>
-              </div>
-
-              <div className={`rounded-lg border p-4 ${getWorkflowFeedbackToneClass(workflowFeedback.tone)}`}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">{workflowFeedback.badge}</p>
-                    <p className="mt-1 text-sm leading-6">{workflowFeedback.summary}</p>
-                  </div>
-                  {workflowFeedback.readyToResubmit ? (
-                    <span className="inline-flex items-center rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700">
-                      Ready to resubmit
-                    </span>
-                  ) : workflowFeedback.waitingOnDesk ? (
-                    <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700">
-                      With desk
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-3 text-sm leading-6">
-                  <span className="font-semibold">Next action:</span> {workflowFeedback.nextAction}
-                </p>
-                {workflowFeedback.highlightedNote ? (
-                  <div className="mt-3 rounded-lg border border-white/70 bg-white/80 p-3 text-sm text-gray-700">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                      {workflowFeedback.highlightedNoteLabel || 'Desk feedback'}
-                    </p>
-                    <p className="mt-1 whitespace-pre-wrap">{workflowFeedback.highlightedNote}</p>
-                    {workflowFeedback.highlightedBy ? (
-                      <p className="mt-2 text-xs text-gray-500">
-                        From {workflowFeedback.highlightedBy}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-
-              {canUseWorkflowDesk ? (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Assignee</label>
-                    <select
-                      value={workflowAssigneeId}
-                      onChange={(event) => setWorkflowAssigneeId(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    >
-                      <option value="">
-                        {isLoadingAssignableUsers ? 'Loading team...' : 'Select assignee'}
-                      </option>
-                      {assignableUsers.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.name} ({formatNewsroomRoleLabel(member.role)})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Priority</label>
-                    <select
-                      value={workflowPriority}
-                      onChange={(event) => setWorkflowPriority(event.target.value as WorkflowPriority)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 capitalize focus:border-spanish-red focus:outline-none"
-                    >
-                      {WORKFLOW_PRIORITIES.map((priority) => (
-                        <option key={priority} value={priority}>
-                          {priority}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Due Date</label>
-                    <input
-                      type="datetime-local"
-                      value={workflowDueAt}
-                      onChange={(event) => setWorkflowDueAt(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Schedule Publish Time</label>
-                    <input
-                      type="datetime-local"
-                      value={workflowScheduledFor}
-                      onChange={(event) => setWorkflowScheduledFor(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {availableWorkflowActions.includes('reject') || workflow.rejectionReason ? (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-900">Rejection Reason</label>
-                  <textarea
-                    value={workflowRejectionReason}
-                    onChange={(event) => setWorkflowRejectionReason(event.target.value)}
-                    rows={3}
-                    placeholder="Explain what should change before this story can continue."
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                </div>
-              ) : null}
-
-              {availableWorkflowActions.length > 0 ? (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-900">Workflow Note</label>
-                  <textarea
-                    value={workflowComment}
-                    onChange={(event) => setWorkflowComment(event.target.value)}
-                    rows={3}
-                    placeholder="Add handoff context, review notes, or publish instructions."
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                </div>
-              ) : null}
-
-              {availableWorkflowActions.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {availableWorkflowActions.map((action) => {
-                    const needsAssignee = action === 'assign' && !workflowAssigneeId.trim();
-                    const needsReason = action === 'reject' && !workflowRejectionReason.trim();
-                    const needsSchedule = action === 'schedule' && !workflowScheduledFor.trim();
-                    const disabled =
-                      Boolean(runningWorkflowAction) ||
-                      hasUnsavedChanges ||
-                      needsAssignee ||
-                      needsReason ||
-                      needsSchedule;
-
-                    return (
-                      <button
-                        key={action}
-                        type="button"
-                        onClick={() => void handleWorkflowAction(action)}
-                        disabled={disabled}
-                        className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {runningWorkflowAction === action ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        {ACTION_LABELS[action]}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600">
-                  No workflow transition is available for your role from the current state.
-                </p>
-              )}
-
-              {recentWorkflowComments.length > 0 ? (
-                <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-gray-900">Recent Workflow Notes</p>
-                  <div className="space-y-3">
-                    {recentWorkflowComments.map((comment) => (
-                      <div
-                        key={comment.id || `${comment.createdAt || 'comment'}-${comment.body || ''}`}
-                        className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0"
-                      >
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                          <span className="font-semibold text-gray-700">
-                            {comment.author?.name || comment.author?.email || 'Team'}
-                          </span>
-                          <span>{formatNewsroomRoleLabel(comment.author?.role)}</span>
-                          {comment.createdAt ? (
-                            <span>{formatDateTime(comment.createdAt)}</span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 text-sm text-gray-700">{comment.body}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+          <form onSubmit={handleSubmit}>
+            <CmsEditorColumns>
+            <CmsEditorMain className="space-y-4">
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-900">
@@ -2381,56 +2178,276 @@ export default function EditStoryPage() {
               </div>
             ) : null}
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Source Information</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Source and handoff details that move with this story through the desk.
-                </p>
+            </CmsEditorMain>
+
+            <CmsEditorSidebar>
+              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Workflow</p>
+                    <p className="mt-1 text-sm text-gray-700">
+                      Move this story through the newsroom queue without leaving the editor.
+                    </p>
+                  </div>
+                  <WorkflowPill status={workflow.status} />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Created By</p>
+                    <p className="mt-1 text-sm font-medium text-gray-900">
+                      {workflow.createdBy?.name || workflow.createdBy?.email || 'Unknown'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Assigned To</p>
+                    <p className="mt-1 text-sm font-medium text-gray-900">
+                      {workflow.assignedTo?.name || workflow.assignedTo?.email || 'Unassigned'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Reviewed By</p>
+                    <p className="mt-1 text-sm font-medium text-gray-900">
+                      {workflow.reviewedBy?.name || workflow.reviewedBy?.email || 'Not started'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Priority</p>
+                    <p className="mt-1 text-sm font-medium capitalize text-gray-900">{workflowPriority}</p>
+                  </div>
+                </div>
+
+                <div className={`rounded-lg border p-4 ${getWorkflowFeedbackToneClass(workflowFeedback.tone)}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">{workflowFeedback.badge}</p>
+                      <p className="mt-1 text-sm leading-6">{workflowFeedback.summary}</p>
+                    </div>
+                    {workflowFeedback.readyToResubmit ? (
+                      <span className="inline-flex items-center rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700">
+                        Ready to resubmit
+                      </span>
+                    ) : workflowFeedback.waitingOnDesk ? (
+                      <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700">
+                        With desk
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-sm leading-6">
+                    <span className="font-semibold">Next action:</span> {workflowFeedback.nextAction}
+                  </p>
+                  {workflowFeedback.highlightedNote ? (
+                    <div className="mt-3 rounded-lg border border-white/70 bg-white/80 p-3 text-sm text-gray-700">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        {workflowFeedback.highlightedNoteLabel || 'Desk feedback'}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap">{workflowFeedback.highlightedNote}</p>
+                      {workflowFeedback.highlightedBy ? (
+                        <p className="mt-2 text-xs text-gray-500">
+                          From {workflowFeedback.highlightedBy}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+
+                {canUseWorkflowDesk ? (
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-900">Assignee</label>
+                      <select
+                        value={workflowAssigneeId}
+                        onChange={(event) => setWorkflowAssigneeId(event.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                      >
+                        <option value="">
+                          {isLoadingAssignableUsers ? 'Loading team...' : 'Select assignee'}
+                        </option>
+                        {assignableUsers.map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.name} ({formatNewsroomRoleLabel(member.role)})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-900">Priority</label>
+                        <select
+                          value={workflowPriority}
+                          onChange={(event) => setWorkflowPriority(event.target.value as WorkflowPriority)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 capitalize focus:border-spanish-red focus:outline-none"
+                        >
+                          {WORKFLOW_PRIORITIES.map((priority) => (
+                            <option key={priority} value={priority}>
+                              {priority}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-900">Due Date</label>
+                        <input
+                          type="datetime-local"
+                          value={workflowDueAt}
+                          onChange={(event) => setWorkflowDueAt(event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-900">Schedule Publish Time</label>
+                      <input
+                        type="datetime-local"
+                        value={workflowScheduledFor}
+                        onChange={(event) => setWorkflowScheduledFor(event.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                {availableWorkflowActions.includes('reject') || workflow.rejectionReason ? (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-900">Rejection Reason</label>
+                    <textarea
+                      value={workflowRejectionReason}
+                      onChange={(event) => setWorkflowRejectionReason(event.target.value)}
+                      rows={3}
+                      placeholder="Explain what should change before this story can continue."
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                    />
+                  </div>
+                ) : null}
+
+                {availableWorkflowActions.length > 0 ? (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-900">Workflow Note</label>
+                    <textarea
+                      value={workflowComment}
+                      onChange={(event) => setWorkflowComment(event.target.value)}
+                      rows={3}
+                      placeholder="Add handoff context, review notes, or publish instructions."
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                    />
+                  </div>
+                ) : null}
+
+                {availableWorkflowActions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {availableWorkflowActions.map((action) => {
+                      const needsAssignee = action === 'assign' && !workflowAssigneeId.trim();
+                      const needsReason = action === 'reject' && !workflowRejectionReason.trim();
+                      const needsSchedule = action === 'schedule' && !workflowScheduledFor.trim();
+                      const disabled =
+                        Boolean(runningWorkflowAction) ||
+                        hasUnsavedChanges ||
+                        needsAssignee ||
+                        needsReason ||
+                        needsSchedule;
+
+                      return (
+                        <button
+                          key={action}
+                          type="button"
+                          onClick={() => void handleWorkflowAction(action)}
+                          disabled={disabled}
+                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {runningWorkflowAction === action ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          {ACTION_LABELS[action]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    No workflow transition is available for your role from the current state.
+                  </p>
+                )}
+
+                {recentWorkflowComments.length > 0 ? (
+                  <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+                    <p className="text-sm font-semibold text-gray-900">Recent Workflow Notes</p>
+                    <div className="space-y-3">
+                      {recentWorkflowComments.map((comment) => (
+                        <div
+                          key={comment.id || `${comment.createdAt || 'comment'}-${comment.body || ''}`}
+                          className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0"
+                        >
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                            <span className="font-semibold text-gray-700">
+                              {comment.author?.name || comment.author?.email || 'Team'}
+                            </span>
+                            <span>{formatNewsroomRoleLabel(comment.author?.role)}</span>
+                            {comment.createdAt ? (
+                              <span>{formatDateTime(comment.createdAt)}</span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-sm text-gray-700">{comment.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Source Info
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Source Information</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Source and handoff details that move with this story through the desk.
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-900">
+                    Source Info
+                  </label>
+                  <textarea
+                    name="sourceInfo"
+                    value={formData.sourceInfo}
+                    onChange={handleInputChange}
+                    rows={3}
+                    placeholder="Source, bureau, agency, or submission background."
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    disabled={!canEditReporterFields}
+                  />
+                </div>
+                <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="sourceConfidential"
+                    checked={formData.sourceConfidential}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                    disabled={!canEditReporterFields}
+                  />
+                  <span className="text-sm text-gray-700">
+                    Source is confidential and should remain internal
+                  </span>
                 </label>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Reporter Notes</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Desk notes, context, verification leads, or packaging hints.
+                  </p>
+                </div>
                 <textarea
-                  name="sourceInfo"
-                  value={formData.sourceInfo}
+                  name="reporterNotes"
+                  value={formData.reporterNotes}
                   onChange={handleInputChange}
                   rows={3}
-                  placeholder="Source, bureau, agency, or submission background."
+                  placeholder="Desk notes, context, verification leads, or packaging hints."
                   className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
                   disabled={!canEditReporterFields}
                 />
               </div>
-              <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="sourceConfidential"
-                  checked={formData.sourceConfidential}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                  disabled={!canEditReporterFields}
-                />
-                <span className="text-sm text-gray-700">
-                  Source is confidential and should remain internal
-                </span>
-              </label>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-900">
-                Reporter Notes
-              </label>
-              <textarea
-                name="reporterNotes"
-                value={formData.reporterNotes}
-                onChange={handleInputChange}
-                rows={3}
-                placeholder="Desk notes, context, verification leads, or packaging hints."
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                disabled={!canEditReporterFields}
-              />
-            </div>
 
             {showCopyDeskSection ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
@@ -2617,39 +2634,44 @@ export default function EditStoryPage() {
             </div>
 
             {canSaveStory ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={isSaving || isUploadingThumbnail || isUploadingImages || isUploadingVideo}
-                  className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isSaving || isUploadingThumbnail || isUploadingImages || isUploadingVideo ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      {isUploadingThumbnail || isUploadingImages || isUploadingVideo ? 'Uploading...' : 'Saving...'}
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-5 w-5" />
-                      Save Changes
-                    </>
-                  )}
-                </button>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={isSaving || isUploadingThumbnail || isUploadingImages || isUploadingVideo}
+                    className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSaving || isUploadingThumbnail || isUploadingImages || isUploadingVideo ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        {isUploadingThumbnail || isUploadingImages || isUploadingVideo ? 'Uploading...' : 'Saving...'}
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-5 w-5" />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
 
-                <Link
-                  href="/admin/stories"
-                  className="rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100"
-                >
-                  Cancel
-                </Link>
+                  <Link
+                    href="/admin/stories"
+                    className="rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                  >
+                    Cancel
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
                 Viewer mode: you can review the story and timeline, but editing is disabled.
               </div>
             )}
+            </CmsEditorSidebar>
+            </CmsEditorColumns>
           </form>
         </div>
+        </CmsEditorCanvas>
       </motion.div>
 
       {previewAsset ? (

@@ -29,6 +29,18 @@ import {
   type WorkflowFeedbackTone,
 } from '@/lib/workflow/feedback';
 import type { WorkflowStatus } from '@/lib/workflow/types';
+import {
+  CmsCollectionHero,
+  CmsCollectionMetricCard,
+  CmsCollectionMetricGrid,
+  CmsCollectionPage,
+  CMS_COLLECTION_EMPTY_STATE_CLASS as EMPTY_STATE_CLASS,
+  CMS_COLLECTION_FILTER_INPUT_CLASS as FILTER_INPUT_CLASS,
+  CMS_COLLECTION_META_CHIP_CLASS as META_CHIP_CLASS,
+  CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
+  CMS_COLLECTION_PRIMARY_BUTTON_CLASS as PRIMARY_BUTTON_CLASS,
+  CMS_COLLECTION_SECONDARY_BUTTON_CLASS as SECONDARY_BUTTON_CLASS,
+} from '@/components/admin/CmsCollectionLayout';
 
 type WorkflowActor = {
   id?: string;
@@ -107,25 +119,6 @@ const workflowFilters: StatusFilter[] = [
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
-
-const PANEL_CLASS = 'admin-shell-surface-strong rounded-[30px] p-6';
-
-const METRIC_CARD_CLASS = 'admin-shell-surface rounded-[26px] p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.16)]';
-
-const EMPTY_STATE_CLASS =
-  'rounded-[24px] border border-dashed border-[color:var(--admin-shell-border-strong)] bg-[color:var(--admin-shell-surface-muted)] p-6 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]';
-
-const META_CHIP_CLASS =
-  'admin-shell-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]';
-
-const FILTER_INPUT_CLASS =
-  'w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-4 py-3 text-sm text-[color:var(--admin-shell-text)] outline-none transition-colors placeholder:text-[color:var(--admin-shell-text-muted)] focus:border-red-400/40';
-
-const SECONDARY_BUTTON_CLASS =
-  'admin-shell-toolbar-btn inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold';
-
-const PRIMARY_BUTTON_CLASS =
-  'admin-shell-toolbar-btn inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold';
 
 const DANGER_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20';
@@ -441,24 +434,14 @@ export default function StoriesManagementPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[36px] border border-[color:var(--admin-shell-border)] bg-[radial-gradient(circle_at_top_left,rgba(185,28,28,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.08),transparent_28%),var(--admin-bg-depth)] p-8 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] lg:p-10">
-        <div className="pointer-events-none absolute -right-10 top-0 h-48 w-48 rounded-full bg-rose-500/10 blur-3xl dark:bg-rose-500/14" />
-        <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/14" />
-        <div className="relative grid gap-8 xl:grid-cols-[1.25fr,0.82fr]">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-              Story Workflow
-            </div>
-            <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
-              {deskTitle}
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-              {deskDescription}
-            </p>
-          </div>
-
-          <div className={PANEL_CLASS}>
+    <CmsCollectionPage className="space-y-6">
+      <CmsCollectionHero
+        accent="rose"
+        eyebrow="Story Workflow"
+        title={deskTitle}
+        description={deskDescription}
+        aside={
+          <div className={cx(PANEL_CLASS, 'p-4 sm:p-6')}>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
               Actions
             </p>
@@ -481,8 +464,8 @@ export default function StoriesManagementPage() {
               ) : null}
             </div>
           </div>
-        </div>
-      </section>
+        }
+      />
 
       {error ? (
         <div className="flex items-start gap-2 rounded-[20px] border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
@@ -498,26 +481,14 @@ export default function StoriesManagementPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Drafts</p>
-          <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">{summary.drafts}</p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">In Review</p>
-          <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">{summary.review}</p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Ready</p>
-          <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">{summary.ready}</p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Published</p>
-          <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">{summary.published}</p>
-        </div>
-      </div>
+      <CmsCollectionMetricGrid className="grid-cols-2 md:grid-cols-4 xl:grid-cols-4">
+        <CmsCollectionMetricCard label="Drafts" value={summary.drafts} />
+        <CmsCollectionMetricCard label="In Review" value={summary.review} />
+        <CmsCollectionMetricCard label="Ready" value={summary.ready} />
+        <CmsCollectionMetricCard label="Published" value={summary.published} />
+      </CmsCollectionMetricGrid>
 
-      <div className={PANEL_CLASS}>
+      <div className={cx(PANEL_CLASS, 'p-4 sm:p-6')}>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <div className="relative md:col-span-2">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
@@ -591,10 +562,13 @@ export default function StoriesManagementPage() {
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.03 }}
-                className="admin-shell-surface-strong rounded-[30px] p-5"
+                className={cx(
+                  'admin-shell-surface-strong rounded-[24px] p-4 sm:rounded-[30px] sm:p-5',
+                  isReporterFlow && 'overflow-hidden'
+                )}
               >
                 <div className="flex flex-col gap-4 md:flex-row">
-                  <div className="relative h-44 w-28 shrink-0 overflow-hidden rounded-[22px] bg-zinc-100 dark:bg-zinc-900 md:h-48 md:w-32">
+                  <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-[18px] bg-zinc-100 dark:bg-zinc-900 sm:h-44 sm:w-28 sm:rounded-[22px] md:h-48 md:w-32">
                     {story.thumbnail ? (
                       <img
                         src={story.thumbnail}
@@ -610,7 +584,7 @@ export default function StoriesManagementPage() {
 
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <h2 className="line-clamp-2 text-xl font-semibold tracking-tight text-[color:var(--admin-shell-text)]">
+                      <h2 className="line-clamp-2 text-lg font-semibold tracking-tight text-[color:var(--admin-shell-text)] sm:text-xl">
                         {story.title}
                       </h2>
                       <span className={META_CHIP_CLASS}>
@@ -622,29 +596,43 @@ export default function StoriesManagementPage() {
                         {formatWorkflowStatus(status)}
                       </span>
                       <span
-                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${linkedArticleTone(
-                          story.linkedArticleStatus
-                        )}`}
+                        className={cx(
+                          `rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${linkedArticleTone(
+                            story.linkedArticleStatus
+                          )}`,
+                          isReporterFlow && 'hidden sm:inline-flex'
+                        )}
                       >
                         {formatLinkedArticleStatus(story.linkedArticleStatus)}
                       </span>
                       <span
-                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${videoProductionTone(
-                          story.videoProduction?.status
-                        )}`}
+                        className={cx(
+                          `rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${videoProductionTone(
+                            story.videoProduction?.status
+                          )}`,
+                          isReporterFlow && 'hidden sm:inline-flex'
+                        )}
                       >
                         {formatVideoProductionStatus(story.videoProduction?.status)}
                       </span>
                     </div>
 
                     {story.caption ? (
-                      <p className="mb-3 line-clamp-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">{story.caption}</p>
+                      <p
+                        className={cx(
+                          'mb-3 line-clamp-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]',
+                          isReporterFlow && 'hidden sm:block'
+                        )}
+                      >
+                        {story.caption}
+                      </p>
                     ) : null}
 
                     {workflowFeedback ? (
                       <div
                         className={cx(
-                          'mb-4 rounded-[24px] border p-4 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.28)]',
+                          'mb-4 rounded-[18px] border p-3 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.28)] sm:rounded-[24px] sm:p-4',
+                          workflowFeedback.tone === 'success' && isReporterFlow && 'hidden sm:block',
                           workflowFeedbackToneClasses(workflowFeedback.tone)
                         )}
                       >
@@ -660,15 +648,15 @@ export default function StoriesManagementPage() {
                                 : 'Status updated'}
                           </span>
                         </div>
-                        <p className="mt-3 text-sm font-semibold leading-6">
+                        <p className="mt-3 text-xs font-semibold leading-5 sm:text-sm sm:leading-6">
                           {workflowFeedback.summary}
                         </p>
-                        <p className="mt-2 text-sm leading-6 opacity-90">
+                        <p className="mt-2 text-xs leading-5 opacity-90 sm:text-sm sm:leading-6">
                           <span className="font-semibold">Next:</span> {workflowFeedback.nextAction}
                         </p>
 
                         {workflowFeedback.highlightedNote ? (
-                          <div className="mt-3 rounded-[18px] border border-current/15 bg-white/65 p-3 dark:bg-white/5">
+                          <div className="mt-3 hidden rounded-[18px] border border-current/15 bg-white/65 p-3 dark:bg-white/5 sm:block">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-80">
                               {workflowFeedback.highlightedNoteLabel || 'Latest note'}
                               {workflowFeedback.highlightedBy
@@ -683,19 +671,24 @@ export default function StoriesManagementPage() {
                       </div>
                     ) : null}
 
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[color:var(--admin-shell-text-muted)]">
+                    <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-[color:var(--admin-shell-text-muted)] sm:gap-x-3 sm:text-xs">
                       <span>{story.category || 'General'}</span>
-                      <span>&bull;</span>
+                      <span className={cx(isReporterFlow && 'hidden sm:inline')}>•</span>
                       <span>{story.durationSeconds || 6}s</span>
-                      <span>&bull;</span>
-                      <span>Priority {story.priority || 0}</span>
-                      <span>&bull;</span>
+                      <span className={cx(isReporterFlow && 'hidden sm:inline')}>•</span>
+                      <span className={cx(isReporterFlow && 'hidden sm:inline')}>Priority {story.priority || 0}</span>
+                      <span className={cx(isReporterFlow && 'hidden sm:inline')}>•</span>
                       <span>{story.views || 0} views</span>
-                      <span>&bull;</span>
+                      <span className={cx(isReporterFlow && 'hidden sm:inline')}>•</span>
                       <span>{formatUiDate(story.updatedAt || story.publishedAt, story.updatedAt || story.publishedAt)}</span>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[color:var(--admin-shell-text-muted)]">
+                    <div
+                      className={cx(
+                        'mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[color:var(--admin-shell-text-muted)]',
+                        isReporterFlow && 'hidden sm:flex'
+                      )}
+                    >
                       {story.workflow?.createdBy?.name ? (
                         <span>Created by: {story.workflow.createdBy.name}</span>
                       ) : null}
@@ -730,7 +723,12 @@ export default function StoriesManagementPage() {
                     ) : null}
                   </div>
 
-                  <div className="flex flex-row items-start justify-end gap-2 md:flex-col">
+                  <div
+                    className={cx(
+                      'flex flex-row items-start justify-end gap-2 md:flex-col',
+                      isReporterFlow && 'w-full md:w-auto'
+                    )}
+                  >
                     {canCreateLinkedArticles &&
                     !story.linkedArticleId &&
                     ['approved', 'scheduled', 'published'].includes(status) ? (
@@ -790,7 +788,7 @@ export default function StoriesManagementPage() {
                     {canOpenDesk ? (
                       <Link
                         href={`/admin/stories/${story._id}/edit`}
-                        className={SECONDARY_BUTTON_CLASS}
+                        className={cx(SECONDARY_BUTTON_CLASS, isReporterFlow && 'w-full justify-center md:w-auto')}
                       >
                         Open Desk
                         <ArrowRight className="h-4 w-4" />
@@ -837,7 +835,7 @@ export default function StoriesManagementPage() {
           })}
         </div>
       )}
-    </div>
+    </CmsCollectionPage>
   );
 }
 

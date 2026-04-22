@@ -18,6 +18,12 @@ import {
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { isAdminRole } from '@/lib/auth/roles';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
+import {
+  CmsEditorCanvas,
+  CmsEditorColumns,
+  CmsEditorMain,
+  CmsEditorSidebar,
+} from '@/components/admin/CmsEditorLayout';
 
 const categories = NEWS_CATEGORIES.map((category) => category.nameEn);
 const THUMBNAIL_MAX_SIZE = 10 * 1024 * 1024;
@@ -296,19 +302,13 @@ export default function CreateVideoPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mx-auto max-w-3xl"
       >
+        <CmsEditorCanvas>
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <h1 className="mb-2 text-3xl font-bold text-gray-900">Create Video</h1>
           <p className="mb-6 text-gray-600">
             Save a draft, hand it into review, or publish when allowed
           </p>
-
-          {!canUseDesk ? (
-            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              Your session is still loading role permissions. Publishing actions may stay hidden until it resolves.
-            </div>
-          ) : null}
 
           {error ? (
             <div className="mb-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
@@ -329,8 +329,9 @@ export default function CreateVideoPage() {
               event.preventDefault();
               void handleSubmit('submit');
             }}
-            className="space-y-6"
           >
+            <CmsEditorColumns sidebarWidth="narrow">
+              <CmsEditorMain>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-900">
                 Video Title <span className="text-red-500">*</span>
@@ -419,26 +420,6 @@ export default function CreateVideoPage() {
               </label>
             </div>
 
-            {thumbnailFile || formData.thumbnail ? (
-              <div className="overflow-hidden rounded-lg border border-gray-200">
-                {hasPdfThumbnail ? (
-                  <div className="flex h-44 flex-col items-center justify-center gap-2 bg-gray-50 px-4 text-center">
-                    <FileText className="h-8 w-8 text-red-600" />
-                    <p className="text-sm font-semibold text-gray-800">PDF thumbnail selected</p>
-                    <p className="text-xs text-gray-500">
-                      {thumbnailFile ? thumbnailFile.name : 'PDF URL provided'}
-                    </p>
-                  </div>
-                ) : (
-                  <img
-                    src={thumbnailPreview || formData.thumbnail}
-                    alt="Thumbnail preview"
-                    className="h-48 w-full object-cover"
-                  />
-                )}
-              </div>
-            ) : null}
-
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-900">
@@ -490,7 +471,36 @@ export default function CreateVideoPage() {
               </div>
             </div>
 
-            <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              </CmsEditorMain>
+
+              <CmsEditorSidebar>
+                {!canUseDesk ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    Your session is still loading role permissions. Publishing actions may stay hidden until it resolves.
+                  </div>
+                ) : null}
+
+                {(thumbnailFile || formData.thumbnail) && (thumbnailPreview || formData.thumbnail || hasPdfThumbnail) ? (
+                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                    {hasPdfThumbnail ? (
+                      <div className="flex h-44 flex-col items-center justify-center gap-2 bg-gray-50 px-4 text-center">
+                        <FileText className="h-8 w-8 text-red-600" />
+                        <p className="text-sm font-semibold text-gray-800">PDF thumbnail selected</p>
+                        <p className="text-xs text-gray-500">
+                          {thumbnailFile ? thumbnailFile.name : 'PDF URL provided'}
+                        </p>
+                      </div>
+                    ) : (
+                      <img
+                        src={thumbnailPreview || formData.thumbnail}
+                        alt="Thumbnail preview"
+                        className="h-48 w-full object-cover"
+                      />
+                    )}
+                  </div>
+                ) : null}
+
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <label className="flex cursor-pointer items-center justify-between gap-4">
                 <span className="text-sm font-medium text-gray-900">Use this video in Shorts mode</span>
                 <input
@@ -501,18 +511,18 @@ export default function CreateVideoPage() {
                   className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
                 />
               </label>
-            </div>
+                </div>
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
               Draft keeps the video private, submit sends it into review, and publish is only shown for desk roles with release authority.
-            </div>
+                </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <button
                 type="button"
                 disabled={isLoading || isUploadingThumbnail}
                 onClick={() => void handleSubmit('draft')}
-                className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {runningIntent === 'draft' ? (
                   <>
@@ -530,7 +540,7 @@ export default function CreateVideoPage() {
               <button
                 type="submit"
                 disabled={isLoading || isUploadingThumbnail}
-                className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-lg bg-spanish-red px-5 py-3 font-medium text-white transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red px-5 py-3 font-medium text-white transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {runningIntent === 'submit' ? (
                   <>
@@ -550,7 +560,7 @@ export default function CreateVideoPage() {
                   type="button"
                   disabled={isLoading || isUploadingThumbnail}
                   onClick={() => void handleSubmit('publish')}
-                  className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {runningIntent === 'publish' ? (
                     <>
@@ -568,13 +578,16 @@ export default function CreateVideoPage() {
 
               <Link
                 href="/admin/videos"
-                className="rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100"
               >
                 Cancel
               </Link>
-            </div>
+                </div>
+              </CmsEditorSidebar>
+            </CmsEditorColumns>
           </form>
         </div>
+        </CmsEditorCanvas>
       </motion.div>
     </div>
   );

@@ -8,6 +8,13 @@ import { getNewsroomControlCenterData } from '@/lib/admin/newsroomControlCenter'
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
 import DeskWorkflowActions from '@/app/(admin)/admin/DeskWorkflowActions';
+import {
+  CmsCollectionHero,
+  CmsCollectionPage,
+  CMS_COLLECTION_META_CHIP_CLASS as META_CHIP_CLASS,
+  CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
+  CMS_COLLECTION_SOFT_CARD_CLASS as SOFT_CARD_CLASS,
+} from '@/components/admin/CmsCollectionLayout';
 
 function formatStatusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
@@ -25,15 +32,6 @@ function hasReporterSummary(item: Awaited<ReturnType<typeof getNewsroomControlCe
   );
 }
 
-const PANEL_CLASS =
-  'rounded-[32px] border border-zinc-200/80 bg-white/92 p-6 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.38)] dark:border-white/10 dark:bg-zinc-950/60';
-
-const SOFT_CARD_CLASS =
-  'rounded-[24px] border border-zinc-200/80 bg-zinc-50/78 p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.3)] dark:border-white/10 dark:bg-white/[0.03]';
-
-const META_CHIP_CLASS =
-  'inline-flex items-center gap-2 rounded-full border border-zinc-200/80 bg-white/85 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-300';
-
 export default async function ContentQueuePage() {
   const admin = await getAdminSession();
   if (!admin) {
@@ -48,26 +46,20 @@ export default async function ContentQueuePage() {
   const queue = control.contentQueue;
 
   return (
-    <div className="mx-auto max-w-[1640px] space-y-8">
-      <section className="relative overflow-hidden rounded-[36px] border border-zinc-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(245,247,251,0.95)_48%,rgba(244,241,250,0.97)_100%)] p-8 shadow-[0_30px_90px_-52px_rgba(15,23,42,0.42)] dark:border-white/10 dark:bg-[linear-gradient(135deg,rgba(18,18,22,0.98),rgba(15,19,33,0.98)_48%,rgba(27,19,35,0.96)_100%)] lg:p-10">
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-            {formatUserRoleLabel(admin.role)}
-          </div>
-          <h1 className="mt-5 text-4xl font-black tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-            Content Queue
-          </h1>
-          <p className="mt-4 max-w-4xl text-sm leading-7 text-zinc-600 dark:text-zinc-300 sm:text-[15px]">
-            The admin queue for everything actively moving across story approval, copy work, and edition release.
-            Use this desk to see what is waiting, what is assigned, and what should be escalated.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+    <CmsCollectionPage>
+      <CmsCollectionHero
+        accent="amber"
+        eyebrow={formatUserRoleLabel(admin.role)}
+        title="Content Queue"
+        description="The admin queue for everything actively moving across story approval, copy work, and edition release. Use this desk to see what is waiting, what is assigned, and what should be escalated."
+        meta={
+          <>
             <span className={META_CHIP_CLASS}>Queue {formatNumber(control.stats.queueItems)}</span>
             <span className={META_CHIP_CLASS}>Assigned {formatNumber(control.stats.assignedItems)}</span>
             <span className={META_CHIP_CLASS}>Inbox New {formatNumber(control.stats.inboxNew)}</span>
-          </div>
-        </div>
-      </section>
+          </>
+        }
+      />
 
       <section className={PANEL_CLASS}>
         <div className="flex items-center justify-between gap-4">
@@ -232,6 +224,6 @@ export default async function ContentQueuePage() {
           </div>
         </div>
       </section>
-    </div>
+    </CmsCollectionPage>
   );
 }

@@ -25,6 +25,12 @@ import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
 import { getAllowedWorkflowTransitions } from '@/lib/workflow/transitions';
 import type { WorkflowPriority, WorkflowStatus } from '@/lib/workflow/types';
+import {
+  CmsEditorCanvas,
+  CmsEditorColumns,
+  CmsEditorMain,
+  CmsEditorSidebar,
+} from '@/components/admin/CmsEditorLayout';
 
 type WorkflowActor = {
   id?: string;
@@ -665,8 +671,8 @@ export default function EditVideoPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mx-auto max-w-5xl"
       >
+        <CmsEditorCanvas>
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <h1 className="mb-2 text-3xl font-bold text-gray-900">Video Desk</h1>
           <p className="mb-6 text-gray-600">
@@ -687,135 +693,9 @@ export default function EditVideoPage() {
             </div>
           ) : null}
 
-          <form onSubmit={handleSave} className="space-y-6">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Workflow</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Current status, assignee, and review actions.
-                  </p>
-                </div>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${toneForStatus(workflow.status)}`}>
-                  {labelStatus(workflow.status)}
-                </span>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-gray-600 md:grid-cols-3">
-                <div><span className="font-semibold text-gray-900">Created by:</span> {workflow.createdBy?.name || workflow.createdBy?.email || 'Unknown'}</div>
-                <div><span className="font-semibold text-gray-900">Assigned to:</span> {workflow.assignedTo?.name || 'Unassigned'}</div>
-                <div><span className="font-semibold text-gray-900">Reviewer:</span> {workflow.reviewedBy?.name || 'Not started'}</div>
-                <div><span className="font-semibold text-gray-900">Submitted:</span> {formatDateTime(workflow.submittedAt) || 'Not yet'}</div>
-                <div><span className="font-semibold text-gray-900">Approved:</span> {formatDateTime(workflow.approvedAt) || 'Not yet'}</div>
-                <div><span className="font-semibold text-gray-900">Published:</span> {formatDateTime(workflow.publishedAt) || 'Not yet'}</div>
-              </div>
-
-              {canUseWorkflowDesk ? (
-                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Assignee</label>
-                    <select
-                      value={workflowAssigneeId}
-                      onChange={(event) => setWorkflowAssigneeId(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    >
-                      <option value="">{isLoadingAssignableUsers ? 'Loading team...' : 'Select assignee'}</option>
-                      {assignableUsers.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.name} ({member.role})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Priority</label>
-                    <select
-                      value={workflowPriority}
-                      onChange={(event) => setWorkflowPriority(event.target.value as WorkflowPriority)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 capitalize focus:border-spanish-red focus:outline-none"
-                    >
-                      {WORKFLOW_PRIORITIES.map((priority) => (
-                        <option key={priority} value={priority}>{priority}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Due Date</label>
-                    <input
-                      type="datetime-local"
-                      value={workflowDueAt}
-                      onChange={(event) => setWorkflowDueAt(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Schedule Publish</label>
-                    <input
-                      type="datetime-local"
-                      value={workflowScheduledFor}
-                      onChange={(event) => setWorkflowScheduledFor(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {availableWorkflowActions.includes('reject') || workflow.rejectionReason ? (
-                <div className="mt-4 space-y-2">
-                  <label className="block text-sm font-medium text-gray-900">Rejection Reason</label>
-                  <textarea
-                    value={workflowRejectionReason}
-                    onChange={(event) => setWorkflowRejectionReason(event.target.value)}
-                    rows={3}
-                    placeholder="Explain what should change before this video can continue."
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                </div>
-              ) : null}
-
-              {availableWorkflowActions.length > 0 ? (
-                <div className="mt-4 space-y-2">
-                  <label className="block text-sm font-medium text-gray-900">Workflow Note</label>
-                  <textarea
-                    value={workflowComment}
-                    onChange={(event) => setWorkflowComment(event.target.value)}
-                    rows={3}
-                    placeholder="Add handoff context, review notes, or publish instructions."
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                </div>
-              ) : null}
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {availableWorkflowActions.length ? availableWorkflowActions.map((action) => {
-                  const disabled =
-                    Boolean(runningWorkflowAction) ||
-                    hasUnsavedChanges ||
-                    (action === 'assign' && !workflowAssigneeId.trim()) ||
-                    (action === 'reject' && !workflowRejectionReason.trim()) ||
-                    (action === 'schedule' && !workflowScheduledFor.trim());
-                  return (
-                    <button
-                      key={action}
-                      type="button"
-                      onClick={() => void handleWorkflowAction(action)}
-                      disabled={disabled}
-                      className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {runningWorkflowAction === action ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      {ACTION_LABELS[action]}
-                    </button>
-                  );
-                }) : (
-                  <p className="text-sm text-gray-600">
-                    No workflow transition is available for your role from the current state.
-                  </p>
-                )}
-              </div>
-            </div>
+          <form onSubmit={handleSave}>
+            <CmsEditorColumns>
+              <CmsEditorMain className="space-y-4">
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-900">
@@ -966,6 +846,140 @@ export default function EditVideoPage() {
               </div>
             </div>
 
+              </CmsEditorMain>
+
+              <CmsEditorSidebar>
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Workflow</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Current status, assignee, and review actions.
+                  </p>
+                </div>
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${toneForStatus(workflow.status)}`}>
+                  {labelStatus(workflow.status)}
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-gray-600 sm:grid-cols-2">
+                <div><span className="font-semibold text-gray-900">Created by:</span> {workflow.createdBy?.name || workflow.createdBy?.email || 'Unknown'}</div>
+                <div><span className="font-semibold text-gray-900">Assigned to:</span> {workflow.assignedTo?.name || 'Unassigned'}</div>
+                <div><span className="font-semibold text-gray-900">Reviewer:</span> {workflow.reviewedBy?.name || 'Not started'}</div>
+                <div><span className="font-semibold text-gray-900">Submitted:</span> {formatDateTime(workflow.submittedAt) || 'Not yet'}</div>
+                <div><span className="font-semibold text-gray-900">Approved:</span> {formatDateTime(workflow.approvedAt) || 'Not yet'}</div>
+                <div><span className="font-semibold text-gray-900">Published:</span> {formatDateTime(workflow.publishedAt) || 'Not yet'}</div>
+              </div>
+
+              {canUseWorkflowDesk ? (
+                <div className="mt-5 grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-900">Assignee</label>
+                    <select
+                      value={workflowAssigneeId}
+                      onChange={(event) => setWorkflowAssigneeId(event.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                    >
+                      <option value="">{isLoadingAssignableUsers ? 'Loading team...' : 'Select assignee'}</option>
+                      {assignableUsers.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.name} ({member.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-900">Priority</label>
+                      <select
+                        value={workflowPriority}
+                        onChange={(event) => setWorkflowPriority(event.target.value as WorkflowPriority)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 capitalize focus:border-spanish-red focus:outline-none"
+                      >
+                        {WORKFLOW_PRIORITIES.map((priority) => (
+                          <option key={priority} value={priority}>{priority}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-900">Due Date</label>
+                      <input
+                        type="datetime-local"
+                        value={workflowDueAt}
+                        onChange={(event) => setWorkflowDueAt(event.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-900">Schedule Publish</label>
+                    <input
+                      type="datetime-local"
+                      value={workflowScheduledFor}
+                      onChange={(event) => setWorkflowScheduledFor(event.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {availableWorkflowActions.includes('reject') || workflow.rejectionReason ? (
+                <div className="mt-4 space-y-2">
+                  <label className="block text-sm font-medium text-gray-900">Rejection Reason</label>
+                  <textarea
+                    value={workflowRejectionReason}
+                    onChange={(event) => setWorkflowRejectionReason(event.target.value)}
+                    rows={3}
+                    placeholder="Explain what should change before this video can continue."
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                  />
+                </div>
+              ) : null}
+
+              {availableWorkflowActions.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  <label className="block text-sm font-medium text-gray-900">Workflow Note</label>
+                  <textarea
+                    value={workflowComment}
+                    onChange={(event) => setWorkflowComment(event.target.value)}
+                    rows={3}
+                    placeholder="Add handoff context, review notes, or publish instructions."
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                  />
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {availableWorkflowActions.length ? availableWorkflowActions.map((action) => {
+                  const disabled =
+                    Boolean(runningWorkflowAction) ||
+                    hasUnsavedChanges ||
+                    (action === 'assign' && !workflowAssigneeId.trim()) ||
+                    (action === 'reject' && !workflowRejectionReason.trim()) ||
+                    (action === 'schedule' && !workflowScheduledFor.trim());
+                  return (
+                    <button
+                      key={action}
+                      type="button"
+                      onClick={() => void handleWorkflowAction(action)}
+                      disabled={disabled}
+                      className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {runningWorkflowAction === action ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      {ACTION_LABELS[action]}
+                    </button>
+                  );
+                }) : (
+                  <p className="text-sm text-gray-600">
+                    No workflow transition is available for your role from the current state.
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <label className="flex cursor-pointer items-center justify-between gap-4">
                 <span className="text-sm font-medium text-gray-900">Use this video in Shorts mode</span>
@@ -1046,39 +1060,44 @@ export default function EditVideoPage() {
             </div>
 
             {canSaveVideo ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={isSaving || isUploadingThumbnail}
-                  className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isSaving || isUploadingThumbnail ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      {isUploadingThumbnail ? 'Uploading...' : 'Saving...'}
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-5 w-5" />
-                      Save Changes
-                    </>
-                  )}
-                </button>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={isSaving || isUploadingThumbnail}
+                    className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSaving || isUploadingThumbnail ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        {isUploadingThumbnail ? 'Uploading...' : 'Saving...'}
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-5 w-5" />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
 
-                <Link
-                  href="/admin/videos"
-                  className="rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100"
-                >
-                  Cancel
-                </Link>
+                  <Link
+                    href="/admin/videos"
+                    className="rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                  >
+                    Cancel
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
                 Viewer mode: you can review the video and timeline, but editing is disabled.
               </div>
             )}
+              </CmsEditorSidebar>
+            </CmsEditorColumns>
           </form>
         </div>
+        </CmsEditorCanvas>
       </motion.div>
     </div>
   );

@@ -46,6 +46,13 @@ export const SOCIAL_POST_STATUSES = [
 ] as const;
 export type SocialPostStatus = (typeof SOCIAL_POST_STATUSES)[number];
 
+export const SOCIAL_AUTOMATION_PROVIDERS = [
+  'manual',
+  'n8n',
+  'generic_webhook',
+] as const;
+export type SocialAutomationProvider = (typeof SOCIAL_AUTOMATION_PROVIDERS)[number];
+
 export type SocialPostRecord = {
   _id: string;
   sourceStoryId: string;
@@ -61,6 +68,10 @@ export type SocialPostRecord = {
   externalPostId: string;
   externalUrl: string;
   lastError: string;
+  automationProvider: SocialAutomationProvider;
+  automationDispatchedAt: string | null;
+  automationExecutionId: string;
+  automationExecutionUrl: string;
   createdAt: string;
   updatedAt: string;
   createdBy: {
@@ -209,4 +220,17 @@ export function isSocialPostStatus(value: unknown): value is SocialPostStatus {
 
 export function normalizeSocialPostStatus(value: unknown): SocialPostStatus {
   return isSocialPostStatus(value) ? value : 'draft';
+}
+
+export function isSocialAutomationProvider(value: unknown): value is SocialAutomationProvider {
+  return (
+    typeof value === 'string' &&
+    SOCIAL_AUTOMATION_PROVIDERS.includes(value as SocialAutomationProvider)
+  );
+}
+
+export function normalizeSocialAutomationProvider(
+  value: unknown
+): SocialAutomationProvider {
+  return isSocialAutomationProvider(value) ? value : 'manual';
 }

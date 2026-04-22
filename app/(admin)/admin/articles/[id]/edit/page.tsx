@@ -16,7 +16,16 @@ import {
   Volume2,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import RichTextEditor from '@/components/forms/RichTextEditor';
+import ArticleEditorStudio, {
+  ArticleEditorSidebar,
+  type ArticleEditorStudioMode,
+} from '@/components/forms/ArticleEditorStudio';
+import {
+  CmsEditorCanvas,
+  CmsEditorColumns,
+  CmsEditorMain,
+  CmsEditorSidebar,
+} from '@/components/admin/CmsEditorLayout';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import {
   FACT_CHECK_STATUSES,
@@ -38,7 +47,6 @@ import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { normalizeBreakingTtsMetadata, type BreakingTtsMetadata } from '@/lib/types/breaking';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
 import { buildDefaultArticlePermalink } from '@/lib/utils/articleEditorTemplates';
-import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import {
   ARTICLE_IMAGE_UPLOAD_GUIDE,
   getArticleImageHints,
@@ -510,7 +518,8 @@ export default function EditArticle() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [contentMode, setContentMode] = useState<'write' | 'preview'>('write');
+  const [contentMode, setContentMode] = useState<ArticleEditorStudioMode>('write');
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState('');
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
@@ -538,12 +547,6 @@ export default function EditArticle() {
   const [runningWorkflowAction, setRunningWorkflowAction] = useState<ContentTransitionAction | ''>('');
   const [articleActivity, setArticleActivity] = useState<ArticleActivityItem[]>([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
-
-  const previewContentHtml = useMemo(() => {
-    const source = formData.content.trim() || formData.summary.trim();
-    if (!source) return '<p>Start writing your article to see a live preview.</p>';
-    return renderArticleRichContent(source);
-  }, [formData.content, formData.summary]);
 
   const currentArticleListenSignature = useMemo(
     () => buildArticleListenSignature(formData),
@@ -872,7 +875,8 @@ export default function EditArticle() {
       const nextWorkflow = normalizeWorkflowState(article.workflow);
       let nextForm = baseForm;
       let nextImage = article.image || '';
-      let nextMode: 'write' | 'preview' = 'write';
+      let nextMode: ArticleEditorStudioMode = 'write';
+      let nextFocusMode = false;
       let nextSavedAt = '';
       let restored = false;
 
@@ -884,7 +888,8 @@ export default function EditArticle() {
               savedAt?: string;
               formData?: Partial<ArticleFormState>;
               imagePreview?: string;
-              contentMode?: 'write' | 'preview';
+              contentMode?: ArticleEditorStudioMode;
+              focusMode?: boolean;
             };
             if (parsed.formData) {
               const shouldRestore = window.confirm(
@@ -893,7 +898,11 @@ export default function EditArticle() {
               if (shouldRestore) {
                 nextForm = { ...baseForm, ...parsed.formData };
                 nextImage = parsed.imagePreview?.trim() ? parsed.imagePreview : nextImage;
-                nextMode = parsed.contentMode === 'preview' ? 'preview' : 'write';
+                nextMode =
+                  parsed.contentMode === 'preview' || parsed.contentMode === 'split'
+                    ? parsed.contentMode
+                    : 'write';
+                nextFocusMode = Boolean(parsed.focusMode);
                 nextSavedAt = parsed.savedAt || '';
                 restored = true;
               }
@@ -907,6 +916,7 @@ export default function EditArticle() {
       setFormData(nextForm);
       setImagePreview(nextImage);
       setContentMode(nextMode);
+      setIsFocusMode(nextFocusMode);
       setDraftSavedAt(nextSavedAt);
       setDraftRestored(restored);
       setBreakingTtsInfo(normalizeBreakingTtsMetadata(article.breakingTts));
@@ -981,10 +991,11 @@ export default function EditArticle() {
       formData,
       imagePreview: imagePreview.startsWith('data:') ? '' : imagePreview,
       contentMode,
+      focusMode: isFocusMode,
     };
     localStorage.setItem(draftStorageKey, JSON.stringify(payload));
     setDraftSavedAt(payload.savedAt);
-  }, [articleId, contentMode, draftReady, draftStorageKey, formData, imagePreview]);
+  }, [articleId, contentMode, draftReady, draftStorageKey, formData, imagePreview, isFocusMode]);
 
   const clearDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -1480,9 +1491,9 @@ export default function EditArticle() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-4xl mx-auto"
       >
-        <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm">
+        <CmsEditorCanvas className="max-w-[1560px]">
+        <div className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm xl:p-8">
           <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-3">
@@ -1511,770 +1522,757 @@ export default function EditArticle() {
             </div>
           ) : null}
 
-          {formData.sourceType === 'story' && formData.sourceStoryId ? (
-            <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                    Source Story Link
-                  </p>
-                  <p className="mt-1 font-semibold">
-                    {formData.sourceStoryTitle || 'Linked story package'}
-                  </p>
-                  <p className="mt-1 text-emerald-800/80">
-                    This article stays connected to the story package reporters submitted.
-                  </p>
-                </div>
-                <Link
-                  href={`/admin/stories/${formData.sourceStoryId}/edit`}
-                  className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
-                >
-                  Open Source Story
-                </Link>
-              </div>
+          {isFocusMode ? (
+            <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              Focus writing mode is on. Workflow, SEO, audio, and revision tools are hidden so you can stay inside the article copy.
             </div>
           ) : null}
 
-          <div className="mb-6 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
-            <p className="font-medium">Draft & Revision Tools</p>
-            <p className="mt-1 text-blue-800">
-              Draft autosaves every {AUTOSAVE_INTERVAL_MS / 1000} seconds.
-              {draftSavedAt ? ` Last saved: ${formatDraftTimestamp(draftSavedAt)}.` : ' No local draft yet.'}
-            </p>
-            {draftRestored ? (
-              <p className="mt-1 text-blue-800">Local draft restored for this article.</p>
-            ) : null}
-            {hasUnsavedChanges ? (
-              <p className="mt-1 text-blue-800">
-                Save article edits before running workflow actions like assign, approve, or publish.
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={persistDraft}
-                className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
-              >
-                Save Draft Now
-              </button>
-              <button
-                type="button"
-                onClick={clearDraft}
-                className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
-              >
-                Discard Local Draft
-              </button>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <CmsEditorColumns stacked={isFocusMode}>
+              <CmsEditorMain>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Workflow</p>
-                  <p className="mt-1 text-sm text-gray-700">
-                    Move this article through the newsroom queue without leaving the edit screen.
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Article Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Summary <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    name="summary"
+                    value={formData.summary}
+                    onChange={handleInputChange}
+                    rows={2}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Article Content <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mb-3 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900 sm:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <p className="font-semibold">Headings</p>
+                      <p className="mt-1">Use H2 and H3 to split dense reporting into readable sections.</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold">Inline Images</p>
+                      <p className="mt-1">Upload inline article images with caption and source credit from the toolbar.</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold">Resources & Tables</p>
+                      <p className="mt-1">Drop in source cards, quotes, and tables when the article needs evidence or comparisons.</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold">Permalink</p>
+                      <p className="mt-1">Canonical URL in SEO Settings controls the preferred permalink for this published article.</p>
+                    </div>
+                  </div>
+                  <p className="mb-2 text-xs text-gray-500">
+                    Tip: Paste a YouTube link on its own line or use the YouTube button in the toolbar.
                   </p>
+                  <ArticleEditorStudio
+                    title={formData.title}
+                    summary={formData.summary}
+                    content={formData.content}
+                    mode={contentMode}
+                    focusMode={isFocusMode}
+                    showSidebar={false}
+                    onModeChange={setContentMode}
+                    onFocusModeChange={setIsFocusMode}
+                    onContentChange={(content) => setFormData((current) => ({ ...current, content }))}
+                  />
                 </div>
-                <WorkflowPill status={workflow.status} />
-              </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {workflowMetaItems.map((item) => (
-                  <div key={item.label} className="rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                      {item.label}
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-gray-900 capitalize">
-                      {item.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <div className={`rounded-lg border p-4 ${getWorkflowFeedbackToneClass(workflowFeedback.tone)}`}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="grid gap-6 lg:grid-cols-2">
                   <div>
-                    <p className="text-sm font-semibold">{workflowFeedback.badge}</p>
-                    <p className="mt-1 text-sm leading-6">{workflowFeedback.summary}</p>
-                  </div>
-                  {workflowFeedback.readyToResubmit ? (
-                    <span className="inline-flex items-center rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700">
-                      Ready to resubmit
-                    </span>
-                  ) : workflowFeedback.waitingOnDesk ? (
-                    <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700">
-                      With desk
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-3 text-sm leading-6">
-                  <span className="font-semibold">Next action:</span> {workflowFeedback.nextAction}
-                </p>
-                {workflowFeedback.highlightedNote ? (
-                  <div className="mt-3 rounded-lg border border-white/70 bg-white/80 p-3 text-sm text-gray-700">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                      {workflowFeedback.highlightedNoteLabel || 'Desk feedback'}
-                    </p>
-                    <p className="mt-1 whitespace-pre-wrap">{workflowFeedback.highlightedNote}</p>
-                    {workflowFeedback.highlightedBy ? (
-                      <p className="mt-2 text-xs text-gray-500">
-                        From {workflowFeedback.highlightedBy}
-                      </p>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Category <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="category"
+                      value={formData.category}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                    >
+                      {categories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+
+                    {canCreateCategories ? (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowCreateCategory((current) => !current)}
+                          className="text-sm text-spanish-red font-medium hover:underline"
+                        >
+                          {showCreateCategory ? 'Cancel' : '+ Create new category'}
+                        </button>
+
+                        {showCreateCategory ? (
+                          <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                            {createCategoryError ? (
+                              <div className="text-sm text-red-600">{createCategoryError}</div>
+                            ) : null}
+                            <input
+                              value={newCategoryName}
+                              onChange={(event) => setNewCategoryName(event.target.value)}
+                              placeholder="Category name"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            />
+                            <input
+                              value={newCategorySlug}
+                              onChange={(event) => setNewCategorySlug(event.target.value)}
+                              placeholder="Optional slug (auto-generated if blank)"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                disabled={isCreatingCategory}
+                                onClick={async () => {
+                                  setCreateCategoryError('');
+                                  if (!newCategoryName.trim()) {
+                                    setCreateCategoryError('Please provide a category name');
+                                    return;
+                                  }
+                                  setIsCreatingCategory(true);
+                                  try {
+                                    const response = await fetch('/api/admin/categories', {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        ...getAuthHeader(),
+                                      },
+                                      body: JSON.stringify({
+                                        name: newCategoryName.trim(),
+                                        slug: newCategorySlug.trim() || undefined,
+                                      }),
+                                    });
+                                    const data = await response.json();
+                                    if (!response.ok) {
+                                      throw new Error(data?.error || 'Failed to create category');
+                                    }
+                                    const created = data.data as { name: string };
+                                    setCategories((current) => [
+                                      created.name,
+                                      ...current.filter((item) => item !== created.name),
+                                    ]);
+                                    setFormData((current) => ({ ...current, category: created.name }));
+                                    setNewCategoryName('');
+                                    setNewCategorySlug('');
+                                    setShowCreateCategory(false);
+                                  } catch (requestError: unknown) {
+                                    setCreateCategoryError(
+                                      requestError instanceof Error
+                                        ? requestError.message
+                                        : 'Failed to create category'
+                                    );
+                                  } finally {
+                                    setIsCreatingCategory(false);
+                                  }
+                                }}
+                                className="px-4 py-2 bg-spanish-red text-white rounded-md disabled:opacity-50"
+                              >
+                                {isCreatingCategory ? 'Creating...' : 'Create'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowCreateCategory(false);
+                                  setNewCategoryName('');
+                                  setNewCategorySlug('');
+                                  setCreateCategoryError('');
+                                }}
+                                className="px-4 py-2 border border-gray-300 rounded-md"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Author Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="author"
+                      value={formData.author}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Reporter Submission</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Origin, location, and handoff notes that should travel with the article.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                        Location Tag
+                      </label>
+                      <input
+                        type="text"
+                        name="locationTag"
+                        value={formData.locationTag}
+                        onChange={handleInputChange}
+                        placeholder="Indore, Madhya Pradesh"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                        Reporter Notes
+                      </label>
+                      <textarea
+                        name="reporterNotes"
+                        value={formData.reporterNotes}
+                        onChange={handleInputChange}
+                        rows={3}
+                        placeholder="Context for copy edit, verification, or publishing handoff."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Source Info
+                    </label>
+                    <textarea
+                      name="sourceInfo"
+                      value={formData.sourceInfo}
+                      onChange={handleInputChange}
+                      rows={3}
+                      placeholder="Source background, documents, interview trail, or bureau reference."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                    />
+                  </div>
+                  <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-3">
+                    <input
+                      type="checkbox"
+                      name="sourceConfidential"
+                      checked={formData.sourceConfidential}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Source is confidential and should stay internal to the desk
+                    </span>
+                  </label>
+                </div>
+
+                {canEditCopyDeskMeta ? (
+                  <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Copy Editor Review</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Proofing and quality checks before the article moves toward approval or publish.
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-3">
+                      <input
+                        type="checkbox"
+                        name="proofreadComplete"
+                        checked={formData.proofreadComplete}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                      />
+                      <span className="text-sm text-gray-700">
+                        Proofread is complete and ready for desk review
+                      </span>
+                    </label>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">
+                          Fact Check
+                        </label>
+                        <select
+                          name="factCheckStatus"
+                          value={formData.factCheckStatus}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                        >
+                          {FACT_CHECK_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status.replace(/_/g, ' ')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">
+                          Headline
+                        </label>
+                        <select
+                          name="headlineStatus"
+                          value={formData.headlineStatus}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                        >
+                          {HEADLINE_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status.replace(/_/g, ' ')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">
+                          Image
+                        </label>
+                        <select
+                          name="imageOptimizationStatus"
+                          value={formData.imageOptimizationStatus}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                        >
+                          {IMAGE_OPTIMIZATION_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status.replace(/_/g, ' ')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                        Copy Editor Notes
+                      </label>
+                      <textarea
+                        name="copyEditorNotes"
+                        value={formData.copyEditorNotes}
+                        onChange={handleInputChange}
+                        rows={3}
+                        placeholder="Headline, language, verification, or image feedback for the desk."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                        Return For Changes Reason
+                      </label>
+                      <textarea
+                        name="returnForChangesReason"
+                        value={formData.returnForChangesReason}
+                        onChange={handleInputChange}
+                        rows={3}
+                        placeholder={
+                          isReporterView
+                            ? 'Visible to desk roles when changes are requested.'
+                            : 'Explain what should go back to the reporter before approval.'
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                      />
+                    </div>
+                  </div>
                 ) : null}
-              </div>
+              </CmsEditorMain>
 
-              {canUseWorkflowDesk ? (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Assignee</label>
-                    <select
-                      value={workflowAssigneeId}
-                      onChange={(event) => setWorkflowAssigneeId(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    >
-                      <option value="">
-                        {isLoadingAssignableUsers ? 'Loading team...' : 'Select assignee'}
-                      </option>
-                      {assignableUsers.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.name} ({formatNewsroomRoleLabel(member.role)})
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500">
-                      Use this when sending a submitted article to a desk owner.
-                    </p>
+              {!isFocusMode ? (
+              <CmsEditorSidebar>
+                <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Workflow</p>
+                      <p className="mt-1 text-sm text-gray-700">
+                        Move this article through the newsroom queue without leaving the edit screen.
+                      </p>
+                    </div>
+                    <WorkflowPill status={workflow.status} />
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Priority</label>
-                    <select
-                      value={workflowPriority}
-                      onChange={(event) => setWorkflowPriority(event.target.value as WorkflowPriority)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 capitalize focus:border-spanish-red focus:outline-none"
-                    >
-                      {WORKFLOW_PRIORITIES.map((priority) => (
-                        <option key={priority} value={priority}>
-                          {priority}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500">
-                      Priority and due date are saved with the next workflow action.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Due Date</label>
-                    <input
-                      type="datetime-local"
-                      value={workflowDueAt}
-                      onChange={(event) => setWorkflowDueAt(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Schedule Publish Time</label>
-                    <input
-                      type="datetime-local"
-                      value={workflowScheduledFor}
-                      onChange={(event) => setWorkflowScheduledFor(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Only required when using the schedule action.
-                    </p>
-                  </div>
-                </div>
-              ) : null}
-
-              {availableWorkflowActions.includes('reject') || workflow.rejectionReason ? (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-900">Rejection Reason</label>
-                  <textarea
-                    value={workflowRejectionReason}
-                    onChange={(event) => setWorkflowRejectionReason(event.target.value)}
-                    rows={3}
-                    placeholder="Explain what needs to change before this article can continue."
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                </div>
-              ) : null}
-
-              {availableWorkflowActions.length > 0 ? (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-900">Workflow Note</label>
-                  <textarea
-                    value={workflowComment}
-                    onChange={(event) => setWorkflowComment(event.target.value)}
-                    rows={3}
-                    placeholder="Add an editorial note, approval note, or handoff context."
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                </div>
-              ) : null}
-
-              {availableWorkflowActions.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {availableWorkflowActions.map((action) => {
-                    const isRunning = runningWorkflowAction === action;
-                    const needsAssignee = action === 'assign' && !workflowAssigneeId.trim();
-                    const needsReason = action === 'reject' && !workflowRejectionReason.trim();
-                    const needsSchedule = action === 'schedule' && !workflowScheduledFor.trim();
-                    const disabled =
-                      Boolean(runningWorkflowAction) ||
-                      hasUnsavedChanges ||
-                      needsAssignee ||
-                      needsReason ||
-                      needsSchedule;
-                    const toneClass =
-                      action === 'reject'
-                        ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                        : action === 'publish'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                          : action === 'approve'
-                            ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50';
-
-                    return (
-                      <button
-                        key={action}
-                        type="button"
-                        onClick={() => void handleWorkflowAction(action)}
-                        disabled={disabled}
-                        className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${toneClass}`}
-                      >
-                        {isRunning ? <Loader className="h-4 w-4 animate-spin" /> : null}
-                        {ACTION_LABELS[action]}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600">
-                  No workflow transition is available for your role from the current state.
-                </p>
-              )}
-
-              {recentWorkflowComments.length > 0 ? (
-                <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-gray-900">Recent Workflow Notes</p>
-                  <div className="space-y-3">
-                    {recentWorkflowComments.map((comment) => (
-                      <div key={comment.id || `${comment.createdAt || 'comment'}-${comment.body || ''}`} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                          <span className="font-semibold text-gray-700">
-                            {comment.author?.name || comment.author?.email || 'Team'}
-                          </span>
-                          <span>{formatNewsroomRoleLabel(comment.author?.role)}</span>
-                          {comment.createdAt ? (
-                            <span>{formatDraftTimestamp(comment.createdAt)}</span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 text-sm text-gray-700">{comment.body}</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {workflowMetaItems.map((item) => (
+                      <div key={item.label} className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-gray-900 capitalize">
+                          {item.value}
+                        </p>
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Article Title <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Summary <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                name="summary"
-                value={formData.summary}
-                onChange={handleInputChange}
-                rows={2}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                required
-              />
-            </div>
-
-            <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-semibold text-gray-900">SEO Settings</p>
-              <input
-                type="text"
-                name="seoTitle"
-                value={formData.seoTitle}
-                onChange={handleInputChange}
-                placeholder="Meta title (max 160)"
-                maxLength={160}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-              />
-              <textarea
-                name="seoDescription"
-                value={formData.seoDescription}
-                onChange={handleInputChange}
-                placeholder="Meta description (max 320)"
-                rows={3}
-                maxLength={320}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-              />
-              <input
-                type="text"
-                name="ogImage"
-                value={formData.ogImage}
-                onChange={handleInputChange}
-                placeholder="OG image URL or /local-path"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-              />
-              <p className="-mt-2 text-xs text-gray-500">
-                Leave empty to auto-use featured image as 1200x630 OG preview.
-              </p>
-              <input
-                type="url"
-                name="canonicalUrl"
-                value={formData.canonicalUrl}
-                onChange={handleInputChange}
-                placeholder="Canonical URL"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-              />
-              <div className="-mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                <span>
-                  Leave empty to use the default public article permalink. Override it only when
-                  the article needs a preferred external URL.
-                </span>
-                {defaultPermalink ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData((current) => ({
-                        ...current,
-                        canonicalUrl: defaultPermalink,
-                      }))
-                    }
-                    className="rounded-full border border-gray-300 bg-white px-3 py-1 font-semibold text-gray-700 hover:bg-gray-100"
-                  >
-                    Use Default Permalink
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Featured Image <span className="text-red-500">*</span>
-              </label>
-              <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-spanish-red hover:bg-gray-50 transition-colors">
-                <div className="flex flex-col items-center gap-2">
-                  <ImageIcon className="w-6 h-6 text-gray-400" />
-                  <span className="text-sm font-medium text-gray-700">Click to change image</span>
-                </div>
-                <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-              </label>
-              <p className="mt-2 text-xs text-gray-500">{ARTICLE_IMAGE_UPLOAD_GUIDE}</p>
-              {imageQualityNote ? (
-                <p className="mt-1 text-xs font-medium text-amber-700">{imageQualityNote}</p>
-              ) : null}
-              {imagePreview ? (
-                <div className="mt-4 rounded-lg overflow-hidden border border-gray-200">
-                  <img src={imagePreview} alt="Preview" className="w-full h-64 object-cover" />
-                </div>
-              ) : null}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Article Content <span className="text-red-500">*</span>
-              </label>
-              <div className="mb-3 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900 sm:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <p className="font-semibold">Headings</p>
-                  <p className="mt-1">Use H2 and H3 to split dense reporting into readable sections.</p>
-                </div>
-                <div>
-                  <p className="font-semibold">Inline Images</p>
-                  <p className="mt-1">Upload inline article images with caption and source credit from the toolbar.</p>
-                </div>
-                <div>
-                  <p className="font-semibold">Resources & Tables</p>
-                  <p className="mt-1">Drop in source cards, quotes, and tables when the article needs evidence or comparisons.</p>
-                </div>
-                <div>
-                  <p className="font-semibold">Permalink</p>
-                  <p className="mt-1">Canonical URL in SEO Settings controls the preferred permalink for this published article.</p>
-                </div>
-              </div>
-              <p className="mb-2 text-xs text-gray-500">
-                Tip: Paste a YouTube link on its own line or use the YouTube button in the toolbar.
-              </p>
-              <div className="mb-3 inline-flex overflow-hidden rounded-lg border border-gray-300">
-                <button
-                  type="button"
-                  onClick={() => setContentMode('write')}
-                  className={`px-4 py-1.5 text-sm font-medium ${contentMode === 'write' ? 'bg-spanish-red text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-                >
-                  Write
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setContentMode('preview')}
-                  className={`px-4 py-1.5 text-sm font-medium ${contentMode === 'preview' ? 'bg-spanish-red text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-                >
-                  Preview
-                </button>
-              </div>
-              {contentMode === 'write' ? (
-                <RichTextEditor
-                  value={formData.content}
-                  onChange={(content) => setFormData((current) => ({ ...current, content }))}
-                />
-              ) : (
-                <div className="rounded-lg border border-gray-300 bg-white p-4">
-                  <h3 className="text-lg font-bold text-gray-900">
-                    {formData.title.trim() || 'Untitled article'}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {formData.summary.trim() || 'Summary preview will appear here.'}
-                  </p>
-                  <div className="my-4 h-px bg-gray-200" />
-                  <div
-                    className="article-rich-content text-gray-800"
-                    dangerouslySetInnerHTML={{ __html: previewContentHtml }}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Category <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-              >
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-
-              {canCreateCategories ? (
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateCategory((current) => !current)}
-                    className="text-sm text-spanish-red font-medium hover:underline"
-                  >
-                    {showCreateCategory ? 'Cancel' : '+ Create new category'}
-                  </button>
-
-                  {showCreateCategory ? (
-                    <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
-                      {createCategoryError ? (
-                        <div className="text-sm text-red-600">{createCategoryError}</div>
+                  <div className={`rounded-lg border p-4 ${getWorkflowFeedbackToneClass(workflowFeedback.tone)}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold">{workflowFeedback.badge}</p>
+                        <p className="mt-1 text-sm leading-6">{workflowFeedback.summary}</p>
+                      </div>
+                      {workflowFeedback.readyToResubmit ? (
+                        <span className="inline-flex items-center rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700">
+                          Ready to resubmit
+                        </span>
+                      ) : workflowFeedback.waitingOnDesk ? (
+                        <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700">
+                          With desk
+                        </span>
                       ) : null}
-                      <input
-                        value={newCategoryName}
-                        onChange={(event) => setNewCategoryName(event.target.value)}
-                        placeholder="Category name"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      />
-                      <input
-                        value={newCategorySlug}
-                        onChange={(event) => setNewCategorySlug(event.target.value)}
-                        placeholder="Optional slug (auto-generated if blank)"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={isCreatingCategory}
-                          onClick={async () => {
-                            setCreateCategoryError('');
-                            if (!newCategoryName.trim()) {
-                              setCreateCategoryError('Please provide a category name');
-                              return;
-                            }
-                            setIsCreatingCategory(true);
-                            try {
-                              const response = await fetch('/api/admin/categories', {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  ...getAuthHeader(),
-                                },
-                                body: JSON.stringify({
-                                  name: newCategoryName.trim(),
-                                  slug: newCategorySlug.trim() || undefined,
-                                }),
-                              });
-                              const data = await response.json();
-                              if (!response.ok) {
-                                throw new Error(data?.error || 'Failed to create category');
-                              }
-                              const created = data.data as { name: string };
-                              setCategories((current) => [
-                                created.name,
-                                ...current.filter((item) => item !== created.name),
-                              ]);
-                              setFormData((current) => ({ ...current, category: created.name }));
-                              setNewCategoryName('');
-                              setNewCategorySlug('');
-                              setShowCreateCategory(false);
-                            } catch (requestError: unknown) {
-                              setCreateCategoryError(
-                                requestError instanceof Error
-                                  ? requestError.message
-                                  : 'Failed to create category'
-                              );
-                            } finally {
-                              setIsCreatingCategory(false);
-                            }
-                          }}
-                          className="px-4 py-2 bg-spanish-red text-white rounded-md disabled:opacity-50"
+                    </div>
+                    <p className="mt-3 text-sm leading-6">
+                      <span className="font-semibold">Next action:</span> {workflowFeedback.nextAction}
+                    </p>
+                    {workflowFeedback.highlightedNote ? (
+                      <div className="mt-3 rounded-lg border border-white/70 bg-white/80 p-3 text-sm text-gray-700">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          {workflowFeedback.highlightedNoteLabel || 'Desk feedback'}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap">{workflowFeedback.highlightedNote}</p>
+                        {workflowFeedback.highlightedBy ? (
+                          <p className="mt-2 text-xs text-gray-500">
+                            From {workflowFeedback.highlightedBy}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {canUseWorkflowDesk ? (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-900">Assignee</label>
+                        <select
+                          value={workflowAssigneeId}
+                          onChange={(event) => setWorkflowAssigneeId(event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
                         >
-                          {isCreatingCategory ? 'Creating...' : 'Create'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowCreateCategory(false);
-                            setNewCategoryName('');
-                            setNewCategorySlug('');
-                            setCreateCategoryError('');
-                          }}
-                          className="px-4 py-2 border border-gray-300 rounded-md"
+                          <option value="">
+                            {isLoadingAssignableUsers ? 'Loading team...' : 'Select assignee'}
+                          </option>
+                          {assignableUsers.map((member) => (
+                            <option key={member.id} value={member.id}>
+                              {member.name} ({formatNewsroomRoleLabel(member.role)})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500">
+                          Use this when sending a submitted article to a desk owner.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-900">Priority</label>
+                        <select
+                          value={workflowPriority}
+                          onChange={(event) => setWorkflowPriority(event.target.value as WorkflowPriority)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 capitalize focus:border-spanish-red focus:outline-none"
                         >
-                          Cancel
-                        </button>
+                          {WORKFLOW_PRIORITIES.map((priority) => (
+                            <option key={priority} value={priority}>
+                              {priority}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-900">Due Date</label>
+                        <input
+                          type="datetime-local"
+                          value={workflowDueAt}
+                          onChange={(event) => setWorkflowDueAt(event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-900">Schedule Publish Time</label>
+                        <input
+                          type="datetime-local"
+                          value={workflowScheduledFor}
+                          onChange={(event) => setWorkflowScheduledFor(event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                        />
+                        <p className="text-xs text-gray-500">
+                          Only required when using the schedule action.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {availableWorkflowActions.includes('reject') || workflow.rejectionReason ? (
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-900">Rejection Reason</label>
+                      <textarea
+                        value={workflowRejectionReason}
+                        onChange={(event) => setWorkflowRejectionReason(event.target.value)}
+                        rows={3}
+                        placeholder="Explain what needs to change before this article can continue."
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                      />
+                    </div>
+                  ) : null}
+
+                  {availableWorkflowActions.length > 0 ? (
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-900">Workflow Note</label>
+                      <textarea
+                        value={workflowComment}
+                        onChange={(event) => setWorkflowComment(event.target.value)}
+                        rows={3}
+                        placeholder="Add an editorial note, approval note, or handoff context."
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
+                      />
+                    </div>
+                  ) : null}
+
+                  {availableWorkflowActions.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {availableWorkflowActions.map((action) => {
+                        const isRunning = runningWorkflowAction === action;
+                        const needsAssignee = action === 'assign' && !workflowAssigneeId.trim();
+                        const needsReason = action === 'reject' && !workflowRejectionReason.trim();
+                        const needsSchedule = action === 'schedule' && !workflowScheduledFor.trim();
+                        const disabled =
+                          Boolean(runningWorkflowAction) ||
+                          hasUnsavedChanges ||
+                          needsAssignee ||
+                          needsReason ||
+                          needsSchedule;
+                        const toneClass =
+                          action === 'reject'
+                            ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                            : action === 'publish'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                              : action === 'approve'
+                                ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50';
+
+                        return (
+                          <button
+                            key={action}
+                            type="button"
+                            onClick={() => void handleWorkflowAction(action)}
+                            disabled={disabled}
+                            className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${toneClass}`}
+                          >
+                            {isRunning ? <Loader className="h-4 w-4 animate-spin" /> : null}
+                            {ACTION_LABELS[action]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600">
+                      No workflow transition is available for your role from the current state.
+                    </p>
+                  )}
+
+                  {recentWorkflowComments.length > 0 ? (
+                    <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+                      <p className="text-sm font-semibold text-gray-900">Recent Workflow Notes</p>
+                      <div className="space-y-3">
+                        {recentWorkflowComments.map((comment) => (
+                          <div key={comment.id || `${comment.createdAt || 'comment'}-${comment.body || ''}`} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                              <span className="font-semibold text-gray-700">
+                                {comment.author?.name || comment.author?.email || 'Team'}
+                              </span>
+                              <span>{formatNewsroomRoleLabel(comment.author?.role)}</span>
+                              {comment.createdAt ? (
+                                <span>{formatDraftTimestamp(comment.createdAt)}</span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-sm text-gray-700">{comment.body}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ) : null}
                 </div>
-              ) : null}
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Author Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="author"
-                value={formData.author}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                required
-              />
-            </div>
+                {formData.sourceType === 'story' && formData.sourceStoryId ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                          Source Story Link
+                        </p>
+                        <p className="mt-1 font-semibold">
+                          {formData.sourceStoryTitle || 'Linked story package'}
+                        </p>
+                        <p className="mt-1 text-emerald-800/80">
+                          This article stays connected to the story package reporters submitted.
+                        </p>
+                      </div>
+                      <Link
+                        href={`/admin/stories/${formData.sourceStoryId}/edit`}
+                        className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                      >
+                        Open Source Story
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
 
-            <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Reporter Submission</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Origin, location, and handoff notes that should travel with the article.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Location Tag
-                </label>
-                <input
-                  type="text"
-                  name="locationTag"
-                  value={formData.locationTag}
-                  onChange={handleInputChange}
-                  placeholder="Indore, Madhya Pradesh"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Source Info
-                </label>
-                <textarea
-                  name="sourceInfo"
-                  value={formData.sourceInfo}
-                  onChange={handleInputChange}
-                  rows={3}
-                  placeholder="Source background, documents, interview trail, or bureau reference."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-              </div>
-              <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-3">
-                <input
-                  type="checkbox"
-                  name="sourceConfidential"
-                  checked={formData.sourceConfidential}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                />
-                <span className="text-sm text-gray-700">
-                  Source is confidential and should stay internal to the desk
-                </span>
-              </label>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Reporter Notes
-                </label>
-                <textarea
-                  name="reporterNotes"
-                  value={formData.reporterNotes}
-                  onChange={handleInputChange}
-                  rows={3}
-                  placeholder="Context for copy edit, verification, or publishing handoff."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-              </div>
-            </div>
-
-            {canEditCopyDeskMeta ? (
-              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Copy Editor Review</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Proofing and quality checks before the article moves toward approval or publish.
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+                  <p className="font-medium">Draft & Revision Tools</p>
+                  <p className="mt-1 text-blue-800">
+                    Draft autosaves every {AUTOSAVE_INTERVAL_MS / 1000} seconds.
+                    {draftSavedAt ? ` Last saved: ${formatDraftTimestamp(draftSavedAt)}.` : ' No local draft yet.'}
                   </p>
+                  {draftRestored ? (
+                    <p className="mt-1 text-blue-800">Local draft restored for this article.</p>
+                  ) : null}
+                  {hasUnsavedChanges ? (
+                    <p className="mt-1 text-blue-800">
+                      Save article edits before running workflow actions like assign, approve, or publish.
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={persistDraft}
+                      className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+                    >
+                      Save Draft Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearDraft}
+                      className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+                    >
+                      Discard Local Draft
+                    </button>
+                  </div>
                 </div>
-                <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-3">
+
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-gray-900">SEO Settings</p>
                   <input
-                    type="checkbox"
-                    name="proofreadComplete"
-                    checked={formData.proofreadComplete}
+                    type="text"
+                    name="seoTitle"
+                    value={formData.seoTitle}
                     onChange={handleInputChange}
-                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                  />
-                  <span className="text-sm text-gray-700">
-                    Proofread is complete and ready for desk review
-                  </span>
-                </label>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Fact Check
-                    </label>
-                    <select
-                      name="factCheckStatus"
-                      value={formData.factCheckStatus}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                    >
-                      {FACT_CHECK_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {status.replace(/_/g, ' ')}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Headline
-                    </label>
-                    <select
-                      name="headlineStatus"
-                      value={formData.headlineStatus}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                    >
-                      {HEADLINE_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {status.replace(/_/g, ' ')}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Image
-                    </label>
-                    <select
-                      name="imageOptimizationStatus"
-                      value={formData.imageOptimizationStatus}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                    >
-                      {IMAGE_OPTIMIZATION_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {status.replace(/_/g, ' ')}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Copy Editor Notes
-                  </label>
-                  <textarea
-                    name="copyEditorNotes"
-                    value={formData.copyEditorNotes}
-                    onChange={handleInputChange}
-                    rows={3}
-                    placeholder="Headline, language, verification, or image feedback for the desk."
+                    placeholder="Meta title (max 160)"
+                    maxLength={160}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Return For Changes Reason
-                  </label>
                   <textarea
-                    name="returnForChangesReason"
-                    value={formData.returnForChangesReason}
+                    name="seoDescription"
+                    value={formData.seoDescription}
                     onChange={handleInputChange}
+                    placeholder="Meta description (max 320)"
                     rows={3}
-                    placeholder={
-                      isReporterView
-                        ? 'Visible to desk roles when changes are requested.'
-                        : 'Explain what should go back to the reporter before approval.'
-                    }
+                    maxLength={320}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
                   />
+                  <input
+                    type="text"
+                    name="ogImage"
+                    value={formData.ogImage}
+                    onChange={handleInputChange}
+                    placeholder="OG image URL or /local-path"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <p className="-mt-2 text-xs text-gray-500">
+                    Leave empty to auto-use featured image as 1200x630 OG preview.
+                  </p>
+                  <input
+                    type="url"
+                    name="canonicalUrl"
+                    value={formData.canonicalUrl}
+                    onChange={handleInputChange}
+                    placeholder="Canonical URL"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <div className="-mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <span>
+                      Leave empty to use the default public article permalink. Override it only when
+                      the article needs a preferred external URL.
+                    </span>
+                    {defaultPermalink ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((current) => ({
+                            ...current,
+                            canonicalUrl: defaultPermalink,
+                          }))
+                        }
+                        className="rounded-full border border-gray-300 bg-white px-3 py-1 font-semibold text-gray-700 hover:bg-gray-100"
+                      >
+                        Use Default Permalink
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            ) : null}
 
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-900">Article Status</p>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="isBreaking"
-                  checked={formData.isBreaking}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                />
-                <span className="text-sm text-gray-700">Mark as Breaking News</span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="isTrending"
-                  checked={formData.isTrending}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                />
-                <span className="text-sm text-gray-700">Mark as Trending</span>
-              </label>
-            </div>
+                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Featured Image <span className="text-red-500">*</span>
+                  </label>
+                  <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-spanish-red hover:bg-gray-50 transition-colors">
+                    <div className="flex flex-col items-center gap-2">
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-700">Click to change image</span>
+                    </div>
+                    <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                  </label>
+                  <p className="mt-2 text-xs text-gray-500">{ARTICLE_IMAGE_UPLOAD_GUIDE}</p>
+                  {imageQualityNote ? (
+                    <p className="mt-1 text-xs font-medium text-amber-700">{imageQualityNote}</p>
+                  ) : null}
+                  {imagePreview ? (
+                    <div className="mt-4 rounded-lg overflow-hidden border border-gray-200">
+                      <img src={imagePreview} alt="Preview" className="w-full h-52 object-cover" />
+                    </div>
+                  ) : null}
+                </div>
 
-            <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium text-gray-900">Article Status</p>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="isBreaking"
+                      checked={formData.isBreaking}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                    />
+                    <span className="text-sm text-gray-700">Mark as Breaking News</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="isTrending"
+                      checked={formData.isTrending}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                    />
+                    <span className="text-sm text-gray-700">Mark as Trending</span>
+                  </label>
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -2547,8 +2545,61 @@ export default function EditArticle() {
                 </button>
               </Link>
             </div>
+
+            <ArticleEditorSidebar
+              title={formData.title}
+              summary={formData.summary}
+              content={formData.content}
+              className="space-y-3"
+            />
+            </CmsEditorSidebar>
+              ) : null}
+          </CmsEditorColumns>
+          {isFocusMode ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm font-semibold text-gray-900">Save & Return To Desk Tools</p>
+              <p className="mt-1 text-xs text-gray-600">
+                Exit focus when you want to review workflow, revisions, audio, SEO, or publishing settings.
+              </p>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="submit"
+                  disabled={isSaving || isLoadingImage}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red py-3 text-white font-medium transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSaving || isLoadingImage ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5" />
+                      Save Changes
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsFocusMode(false)}
+                  className="w-full rounded-lg border border-gray-300 px-6 py-3 text-gray-700 transition-colors hover:bg-gray-50 sm:w-auto"
+                >
+                  Exit Focus
+                </button>
+                <Link href="/admin/articles" className="w-full sm:w-auto">
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-gray-300 px-6 py-3 text-gray-700 transition-colors hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </Link>
+              </div>
+            </div>
+          ) : null}
           </form>
         </div>
+        </CmsEditorCanvas>
       </motion.div>
     </div>
   );

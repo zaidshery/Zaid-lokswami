@@ -38,6 +38,12 @@ import {
   uploadFileToSignedUrl,
   validateStoryVideoFile,
 } from '@/lib/utils/storyVideoUploadClient';
+import {
+  CmsEditorCanvas,
+  CmsEditorColumns,
+  CmsEditorMain,
+  CmsEditorSidebar,
+} from '@/components/admin/CmsEditorLayout';
 
 interface StoryFormData {
   title: string;
@@ -72,6 +78,12 @@ const THUMBNAIL_MAX_SIZE = 5 * 1024 * 1024;
 const SPACES_STORAGE_PROVIDER = 'do-spaces';
 const THUMBNAIL_INPUT_ID = 'story-thumbnail-upload-input';
 const VIDEO_INPUT_ID = 'story-video-upload-input';
+const STORY_IMAGE_ACCEPT = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
+const STORY_VIDEO_ACCEPT = 'video/mp4,.mp4';
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
 
 function truncateMediaLabel(value: string, maxLength = 16) {
   const trimmed = value.trim();
@@ -115,7 +127,7 @@ function StoryMediaTile({
   const sizeLabel = formatStoryVideoSize(asset.sizeBytes);
 
   return (
-    <div className="w-[88px] shrink-0 sm:w-24">
+    <div className="w-20 shrink-0 sm:w-24">
       <button
         type="button"
         onClick={onPreview}
@@ -200,7 +212,7 @@ const REPORTER_COPY = {
   en: {
     back: 'Back to Stories',
     pageTitle: 'Create Story',
-    pageSubtitle: 'Add media first, then write the story and send it for review.',
+    pageSubtitle: 'Add media, capture reporter notes, and hand the story to the desk for review.',
     roleLoading: 'Your session is still loading role permissions. Publishing actions may stay hidden until it resolves.',
     sections: {
       media: 'Add Media',
@@ -456,6 +468,7 @@ export default function CreateStoryPage() {
   const canPublishNow = role === 'admin' || role === 'super_admin';
   const canUseDesk = isAdminRole(role);
   const isReporterFlow = isReporterDeskRole(role);
+  const showMobileReporterActions = isReporterFlow && !canPublishNow;
   const defaultAuthor = isReporterFlow && sessionName ? sessionName : 'Desk';
   const isHindi = isHydrated ? language === 'hi' : true;
   const t = REPORTER_COPY[isHindi ? 'hi' : 'en'];
@@ -942,10 +955,10 @@ export default function CreateStoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 pb-36 sm:p-6 sm:pb-6">
       <Link
         href="/admin/stories"
-        className="mb-6 inline-flex items-center gap-2 text-gray-600 transition-colors hover:text-gray-900"
+        className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 transition-colors hover:text-gray-900 sm:mb-6 sm:text-base"
       >
         <ArrowLeft className="h-5 w-5" />
         {t.back}
@@ -954,27 +967,21 @@ export default function CreateStoryPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mx-auto max-w-3xl"
       >
-        <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-          <h1 className="mb-2 text-3xl font-bold text-gray-900">{t.pageTitle}</h1>
-          <p className="mb-6 text-gray-600">{t.pageSubtitle}</p>
-
-          {!canUseDesk ? (
-            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              {t.roleLoading}
-            </div>
-          ) : null}
+        <CmsEditorCanvas>
+        <div className="rounded-[24px] border border-gray-200 bg-white p-5 shadow-sm sm:rounded-xl sm:p-8">
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 sm:text-3xl">{t.pageTitle}</h1>
+          <p className="mb-5 text-sm text-gray-600 sm:mb-6 sm:text-base">{t.pageSubtitle}</p>
 
           {error ? (
-            <div className="mb-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+            <div className="mb-5 flex items-start gap-3 rounded-[18px] border border-red-200 bg-red-50 p-3 text-red-800 sm:mb-6 sm:rounded-lg sm:p-4">
               <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
               <p className="text-sm">{error}</p>
             </div>
           ) : null}
 
           {success ? (
-            <div className="mb-6 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
+            <div className="mb-5 flex items-start gap-3 rounded-[18px] border border-green-200 bg-green-50 p-3 text-green-800 sm:mb-6 sm:rounded-lg sm:p-4">
               <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
               <p className="text-sm">{success}</p>
             </div>
@@ -985,9 +992,10 @@ export default function CreateStoryPage() {
               event.preventDefault();
               void handleSubmit('submit');
             }}
-            className="space-y-6"
           >
-            <section className="space-y-5 rounded-xl border border-gray-200 bg-gray-50 p-5">
+            <CmsEditorColumns sidebarWidth="narrow" className="gap-4 sm:gap-8">
+              <CmsEditorMain className="space-y-4 sm:space-y-6">
+            <section className="space-y-4 rounded-[20px] border border-gray-200 bg-gray-50 p-4 sm:space-y-5 sm:rounded-xl sm:p-5">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{t.sections.media}</h2>
                 <p className="mt-1 text-sm text-gray-600">{t.sections.uploadSummary}</p>
@@ -1009,14 +1017,14 @@ export default function CreateStoryPage() {
                 </div>
               ) : null}
 
-              <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="rounded-[18px] border border-gray-200 bg-white p-3 sm:rounded-xl sm:p-4">
                 <div className="mb-4">
                   <p className="text-sm font-semibold text-gray-900">{t.sections.uploadSummary}</p>
                   <p className="mt-1 text-xs text-gray-500">{t.media.noFilesYet}</p>
                 </div>
 
-                <div className="grid gap-4">
-                  <div className="rounded-lg border border-gray-200 p-3">
+                <div className="grid gap-3 sm:gap-4">
+                  <div className="rounded-[16px] border border-gray-200 p-3 sm:rounded-lg">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{t.fields.thumbnailUpload}</p>
@@ -1027,11 +1035,20 @@ export default function CreateStoryPage() {
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap gap-3">
+                    <input
+                      id={THUMBNAIL_INPUT_ID}
+                      type="file"
+                      accept={STORY_IMAGE_ACCEPT}
+                      multiple
+                      onChange={(event) => void handleThumbnailFileChange(event)}
+                      className="hidden"
+                    />
+
+                    <div className="flex flex-wrap gap-2.5 sm:gap-3">
                       {mediaCounts.images < STORY_MAX_IMAGE_COUNT ? (
                         <label
                           htmlFor={THUMBNAIL_INPUT_ID}
-                          className="flex aspect-square w-[88px] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-center text-gray-600 transition-colors hover:border-primary-600 hover:bg-primary-50 sm:w-24"
+                          className="flex aspect-square w-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-center text-gray-600 transition-colors hover:border-primary-600 hover:bg-primary-50 sm:w-24"
                         >
                           <ImageIcon className="h-5 w-5" />
                           <span className="px-2 text-[11px] font-semibold leading-4">
@@ -1068,7 +1085,7 @@ export default function CreateStoryPage() {
                     ) : null}
                   </div>
 
-                  <div className="rounded-lg border border-gray-200 p-3">
+                  <div className="rounded-[16px] border border-gray-200 p-3 sm:rounded-lg">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{t.fields.videoUpload}</p>
@@ -1079,11 +1096,20 @@ export default function CreateStoryPage() {
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap gap-3">
+                    <input
+                      id={VIDEO_INPUT_ID}
+                      type="file"
+                      accept={STORY_VIDEO_ACCEPT}
+                      multiple
+                      onChange={(event) => void handleVideoFileChange(event)}
+                      className="hidden"
+                    />
+
+                    <div className="flex flex-wrap gap-2.5 sm:gap-3">
                       {mediaCounts.videos < STORY_MAX_VIDEO_COUNT ? (
                         <label
                           htmlFor={VIDEO_INPUT_ID}
-                          className="flex aspect-square w-[88px] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-center text-gray-600 transition-colors hover:border-primary-600 hover:bg-primary-50 sm:w-24"
+                          className="flex aspect-square w-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-center text-gray-600 transition-colors hover:border-primary-600 hover:bg-primary-50 sm:w-24"
                         >
                           <Upload className="h-5 w-5" />
                           <span className="px-2 text-[11px] font-semibold leading-4">
@@ -1149,7 +1175,7 @@ export default function CreateStoryPage() {
               </div>
             </section>
 
-            <section className="space-y-5 rounded-xl border border-gray-200 bg-gray-50 p-5">
+            <section className="space-y-4 rounded-[20px] border border-gray-200 bg-gray-50 p-4 sm:space-y-5 sm:rounded-xl sm:p-5">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{t.sections.story}</h2>
               </div>
@@ -1295,7 +1321,7 @@ export default function CreateStoryPage() {
               </>
             ) : null}
 
-            <section className="space-y-5 rounded-xl border border-gray-200 bg-gray-50 p-5">
+            <section className="space-y-4 rounded-[20px] border border-gray-200 bg-gray-50 p-4 sm:space-y-5 sm:rounded-xl sm:p-5">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{t.sections.source}</h2>
                 <p className="mt-1 text-sm text-gray-600">{t.helper.sourceBody}</p>
@@ -1331,7 +1357,7 @@ export default function CreateStoryPage() {
                 />
               </div>
 
-              <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+              <div className="space-y-4 rounded-[18px] border border-gray-200 bg-white p-3 sm:rounded-lg sm:p-4">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">{t.helper.sourceTitle}</p>
                   <p className="mt-1 text-xs text-gray-500">
@@ -1366,16 +1392,86 @@ export default function CreateStoryPage() {
               </div>
             </section>
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-              {t.helper.draftNotice}
-            </div>
+              </CmsEditorMain>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <button
+              <CmsEditorSidebar>
+                {!canUseDesk ? (
+                  <div className="rounded-[18px] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 sm:rounded-lg sm:p-4">
+                    {t.roleLoading}
+                  </div>
+                ) : null}
+
+                <div className="rounded-[20px] border border-gray-200 bg-gray-50 p-4 sm:rounded-xl">
+                  <p className="text-sm font-semibold text-gray-900">{t.sections.uploadSummary}</p>
+                  <p className="mt-1 text-xs text-gray-600">{t.media.noFilesYet}</p>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                        {t.media.imageCount}
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-gray-900">
+                        {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                        {t.media.videoCount}
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-gray-900">
+                        {mediaCounts.videos}/{STORY_MAX_VIDEO_COUNT}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Video Storage
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-gray-900">
+                      {formatStoryVideoSize(getTotalStoryVideoBytes(videoAssets))}
+                    </p>
+                  </div>
+
+                  {previewThumbnail ? (
+                    <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                      <img
+                        src={previewThumbnail}
+                        alt="Story thumbnail preview"
+                        className="h-44 w-full object-cover"
+                      />
+                    </div>
+                  ) : null}
+
+                  {isUploadingImages ? (
+                    <p className="mt-3 text-xs font-medium text-gray-600">Uploading photos...</p>
+                  ) : null}
+
+                  {isUploadingVideo ? (
+                    <div className="mt-4 space-y-2">
+                      <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className="h-full rounded-full bg-spanish-red transition-[width] duration-200"
+                          style={{ width: `${videoUploadProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        {t.media.uploadProgress}: {videoUploadProgress}%
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className={cx('rounded-[18px] border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 sm:rounded-lg sm:p-4', showMobileReporterActions && 'hidden sm:block')}>
+              {t.helper.draftNotice}
+                </div>
+
+                <div className={cx('flex flex-col gap-3 rounded-[18px] border border-gray-200 bg-gray-50 p-3 sm:rounded-lg sm:p-4', showMobileReporterActions && 'hidden sm:flex')}>
+            <button
                 type="button"
                 disabled={isLoading || isUploadingImages || isUploadingVideo}
                 onClick={() => void handleSubmit('draft')}
-                className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {runningIntent === 'draft' ? (
                   <>
@@ -1393,7 +1489,7 @@ export default function CreateStoryPage() {
               <button
                 type="submit"
                 disabled={isLoading || isUploadingImages || isUploadingVideo}
-                className="inline-flex min-w-[180px] items-center justify-center gap-2 rounded-lg bg-spanish-red px-5 py-3 font-medium text-white transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red px-5 py-3 font-medium text-white transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {runningIntent === 'submit' ? (
                   <>
@@ -1413,7 +1509,7 @@ export default function CreateStoryPage() {
                   type="button"
                   disabled={isLoading || isUploadingImages || isUploadingVideo}
                   onClick={() => void handleSubmit('publish')}
-                  className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {runningIntent === 'publish' ? (
                     <>
@@ -1431,14 +1527,57 @@ export default function CreateStoryPage() {
 
               <Link
                 href="/admin/stories"
-                className="rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-100"
               >
                 {t.actions.cancel}
               </Link>
-            </div>
+                </div>
+              </CmsEditorSidebar>
+            </CmsEditorColumns>
           </form>
         </div>
+        </CmsEditorCanvas>
       </motion.div>
+
+      {showMobileReporterActions ? (
+        <div className="fixed inset-x-4 bottom-24 z-20 rounded-[24px] border border-gray-200 bg-white/95 p-3 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.28)] backdrop-blur sm:hidden">
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={isLoading || isUploadingImages || isUploadingVideo}
+              onClick={() => void handleSubmit('draft')}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {runningIntent === 'draft' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t.actions.savingDraft}
+                </>
+              ) : (
+                t.actions.saveDraft
+              )}
+            </button>
+            <button
+              type="button"
+              disabled={isLoading || isUploadingImages || isUploadingVideo}
+              onClick={() => void handleSubmit('submit')}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-spanish-red px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {runningIntent === 'submit' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t.actions.submitting}
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  {t.actions.submit}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {previewAsset ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">

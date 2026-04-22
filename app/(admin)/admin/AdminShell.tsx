@@ -15,6 +15,7 @@ import {
   Languages,
   LayoutDashboard,
   LogOut,
+  Menu,
   Moon,
   Newspaper,
   ListChecks,
@@ -25,10 +26,12 @@ import {
   Sun,
   UserCog,
   Video,
+  X,
 } from 'lucide-react';
 import Logo from '@/components/layout/Logo';
 import {
   formatUserRoleLabel,
+  isReporterDeskRole,
   isSuperAdminRole,
   type UserRole,
 } from '@/lib/auth/roles';
@@ -47,10 +50,16 @@ type AdminShellUser = {
   role?: UserRole;
 };
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
 const HI = {
   adminPanel: '\u090f\u0921\u092e\u093f\u0928 \u092a\u0948\u0928\u0932',
+  reporterPanel: '\u0930\u093f\u092a\u094b\u0930\u094d\u091f\u0930 \u092a\u0948\u0928\u0932',
   leadershipConsole: '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0932\u0940\u0921\u0930\u0936\u093f\u092a',
   adminDashboard: '\u090f\u0921\u092e\u093f\u0928 \u0921\u0948\u0936\u092c\u094b\u0930\u094d\u0921',
+  reporterDesk: '\u0930\u093f\u092a\u094b\u0930\u094d\u091f\u0930 \u0921\u0947\u0938\u094d\u0915',
   leadershipDashboard: '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0932\u0940\u0921\u0930\u0936\u093f\u092a',
   dashboard: '\u0921\u0948\u0936\u092c\u094b\u0930\u094d\u0921',
   newsroomOverview: '\u0928\u094d\u092f\u0942\u091c\u0930\u0942\u092e \u0913\u0935\u0930\u0935\u094d\u092f\u0942',
@@ -62,6 +71,7 @@ const HI = {
   myWork: '\u092e\u0947\u0930\u093e \u0915\u093e\u092e',
   articles: '\u0932\u0947\u0916',
   myArticles: '\u092e\u0947\u0930\u0947 \u0932\u0947\u0916',
+  myStories: '\u092e\u0947\u0930\u0940 \u0938\u094d\u091f\u094b\u0930\u0940\u091c\u093c',
   categories: '\u0936\u094d\u0930\u0947\u0923\u093f\u092f\u093e\u0901',
   polls: '\u092a\u094b\u0932\u094d\u0938',
   stories: '\u0938\u094d\u091f\u094b\u0930\u0940\u091c\u093c',
@@ -142,7 +152,7 @@ const COPY_EDITOR_ITEMS: SidebarItem[] = [
 const REPORTER_ITEMS: SidebarItem[] = [
   { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
   { icon: FileText, labelEn: 'My Work', labelHi: HI.myWork, href: '/admin/my-work' },
-  { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
+  { icon: FileText, labelEn: 'My Stories', labelHi: HI.myStories, href: '/admin/stories' },
   { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
 ];
 
@@ -177,12 +187,20 @@ function getConsoleLabel(role: UserRole | undefined, isHindi: boolean) {
     return isHindi ? HI.leadershipConsole : 'Lokswami Leadership';
   }
 
+  if (isReporterDeskRole(role)) {
+    return isHindi ? HI.reporterPanel : 'Reporter Panel';
+  }
+
   return isHindi ? HI.adminPanel : 'Admin Panel';
 }
 
 function getHeaderLabel(role: UserRole | undefined, isHindi: boolean) {
   if (isSuperAdminRole(role)) {
     return isHindi ? HI.leadershipDashboard : 'Lokswami Leadership';
+  }
+
+  if (isReporterDeskRole(role)) {
+    return isHindi ? HI.reporterDesk : 'Reporter Desk';
   }
 
   return isHindi ? HI.adminDashboard : 'Admin Dashboard';
@@ -192,10 +210,12 @@ function ThemeModeSwitcher({
   theme,
   isHindi,
   onChange,
+  alwaysShowLabels = false,
 }: {
   theme: 'dark' | 'light';
   isHindi: boolean;
   onChange: (theme: 'dark' | 'light') => void;
+  alwaysShowLabels?: boolean;
 }) {
   const options = [
     {
@@ -226,7 +246,7 @@ function ThemeModeSwitcher({
             className="admin-shell-segmented-option inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold"
           >
             <option.icon className="h-4 w-4" />
-            <span className="hidden sm:inline">{option.label}</span>
+            <span className={alwaysShowLabels ? 'inline' : 'hidden sm:inline'}>{option.label}</span>
           </button>
         );
       })}
@@ -244,11 +264,48 @@ export default function AdminShell({
   const pathname = usePathname();
   const router = useRouter();
   const [isHydrated, setIsHydrated] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const { theme, setTheme, language, toggleLanguage } = useAppStore();
 
   useEffect(() => {
     setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+    setMobileToolsOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setMobileNavOpen(false);
+        setMobileToolsOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+
+    if (mobileNavOpen || mobileToolsOpen) {
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [mobileNavOpen, mobileToolsOpen]);
+
+  useEffect(() => {
+    if (mobileNavOpen) {
+      setMobileToolsOpen(false);
+    }
+  }, [mobileNavOpen]);
 
   const resolvedUser = {
     name: initialUser.name ?? null,
@@ -267,6 +324,9 @@ export default function AdminShell({
   const adminInitial = (adminName.charAt(0) || 'A').toUpperCase();
   const consoleLabel = getConsoleLabel(resolvedUser.role, isHindi);
   const headerLabel = getHeaderLabel(resolvedUser.role, isHindi);
+  const isReporterView = isReporterDeskRole(resolvedUser.role);
+  const sidebarLabel = isReporterView ? adminName : consoleLabel;
+  const headerSubtitle = isReporterView ? adminName : adminRoleLabel;
 
   const handleLogout = async () => {
     try {
@@ -281,20 +341,28 @@ export default function AdminShell({
 
   const sidebarContent = (
     <>
-      <div className="flex h-16 items-center justify-between border-b border-[color:var(--admin-shell-border)] px-4">
+      <div className="flex h-16 items-center gap-3 border-b border-[color:var(--admin-shell-border)] px-4">
         <Link href="/admin" className="flex min-w-0 flex-1 items-center gap-2">
           <div className="flex-shrink-0">
             <Logo size="sm" />
           </div>
           <div className="min-w-0">
             <div className="truncate text-xs text-[color:var(--admin-shell-text-muted)]">
-              {consoleLabel}
+              {sidebarLabel}
             </div>
             <div className="truncate text-[11px] font-semibold text-[color:var(--admin-shell-text)]">
               {adminRoleLabel}
             </div>
           </div>
         </Link>
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen(false)}
+          className="admin-shell-toolbar-btn inline-flex h-10 w-10 items-center justify-center rounded-xl lg:hidden"
+          aria-label="Close navigation"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4 pb-24">
@@ -302,6 +370,7 @@ export default function AdminShell({
           <Link
             key={`${item.href}-${item.labelEn}`}
             href={item.href}
+            onClick={() => setMobileNavOpen(false)}
             className={`group flex items-center gap-3 rounded-2xl px-3 py-3 transition-all ${
               isActiveNavItem(pathname, item.href)
                 ? 'bg-[color:var(--admin-shell-active)] text-[color:var(--admin-shell-active-text)] shadow-[var(--admin-shell-shadow)]'
@@ -340,43 +409,83 @@ export default function AdminShell({
   return (
     <div
       suppressHydrationWarning
-      className="admin-shell flex min-h-screen text-[color:var(--admin-shell-text)] transition-colors"
+      className="admin-shell min-h-screen text-[color:var(--admin-shell-text)] transition-colors lg:flex lg:h-screen lg:overflow-hidden"
     >
+      <button
+        type="button"
+        aria-label={mobileNavOpen ? 'Close mobile navigation' : mobileToolsOpen ? 'Close mobile tools' : 'Close mobile overlays'}
+        onClick={() => {
+          setMobileNavOpen(false);
+          setMobileToolsOpen(false);
+        }}
+        className={cx(
+          'fixed inset-0 z-30 bg-black/55 transition-opacity lg:hidden',
+          mobileNavOpen || mobileToolsOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
+      />
       <aside
-        className="admin-shell-surface-strong fixed bottom-0 left-0 top-0 z-40 flex w-[272px] flex-col overflow-hidden border-r border-[color:var(--admin-shell-border-strong)]"
+        className={cx(
+          'admin-shell-surface-strong fixed inset-y-0 left-0 z-40 flex w-[min(86vw,320px)] flex-col overflow-hidden border-r border-[color:var(--admin-shell-border-strong)] transition-transform duration-300 lg:w-[272px] lg:translate-x-0',
+          mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
       >
         {sidebarContent}
       </aside>
 
       <main
-        className="relative ml-[272px] flex-1 transition-colors"
+        className="relative min-h-screen min-w-0 flex-1 overflow-y-auto transition-colors lg:ml-[272px] lg:h-screen"
       >
-        <header className="admin-shell-surface sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[color:var(--admin-shell-border)] px-4 sm:px-6">
-          <div>
-            <h1 className="text-lg font-semibold text-[color:var(--admin-shell-text)]">
-              {headerLabel}
-            </h1>
-            <p className="text-xs text-[color:var(--admin-shell-text-muted)]">{adminRoleLabel}</p>
+        <header className="admin-shell-surface sticky top-0 z-20 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen((current) => !current)}
+              className="admin-shell-toolbar-btn inline-flex h-10 w-10 items-center justify-center rounded-xl lg:hidden"
+              aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
+              aria-expanded={mobileNavOpen}
+            >
+              {mobileNavOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold text-[color:var(--admin-shell-text)] sm:text-lg">
+                {headerLabel}
+              </h1>
+              <p className="truncate text-xs text-[color:var(--admin-shell-text-muted)]">
+                {headerSubtitle}
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="relative ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             <button
               onClick={toggleLanguage}
-              className="admin-shell-toolbar-btn inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold"
+              className="admin-shell-toolbar-btn hidden items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold sm:inline-flex"
               aria-label={isHindi ? 'Switch to English' : 'Switch to Hindi'}
               type="button"
             >
               <Languages className="h-3.5 w-3.5" />
               <span>{isHindi ? '\u0939\u093f' : 'EN'}</span>
             </button>
-            <ThemeModeSwitcher
-              theme={effectiveTheme}
-              isHindi={isHindi}
-              onChange={setTheme}
-            />
+            <button
+              type="button"
+              onClick={() => setMobileToolsOpen((current) => !current)}
+              className="admin-shell-toolbar-btn inline-flex h-10 w-10 items-center justify-center rounded-xl sm:hidden"
+              aria-label={mobileToolsOpen ? 'Close display and language tools' : 'Open display and language tools'}
+              aria-expanded={mobileToolsOpen}
+            >
+              <Settings2 className="h-4 w-4" />
+            </button>
+            <div className="hidden sm:block">
+              <ThemeModeSwitcher
+                theme={effectiveTheme}
+                isHindi={isHindi}
+                onChange={setTheme}
+                alwaysShowLabels={false}
+              />
+            </div>
             <Link
               href="/main"
-              className="admin-shell-toolbar-btn rounded-xl px-3 py-2 text-sm font-medium"
+              className="admin-shell-toolbar-btn hidden rounded-xl px-3 py-2 text-sm font-medium md:inline-flex"
             >
               {isHindi ? HI.viewSite : 'View Site'}
             </Link>
@@ -391,11 +500,78 @@ export default function AdminShell({
             <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-red-600 shadow-sm">
               <span className="text-sm font-bold text-white">{adminInitial}</span>
             </div>
+
+            {mobileToolsOpen ? (
+              <div className="admin-shell-surface-strong absolute right-12 top-12 z-40 w-56 rounded-[24px] p-3 shadow-[var(--admin-shell-shadow-strong)] sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleLanguage();
+                    setMobileToolsOpen(false);
+                  }}
+                  className="admin-shell-toolbar-btn flex w-full items-center justify-between rounded-2xl px-3 py-2 text-sm font-semibold"
+                >
+                  <span>{isHindi ? 'English' : 'हिन्दी'}</span>
+                  <span className="text-xs text-[color:var(--admin-shell-text-muted)]">{isHindi ? 'EN' : 'HI'}</span>
+                </button>
+                <div className="mt-3">
+                  <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
+                    Theme
+                  </p>
+                  <div className="mt-2">
+                    <ThemeModeSwitcher
+                      theme={effectiveTheme}
+                      isHindi={isHindi}
+                      onChange={(nextTheme) => {
+                        setTheme(nextTheme);
+                        setMobileToolsOpen(false);
+                      }}
+                      alwaysShowLabels
+                    />
+                  </div>
+                </div>
+                <Link
+                  href="/main"
+                  onClick={() => setMobileToolsOpen(false)}
+                  className="admin-shell-toolbar-btn mt-3 flex w-full items-center justify-center rounded-2xl px-3 py-2 text-sm font-medium"
+                >
+                  {isHindi ? HI.viewSite : 'View Site'}
+                </Link>
+              </div>
+            ) : null}
           </div>
         </header>
 
-        <div className="relative p-6 sm:p-8">{children}</div>
+        <div className={cx('relative p-4 sm:p-6 lg:p-8', isReporterView && 'pb-28 lg:pb-8')}>
+          {children}
+        </div>
       </main>
+
+      {isReporterView ? (
+        <nav className="admin-shell-surface-strong fixed inset-x-4 bottom-4 z-20 rounded-[26px] px-2 py-2 shadow-[var(--admin-shell-shadow-strong)] lg:hidden">
+          <div className="grid grid-cols-4 gap-1">
+            {sidebarItems.map((item) => {
+              const isActive = isActiveNavItem(pathname, item.href);
+
+              return (
+                <Link
+                  key={`${item.href}-${item.labelEn}-mobile`}
+                  href={item.href}
+                  className={cx(
+                    'flex min-w-0 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center text-[10px] font-semibold transition-colors',
+                    isActive
+                      ? 'bg-[color:var(--admin-shell-active)] text-[color:var(--admin-shell-active-text)]'
+                      : 'text-[color:var(--admin-shell-text-muted)]'
+                  )}
+                >
+                  <item.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="w-full truncate">{isHindi ? item.labelHi : item.labelEn}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      ) : null}
     </div>
   );
 }

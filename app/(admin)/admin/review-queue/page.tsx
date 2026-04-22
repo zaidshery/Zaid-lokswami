@@ -9,6 +9,14 @@ import { canViewPage } from '@/lib/auth/permissions';
 import { formatUserRoleLabel } from '@/lib/auth/roles';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
+import {
+  CmsCollectionHero,
+  CmsCollectionPage,
+  CMS_COLLECTION_EMPTY_STATE_CLASS as EMPTY_STATE_CLASS,
+  CMS_COLLECTION_META_CHIP_CLASS as META_CHIP_CLASS,
+  CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
+  CMS_COLLECTION_SOFT_CARD_CLASS as SOFT_CARD_CLASS,
+} from '@/components/admin/CmsCollectionLayout';
 
 type QueueCard = {
   title: string;
@@ -22,17 +30,6 @@ type QueueCard = {
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
-
-const PANEL_CLASS = 'admin-shell-surface-strong rounded-[30px] p-6';
-
-const SOFT_CARD_CLASS =
-  'admin-shell-surface-muted rounded-[24px] p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.14)] dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.35)]';
-
-const EMPTY_STATE_CLASS =
-  'rounded-[24px] border border-dashed border-[color:var(--admin-shell-border-strong)] bg-[color:var(--admin-shell-surface-muted)] p-4 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]';
-
-const META_CHIP_CLASS =
-  'admin-shell-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]';
 
 function formatStatusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
@@ -99,45 +96,35 @@ export default async function AdminReviewQueuePage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[36px] border border-[color:var(--admin-shell-border)] bg-[radial-gradient(circle_at_top_left,rgba(185,28,28,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.08),transparent_28%),var(--admin-bg-depth)] p-8 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] lg:p-10">
-        <div className="pointer-events-none absolute -right-10 top-0 h-48 w-48 rounded-full bg-red-500/10 blur-3xl dark:bg-red-500/14" />
-        <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/14" />
-        <div className="relative">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-              {formatUserRoleLabel(admin.role)}
+    <CmsCollectionPage className="space-y-6">
+      <CmsCollectionHero
+        accent="red"
+        eyebrow={formatUserRoleLabel(admin.role)}
+        title="Review Queue"
+        description="See active review work across articles, stories, videos, inbox triage, and e-paper production in one place."
+        meta={
+          <>
+            <div className={META_CHIP_CLASS}>
+              <span>Queue Items</span>
+              <strong className="text-[color:var(--admin-shell-text)]">
+                {formatNumber(reviewQueue.items.length)}
+              </strong>
             </div>
-            <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
-              Review Queue
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-              See active review work across articles, stories, videos, inbox triage, and e-paper
-              production in one place.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <div className={META_CHIP_CLASS}>
-                <span>Queue Items</span>
-                <strong className="text-[color:var(--admin-shell-text)]">
-                  {formatNumber(reviewQueue.items.length)}
-                </strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Blocked Editions</span>
-                <strong className="text-[color:var(--admin-shell-text)]">
-                  {formatNumber(epaperInsights.blockedEditions.length)}
-                </strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Inbox New</span>
-                <strong className="text-[color:var(--admin-shell-text)]">
-                  {formatNumber(dashboard.inbox.new)}
-                </strong>
-              </div>
+            <div className={META_CHIP_CLASS}>
+              <span>Blocked Editions</span>
+              <strong className="text-[color:var(--admin-shell-text)]">
+                {formatNumber(epaperInsights.blockedEditions.length)}
+              </strong>
             </div>
-          </div>
-        </div>
-      </section>
+            <div className={META_CHIP_CLASS}>
+              <span>Inbox New</span>
+              <strong className="text-[color:var(--admin-shell-text)]">
+                {formatNumber(dashboard.inbox.new)}
+              </strong>
+            </div>
+          </>
+        }
+      />
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {queueCards.map((card) => {
@@ -365,6 +352,6 @@ export default async function AdminReviewQueuePage() {
           </div>
         </div>
       </section>
-    </div>
+    </CmsCollectionPage>
   );
 }

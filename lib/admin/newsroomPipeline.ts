@@ -79,6 +79,45 @@ export type NewsroomPipelineAnalytics = {
     awaitingSocialDrafts: number;
     awaitingSocialPublish: number;
   };
+  conversions: Array<{
+    key:
+      | 'submitted'
+      | 'approved'
+      | 'linked_article'
+      | 'published_article'
+      | 'video_ready'
+      | 'social_published'
+      | 'fully_distributed';
+    label: string;
+    count: number;
+    rateFromApproved: number;
+  }>;
+  breakdowns: {
+    categories: Array<{
+      label: string;
+      approvedStories: number;
+      linkedArticles: number;
+      videoReady: number;
+      socialPublished: number;
+      completionRate: number;
+    }>;
+    reporters: Array<{
+      label: string;
+      approvedStories: number;
+      linkedArticles: number;
+      videoReady: number;
+      socialPublished: number;
+      completionRate: number;
+    }>;
+  };
+  timeline: Array<{
+    label: string;
+    submittedStories: number;
+    approvedStories: number;
+    linkedArticles: number;
+    videoReady: number;
+    socialPublished: number;
+  }>;
 };
 
 export type NewsroomPipelineRange = '7d' | '30d' | '90d' | '365d' | 'all';
@@ -244,6 +283,190 @@ function matchesDateRange(
   return date >= windowStart && date <= now;
 }
 
+function createBreakdownMap() {
+  return new Map<
+    string,
+    {
+      label: string;
+      approvedStories: number;
+      linkedArticles: number;
+      videoReady: number;
+      socialPublished: number;
+      fullyDistributed: number;
+    }
+  >();
+}
+
+function incrementBreakdown(
+  map: ReturnType<typeof createBreakdownMap>,
+  label: string,
+  values: {
+    approvedStories?: number;
+    linkedArticles?: number;
+    videoReady?: number;
+    socialPublished?: number;
+    fullyDistributed?: number;
+  }
+) {
+  if (!label.trim()) return;
+  const current = map.get(label) || {
+    label,
+    approvedStories: 0,
+    linkedArticles: 0,
+    videoReady: 0,
+    socialPublished: 0,
+    fullyDistributed: 0,
+  };
+  current.approvedStories += values.approvedStories || 0;
+  current.linkedArticles += values.linkedArticles || 0;
+  current.videoReady += values.videoReady || 0;
+  current.socialPublished += values.socialPublished || 0;
+  current.fullyDistributed += values.fullyDistributed || 0;
+  map.set(label, current);
+}
+
+function finalizeBreakdowns(map: ReturnType<typeof createBreakdownMap>) {
+  return Array.from(map.values())
+    .map((entry) => ({
+      label: entry.label,
+      approvedStories: entry.approvedStories,
+      linkedArticles: entry.linkedArticles,
+      videoReady: entry.videoReady,
+      socialPublished: entry.socialPublished,
+      completionRate:
+        entry.approvedStories > 0
+          ? Math.round((entry.fullyDistributed / entry.approvedStories) * 100)
+          : 0,
+    }))
+    .sort((left, right) => {
+      if (right.approvedStories !== left.approvedStories) {
+        return right.approvedStories - left.approvedStories;
+      }
+      return left.label.localeCompare(right.label, 'en', { sensitivity: 'base' });
+    })
+    .slice(0, 6);
+}
+
+function getTimelineBucketConfig(range: NewsroomPipelineRange) {
+  switch (range) {
+    case '7d':
+    case '30d':
+      return { unit: 'day' as const, count: range === '7d' ? 7 : 30 };
+    case '90d':
+      return { unit: 'week' as const, count: 13 };
+    case '365d':
+      return { unit: 'month' as const, count: 12 };
+    case 'all':
+    default:
+      return { unit: 'month' as const, count: 6 };
+  }
+}
+
+function startOfDay(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function startOfWeek(date: Date) {
+  const copy = startOfDay(date);
+  const day = copy.getDay();
+  const diff = (day + 6) % 7;
+  copy.setDate(copy.getDate() - diff);
+  return copy;
+}
+
+function startOfMonth(date: Date) {
+  const copy = startOfDay(date);
+  copy.setDate(1);
+  return copy;
+}
+
+function addDays(date: Date, amount: number) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + amount);
+  return copy;
+}
+
+function addWeeks(date: Date, amount: number) {
+  return addDays(date, amount * 7);
+}
+
+function addMonths(date: Date, amount: number) {
+  const copy = new Date(date);
+  copy.setMonth(copy.getMonth() + amount);
+  return copy;
+}
+
+function formatTimelineLabel(date: Date, unit: 'day' | 'week' | 'month') {
+  if (unit === 'month') {
+    return new Intl.DateTimeFormat('en-IN', { month: 'short', year: '2-digit' }).format(date);
+  }
+  if (unit === 'week') {
+    return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(date);
+  }
+  return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(date);
+}
+
+function buildTimelineSkeleton(range: NewsroomPipelineRange, now: Date) {
+  const config = getTimelineBucketConfig(range);
+  const bucketMap = new Map<
+    string,
+    {
+      label: string;
+      submittedStories: number;
+      approvedStories: number;
+      linkedArticles: number;
+      videoReady: number;
+      socialPublished: number;
+    }
+  >();
+
+  let cursor =
+    config.unit === 'day'
+      ? startOfDay(now)
+      : config.unit === 'week'
+        ? startOfWeek(now)
+        : startOfMonth(now);
+
+  const starters: Date[] = [];
+  for (let index = 0; index < config.count; index += 1) {
+    starters.push(cursor);
+    cursor =
+      config.unit === 'day'
+        ? addDays(cursor, -1)
+        : config.unit === 'week'
+          ? addWeeks(cursor, -1)
+          : addMonths(cursor, -1);
+  }
+
+  starters.reverse().forEach((date) => {
+    const key = date.toISOString();
+    bucketMap.set(key, {
+      label: formatTimelineLabel(date, config.unit),
+      submittedStories: 0,
+      approvedStories: 0,
+      linkedArticles: 0,
+      videoReady: 0,
+      socialPublished: 0,
+    });
+  });
+
+  return {
+    unit: config.unit,
+    bucketMap,
+  };
+}
+
+function resolveTimelineBucketKey(
+  date: Date,
+  unit: 'day' | 'week' | 'month'
+) {
+  const base =
+    unit === 'day' ? startOfDay(date) : unit === 'week' ? startOfWeek(date) : startOfMonth(date);
+  return base.toISOString();
+}
+
 export function summarizeNewsroomPipeline(params: {
   stories: PipelineStorySource[];
   articles: PipelineArticleSource[];
@@ -349,9 +572,13 @@ export function summarizeNewsroomPipeline(params: {
   let awaitingVideo = 0;
   let awaitingSocialDrafts = 0;
   let awaitingSocialPublish = 0;
+  const categoryBreakdowns = createBreakdownMap();
+  const reporterBreakdowns = createBreakdownMap();
+  const timeline = buildTimelineSkeleton(appliedFilters.range, now);
 
   for (const story of filteredStories) {
     const storyId = typeof story._id === 'string' ? story._id.trim() : String(story._id || '').trim();
+    const storyDate = resolveRelevantDate(story.updatedAt, story.publishedAt);
     const workflow = resolveStoryWorkflow({
       workflow: story.workflow,
       isPublished: typeof story.isPublished === 'boolean' ? story.isPublished : undefined,
@@ -368,6 +595,12 @@ export function summarizeNewsroomPipeline(params: {
       workflow.status === 'ready_for_approval'
     ) {
       storiesSubmitted += 1;
+      if (storyDate) {
+        const bucket = timeline.bucketMap.get(resolveTimelineBucketKey(storyDate, timeline.unit));
+        if (bucket) {
+          bucket.submittedStories += 1;
+        }
+      }
     }
 
     if (!isStoryReadyForArticleCreation(workflow.status)) {
@@ -375,6 +608,12 @@ export function summarizeNewsroomPipeline(params: {
     }
 
     approvedStories += 1;
+    if (storyDate) {
+      const bucket = timeline.bucketMap.get(resolveTimelineBucketKey(storyDate, timeline.unit));
+      if (bucket) {
+        bucket.approvedStories += 1;
+      }
+    }
 
     const hasLinkedArticle =
       typeof story.linkedArticleId === 'string' && story.linkedArticleId.trim().length > 0;
@@ -391,6 +630,12 @@ export function summarizeNewsroomPipeline(params: {
 
     if (hasLinkedArticle) {
       linkedArticleCreated += 1;
+      if (storyDate) {
+        const bucket = timeline.bucketMap.get(resolveTimelineBucketKey(storyDate, timeline.unit));
+        if (bucket) {
+          bucket.linkedArticles += 1;
+        }
+      }
     } else {
       awaitingArticle += 1;
     }
@@ -405,6 +650,12 @@ export function summarizeNewsroomPipeline(params: {
 
     if (isVideoReady) {
       videoReady += 1;
+      if (storyDate) {
+        const bucket = timeline.bucketMap.get(resolveTimelineBucketKey(storyDate, timeline.unit));
+        if (bucket) {
+          bucket.videoReady += 1;
+        }
+      }
     }
 
     if (hasSocialDrafts) {
@@ -413,6 +664,12 @@ export function summarizeNewsroomPipeline(params: {
 
     if (hasPublishedSocial) {
       socialPublished += 1;
+      if (storyDate) {
+        const bucket = timeline.bucketMap.get(resolveTimelineBucketKey(storyDate, timeline.unit));
+        if (bucket) {
+          bucket.socialPublished += 1;
+        }
+      }
     }
 
     if (hasLinkedArticle && !hasVideoStarted) {
@@ -430,6 +687,24 @@ export function summarizeNewsroomPipeline(params: {
     if (linkedStatus === 'published' && isVideoReady && hasPublishedSocial) {
       fullyDistributed += 1;
     }
+
+    const breakdownValues = {
+      approvedStories: 1,
+      linkedArticles: hasLinkedArticle ? 1 : 0,
+      videoReady: isVideoReady ? 1 : 0,
+      socialPublished: hasPublishedSocial ? 1 : 0,
+      fullyDistributed: linkedStatus === 'published' && isVideoReady && hasPublishedSocial ? 1 : 0,
+    };
+    incrementBreakdown(
+      categoryBreakdowns,
+      normalizeFilterText(story.category) || 'Uncategorised',
+      breakdownValues
+    );
+    incrementBreakdown(
+      reporterBreakdowns,
+      getReporterLabel({ workflow: story.workflow, author: story.author }) || 'Unknown reporter',
+      breakdownValues
+    );
   }
 
   return {
@@ -464,6 +739,55 @@ export function summarizeNewsroomPipeline(params: {
       awaitingSocialDrafts,
       awaitingSocialPublish,
     },
+    conversions: [
+      {
+        key: 'submitted',
+        label: 'Submitted',
+        count: storiesSubmitted,
+        rateFromApproved: approvedStories > 0 ? Math.round((storiesSubmitted / approvedStories) * 100) : 0,
+      },
+      {
+        key: 'approved',
+        label: 'Approved',
+        count: approvedStories,
+        rateFromApproved: approvedStories > 0 ? 100 : 0,
+      },
+      {
+        key: 'linked_article',
+        label: 'Article Created',
+        count: linkedArticleCreated,
+        rateFromApproved: approvedStories > 0 ? Math.round((linkedArticleCreated / approvedStories) * 100) : 0,
+      },
+      {
+        key: 'published_article',
+        label: 'Article Published',
+        count: linkedArticlePublished,
+        rateFromApproved: approvedStories > 0 ? Math.round((linkedArticlePublished / approvedStories) * 100) : 0,
+      },
+      {
+        key: 'video_ready',
+        label: 'Video Ready',
+        count: videoReady,
+        rateFromApproved: approvedStories > 0 ? Math.round((videoReady / approvedStories) * 100) : 0,
+      },
+      {
+        key: 'social_published',
+        label: 'Social Published',
+        count: socialPublished,
+        rateFromApproved: approvedStories > 0 ? Math.round((socialPublished / approvedStories) * 100) : 0,
+      },
+      {
+        key: 'fully_distributed',
+        label: 'Fully Distributed',
+        count: fullyDistributed,
+        rateFromApproved: approvedStories > 0 ? Math.round((fullyDistributed / approvedStories) * 100) : 0,
+      },
+    ],
+    breakdowns: {
+      categories: finalizeBreakdowns(categoryBreakdowns),
+      reporters: finalizeBreakdowns(reporterBreakdowns),
+    },
+    timeline: Array.from(timeline.bucketMap.values()),
   };
 }
 

@@ -102,6 +102,10 @@ export function buildSocialDraftSeed(params: {
     externalPostId: '',
     externalUrl: '',
     lastError: '',
+    automationProvider: 'manual' as const,
+    automationDispatchedAt: null,
+    automationExecutionId: '',
+    automationExecutionUrl: '',
     createdBy: params.actor,
   }));
 }

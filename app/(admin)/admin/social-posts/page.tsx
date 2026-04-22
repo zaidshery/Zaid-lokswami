@@ -23,6 +23,16 @@ type SocialPost = {
   externalUrl?: string;
   lastError?: string;
   updatedAt?: string;
+  automationProvider?: 'manual' | 'n8n' | 'generic_webhook';
+  automationDispatchedAt?: string | null;
+  automationExecutionId?: string;
+  automationExecutionUrl?: string;
+};
+
+type AutomationMeta = {
+  provider: 'manual' | 'n8n' | 'generic_webhook';
+  enabled: boolean;
+  label: string;
 };
 
 const PLATFORM_OPTIONS = ['all', 'youtube', 'facebook', 'instagram'] as const;
@@ -70,6 +80,7 @@ export default function SocialPostsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
+  const [automationMeta, setAutomationMeta] = useState<AutomationMeta | null>(null);
 
   const fetchPosts = async () => {
     setIsLoading(true);
@@ -88,11 +99,15 @@ export default function SocialPostsPage() {
         success?: boolean;
         error?: string;
         data?: SocialPost[];
+        meta?: {
+          automation?: AutomationMeta;
+        };
       };
       if (!response.ok || !data.success || !Array.isArray(data.data)) {
         throw new Error(data.error || 'Failed to load social posts');
       }
       setPosts(data.data);
+      setAutomationMeta(data.meta?.automation || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load social posts');
     } finally {
@@ -141,6 +156,40 @@ export default function SocialPostsPage() {
     }
   };
 
+  const handleDispatch = async (postId: string) => {
+    setBusyId(postId);
+    setError('');
+    try {
+      const response = await fetch(`/api/admin/social-posts/${postId}/dispatch`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        data?: SocialPost;
+        meta?: {
+          automation?: AutomationMeta;
+        };
+      };
+
+      if (!response.ok || !data.success || !data.data) {
+        throw new Error(data.error || 'Failed to send social post to automation');
+      }
+
+      setPosts((current) => current.map((post) => (post._id === postId ? data.data! : post)));
+      if (data.meta?.automation) {
+        setAutomationMeta(data.meta.automation);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send social post to automation');
+    } finally {
+      setBusyId('');
+    }
+  };
+
   if (!canAccess) {
     return (
       <div className="rounded-[28px] border border-red-200 bg-red-50 p-6 text-sm text-red-700">
@@ -182,6 +231,17 @@ export default function SocialPostsPage() {
       </section>
 
       <section className="admin-shell-surface rounded-[28px] p-5">
+        <div className="mb-4 rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface-muted)] px-4 py-3 text-sm text-[color:var(--admin-shell-text-muted)]">
+          <p className="font-semibold text-[color:var(--admin-shell-text)]">Automation</p>
+          <p className="mt-1">
+            {automationMeta?.enabled
+              ? `${automationMeta.label} is connected. Approve a draft, then send it to automation for handoff to your publishing workflow.`
+              : 'Automation is in manual mode. Configure n8n or a webhook to hand off approved drafts automatically.'}
+          </p>
+          <p className="mt-2 text-xs">
+            Recommended free automation for this setup: self-hosted n8n using a webhook trigger.
+          </p>
+        </div>
         <div className="grid gap-3 md:grid-cols-2">
           <select
             value={platformFilter}
@@ -268,6 +328,19 @@ export default function SocialPostsPage() {
                     <span>Story {post.sourceStoryId}</span>
                     {post.sourceArticleId ? <span>Article {post.sourceArticleId}</span> : null}
                     {post.updatedAt ? <span>Updated {post.updatedAt}</span> : null}
+                    {post.automationDispatchedAt ? (
+                      <span>Automation sent {post.automationDispatchedAt}</span>
+                    ) : null}
+                    {post.automationExecutionUrl ? (
+                      <a
+                        href={post.automationExecutionUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold underline"
+                      >
+                        Open automation run
+                      </a>
+                    ) : null}
                     {post.externalUrl ? (
                       <a
                         href={post.externalUrl}
@@ -294,6 +367,20 @@ export default function SocialPostsPage() {
                       className="admin-shell-toolbar-btn rounded-2xl px-3 py-2 text-xs font-semibold"
                     >
                       Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDispatch(post._id)}
+                      disabled={
+                        busyId === post._id ||
+                        !automationMeta?.enabled ||
+                        (post.status !== 'approved' &&
+                          post.status !== 'scheduled' &&
+                          post.status !== 'failed')
+                      }
+                      className="admin-shell-toolbar-btn rounded-2xl px-3 py-2 text-xs font-semibold"
+                    >
+                      Send To Automation
                     </button>
                     <button
                       type="button"

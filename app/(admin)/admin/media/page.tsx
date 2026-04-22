@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useSession } from 'next-auth/react';
 import {
   AlertCircle,
   Film,
@@ -12,12 +13,19 @@ import {
   Upload,
 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import {
+  canDeleteContent,
+  type PermissionUser,
+} from '@/lib/auth/permissions';
+import { isAdminRole, isReporterDeskRole } from '@/lib/auth/roles';
 
 interface MediaItem {
   _id: string;
   filename: string;
   url: string;
   type: string;
+  uploadedBy?: string;
+  createdAt?: string;
 }
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -58,12 +66,57 @@ function formatKindLabel(type: string) {
 }
 
 export default function MediaLibrary() {
+  const { data: session } = useSession();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeDeleteId, setActiveDeleteId] = useState<string | null>(null);
+  const adminRole = isAdminRole(session?.user?.role) ? session.user.role : null;
+
+  const permissionUser = useMemo<PermissionUser | null>(() => {
+    const sessionUser = session?.user;
+    const email = sessionUser?.email?.trim() || '';
+    const role = sessionUser?.role;
+
+    if (!sessionUser || !email || !isAdminRole(role)) {
+      return null;
+    }
+
+    return {
+      id: sessionUser.userId || sessionUser.id || email,
+      email,
+      name: sessionUser.name?.trim() || email.split('@')[0] || 'Admin',
+      role,
+    };
+  }, [session]);
+
+  const isReporterView = isReporterDeskRole(adminRole);
+  const canDeleteMedia = canDeleteContent(permissionUser);
+  const libraryBadge = isReporterView ? 'Your Uploads' : 'Media Control';
+  const libraryTitle = isReporterView ? 'My Media' : 'Media Library';
+  const libraryDescription = isReporterView
+    ? 'Upload and review the images and videos you filed for your reporting work. Only media uploaded by you appears here.'
+    : 'Upload, review, and clean shared image and video assets from one calmer library surface built for newsroom operations.';
+  const uploadWorkspaceTitle = isReporterView ? 'Your Upload Desk' : 'Upload Workspace';
+  const uploadWorkspaceDescription = isReporterView
+    ? 'Supports image and video assets for your reporting work.'
+    : 'Supports image and video assets for the shared desk.';
+  const refreshLabel = isReporterView ? 'Refresh My Uploads' : 'Refresh Library';
+  const assetsLabel = isReporterView ? 'Your Assets' : 'Assets';
+  const totalAssetsLabel = isReporterView ? 'Your Assets' : 'Total Assets';
+  const imageAssetsLabel = isReporterView ? 'Your Images' : 'Image Assets';
+  const videoAssetsLabel = isReporterView ? 'Your Videos' : 'Video Assets';
+  const totalAssetsDescription = isReporterView
+    ? 'Media you uploaded for your reporting workflow.'
+    : 'Shared items currently available to newsroom workflows.';
+  const imageAssetsDescription = isReporterView
+    ? 'Photos and visual uploads filed from your desk.'
+    : 'Thumbnails, story cards, and general visual assets.';
+  const videoAssetsDescription = isReporterView
+    ? 'Video clips and motion assets from your reporting work.'
+    : 'Motion assets available for video and multimedia surfaces.';
 
   const fetchMedia = useCallback(async () => {
     setLoading(true);
@@ -207,17 +260,17 @@ export default function MediaLibrary() {
         <div className="relative grid gap-8 xl:grid-cols-[1.15fr,0.9fr]">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-              Media Control
+              {libraryBadge}
             </div>
             <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
-              Media Library
+              {libraryTitle}
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-              Upload, review, and clean shared image and video assets from one calmer library surface built for newsroom operations.
+              {libraryDescription}
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <div className={META_CHIP_CLASS}>
-                <span>Assets</span>
+                <span>{assetsLabel}</span>
                 <strong className="text-[color:var(--admin-shell-text)]">{media.length}</strong>
               </div>
               <div className={META_CHIP_CLASS}>
@@ -233,7 +286,7 @@ export default function MediaLibrary() {
 
           <div className={PANEL_CLASS}>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-              Upload Workspace
+              {uploadWorkspaceTitle}
             </p>
             <div className="mt-4 space-y-4">
               <label
@@ -246,7 +299,7 @@ export default function MediaLibrary() {
                     Choose media to upload
                   </p>
                   <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
-                    Supports image and video assets for the shared desk.
+                    {uploadWorkspaceDescription}
                   </p>
                 </div>
               </label>
@@ -276,6 +329,12 @@ export default function MediaLibrary() {
                 </div>
               )}
 
+              {isReporterView ? (
+                <div className={EMPTY_STATE_CLASS}>
+                  Only your uploads are visible here. Asset cleanup stays with desk admins so published work is not removed by mistake.
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
@@ -293,7 +352,7 @@ export default function MediaLibrary() {
                   className={SECONDARY_BUTTON_CLASS}
                 >
                   <RefreshCw className={cx('h-4 w-4', loading && 'animate-spin')} />
-                  Refresh Library
+                  {refreshLabel}
                 </button>
               </div>
             </div>
@@ -318,35 +377,35 @@ export default function MediaLibrary() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className={METRIC_CARD_CLASS}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-            Total Assets
+            {totalAssetsLabel}
           </p>
           <p className="mt-4 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)]">
             {media.length}
           </p>
           <p className="mt-3 text-sm text-[color:var(--admin-shell-text-muted)]">
-            Shared items currently available to newsroom workflows.
+            {totalAssetsDescription}
           </p>
         </div>
         <div className={METRIC_CARD_CLASS}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-            Image Assets
+            {imageAssetsLabel}
           </p>
           <p className="mt-4 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)]">
             {imageCount}
           </p>
           <p className="mt-3 text-sm text-[color:var(--admin-shell-text-muted)]">
-            Thumbnails, story cards, and general visual assets.
+            {imageAssetsDescription}
           </p>
         </div>
         <div className={METRIC_CARD_CLASS}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-            Video Assets
+            {videoAssetsLabel}
           </p>
           <p className="mt-4 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)]">
             {videoCount}
           </p>
           <p className="mt-3 text-sm text-[color:var(--admin-shell-text-muted)]">
-            Motion assets available for video and multimedia surfaces.
+            {videoAssetsDescription}
           </p>
         </div>
       </div>
@@ -359,7 +418,7 @@ export default function MediaLibrary() {
         <div className={cx(PANEL_CLASS, 'py-16 text-center')}>
           <ImageIcon className="mx-auto mb-3 h-10 w-10 text-zinc-400" />
           <p className="text-sm text-[color:var(--admin-shell-text-muted)]">
-            No media has been uploaded yet.
+            {isReporterView ? 'You have not uploaded any media yet.' : 'No media has been uploaded yet.'}
           </p>
         </div>
       ) : (
@@ -407,19 +466,21 @@ export default function MediaLibrary() {
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => void remove(item._id)}
-                    disabled={activeDeleteId === item._id}
-                    className={DANGER_BUTTON_CLASS}
-                    aria-label={`Delete ${item.filename}`}
-                  >
-                    {activeDeleteId === item._id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </button>
+                  {canDeleteMedia ? (
+                    <button
+                      type="button"
+                      onClick={() => void remove(item._id)}
+                      disabled={activeDeleteId === item._id}
+                      className={DANGER_BUTTON_CLASS}
+                      aria-label={`Delete ${item.filename}`}
+                    >
+                      {activeDeleteId === item._id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  ) : null}
                 </div>
               </motion.article>
             );

@@ -25,6 +25,19 @@ import { isAdminRole, type AdminRole } from '@/lib/auth/roles';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import type { WorkflowStatus } from '@/lib/workflow/types';
+import {
+  CmsCollectionHero,
+  CmsCollectionMetricCard,
+  CmsCollectionMetricGrid,
+  CmsCollectionPage,
+  CMS_COLLECTION_EMPTY_STATE_CLASS as EMPTY_STATE_CLASS,
+  CMS_COLLECTION_FILTER_INPUT_CLASS as FILTER_INPUT_CLASS,
+  CMS_COLLECTION_META_CHIP_CLASS as META_CHIP_CLASS,
+  CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
+  CMS_COLLECTION_PRIMARY_BUTTON_CLASS as PRIMARY_BUTTON_CLASS,
+  CMS_COLLECTION_SECONDARY_BUTTON_CLASS as SECONDARY_BUTTON_CLASS,
+  CMS_COLLECTION_SOFT_CARD_CLASS as SOFT_CARD_CLASS,
+} from '@/components/admin/CmsCollectionLayout';
 
 type WorkflowActor = {
   id?: string;
@@ -77,30 +90,6 @@ const workflowFilters: StatusFilter[] = [
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
-
-const PANEL_CLASS =
-  'admin-shell-surface-strong rounded-[30px] p-6 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.22)] dark:shadow-[0_28px_90px_-52px_rgba(0,0,0,0.45)]';
-
-const SOFT_CARD_CLASS =
-  'admin-shell-surface-muted rounded-[24px] p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.14)] dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.35)]';
-
-const METRIC_CARD_CLASS =
-  'admin-shell-surface rounded-[26px] p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.16)] dark:shadow-[0_22px_70px_-46px_rgba(0,0,0,0.38)]';
-
-const EMPTY_STATE_CLASS =
-  'rounded-[24px] border border-dashed border-[color:var(--admin-shell-border-strong)] bg-[color:var(--admin-shell-surface-muted)] p-6 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]';
-
-const META_CHIP_CLASS =
-  'admin-shell-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]';
-
-const FILTER_INPUT_CLASS =
-  'w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-4 py-3 text-sm text-[color:var(--admin-shell-text)] outline-none transition-colors placeholder:text-[color:var(--admin-shell-text-muted)] focus:border-red-400/40';
-
-const SECONDARY_BUTTON_CLASS =
-  'admin-shell-toolbar-btn inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold';
-
-const PRIMARY_BUTTON_CLASS =
-  'inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-900 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200';
 
 const DANGER_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20';
@@ -267,41 +256,33 @@ export default function VideosManagementPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[36px] border border-[color:var(--admin-shell-border)] bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.08),transparent_28%),var(--admin-bg-depth)] p-8 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] lg:p-10">
-        <div className="pointer-events-none absolute -right-10 top-0 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/14" />
-        <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl dark:bg-emerald-500/14" />
-        <div className="relative grid gap-8 xl:grid-cols-[1.25fr,0.82fr]">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-              Video Workflow
+    <CmsCollectionPage className="space-y-6">
+      <CmsCollectionHero
+        accent="blue"
+        eyebrow="Video Workflow"
+        title="Video Desk"
+        description="Manage long-form videos and Shorts through one calmer workflow desk for review, ranking, and publish readiness."
+        meta={
+          <>
+            <div className={META_CHIP_CLASS}>
+              <span>Drafts</span>
+              <strong className="text-[color:var(--admin-shell-text)]">{summary.drafts}</strong>
             </div>
-            <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
-              Video Desk
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-              Manage long-form videos and Shorts through one calmer workflow desk for review, ranking, and publish readiness.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <div className={META_CHIP_CLASS}>
-                <span>Drafts</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{summary.drafts}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Review</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{summary.review}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Ready</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{summary.ready}</strong>
-              </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Published</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{summary.published}</strong>
-              </div>
+            <div className={META_CHIP_CLASS}>
+              <span>Review</span>
+              <strong className="text-[color:var(--admin-shell-text)]">{summary.review}</strong>
             </div>
-          </div>
-
+            <div className={META_CHIP_CLASS}>
+              <span>Ready</span>
+              <strong className="text-[color:var(--admin-shell-text)]">{summary.ready}</strong>
+            </div>
+            <div className={META_CHIP_CLASS}>
+              <span>Published</span>
+              <strong className="text-[color:var(--admin-shell-text)]">{summary.published}</strong>
+            </div>
+          </>
+        }
+        aside={
           <div className={PANEL_CLASS}>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
               Desk Actions
@@ -328,8 +309,8 @@ export default function VideosManagementPage() {
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        }
+      />
 
       {error ? (
         <div className="flex items-start gap-2 rounded-[20px] border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
@@ -345,24 +326,12 @@ export default function VideosManagementPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Drafts</p>
-          <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">{summary.drafts}</p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">In Review</p>
-          <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">{summary.review}</p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Ready</p>
-          <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">{summary.ready}</p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Published</p>
-          <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">{summary.published}</p>
-        </div>
-      </div>
+      <CmsCollectionMetricGrid className="md:grid-cols-4 xl:grid-cols-4">
+        <CmsCollectionMetricCard label="Drafts" value={summary.drafts} />
+        <CmsCollectionMetricCard label="In Review" value={summary.review} />
+        <CmsCollectionMetricCard label="Ready" value={summary.ready} />
+        <CmsCollectionMetricCard label="Published" value={summary.published} />
+      </CmsCollectionMetricGrid>
 
       <div className={PANEL_CLASS}>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -550,6 +519,6 @@ export default function VideosManagementPage() {
           })}
         </div>
       )}
-    </div>
+    </CmsCollectionPage>
   );
 }

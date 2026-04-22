@@ -42,6 +42,9 @@
     --admin-shell-active: #111827;
     --admin-shell-active-text: #ffffff;
     --admin-shell-accent: #dc2626;
+    --admin-shell-scrollbar-track: rgba(148, 163, 184, 0.14);
+    --admin-shell-scrollbar-thumb: rgba(100, 116, 139, 0.58);
+    --admin-shell-scrollbar-thumb-hover: rgba(71, 85, 105, 0.82);
   }
   
   html {
@@ -81,6 +84,9 @@
     --admin-shell-active: #f4efe6;
     --admin-shell-active-text: #121216;
     --admin-shell-accent: #ef4444;
+    --admin-shell-scrollbar-track: rgba(255, 255, 255, 0.08);
+    --admin-shell-scrollbar-thumb: rgba(148, 163, 184, 0.48);
+    --admin-shell-scrollbar-thumb-hover: rgba(226, 232, 240, 0.68);
   }
   
   html.dark main {
@@ -868,6 +874,45 @@
       radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.06), transparent 26%),
       radial-gradient(circle at 88% 0%, rgba(99, 102, 241, 0.06), transparent 22%),
       linear-gradient(180deg, var(--admin-bg-depth) 0%, var(--admin-bg) 100%);
+  }
+
+  .admin-shell,
+  .admin-shell * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--admin-shell-scrollbar-thumb) var(--admin-shell-scrollbar-track);
+  }
+
+  .admin-shell::-webkit-scrollbar,
+  .admin-shell *::-webkit-scrollbar {
+    display: block;
+    width: 10px;
+    height: 10px;
+  }
+
+  .admin-shell::-webkit-scrollbar-track,
+  .admin-shell *::-webkit-scrollbar-track {
+    background: var(--admin-shell-scrollbar-track);
+    border-radius: 999px;
+  }
+
+  .admin-shell::-webkit-scrollbar-thumb,
+  .admin-shell *::-webkit-scrollbar-thumb {
+    background: var(--admin-shell-scrollbar-thumb);
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+
+  .admin-shell::-webkit-scrollbar-thumb:hover,
+  .admin-shell *::-webkit-scrollbar-thumb:hover {
+    background: var(--admin-shell-scrollbar-thumb-hover);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .admin-shell::-webkit-scrollbar-corner,
+  .admin-shell *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   html.dark .admin-shell {

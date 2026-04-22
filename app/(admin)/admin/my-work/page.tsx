@@ -25,7 +25,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
-const PANEL_CLASS = 'admin-shell-surface-strong rounded-[30px] p-6';
+const PANEL_CLASS = 'admin-shell-surface-strong rounded-[26px] p-4 sm:rounded-[30px] sm:p-6';
 
 const SOFT_CARD_CLASS =
   'admin-shell-surface-muted rounded-[24px] p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.14)] dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.35)]';
@@ -91,7 +91,7 @@ function getLinkCards(role: string): LinkCard[] {
   if (isReporter) {
     cards.unshift({
       title: 'Create Story',
-      description: 'Start a new story draft with reporter media, source notes, and desk handoff details.',
+      description: 'Start a new reporting draft with media, source notes, and desk handoff details.',
       href: '/admin/stories/new',
       icon: Video,
       tone: 'bg-fuchsia-500/10 text-fuchsia-600',
@@ -222,7 +222,7 @@ export default async function AdminMyWorkPage() {
 
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[36px] border border-[color:var(--admin-shell-border)] bg-[radial-gradient(circle_at_top_left,rgba(185,28,28,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.08),transparent_28%),var(--admin-bg-depth)] p-8 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] lg:p-10">
+      <section className="relative overflow-hidden rounded-[30px] border border-[color:var(--admin-shell-border)] bg-[radial-gradient(circle_at_top_left,rgba(185,28,28,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.08),transparent_28%),var(--admin-bg-depth)] p-6 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] sm:rounded-[36px] sm:p-8 lg:p-10">
         <div className="pointer-events-none absolute -right-10 top-0 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl dark:bg-emerald-500/14" />
         <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/14" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -230,7 +230,7 @@ export default async function AdminMyWorkPage() {
             <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
               {formatUserRoleLabel(admin.role)}
             </div>
-            <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
+            <h1 className="mt-5 text-3xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
               My Work
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
@@ -246,22 +246,35 @@ export default async function AdminMyWorkPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <section
+        className={cx(
+          'grid gap-4',
+          isReporter ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 lg:grid-cols-3'
+        )}
+      >
         {cards.map((card) => {
           const Icon = card.icon;
           return (
             <Link
               key={card.href}
               href={card.href}
-              className="admin-shell-surface-strong rounded-[28px] p-6 transition-all hover:-translate-y-0.5"
+              className={cx(
+                'admin-shell-surface-strong rounded-[24px] p-4 transition-all hover:-translate-y-0.5 sm:rounded-[28px] sm:p-6',
+                isReporter && 'min-h-[132px] sm:min-h-0'
+              )}
             >
-              <div className={`inline-flex rounded-2xl p-3 ${card.tone}`}>
-                <Icon className="h-5 w-5" />
+              <div className={cx('inline-flex rounded-2xl p-3', card.tone, isReporter && 'p-2.5 sm:p-3')}>
+                <Icon className={cx('h-5 w-5', isReporter && 'h-4 w-4 sm:h-5 sm:w-5')} />
               </div>
-              <h2 className="mt-4 text-lg font-bold text-[color:var(--admin-shell-text)]">
+              <h2 className={cx('mt-4 text-lg font-bold text-[color:var(--admin-shell-text)]', isReporter && 'text-base sm:text-lg')}>
                 {card.title}
               </h2>
-              <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+              <p
+                className={cx(
+                  'mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]',
+                  isReporter && 'hidden text-xs leading-5 sm:block sm:text-sm sm:leading-6'
+                )}
+              >
                 {card.description}
               </p>
             </Link>
@@ -281,7 +294,7 @@ export default async function AdminMyWorkPage() {
           </div>
         </div>
 
-        <div className="mt-6 space-y-3">
+        <div className="mt-5 space-y-2.5 sm:mt-6 sm:space-y-3">
           {myWork.items.length ? (
             myWork.items.map((item) => (
               (() => {
@@ -303,16 +316,16 @@ export default async function AdminMyWorkPage() {
                     key={`${item.contentType}-${item.id}`}
                     href={item.editHref}
                     className={cx(
-                      'flex flex-col gap-3 transition-colors hover:border-zinc-300/90 hover:bg-zinc-100/80 dark:hover:border-white/15 dark:hover:bg-white/[0.06]',
+                      'flex flex-col gap-2.5 transition-colors hover:border-zinc-300/90 hover:bg-zinc-100/80 dark:hover:border-white/15 dark:hover:bg-white/[0.06] sm:gap-3',
                       SOFT_CARD_CLASS
                     )}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-[color:var(--admin-shell-text)]">
+                        <p className="truncate text-[13px] font-semibold text-[color:var(--admin-shell-text)] sm:text-sm">
                           {item.title}
                         </p>
-                        <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
+                        <p className="mt-1 text-[11px] text-[color:var(--admin-shell-text-muted)] sm:text-xs">
                           {item.category} / {item.author} / {formatContentTypeLabel(item.contentType)}
                         </p>
                       </div>
@@ -320,13 +333,19 @@ export default async function AdminMyWorkPage() {
                         {formatStatusLabel(item.status)}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-3 text-xs text-[color:var(--admin-shell-text-muted)]">
+                    <div className="flex flex-wrap gap-2 text-[11px] text-[color:var(--admin-shell-text-muted)] sm:gap-3 sm:text-xs">
                       <span>Updated {formatUiDate(item.updatedAt, item.updatedAt)}</span>
-                      {item.assignedToName ? <span>Assignee: {item.assignedToName}</span> : null}
-                      {item.createdByName ? <span>Created by: {item.createdByName}</span> : null}
+                      {item.assignedToName ? <span className="hidden sm:inline">Assignee: {item.assignedToName}</span> : null}
+                      {item.createdByName ? <span className="hidden sm:inline">Created by: {item.createdByName}</span> : null}
                     </div>
                     {workflowFeedback ? (
-                      <div className={cx('rounded-[20px] border p-3', getWorkflowFeedbackToneClass(workflowFeedback.tone))}>
+                      <div
+                        className={cx(
+                          'rounded-[18px] border p-3 sm:rounded-[20px]',
+                          getWorkflowFeedbackToneClass(workflowFeedback.tone),
+                          workflowFeedback.tone === 'success' && 'hidden sm:block'
+                        )}
+                      >
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">
                             {workflowFeedback.badge}
@@ -337,9 +356,9 @@ export default async function AdminMyWorkPage() {
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-2 text-sm leading-6">{workflowFeedback.nextAction}</p>
+                        <p className="mt-2 text-xs leading-5 sm:text-sm sm:leading-6">{workflowFeedback.nextAction}</p>
                         {workflowFeedback.highlightedNote ? (
-                          <p className="mt-2 line-clamp-2 text-xs leading-5 opacity-90">
+                          <p className="mt-2 hidden line-clamp-2 text-xs leading-5 opacity-90 sm:block">
                             <span className="font-semibold">
                               {workflowFeedback.highlightedNoteLabel || 'Desk feedback'}:
                             </span>{' '}
@@ -360,26 +379,31 @@ export default async function AdminMyWorkPage() {
         </div>
       </section>
 
-      <section className={cx('grid grid-cols-1 gap-4', isReporter ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
+      <section
+        className={cx(
+          'grid gap-4',
+          isReporter ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 lg:grid-cols-3'
+        )}
+      >
         {contextStats.map((stat) => (
           <div
             key={stat.label}
-            className="admin-shell-surface-strong rounded-[28px] p-6"
+            className="admin-shell-surface-strong rounded-[24px] p-4 sm:rounded-[28px] sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-[color:var(--admin-shell-text-muted)]">
+                <p className="text-xs font-medium text-[color:var(--admin-shell-text-muted)] sm:text-sm">
                   {stat.label}
                 </p>
-                <p className="mt-3 text-3xl font-black text-[color:var(--admin-shell-text)]">
+                <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)] sm:mt-3 sm:text-3xl">
                   {formatNumber(stat.value)}
                 </p>
               </div>
-              <div className={`rounded-2xl p-3 ${stat.tone}`}>
-                <stat.icon className="h-5 w-5" />
+              <div className={`rounded-2xl p-2.5 sm:p-3 ${stat.tone}`}>
+                <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
             </div>
-            <p className="mt-4 text-sm text-[color:var(--admin-shell-text-muted)]">{stat.note}</p>
+            <p className="mt-4 hidden text-sm text-[color:var(--admin-shell-text-muted)] sm:block">{stat.note}</p>
           </div>
         ))}
       </section>

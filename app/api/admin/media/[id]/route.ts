@@ -4,6 +4,7 @@ import Media from '@/lib/models/Media';
 import fs from 'fs/promises';
 import path from 'path';
 import { getAdminSession } from '@/lib/auth/admin';
+import { canDeleteContent, canViewPage } from '@/lib/auth/permissions';
 
 type MediaRecord = {
   _id?: string;
@@ -19,6 +20,17 @@ export async function DELETE(req: NextRequest) {
   try {
     const user = await getAdminSession();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    if (!canViewPage(user.role, 'media')) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!canDeleteContent(user)) {
+      return NextResponse.json(
+        { success: false, error: 'Only admins can delete media assets.' },
+        { status: 403 }
+      );
+    }
 
     if (!process.env.MONGODB_URI) {
       const parts = req.url.split('/');

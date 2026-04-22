@@ -6,8 +6,11 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import {
+  ArrowRight,
+  CheckCircle2,
   Edit,
   FileText,
+  Link2,
   Loader,
   Plus,
   RefreshCw,
@@ -16,14 +19,36 @@ import {
   Volume2,
 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import {
+  canTransitionContent,
+  type ContentTransitionAction,
+} from '@/lib/auth/permissions';
 import { isAdminRole, isReporterDeskRole, type AdminRole } from '@/lib/auth/roles';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDate } from '@/lib/utils/dateFormat';
+import { getAllowedWorkflowTransitions } from '@/lib/workflow/transitions';
 import type { WorkflowStatus } from '@/lib/workflow/types';
+import {
+  CmsCollectionHero,
+  CmsCollectionPage,
+  CMS_COLLECTION_DANGER_BUTTON_CLASS as DANGER_BUTTON_CLASS,
+  CMS_COLLECTION_EMPTY_STATE_CLASS as EMPTY_STATE_CLASS,
+  CMS_COLLECTION_FILTER_INPUT_CLASS as FILTER_INPUT_CLASS,
+  CMS_COLLECTION_METRIC_CARD_CLASS as METRIC_CARD_CLASS,
+  CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
+  CMS_COLLECTION_PRIMARY_BUTTON_CLASS as PRIMARY_BUTTON_CLASS,
+  CMS_COLLECTION_SECONDARY_BUTTON_CLASS as SECONDARY_BUTTON_CLASS,
+} from '@/components/admin/CmsCollectionLayout';
 
 type ScopeFilter = 'all' | 'mine' | 'assigned' | 'review';
+type SourceFilter = 'all' | 'story' | 'direct';
 type TtsVariant = 'breaking_headline' | 'article_full';
 type TtsStatus = 'pending' | 'ready' | 'failed' | 'stale';
+type WorkflowComment = {
+  body?: string;
+  kind?: string;
+  author?: { name?: string; email?: string } | null;
+};
 
 type Article = {
   _id: string;
@@ -46,6 +71,7 @@ type Article = {
     reviewedBy?: { id?: string; name?: string; email?: string } | null;
     rejectionReason?: string;
     scheduledFor?: string | null;
+    comments?: WorkflowComment[] | null;
   } | null;
 };
 
@@ -66,6 +92,11 @@ type TtsAssetsResponse = {
 };
 
 const FILTER_CATEGORIES = ['all', ...NEWS_CATEGORIES.map((category) => category.nameEn)];
+const SOURCE_FILTERS: Array<{ value: SourceFilter; label: string }> = [
+  { value: 'all', label: 'All Sources' },
+  { value: 'story', label: 'From Story' },
+  { value: 'direct', label: 'Direct Desk' },
+];
 const WORKFLOW_FILTERS: Array<{ value: WorkflowStatus | 'all'; label: string }> = [
   { value: 'all', label: 'All statuses' },
   { value: 'draft', label: 'Draft' },
@@ -111,24 +142,43 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
-const PANEL_CLASS = 'admin-shell-surface-strong rounded-[30px] p-6';
+const STATUS_TO_ACTION: Partial<Record<WorkflowStatus, ContentTransitionAction>> = {
+  submitted: 'submit',
+  assigned: 'assign',
+  in_review: 'start_review',
+  copy_edit: 'move_to_copy_edit',
+  changes_requested: 'request_changes',
+  ready_for_approval: 'mark_ready_for_approval',
+  approved: 'approve',
+  rejected: 'reject',
+  scheduled: 'schedule',
+  published: 'publish',
+  archived: 'archive',
+};
 
-const METRIC_CARD_CLASS = 'admin-shell-surface rounded-[26px] p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.16)]';
+const QUICK_ACTIONS: ContentTransitionAction[] = [
+  'submit',
+  'start_review',
+  'move_to_copy_edit',
+  'mark_ready_for_approval',
+  'approve',
+  'publish',
+  'archive',
+];
 
-const EMPTY_STATE_CLASS =
-  'rounded-[24px] border border-dashed border-[color:var(--admin-shell-border-strong)] bg-[color:var(--admin-shell-surface-muted)] p-6 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]';
-
-const FILTER_INPUT_CLASS =
-  'w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-4 py-3 text-sm text-[color:var(--admin-shell-text)] outline-none transition-colors placeholder:text-[color:var(--admin-shell-text-muted)] focus:border-red-400/40';
-
-const SECONDARY_BUTTON_CLASS =
-  'admin-shell-toolbar-btn inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold';
-
-const PRIMARY_BUTTON_CLASS =
-  'admin-shell-toolbar-btn inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold';
-
-const DANGER_BUTTON_CLASS =
-  'inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20';
+const QUICK_ACTION_LABELS: Record<ContentTransitionAction, string> = {
+  submit: 'Submit',
+  assign: 'Assign',
+  start_review: 'Start Review',
+  move_to_copy_edit: 'Copy Edit',
+  request_changes: 'Request Changes',
+  mark_ready_for_approval: 'Ready',
+  approve: 'Approve',
+  reject: 'Reject',
+  schedule: 'Schedule',
+  publish: 'Publish',
+  archive: 'Archive',
+};
 
 function formatStatusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
@@ -152,6 +202,182 @@ function getWorkflowToneClass(status: string) {
       return 'border-red-200 bg-red-50 text-red-700';
     default:
       return 'border-gray-200 bg-gray-100 text-gray-700';
+  }
+}
+
+function getWorkflowFeedbackToneClass(tone: 'neutral' | 'info' | 'warning' | 'danger' | 'success') {
+  switch (tone) {
+    case 'danger':
+      return 'border-red-200 bg-red-50 text-red-900';
+    case 'warning':
+      return 'border-amber-200 bg-amber-50 text-amber-900';
+    case 'info':
+      return 'border-blue-200 bg-blue-50 text-blue-900';
+    case 'success':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-900';
+    case 'neutral':
+    default:
+      return 'border-gray-200 bg-white text-gray-900';
+  }
+}
+
+function normalizeSourceParam(value: string | null): SourceFilter {
+  return value === 'story' || value === 'direct' ? value : 'all';
+}
+
+function extractLatestWorkflowNote(article: Article) {
+  const comments = Array.isArray(article.workflow?.comments) ? article.workflow?.comments || [] : [];
+  for (let index = comments.length - 1; index >= 0; index -= 1) {
+    const comment = comments[index];
+    const body = String(comment?.body || '').trim();
+    if (!body) continue;
+    return {
+      label:
+        comment?.kind === 'approval_note'
+          ? 'Approval note'
+          : comment?.kind === 'revision_request'
+            ? 'Revision request'
+            : comment?.kind === 'rejection_note'
+              ? 'Rejection note'
+              : 'Latest note',
+      body,
+      by: String(comment?.author?.name || comment?.author?.email || '').trim(),
+    };
+  }
+
+  const rejectionReason = String(article.workflow?.rejectionReason || '').trim();
+  if (rejectionReason) {
+    return {
+      label: 'Rejection reason',
+      body: rejectionReason,
+      by: String(article.workflow?.reviewedBy?.name || article.workflow?.reviewedBy?.email || '').trim(),
+    };
+  }
+
+  return null;
+}
+
+function buildDeskWorkflowSummary(article: Article) {
+  const status = article.workflow?.status || 'published';
+  const sourceLabel = article.sourceType === 'story' ? 'story-linked article' : 'direct desk article';
+  const assignedTo = article.workflow?.assignedTo?.name || article.workflow?.assignedTo?.email || '';
+  const latestNote = extractLatestWorkflowNote(article);
+
+  switch (status) {
+    case 'draft':
+      return {
+        badge: article.sourceType === 'story' ? 'Story Draft' : 'Desk Draft',
+        tone: 'neutral' as const,
+        summary: `This ${sourceLabel} is still in drafting and has not entered the approval lane yet.`,
+        nextAction: 'Finish the copy, then submit it for review when the desk version is ready.',
+        note: latestNote,
+      };
+    case 'submitted':
+      return {
+        badge: 'Review Queue',
+        tone: 'warning' as const,
+        summary: `This ${sourceLabel} is waiting for desk triage or assignment.`,
+        nextAction:
+          'Open the workflow to assign an editor, or start review directly if the desk is taking it forward now.',
+        note: latestNote,
+      };
+    case 'assigned':
+      return {
+        badge: 'Assigned',
+        tone: 'info' as const,
+        summary: assignedTo
+          ? `This ${sourceLabel} is assigned to ${assignedTo}.`
+          : `This ${sourceLabel} is assigned and should move into active review.`,
+        nextAction: 'Start review or open the editor to continue the desk pass.',
+        note: latestNote,
+      };
+    case 'in_review':
+      return {
+        badge: 'In Review',
+        tone: 'info' as const,
+        summary: `Desk review is active on this ${sourceLabel}.`,
+        nextAction: 'Continue review in the editor, or push it into copy edit when the first pass is done.',
+        note: latestNote,
+      };
+    case 'copy_edit':
+      return {
+        badge: 'Copy Edit',
+        tone: 'info' as const,
+        summary: `This ${sourceLabel} is being polished for language, packaging, and evidence support.`,
+        nextAction: 'Use the editor to tighten structure, then mark it ready for approval.',
+        note: latestNote,
+      };
+    case 'changes_requested':
+      return {
+        badge: 'Needs Changes',
+        tone: 'danger' as const,
+        summary: `This ${sourceLabel} needs revisions before it can continue through the desk.`,
+        nextAction: 'Open the editor, address the note, then submit it back into review.',
+        note: latestNote,
+      };
+    case 'ready_for_approval':
+      return {
+        badge: 'Approval Lane',
+        tone: 'success' as const,
+        summary: `Desk work is complete and this ${sourceLabel} is waiting for admin approval.`,
+        nextAction: 'Admin should approve it now or reopen it if another edit pass is needed.',
+        note: latestNote,
+      };
+    case 'approved':
+      return {
+        badge: 'Publish Lane',
+        tone: 'success' as const,
+        summary: `This ${sourceLabel} is approved and waiting for publish handling.`,
+        nextAction: 'Admin can publish now or schedule from the article editor.',
+        note: latestNote,
+      };
+    case 'scheduled':
+      return {
+        badge: 'Scheduled',
+        tone: 'success' as const,
+        summary: `This ${sourceLabel} is approved and scheduled for release.`,
+        nextAction: 'Open the editor only if timing, SEO, or final packaging needs adjustment.',
+        note: latestNote,
+      };
+    case 'published':
+      return {
+        badge: 'Published',
+        tone: 'success' as const,
+        summary: `This ${sourceLabel} is live for readers.`,
+        nextAction: 'Monitor performance, update corrections if needed, and use the article as the newsroom reference output.',
+        note: latestNote,
+      };
+    case 'rejected':
+      return {
+        badge: 'Rejected',
+        tone: 'danger' as const,
+        summary: `This ${sourceLabel} was rejected and needs desk-directed fixes before re-entry.`,
+        nextAction: 'Open the article, resolve the rejection reason, then resubmit it for review.',
+        note: latestNote,
+      };
+    case 'archived':
+    default:
+      return {
+        badge: 'Archived',
+        tone: 'neutral' as const,
+        summary: `This ${sourceLabel} is archived and no longer in the active workflow lane.`,
+        nextAction: 'Reopen the article only if the desk needs to resume work.',
+        note: latestNote,
+      };
+  }
+}
+
+function getQuickActionToneClass(action: ContentTransitionAction) {
+  switch (action) {
+    case 'publish':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
+    case 'approve':
+    case 'mark_ready_for_approval':
+      return 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100';
+    case 'archive':
+      return 'border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200';
+    default:
+      return 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50';
   }
 }
 
@@ -248,17 +474,37 @@ export default function ArticlesManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedScope, setSelectedScope] = useState<ScopeFilter>(defaultScope);
+  const [selectedSourceType, setSelectedSourceType] = useState<SourceFilter>('all');
   const [selectedWorkflowStatus, setSelectedWorkflowStatus] = useState<WorkflowStatus | 'all'>(
     'all'
   );
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [runningTtsActionKey, setRunningTtsActionKey] = useState('');
+  const [runningWorkflowActionKey, setRunningWorkflowActionKey] = useState('');
   const [error, setError] = useState('');
+
+  const permissionUser = useMemo(() => {
+    const sessionUser = session?.user;
+    const email = sessionUser?.email?.trim() || '';
+    const role = sessionUser?.role;
+
+    if (!sessionUser || !email || !isAdminRole(role)) {
+      return null;
+    }
+
+    return {
+      id: sessionUser.userId || sessionUser.id || email,
+      email,
+      name: sessionUser.name?.trim() || email.split('@')[0] || 'Desk User',
+      role,
+    };
+  }, [session]);
 
   useEffect(() => {
     const requestedScope = normalizeScopeParam(searchParams.get('scope'));
     const requestedWorkflow = normalizeWorkflowParam(searchParams.get('workflowStatus'));
     const requestedCategory = searchParams.get('category');
+    const requestedSourceType = normalizeSourceParam(searchParams.get('sourceType'));
 
     if (requestedScope && scopeOptions.some((option) => option.value === requestedScope)) {
       setSelectedScope(requestedScope);
@@ -267,6 +513,7 @@ export default function ArticlesManagement() {
     }
 
     setSelectedWorkflowStatus(requestedWorkflow);
+    setSelectedSourceType(requestedSourceType);
     setSelectedCategory(
       requestedCategory && FILTER_CATEGORIES.includes(requestedCategory)
         ? requestedCategory
@@ -352,10 +599,15 @@ export default function ArticlesManagement() {
   }, [fetchArticles]);
 
   const filteredArticles = useMemo(() => {
-    if (!searchTerm.trim()) return articles;
+    const sourceFiltered =
+      selectedSourceType === 'all'
+        ? articles
+        : articles.filter((article) => (article.sourceType || 'direct') === selectedSourceType);
+
+    if (!searchTerm.trim()) return sourceFiltered;
 
     const normalized = searchTerm.trim().toLowerCase();
-    return articles.filter(
+    return sourceFiltered.filter(
       (article) =>
         article.title.toLowerCase().includes(normalized) ||
         article.author.toLowerCase().includes(normalized) ||
@@ -363,20 +615,30 @@ export default function ArticlesManagement() {
         article.workflow?.assignedTo?.name?.toLowerCase().includes(normalized) ||
         article.workflow?.createdBy?.name?.toLowerCase().includes(normalized)
     );
-  }, [articles, searchTerm]);
+  }, [articles, searchTerm, selectedSourceType]);
 
   const counts = useMemo(() => {
     const next = {
       total: filteredArticles.length,
+      storyLinked: 0,
+      directDesk: 0,
       needsReview: 0,
+      approvalLane: 0,
+      publishLane: 0,
       readyToPublish: 0,
       published: 0,
       rejected: 0,
       drafts: 0,
+      assignedToMe: 0,
     };
 
     for (const article of filteredArticles) {
       const status = article.workflow?.status || 'published';
+      if ((article.sourceType || 'direct') === 'story') {
+        next.storyLinked += 1;
+      } else {
+        next.directDesk += 1;
+      }
       if (
         status === 'submitted' ||
         status === 'assigned' ||
@@ -393,13 +655,61 @@ export default function ArticlesManagement() {
       ) {
         next.readyToPublish += 1;
       }
+      if (status === 'ready_for_approval') next.approvalLane += 1;
+      if (status === 'approved' || status === 'scheduled') next.publishLane += 1;
       if (status === 'published') next.published += 1;
       if (status === 'rejected') next.rejected += 1;
       if (status === 'draft') next.drafts += 1;
+      if (
+        permissionUser &&
+        ((article.workflow?.assignedTo?.id || '').trim().toLowerCase() ===
+          permissionUser.id.trim().toLowerCase() ||
+          (article.workflow?.assignedTo?.email || '').trim().toLowerCase() ===
+            permissionUser.email.trim().toLowerCase())
+      ) {
+        next.assignedToMe += 1;
+      }
     }
 
     return next;
-  }, [filteredArticles]);
+  }, [filteredArticles, permissionUser]);
+
+  const handleWorkflowAction = async (article: Article, action: ContentTransitionAction) => {
+    const actionKey = `${action}:${article._id}`;
+    setRunningWorkflowActionKey(actionKey);
+    setError('');
+
+    try {
+      const response = await fetch(`/api/admin/articles/${encodeURIComponent(article._id)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          action,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update article workflow');
+      }
+
+      await fetchArticles();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Failed to update article workflow'
+      );
+    } finally {
+      setRunningWorkflowActionKey('');
+    }
+  };
 
   const getTtsState = useCallback((articleId: string, variant: TtsVariant) => {
     return articleTtsById[articleId]?.[variant] || null;
@@ -469,57 +779,40 @@ export default function ArticlesManagement() {
   };
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[36px] border border-[color:var(--admin-shell-border)] bg-[radial-gradient(circle_at_top_left,rgba(185,28,28,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.08),transparent_28%),var(--admin-bg-depth)] p-8 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] lg:p-10">
-        <div className="pointer-events-none absolute -right-10 top-0 h-48 w-48 rounded-full bg-red-500/10 blur-3xl dark:bg-red-500/14" />
-        <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/14" />
-        <div className="relative grid gap-8 xl:grid-cols-[1.25fr,0.85fr]">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-              Article Workflow
-            </div>
-            <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
-              Article Desk
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-              Manage drafts, review flow, publish readiness, and article voice operations from one
-              desk.
-            </p>
-          </div>
-
+    <CmsCollectionPage className="space-y-6">
+      <CmsCollectionHero
+        accent="red"
+        eyebrow="Article Workflow"
+        title="Article Desk"
+        description="Manage drafts, review flow, publish readiness, and article voice operations from one desk."
+        aside={
           <div className={PANEL_CLASS}>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
               Actions
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
-          {adminRole ? (
-            <Link
-              href="/admin/my-work"
-              className={SECONDARY_BUTTON_CLASS}
-            >
-              My Work
-            </Link>
-          ) : null}
-          {adminRole === 'super_admin' || adminRole === 'admin' || adminRole === 'copy_editor' ? (
-            <Link
-              href="/admin/review-queue"
-              className={SECONDARY_BUTTON_CLASS}
-            >
-              Review Queue
-            </Link>
-          ) : null}
-          <Link
-            href="/admin/ai?ttsVariant=article_full&ttsSourceType=article"
-            className={SECONDARY_BUTTON_CLASS}
-          >
-            Article TTS
-          </Link>
-          <Link
-            href="/admin/ai?ttsVariant=breaking_headline&ttsSourceType=article"
-            className={DANGER_BUTTON_CLASS}
-          >
-            Breaking TTS
-          </Link>
+              {adminRole ? (
+                <Link href="/admin/my-work" className={SECONDARY_BUTTON_CLASS}>
+                  My Work
+                </Link>
+              ) : null}
+              {adminRole === 'super_admin' || adminRole === 'admin' || adminRole === 'copy_editor' ? (
+                <Link href="/admin/review-queue" className={SECONDARY_BUTTON_CLASS}>
+                  Review Queue
+                </Link>
+              ) : null}
+              <Link
+                href="/admin/ai?ttsVariant=article_full&ttsSourceType=article"
+                className={SECONDARY_BUTTON_CLASS}
+              >
+                Article TTS
+              </Link>
+              <Link
+                href="/admin/ai?ttsVariant=breaking_headline&ttsSourceType=article"
+                className={DANGER_BUTTON_CLASS}
+              >
+                Breaking TTS
+              </Link>
             </div>
             {canCreateArticles && !isReporterDeskRole(adminRole) ? (
               <div className="mt-4">
@@ -530,8 +823,8 @@ export default function ArticlesManagement() {
               </div>
             ) : null}
           </div>
-        </div>
-      </section>
+        }
+      />
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -540,20 +833,42 @@ export default function ArticlesManagement() {
           note="Matches your current desk filters and search."
         />
         <StatCard
+          label="From Story"
+          value={counts.storyLinked}
+          note="Website articles created from approved reporter story packages."
+        />
+        <StatCard
+          label="Direct Desk"
+          value={counts.directDesk}
+          note="Original desk-written articles created without a source story."
+        />
+        <StatCard
           label="Needs Review"
           value={counts.needsReview}
           note="Submitted, assigned, in-review, and copy-edit items."
         />
         <StatCard
-          label="Ready To Publish"
-          value={counts.readyToPublish}
-          note="Approved or scheduled articles waiting for release."
+          label="Approval Lane"
+          value={counts.approvalLane}
+          note="Articles waiting for admin approval right now."
+        />
+        <StatCard
+          label="Publish Lane"
+          value={counts.publishLane}
+          note="Approved or scheduled articles waiting for release handling."
         />
         <StatCard
           label="Published"
           value={counts.published}
           note="Live stories that are already out to readers."
         />
+        {permissionUser ? (
+          <StatCard
+            label="Assigned To Me"
+            value={counts.assignedToMe}
+            note="Articles currently in your personal desk lane."
+          />
+        ) : null}
       </section>
 
       <div className={PANEL_CLASS}>
@@ -576,7 +891,7 @@ export default function ArticlesManagement() {
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr),repeat(2,minmax(0,0.4fr)),auto]">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr),repeat(3,minmax(0,0.34fr)),auto]">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
@@ -610,6 +925,18 @@ export default function ArticlesManagement() {
               {FILTER_CATEGORIES.map((category) => (
                 <option key={category} value={category}>
                   {category === 'all' ? 'All categories' : category}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={selectedSourceType}
+              onChange={(event) => setSelectedSourceType(event.target.value as SourceFilter)}
+              className={FILTER_INPUT_CLASS}
+            >
+              {SOURCE_FILTERS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -668,6 +995,19 @@ export default function ArticlesManagement() {
                     : 'neutral';
             const workflowStatus = article.workflow?.status || 'published';
             const timestamp = article.updatedAt || article.publishedAt || '';
+            const workflowFeedback = buildDeskWorkflowSummary(article);
+            const quickActions = permissionUser
+              ? getAllowedWorkflowTransitions(workflowStatus)
+                  .map((status) => STATUS_TO_ACTION[status])
+                  .filter((action): action is ContentTransitionAction => Boolean(action))
+                  .filter((action) => QUICK_ACTIONS.includes(action))
+                  .filter((action) =>
+                    canTransitionContent(permissionUser, {
+                      legacyAuthorName: article.author,
+                      workflow: article.workflow,
+                    }, action)
+                  )
+              : [];
 
             return (
               <motion.div
@@ -698,6 +1038,41 @@ export default function ArticlesManagement() {
                     </div>
 
                     <p className="mb-4 line-clamp-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">{article.summary}</p>
+
+                    <div
+                      className={cx(
+                        'mb-4 rounded-[24px] border p-4 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.28)]',
+                        getWorkflowFeedbackToneClass(workflowFeedback.tone)
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] dark:bg-white/10">
+                          {workflowFeedback.badge}
+                        </span>
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-80">
+                          {(article.sourceType || 'direct') === 'story'
+                            ? 'Story-linked workflow'
+                            : 'Desk-origin workflow'}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm font-semibold leading-6">
+                        {workflowFeedback.summary}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 opacity-90">
+                        <span className="font-semibold">Next:</span> {workflowFeedback.nextAction}
+                      </p>
+                      {workflowFeedback.note ? (
+                        <div className="mt-3 rounded-[18px] border border-current/15 bg-white/65 p-3 dark:bg-white/5">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-80">
+                            {workflowFeedback.note.label}
+                            {workflowFeedback.note.by ? ` - ${workflowFeedback.note.by}` : ''}
+                          </p>
+                          <p className="mt-1 text-sm leading-6 opacity-95">
+                            {workflowFeedback.note.body}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
 
                     <div className="flex flex-wrap gap-3 text-xs text-[color:var(--admin-shell-text-muted)]">
                       <span>By {article.author}</span>
@@ -739,7 +1114,12 @@ export default function ArticlesManagement() {
                           Open source story
                         </Link>
                       </div>
-                    ) : null}
+                    ) : (
+                      <div className="mt-4 rounded-[20px] border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300">
+                        Direct desk article. This piece was originated in the article desk and still
+                        follows admin approval before publish.
+                      </div>
+                    )}
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <TtsPill
@@ -799,6 +1179,49 @@ export default function ArticlesManagement() {
                     {!listenAsset?.lastError && article.isBreaking && breakingAsset?.lastError ? (
                       <p className="mt-2 text-xs text-red-600 dark:text-red-300">{breakingAsset.lastError}</p>
                     ) : null}
+
+                    <div className="mt-5 flex flex-wrap items-center gap-2">
+                      {quickActions.map((action) => {
+                        const isRunning = runningWorkflowActionKey === `${action}:${article._id}`;
+                        return (
+                          <button
+                            key={action}
+                            type="button"
+                            onClick={() => void handleWorkflowAction(article, action)}
+                            disabled={Boolean(runningWorkflowActionKey)}
+                            className={cx(
+                              'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                              getQuickActionToneClass(action)
+                            )}
+                          >
+                            {isRunning ? <Loader className="h-3.5 w-3.5 animate-spin" /> : null}
+                            {QUICK_ACTION_LABELS[action]}
+                          </button>
+                        );
+                      })}
+                      <Link
+                        href={`/admin/articles/${article._id}/edit`}
+                        className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                      >
+                        Open Workflow
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                      {article.sourceType === 'story' && article.sourceStoryId ? (
+                        <Link
+                          href={`/admin/stories/${article.sourceStoryId}/edit`}
+                          className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 transition-colors hover:bg-sky-100"
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                          Open Source Story
+                        </Link>
+                      ) : null}
+                      {workflowStatus === 'published' ? (
+                        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Live Output
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -857,6 +1280,6 @@ export default function ArticlesManagement() {
           })
         )}
       </div>
-    </div>
+    </CmsCollectionPage>
   );
 }

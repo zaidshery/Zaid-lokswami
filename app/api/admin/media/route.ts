@@ -3,7 +3,12 @@ import connectDB from '@/lib/db/mongoose';
 import Media from '@/lib/models/Media';
 import fs from 'fs/promises';
 import path from 'path';
-import { getAdminSession } from '@/lib/auth/admin';
+import {
+  getAdminSession,
+  type AdminSessionIdentity,
+} from '@/lib/auth/admin';
+import { canDeleteContent, canViewPage } from '@/lib/auth/permissions';
+import { isReporterDeskRole } from '@/lib/auth/roles';
 
 type MediaRecord = {
   _id?: string;
@@ -15,6 +20,24 @@ type MediaRecord = {
   createdAt?: string | Date;
 };
 
+function filterMediaForUser(records: MediaRecord[], user: AdminSessionIdentity): MediaRecord[] {
+  if (!isReporterDeskRole(user.role)) {
+    return records;
+  }
+
+  const normalizedEmail = user.email.trim().toLowerCase();
+
+  return records.filter((record) => record.uploadedBy?.trim().toLowerCase() === normalizedEmail);
+}
+
+function sortMediaByCreatedAt(records: MediaRecord[]): MediaRecord[] {
+  return [...records].sort((left, right) => {
+    const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+    return rightTime - leftTime;
+  });
+}
+
 export async function GET() {
   try {
     const user = await getAdminSession();
@@ -25,20 +48,44 @@ export async function GET() {
       );
     }
 
+    if (!canViewPage(user.role, 'media')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
     if (!process.env.MONGODB_URI) {
       const dataPath = path.resolve(process.cwd(), 'data', 'media.json');
       try {
         const raw = await fs.readFile(dataPath, 'utf-8');
-        const medias = JSON.parse(raw || '[]');
-        return NextResponse.json({ success: true, data: medias });
+        const parsed = JSON.parse(raw || '[]');
+        const medias = Array.isArray(parsed) ? (parsed as MediaRecord[]) : [];
+        const scopedMedia = sortMediaByCreatedAt(filterMediaForUser(medias, user));
+        return NextResponse.json({
+          success: true,
+          data: scopedMedia,
+          meta: {
+            scope: isReporterDeskRole(user.role) ? 'own' : 'all',
+            canDelete: canDeleteContent(user),
+          },
+        });
       } catch {
         return NextResponse.json({ success: true, data: [] });
       }
     }
 
     await connectDB();
-    const medias = await Media.find().sort({ createdAt: -1 }).lean();
-    return NextResponse.json({ success: true, data: medias });
+    const query = isReporterDeskRole(user.role) ? { uploadedBy: user.email } : {};
+    const medias = await Media.find(query).sort({ createdAt: -1 }).lean();
+    return NextResponse.json({
+      success: true,
+      data: medias,
+      meta: {
+        scope: isReporterDeskRole(user.role) ? 'own' : 'all',
+        canDelete: canDeleteContent(user),
+      },
+    });
   } catch {
     return NextResponse.json({ success: false, error: 'Failed to list media' }, { status: 500 });
   }
@@ -48,6 +95,10 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getAdminSession();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    if (!canViewPage(user.role, 'media')) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
 
     const body = await req.json();
     const { filename, url, size, type } = body;

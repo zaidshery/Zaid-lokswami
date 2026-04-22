@@ -82,6 +82,15 @@ describe('newsroom pipeline analytics', () => {
     expect(summary.bottlenecks.awaitingSocialPublish).toBe(0);
     expect(summary.socialStatuses.draft).toBe(1);
     expect(summary.socialStatuses.published).toBe(1);
+    expect(summary.conversions.find((step) => step.key === 'fully_distributed')?.count).toBe(1);
+    expect(summary.breakdowns.categories[0]).toMatchObject({
+      label: 'Uncategorised',
+      approvedStories: 2,
+      linkedArticles: 1,
+      videoReady: 1,
+      socialPublished: 1,
+    });
+    expect(summary.timeline.length).toBeGreaterThan(0);
   });
 
   it('filters pipeline analytics by time window, category, and reporter', () => {
@@ -191,5 +200,8 @@ describe('newsroom pipeline analytics', () => {
     expect(summary.pipeline.videoStarted).toBe(1);
     expect(summary.pipeline.socialDrafted).toBe(1);
     expect(summary.pipeline.socialPublished).toBe(0);
+    expect(summary.breakdowns.categories[0]?.label).toBe('Politics');
+    expect(summary.breakdowns.reporters[0]?.label).toBe('Parvez Khan');
+    expect(summary.conversions.find((step) => step.key === 'linked_article')?.count).toBe(1);
   });
 });

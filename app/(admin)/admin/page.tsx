@@ -66,13 +66,16 @@ const SECTION_LINK_CLASS =
   'admin-shell-toolbar-btn inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em]';
 
 const PANEL_CLASS =
-  'admin-shell-surface-strong rounded-[32px] p-6';
+  'admin-shell-surface-strong rounded-[28px] p-4 sm:rounded-[32px] sm:p-6';
 
 const SOFT_CARD_CLASS =
   'admin-shell-surface-muted rounded-[24px] p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.12)] dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.4)]';
 
 const METRIC_CARD_CLASS =
-  'admin-shell-surface rounded-[22px] p-4 shadow-sm';
+  'admin-shell-surface rounded-[20px] p-4 shadow-sm sm:rounded-[22px]';
+
+const COMPACT_METRIC_CARD_CLASS =
+  'admin-shell-surface rounded-[18px] p-3 shadow-sm sm:rounded-[22px] sm:p-4';
 
 const EMPTY_STATE_CLASS =
   'rounded-[24px] border border-dashed border-[color:var(--admin-shell-border-strong)] bg-[color:var(--admin-shell-surface-muted)] p-4 text-sm text-[color:var(--admin-shell-text-muted)]';
@@ -160,42 +163,71 @@ function getSeverityToneClass(severity: SuperAdminAlert['severity']) {
   }
 }
 
-function QuickActionCard({ action }: { action: QuickAction }) {
+function QuickActionCard({
+  action,
+  compactOnMobile = false,
+}: {
+  action: QuickAction;
+  compactOnMobile?: boolean;
+}) {
   const Icon = action.icon;
 
   return (
     <Link
       href={action.href}
-      className="admin-shell-surface rounded-3xl p-5 transition-all hover:-translate-y-0.5 hover:shadow-[var(--admin-shell-shadow-strong)]"
+      className={cx(
+        'admin-shell-surface rounded-[28px] p-4 transition-all hover:-translate-y-0.5 hover:shadow-[var(--admin-shell-shadow-strong)] sm:rounded-3xl sm:p-5',
+        compactOnMobile && 'min-h-[136px] sm:min-h-0'
+      )}
     >
-      <div className={`inline-flex rounded-2xl p-3 ${action.tone}`}>
-        <Icon className="h-5 w-5" />
+      <div className={cx('inline-flex rounded-2xl p-3', action.tone, compactOnMobile && 'p-2.5 sm:p-3')}>
+        <Icon className={cx('h-5 w-5', compactOnMobile && 'h-4 w-4 sm:h-5 sm:w-5')} />
       </div>
-      <h2 className="mt-4 text-lg font-bold text-[color:var(--admin-shell-text)]">
+      <h2 className={cx('mt-4 text-lg font-bold text-[color:var(--admin-shell-text)]', compactOnMobile && 'text-base sm:text-lg')}>
         {action.label}
       </h2>
-      <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+      <p
+        className={cx(
+          'mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]',
+          compactOnMobile && 'hidden text-xs leading-5 sm:block sm:text-sm sm:leading-6'
+        )}
+      >
         {action.description}
       </p>
     </Link>
   );
 }
 
-function StatCard({ stat }: { stat: StatCardConfig }) {
+function StatCard({
+  stat,
+  compactOnMobile = false,
+}: {
+  stat: StatCardConfig;
+  compactOnMobile?: boolean;
+}) {
   return (
-    <div className="admin-shell-surface rounded-3xl p-6 shadow-sm">
+    <div className={cx('admin-shell-surface rounded-[28px] p-5 shadow-sm sm:rounded-3xl sm:p-6', compactOnMobile && 'p-4 sm:p-6')}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-[color:var(--admin-shell-text-muted)]">{stat.label}</p>
-          <p className="mt-3 text-3xl font-black text-[color:var(--admin-shell-text)]">
+          <p className={cx('text-sm font-medium text-[color:var(--admin-shell-text-muted)]', compactOnMobile && 'text-xs sm:text-sm')}>
+            {stat.label}
+          </p>
+          <p className={cx('mt-3 text-3xl font-black text-[color:var(--admin-shell-text)]', compactOnMobile && 'mt-2 text-2xl sm:mt-3 sm:text-3xl')}>
             {formatNumber(stat.value)}
           </p>
         </div>
-        <div className={`rounded-2xl p-3 ${stat.tone}`}>
-          <stat.icon className="h-5 w-5" />
+        <div className={cx('rounded-2xl p-3', stat.tone, compactOnMobile && 'p-2.5 sm:p-3')}>
+          <stat.icon className={cx('h-5 w-5', compactOnMobile && 'h-4 w-4 sm:h-5 sm:w-5')} />
         </div>
       </div>
-      <p className="mt-4 text-sm text-[color:var(--admin-shell-text-muted)]">{stat.note}</p>
+      <p
+        className={cx(
+          'mt-4 text-sm text-[color:var(--admin-shell-text-muted)]',
+          compactOnMobile && 'hidden sm:block'
+        )}
+      >
+        {stat.note}
+      </p>
     </div>
   );
 }
@@ -372,6 +404,183 @@ function NewsroomPipelineFiltersBar({
   );
 }
 
+function NewsroomPipelineFunnel({
+  analytics,
+}: {
+  analytics: NewsroomPipelineAnalytics;
+}) {
+  return (
+    <div className={SOFT_CARD_CLASS}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
+            Conversion Funnel
+          </p>
+          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
+            How many approved stories make it through each downstream output stage.
+          </p>
+        </div>
+        <span className="rounded-full border border-[color:var(--admin-shell-border)] px-3 py-1.5 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
+          Base: {formatNumber(analytics.pipeline.approvedStories)} approved
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-3 xl:grid-cols-7">
+        {analytics.conversions.map((step) => (
+          <div
+            key={step.key}
+            className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+              {step.label}
+            </p>
+            <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
+              {formatNumber(step.count)}
+            </p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+              <div
+                className="h-full rounded-full bg-red-500"
+                style={{ width: `${Math.max(step.rateFromApproved, 4)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
+              {step.rateFromApproved}% of approved stories
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NewsroomBreakdownChart({
+  title,
+  description,
+  items,
+}: {
+  title: string;
+  description: string;
+  items: NewsroomPipelineAnalytics['breakdowns']['categories'];
+}) {
+  const maxApproved = Math.max(1, ...items.map((item) => item.approvedStories));
+
+  return (
+    <div className={SOFT_CARD_CLASS}>
+      <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">{title}</p>
+      <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">{description}</p>
+
+      {items.length ? (
+        <div className="mt-4 space-y-4">
+          {items.map((item) => (
+            <div key={item.label} className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
+                    {item.label}
+                  </p>
+                  <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
+                    {item.completionRate}% fully distributed from approved stories
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
+                  <span>{formatNumber(item.approvedStories)} approved</span>
+                  <span>{formatNumber(item.linkedArticles)} linked</span>
+                  <span>{formatNumber(item.videoReady)} video ready</span>
+                  <span>{formatNumber(item.socialPublished)} social published</span>
+                </div>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+                <div
+                  className="h-full rounded-full bg-red-500"
+                  style={{ width: `${Math.max((item.approvedStories / maxApproved) * 100, 6)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-2xl border border-dashed border-[color:var(--admin-shell-border)] px-4 py-5 text-sm text-[color:var(--admin-shell-text-muted)]">
+          No matching records for this breakdown yet.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NewsroomTimelineChart({
+  analytics,
+}: {
+  analytics: NewsroomPipelineAnalytics;
+}) {
+  const maxValue = Math.max(
+    1,
+    ...analytics.timeline.flatMap((point) => [
+      point.submittedStories,
+      point.approvedStories,
+      point.linkedArticles,
+      point.videoReady,
+      point.socialPublished,
+    ])
+  );
+
+  return (
+    <div className={SOFT_CARD_CLASS}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
+            Timeline View
+          </p>
+          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
+            Cohort-style trend of story pipeline completion across the selected time range.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-zinc-400" />Submitted</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" />Approved</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-red-500" />Linked</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />Video Ready</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Social Published</span>
+        </div>
+      </div>
+
+      <div className="mt-5 overflow-x-auto">
+        <div className="grid min-w-[900px] grid-cols-1 gap-3">
+          {analytics.timeline.map((point) => (
+            <div
+              key={point.label}
+              className="grid grid-cols-[90px,1fr] items-center gap-4 rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-4 py-3"
+            >
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+                {point.label}
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: 'Submitted', value: point.submittedStories, color: 'bg-zinc-400' },
+                  { label: 'Approved', value: point.approvedStories, color: 'bg-blue-500' },
+                  { label: 'Linked', value: point.linkedArticles, color: 'bg-red-500' },
+                  { label: 'Video', value: point.videoReady, color: 'bg-amber-500' },
+                  { label: 'Social', value: point.socialPublished, color: 'bg-emerald-500' },
+                ].map((series) => (
+                  <div key={`${point.label}-${series.label}`} className="grid grid-cols-[74px,1fr,42px] items-center gap-3 text-xs font-medium text-[color:var(--admin-shell-text-muted)]">
+                    <span>{series.label}</span>
+                    <div className="h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+                      <div
+                        className={`h-full rounded-full ${series.color}`}
+                        style={{ width: `${Math.max((series.value / maxValue) * 100, series.value > 0 ? 4 : 0)}%` }}
+                      />
+                    </div>
+                    <span className="text-right">{formatNumber(series.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NewsroomPipelineSection({
   analytics,
 }: {
@@ -479,6 +688,10 @@ function NewsroomPipelineSection({
         ))}
       </div>
 
+      <div className="mt-6">
+        <NewsroomPipelineFunnel analytics={analytics} />
+      </div>
+
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr,0.8fr]">
         <div className={SOFT_CARD_CLASS}>
           <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
@@ -538,6 +751,23 @@ function NewsroomPipelineSection({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-2">
+        <NewsroomBreakdownChart
+          title="Category Performance"
+          description="Which categories are converting approved stories into full downstream outputs."
+          items={analytics.breakdowns.categories}
+        />
+        <NewsroomBreakdownChart
+          title="Reporter / Desk Performance"
+          description="Which reporters or desk owners are seeing the healthiest downstream completion."
+          items={analytics.breakdowns.reporters}
+        />
+      </div>
+
+      <div className="mt-6">
+        <NewsroomTimelineChart analytics={analytics} />
       </div>
     </section>
   );
@@ -696,6 +926,7 @@ function WorkflowListSection({
   items,
   emptyMessage,
   className,
+  compactOnMobile = false,
 }: {
   title: string;
   description: string;
@@ -704,15 +935,25 @@ function WorkflowListSection({
   items: WorkflowArticleCard[];
   emptyMessage: string;
   className?: string;
+  compactOnMobile?: boolean;
 }) {
   const visibleItems = items.slice(0, 4);
 
   return (
     <section className={cx(PANEL_CLASS, className)}>
-      <div className="flex items-center justify-between gap-4">
+      <div
+        className={cx(
+          'flex items-center justify-between gap-4',
+          compactOnMobile && 'flex-col items-start sm:flex-row sm:items-center'
+        )}
+      >
         <div>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{title}</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{description}</p>
+          <h2 className={cx('text-xl font-bold text-zinc-900 dark:text-zinc-100', compactOnMobile && 'text-lg sm:text-xl')}>
+            {title}
+          </h2>
+          <p className={cx('mt-1 text-sm text-zinc-600 dark:text-zinc-300', compactOnMobile && 'text-xs leading-5 sm:text-sm sm:leading-6')}>
+            {description}
+          </p>
         </div>
         <Link href={href} className={SECTION_LINK_CLASS}>
           {linkLabel}
@@ -721,30 +962,43 @@ function WorkflowListSection({
 
       <div className="mt-6 space-y-3">
         {visibleItems.length ? (
-          visibleItems.map((item) => (
+          visibleItems.map((item, index) => (
             <Link
               key={`${item.contentType}-${item.id}`}
               href={item.editHref}
               className={cx(
-                SOFT_CARD_CLASS,
-                'flex flex-col gap-3 transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/8'
+                compactOnMobile
+                  ? 'admin-shell-surface-muted flex flex-col gap-2 rounded-[20px] p-3 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.12)] transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/8 sm:rounded-[24px] sm:p-4 dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.4)]'
+                  : cx(
+                      SOFT_CARD_CLASS,
+                      'flex flex-col gap-3 transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/8'
+                    ),
+                compactOnMobile && index >= 3 && 'hidden sm:flex'
               )}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  <p className={cx('truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100', compactOnMobile && 'text-[13px] sm:text-sm')}>
                     {item.title}
                   </p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className={cx('mt-1 text-xs text-zinc-500 dark:text-zinc-400', compactOnMobile && 'text-[11px]')}>
                     {item.category} / {item.author} / {formatContentTypeLabel(item.contentType)}
                   </p>
                 </div>
                 <WorkflowPill status={item.status} />
               </div>
-              <div className="flex flex-wrap gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+              <div className={cx('flex flex-wrap gap-3 text-xs text-zinc-500 dark:text-zinc-400', compactOnMobile && 'gap-2 text-[11px] leading-4')}>
                 <span>Updated {formatUiDate(item.updatedAt, item.updatedAt)}</span>
-                {item.assignedToName ? <span>Assignee: {item.assignedToName}</span> : null}
-                {item.createdByName ? <span>Created by: {item.createdByName}</span> : null}
+                {item.assignedToName ? (
+                  <span className={cx(compactOnMobile && 'hidden sm:inline')}>
+                    Assignee: {item.assignedToName}
+                  </span>
+                ) : null}
+                {item.createdByName ? (
+                  <span className={cx(compactOnMobile && 'hidden sm:inline')}>
+                    Created by: {item.createdByName}
+                  </span>
+                ) : null}
               </div>
             </Link>
           ))
@@ -1531,8 +1785,8 @@ function getQuickActions(role: string): QuickAction[] {
     case 'reporter':
       return [
         {
-          label: 'Start Story',
-          description: 'Create a new story draft and send it into review.',
+          label: 'Create Story',
+          description: 'Open a new reporting draft with media, source notes, and desk handoff details.',
           href: '/admin/stories/new',
           icon: FileText,
           tone: 'bg-blue-500/10 text-blue-600',
@@ -1545,8 +1799,8 @@ function getQuickActions(role: string): QuickAction[] {
           tone: 'bg-amber-500/10 text-amber-600',
         },
         {
-          label: 'Stories',
-          description: 'Open your stories desk view.',
+          label: 'My Stories',
+          description: 'Open the stories you created or the desk assigned back to you.',
           href: '/admin/stories',
           icon: FileText,
           tone: 'bg-rose-500/10 text-rose-600',
@@ -1705,6 +1959,9 @@ export default async function AdminDashboardPage({
   ]);
 
   const dashboard = (superAdminDashboard?.dashboard ?? baseDashboard)!;
+  const reporterDisplayName = admin.name?.trim() || admin.email?.split('@')[0] || 'Reporter';
+  const reporterDeskTitle = `${reporterDisplayName} Desk`;
+  const isReporterDashboard = isReporterDeskRole(admin.role);
   const reviewQueue = superAdminDashboard?.reviewQueue ?? baseReviewQueue;
   const epaperInsights = superAdminDashboard?.epaperInsights ?? null;
   const teamHealth = superAdminDashboard?.teamHealth ?? null;
@@ -1777,11 +2034,11 @@ export default async function AdminDashboardPage({
             tone: 'bg-amber-500/15 text-amber-600',
           },
           {
-            label: 'Published',
-            value: Number(myWork?.counts.published || 0),
-            note: 'Your articles already live to readers.',
-            icon: Newspaper,
-            tone: 'bg-emerald-500/15 text-emerald-600',
+            label: 'Changes Requested',
+            value: Number(myWork?.counts.changes_requested || 0),
+            note: 'Desk items sent back to you for updates before approval.',
+            icon: AlertTriangle,
+            tone: 'bg-rose-500/15 text-rose-600',
           },
         ]
       : admin.role === 'copy_editor'
@@ -1954,12 +2211,12 @@ export default async function AdminDashboardPage({
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-600">
                   {formatNewsroomRoleLabel(admin.role)}
                 </p>
-                <h1 className="mt-2 text-3xl font-black text-zinc-900 dark:text-zinc-100">
-                  Newsroom Dashboard
+                <h1 className="mt-2 text-2xl font-black text-zinc-900 dark:text-zinc-100 sm:text-3xl">
+                  {isReporterDashboard ? reporterDeskTitle : 'Newsroom Dashboard'}
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                  {isReporterDeskRole(admin.role)
-                    ? 'See your drafts, submissions, and assigned article work first.'
+                  {isReporterDashboard
+                    ? 'Create story drafts, track desk feedback, and stay on top of your active reporting queue.'
                     : admin.role === 'copy_editor'
                       ? 'See the editorial queue, your copy desk workload, and e-paper production pressure first.'
                       : admin.role === 'admin'
@@ -1970,24 +2227,34 @@ export default async function AdminDashboardPage({
             </div>
           </section>
 
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section
+            className={cx(
+              'grid gap-4 xl:grid-cols-4',
+              isReporterDashboard ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'
+            )}
+          >
             {quickActions.map((action) => (
-              <QuickActionCard key={action.href} action={action} />
+              <QuickActionCard key={action.href} action={action} compactOnMobile={isReporterDashboard} />
             ))}
           </section>
         </>
       )}
 
       <section
-        className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
-          admin.role === 'super_admin' ? 'xl:grid-cols-6' : 'xl:grid-cols-4'
-        }`}
+        className={cx(
+          'grid gap-4',
+          admin.role === 'super_admin'
+            ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-6'
+            : isReporterDashboard
+              ? 'grid-cols-2 xl:grid-cols-4'
+              : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
+        )}
       >
         {statCards.map((stat) =>
           admin.role === 'super_admin' ? (
             <LeadershipStatCard key={stat.label} stat={stat} />
           ) : (
-            <StatCard key={stat.label} stat={stat} />
+            <StatCard key={stat.label} stat={stat} compactOnMobile={isReporterDashboard} />
           )
         )}
       </section>
@@ -1996,52 +2263,57 @@ export default async function AdminDashboardPage({
         <NewsroomPipelineSection analytics={newsroomPipeline} />
       ) : null}
 
-      {isReporterDeskRole(admin.role) ? (
+      {isReporterDashboard ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <WorkflowListSection
-            title="My Desk Items"
-            description="The items currently owned by you or assigned to your reporting queue."
+            title="My Reporting Queue"
+            description="Drafts, submissions, and assigned items currently tied to your reporting workflow."
             href="/admin/my-work"
             linkLabel="Open My Work"
             items={myItems}
             emptyMessage="No owned or assigned workflow items yet. New drafts and submissions will appear here."
+            compactOnMobile
           />
           <section className={PANEL_CLASS}>
-            <h2 className="text-xl font-bold text-[var(--admin-shell-text)]">Newsroom Pulse</h2>
+            <h2 className="text-xl font-bold text-[var(--admin-shell-text)]">Submission Status</h2>
             <p className="mt-1 text-sm text-[var(--admin-shell-text-muted)]">
-              Global article flow so you can see how the desk is moving overall.
+              Track where your filed work is sitting with the desk right now.
             </p>
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className={METRIC_CARD_CLASS}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-shell-text-muted)]">
-                  Needs Review
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-6 sm:gap-4">
+              <div className={COMPACT_METRIC_CARD_CLASS}>
+                <p className="text-[10px] font-semibold uppercase leading-4 tracking-wide text-[var(--admin-shell-text-muted)] sm:text-xs">
+                  Waiting With Desk
                 </p>
-                <p className="mt-2 text-2xl font-bold text-[var(--admin-shell-text)]">
-                  {formatNumber(dashboard.workflow.needsReview)}
-                </p>
-              </div>
-              <div className={METRIC_CARD_CLASS}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-shell-text-muted)]">
-                  Ready To Publish
-                </p>
-                <p className="mt-2 text-2xl font-bold text-[var(--admin-shell-text)]">
-                  {formatNumber(dashboard.workflow.readyToPublish + readyEditionCount)}
+                <p className="mt-2 text-xl font-bold text-[var(--admin-shell-text)] sm:text-2xl">
+                  {formatNumber(Number(myWork?.counts.submitted || 0))}
                 </p>
               </div>
-              <div className={METRIC_CARD_CLASS}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-shell-text-muted)]">
+              <div className={COMPACT_METRIC_CARD_CLASS}>
+                <p className="text-[10px] font-semibold uppercase leading-4 tracking-wide text-[var(--admin-shell-text-muted)] sm:text-xs">
+                  In Review
+                </p>
+                <p className="mt-2 text-xl font-bold text-[var(--admin-shell-text)] sm:text-2xl">
+                  {formatNumber(
+                    Number(myWork?.counts.assigned || 0) +
+                      Number(myWork?.counts.in_review || 0) +
+                      Number(myWork?.counts.copy_edit || 0)
+                  )}
+                </p>
+              </div>
+              <div className={COMPACT_METRIC_CARD_CLASS}>
+                <p className="text-[10px] font-semibold uppercase leading-4 tracking-wide text-[var(--admin-shell-text-muted)] sm:text-xs">
+                  Changes Requested
+                </p>
+                <p className="mt-2 text-xl font-bold text-[var(--admin-shell-text)] sm:text-2xl">
+                  {formatNumber(Number(myWork?.counts.changes_requested || 0))}
+                </p>
+              </div>
+              <div className={COMPACT_METRIC_CARD_CLASS}>
+                <p className="text-[10px] font-semibold uppercase leading-4 tracking-wide text-[var(--admin-shell-text-muted)] sm:text-xs">
                   Published
                 </p>
-                <p className="mt-2 text-2xl font-bold text-[var(--admin-shell-text)]">
-                  {formatNumber(dashboard.workflow.published)}
-                </p>
-              </div>
-              <div className={METRIC_CARD_CLASS}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-shell-text-muted)]">
-                  Rejected
-                </p>
-                <p className="mt-2 text-2xl font-bold text-[var(--admin-shell-text)]">
-                  {formatNumber(dashboard.workflow.rejected)}
+                <p className="mt-2 text-xl font-bold text-[var(--admin-shell-text)] sm:text-2xl">
+                  {formatNumber(Number(myWork?.counts.published || 0))}
                 </p>
               </div>
             </div>

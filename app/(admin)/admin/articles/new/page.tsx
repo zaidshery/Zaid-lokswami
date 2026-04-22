@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -14,12 +14,20 @@ import {
   CheckCircle,
   Image as ImageIcon,
 } from 'lucide-react';
-import RichTextEditor from '@/components/forms/RichTextEditor';
+import ArticleEditorStudio, {
+  ArticleEditorSidebar,
+  type ArticleEditorStudioMode,
+} from '@/components/forms/ArticleEditorStudio';
+import {
+  CmsEditorCanvas,
+  CmsEditorColumns,
+  CmsEditorMain,
+  CmsEditorSidebar,
+} from '@/components/admin/CmsEditorLayout';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
-import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import {
   ARTICLE_IMAGE_UPLOAD_GUIDE,
   getArticleImageHints,
@@ -115,7 +123,8 @@ export default function UploadArticle() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [contentMode, setContentMode] = useState<'write' | 'preview'>('write');
+  const [contentMode, setContentMode] = useState<ArticleEditorStudioMode>('write');
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState('');
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
@@ -124,14 +133,6 @@ export default function UploadArticle() {
   const [isLoadingSourceStory, setIsLoadingSourceStory] = useState(false);
   const [sourceStoryError, setSourceStoryError] = useState('');
   const [sourcePrefillApplied, setSourcePrefillApplied] = useState(false);
-
-  const previewContentHtml = useMemo(() => {
-    const source = formData.content.trim() || formData.summary.trim();
-    if (!source) {
-      return '<p>Start writing your article to see a live preview.</p>';
-    }
-    return renderArticleRichContent(source);
-  }, [formData.content, formData.summary]);
 
   const sourceStoryId = searchParams.get('sourceStoryId')?.trim() || '';
   const canPublishImmediately =
@@ -169,11 +170,12 @@ export default function UploadArticle() {
       formData,
       imagePreview: imagePreview.startsWith('data:') ? '' : imagePreview,
       contentMode,
+      focusMode: isFocusMode,
     };
 
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
     setDraftSavedAt(payload.savedAt);
-  }, [formData, imagePreview, contentMode]);
+  }, [formData, imagePreview, contentMode, isFocusMode]);
 
   const clearDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -195,7 +197,8 @@ export default function UploadArticle() {
         savedAt?: string;
         formData?: Partial<typeof formData>;
         imagePreview?: string;
-        contentMode?: 'write' | 'preview';
+        contentMode?: ArticleEditorStudioMode;
+        focusMode?: boolean;
       };
 
       if (!parsed.formData) {
@@ -211,8 +214,15 @@ export default function UploadArticle() {
         if (typeof parsed.imagePreview === 'string' && parsed.imagePreview.trim()) {
           setImagePreview(parsed.imagePreview);
         }
-        if (parsed.contentMode === 'write' || parsed.contentMode === 'preview') {
+        if (
+          parsed.contentMode === 'write' ||
+          parsed.contentMode === 'split' ||
+          parsed.contentMode === 'preview'
+        ) {
           setContentMode(parsed.contentMode);
+        }
+        if (typeof parsed.focusMode === 'boolean') {
+          setIsFocusMode(parsed.focusMode);
         }
         if (typeof parsed.savedAt === 'string') {
           setDraftSavedAt(parsed.savedAt);
@@ -548,9 +558,9 @@ export default function UploadArticle() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-3xl mx-auto"
       >
-        <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm">
+        <CmsEditorCanvas>
+        <div className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm xl:p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             {sourceStoryId ? 'Create Article From Story' : 'Create Direct Desk Article'}
           </h1>
@@ -559,54 +569,6 @@ export default function UploadArticle() {
               ? 'Turn the approved story package into a polished website article.'
               : 'Write a professional desk article and send it through approval.'}
           </p>
-
-          {isLoadingSourceStory ? (
-            <div className="mb-6 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading source story...
-            </div>
-          ) : null}
-
-          {sourceStoryError ? (
-            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {sourceStoryError}
-            </div>
-          ) : null}
-
-          {sourceStory ? (
-            <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                    Source Story
-                  </p>
-                  <p className="mt-1 text-base font-semibold">{sourceStory.title}</p>
-                  <p className="mt-1 text-emerald-800/80">
-                    This article will stay linked to the approved story package.
-                  </p>
-                </div>
-                <Link
-                  href={`/admin/stories/${sourceStory._id}/edit`}
-                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                  Open Source Story
-                </Link>
-              </div>
-              {sourceStory.linkedArticleId ? (
-                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  A linked article already exists for this story. Opening another one from the
-                  same source will be blocked.{' '}
-                  <Link
-                    href={`/admin/articles/${sourceStory.linkedArticleId}/edit`}
-                    className="font-semibold underline"
-                  >
-                    Open linked article
-                  </Link>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           {error && (
             <motion.div
@@ -630,40 +592,19 @@ export default function UploadArticle() {
             </motion.div>
           )}
 
-          <div className="mb-6 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
-            <p className="font-medium">Draft & SEO Tools</p>
-            <p className="mt-1 text-blue-800">
-              Draft autosaves every {AUTOSAVE_INTERVAL_MS / 1000} seconds.
-              {draftSavedAt
-                ? ` Last saved: ${formatDraftTimestamp(draftSavedAt)}.`
-                : ' No local draft yet.'}
-            </p>
-            {draftRestored ? (
-              <p className="mt-1 text-blue-800">
-                Draft restored from local storage.
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={persistDraft}
-                className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
-              >
-                Save Draft Now
-              </button>
-              <button
-                type="button"
-                onClick={clearDraft}
-                className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
-              >
-                Discard Local Draft
-              </button>
+          {isFocusMode ? (
+            <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              Focus writing mode is on. Publishing controls, SEO, and media settings are hidden so you can stay inside the article draft.
             </div>
-          </div>
+          ) : null}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Title */}
-            <div>
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-8"
+          >
+            <CmsEditorColumns stacked={isFocusMode} sidebarWidth="narrow">
+            <CmsEditorMain>
+              <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Article Title <span className="text-red-500">*</span>
               </label>
@@ -676,10 +617,9 @@ export default function UploadArticle() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
                 required
               />
-            </div>
+              </div>
 
-            {/* Summary */}
-            <div>
+              <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Summary <span className="text-red-500">*</span>
               </label>
@@ -692,132 +632,9 @@ export default function UploadArticle() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
                 required
               />
-            </div>
+              </div>
 
-            {/* SEO Panel */}
-            <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-semibold text-gray-900">SEO Settings</p>
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Meta Title
-                </label>
-                <input
-                  type="text"
-                  name="seoTitle"
-                  value={formData.seoTitle}
-                  onChange={handleInputChange}
-                  placeholder="Optional SEO title (recommended under 60 chars)"
-                  maxLength={160}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  {formData.seoTitle.length}/160
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Meta Description
-                </label>
-                <textarea
-                  name="seoDescription"
-                  value={formData.seoDescription}
-                  onChange={handleInputChange}
-                  placeholder="Optional SEO description"
-                  rows={3}
-                  maxLength={320}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  {formData.seoDescription.length}/320
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  OG Image URL
-                </label>
-                <input
-                  type="text"
-                  name="ogImage"
-                  value={formData.ogImage}
-                  onChange={handleInputChange}
-                  placeholder="https://example.com/image.jpg or /uploads/image.jpg"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Leave empty to auto-use featured image as 1200x630 OG preview.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Canonical URL
-                </label>
-                <input
-                  type="url"
-                  name="canonicalUrl"
-                  value={formData.canonicalUrl}
-                  onChange={handleInputChange}
-                  placeholder="https://example.com/main/article/slug"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Leave empty to use the default public article permalink after publish. You can
-                  override it here for migrated or syndicated stories.
-                </p>
-              </div>
-            </div>
-
-            {/* Image Upload */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Featured Image <span className="text-red-500">*</span>
-              </label>
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className=" flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-spanish-red hover:bg-gray-50 transition-colors">
-                    <div className="flex flex-col items-center gap-2">
-                      <ImageIcon className="w-6 h-6 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-700">Click to upload image</span>
-                      <span className="text-xs text-gray-500">PNG, JPG, WebP up to 5MB</span>
-                    </div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                      required={!imagePreview}
-                    />
-                  </label>
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-gray-500">{ARTICLE_IMAGE_UPLOAD_GUIDE}</p>
-              {imageQualityNote ? (
-                <p className="mt-1 text-xs font-medium text-amber-700">{imageQualityNote}</p>
-              ) : null}
-
-              {imagePreview && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="mt-4 rounded-lg overflow-hidden border border-gray-200"
-                >
-                  <img src={imagePreview} alt="Preview" className="w-full h-64 object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImageFile(null);
-                      setImagePreview('');
-                      setImageQualityNote('');
-                    }}
-                    className="w-full py-2 bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-sm font-medium"
-                  >
-                    Remove Image
-                  </button>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Content Editor */}
-            <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Article Content <span className="text-red-500">*</span>
               </label>
@@ -842,300 +659,517 @@ export default function UploadArticle() {
               <p className="mb-2 text-xs text-gray-500">
                 Tip: Paste a YouTube link on its own line or use the YouTube button in the editor toolbar.
               </p>
-              <div className="mb-3 inline-flex overflow-hidden rounded-lg border border-gray-300">
-                <button
-                  type="button"
-                  onClick={() => setContentMode('write')}
-                  className={`px-4 py-1.5 text-sm font-medium transition-colors ${
-                    contentMode === 'write'
-                      ? 'bg-spanish-red text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  Write
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setContentMode('preview')}
-                  className={`px-4 py-1.5 text-sm font-medium transition-colors ${
-                    contentMode === 'preview'
-                      ? 'bg-spanish-red text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  Preview
-                </button>
+              <ArticleEditorStudio
+                title={formData.title}
+                summary={formData.summary}
+                content={formData.content}
+                mode={contentMode}
+                focusMode={isFocusMode}
+                showSidebar={false}
+                onModeChange={setContentMode}
+                onFocusModeChange={setIsFocusMode}
+                onContentChange={(content) =>
+                  setFormData((current) => ({ ...current, content }))
+                }
+                placeholder="Write your article here. Use the toolbar above for formatting."
+              />
               </div>
-              {contentMode === 'write' ? (
-                <RichTextEditor
-                  value={formData.content}
-                  onChange={(content) =>
-                    setFormData((current) => ({ ...current, content }))
-                  }
-                  placeholder="Write your article here. Use the toolbar above for formatting."
-                />
-              ) : (
-                <div className="rounded-lg border border-gray-300 bg-white p-4">
-                  <h3 className="text-lg font-bold text-gray-900">
-                    {formData.title.trim() || 'Untitled article'}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {formData.summary.trim() || 'Summary preview will appear here.'}
-                  </p>
-                  <div className="my-4 h-px bg-gray-200" />
-                  <div
-                    className="article-rich-content text-gray-800"
-                    dangerouslySetInnerHTML={{ __html: previewContentHtml }}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+
+                  {canCreateCategories ? (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateCategory((s) => !s)}
+                        className="text-sm text-spanish-red font-medium hover:underline"
+                      >
+                        {showCreateCategory ? 'Cancel' : '+ Create new category'}
+                      </button>
+
+                      {showCreateCategory && (
+                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                          {createCategoryError && <div className="text-sm text-red-600">{createCategoryError}</div>}
+                          <input
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            placeholder="Category name"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          />
+                          <input
+                            value={newCategorySlug}
+                            onChange={(e) => setNewCategorySlug(e.target.value)}
+                            placeholder="Optional slug (auto-generated if blank)"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={isCreatingCategory}
+                              onClick={async () => {
+                                setCreateCategoryError('');
+                                if (!newCategoryName.trim()) {
+                                  setCreateCategoryError('Please provide a category name');
+                                  return;
+                                }
+                                setIsCreatingCategory(true);
+                                try {
+                                  const res = await fetch('/api/admin/categories', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      ...getAuthHeader(),
+                                    },
+                                    body: JSON.stringify({ name: newCategoryName.trim(), slug: newCategorySlug.trim() || undefined }),
+                                  });
+                                  const data = await res.json();
+                                  if (!res.ok) throw new Error(data.error || 'Failed to create category');
+                                  const created = data.data;
+                                  setCategories((c) => [created.name, ...c.filter((x) => x !== created.name)]);
+                                  setFormData((f) => ({ ...f, category: created.name }));
+                                  setNewCategoryName('');
+                                  setNewCategorySlug('');
+                                  setShowCreateCategory(false);
+                                } catch (err: unknown) {
+                                  const message =
+                                    err instanceof Error
+                                      ? err.message
+                                      : 'Failed to create category';
+                                  setCreateCategoryError(message);
+                                } finally {
+                                  setIsCreatingCategory(false);
+                                }
+                              }}
+                              className="px-4 py-2 bg-spanish-red text-white rounded-md disabled:opacity-50"
+                            >
+                              {isCreatingCategory ? 'Creating...' : 'Create'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCreateCategory(false);
+                                setNewCategoryName('');
+                                setNewCategorySlug('');
+                                setCreateCategoryError('');
+                              }}
+                              className="px-4 py-2 border border-gray-300 rounded-md"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Author Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="author"
+                    value={formData.author}
+                    onChange={handleInputChange}
+                    placeholder="Your name or team name"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                    required
                   />
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Category */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Category <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-              >
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
+              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Reporter Submission</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Add location context, source notes, and reporter handoff details for the desk.
+                  </p>
+                </div>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Location Tag
+                    </label>
+                    <input
+                      type="text"
+                      name="locationTag"
+                      value={formData.locationTag}
+                      onChange={handleInputChange}
+                      placeholder="Indore, Madhya Pradesh"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                      Reporter Notes
+                    </label>
+                    <textarea
+                      name="reporterNotes"
+                      value={formData.reporterNotes}
+                      onChange={handleInputChange}
+                      placeholder="Extra context for copy edit, verification, or publishing."
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Source Info
+                  </label>
+                  <textarea
+                    name="sourceInfo"
+                    value={formData.sourceInfo}
+                    onChange={handleInputChange}
+                    placeholder="Who provided the information, documents, or quotes?"
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                </div>
+                <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-3">
+                  <input
+                    type="checkbox"
+                    name="sourceConfidential"
+                    checked={formData.sourceConfidential}
+                    onChange={handleInputChange}
+                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Source is confidential and should stay internal to the desk
+                  </span>
+                </label>
+              </div>
+            </CmsEditorMain>
 
-              {/* Inline create category */}
-              {canCreateCategories ? (
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateCategory((s) => !s)}
-                    className="text-sm text-spanish-red font-medium hover:underline"
-                  >
-                    {showCreateCategory ? 'Cancel' : '+ Create new category'}
-                  </button>
-
-                  {showCreateCategory && (
-                    <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
-                      {createCategoryError && <div className="text-sm text-red-600">{createCategoryError}</div>}
-                      <input
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        placeholder="Category name"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      />
-                      <input
-                        value={newCategorySlug}
-                        onChange={(e) => setNewCategorySlug(e.target.value)}
-                        placeholder="Optional slug (auto-generated if blank)"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={isCreatingCategory}
-                          onClick={async () => {
-                            setCreateCategoryError('');
-                            if (!newCategoryName.trim()) {
-                              setCreateCategoryError('Please provide a category name');
-                              return;
-                            }
-                            setIsCreatingCategory(true);
-                            try {
-                              const res = await fetch('/api/admin/categories', {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  ...getAuthHeader(),
-                                },
-                                body: JSON.stringify({ name: newCategoryName.trim(), slug: newCategorySlug.trim() || undefined }),
-                              });
-                              const data = await res.json();
-                              if (!res.ok) throw new Error(data.error || 'Failed to create category');
-                              const created = data.data;
-                              setCategories((c) => [created.name, ...c.filter((x) => x !== created.name)]);
-                              setFormData((f) => ({ ...f, category: created.name }));
-                              setNewCategoryName('');
-                              setNewCategorySlug('');
-                              setShowCreateCategory(false);
-                            } catch (err: unknown) {
-                              const message =
-                                err instanceof Error
-                                  ? err.message
-                                  : 'Failed to create category';
-                              setCreateCategoryError(message);
-                            } finally {
-                              setIsCreatingCategory(false);
-                            }
-                          }}
-                          className="px-4 py-2 bg-spanish-red text-white rounded-md disabled:opacity-50"
-                        >
-                          {isCreatingCategory ? 'Creating...' : 'Create'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowCreateCategory(false);
-                            setNewCategoryName('');
-                            setNewCategorySlug('');
-                            setCreateCategoryError('');
-                          }}
-                          className="px-4 py-2 border border-gray-300 rounded-md"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
+            {!isFocusMode ? (
+            <CmsEditorSidebar>
+              {isLoadingSourceStory ? (
+                <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading source story...
                 </div>
               ) : null}
-            </div>
 
-            {/* Author */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Author Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="author"
-                value={formData.author}
-                onChange={handleInputChange}
-                placeholder="Your name or team name"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                required
-              />
-            </div>
-
-            <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Reporter Submission</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Add location context, source notes, and reporter handoff details for the desk.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Location Tag
-                </label>
-                <input
-                  type="text"
-                  name="locationTag"
-                  value={formData.locationTag}
-                  onChange={handleInputChange}
-                  placeholder="Indore, Madhya Pradesh"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Source Info
-                </label>
-                <textarea
-                  name="sourceInfo"
-                  value={formData.sourceInfo}
-                  onChange={handleInputChange}
-                  placeholder="Who provided the information, documents, or quotes?"
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-              </div>
-              <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-3">
-                <input
-                  type="checkbox"
-                  name="sourceConfidential"
-                  checked={formData.sourceConfidential}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                />
-                <span className="text-sm text-gray-700">
-                  Source is confidential and should stay internal to the desk
-                </span>
-              </label>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Reporter Notes
-                </label>
-                <textarea
-                  name="reporterNotes"
-                  value={formData.reporterNotes}
-                  onChange={handleInputChange}
-                  placeholder="Extra context for copy edit, verification, or publishing."
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                />
-              </div>
-            </div>
-
-            {/* Flags */}
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-900">Article Status</p>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="isBreaking"
-                  checked={formData.isBreaking}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                />
-                <span className="text-sm text-gray-700">Mark as Breaking News</span>
-              </label>
-              {formData.isBreaking ? (
-                <p className="text-xs text-gray-600">
-                  Breaking articles generate reusable voice cache automatically after publish.
-                </p>
+              {sourceStoryError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {sourceStoryError}
+                </div>
               ) : null}
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="isTrending"
-                  checked={formData.isTrending}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                />
-                <span className="text-sm text-gray-700">Mark as Trending</span>
-              </label>
-            </div>
 
-            {/* Submit Button */}
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                disabled={
-                  isLoading ||
-                  isLoadingImage ||
-                  Boolean(sourceStory?.linkedArticleId)
-                }
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-spanish-red text-white font-medium rounded-lg hover:bg-guardsman-red transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading || isLoadingImage ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    {submitVerb}...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-5 h-5" />
-                    {submitLabel}
-                  </>
+              {sourceStory ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                        Source Story
+                      </p>
+                      <p className="mt-1 text-base font-semibold">{sourceStory.title}</p>
+                      <p className="mt-1 text-emerald-800/80">
+                        This article will stay linked to the approved story package.
+                      </p>
+                    </div>
+                    <Link
+                      href={`/admin/stories/${sourceStory._id}/edit`}
+                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                      Open Source Story
+                    </Link>
+                  </div>
+                  {sourceStory.linkedArticleId ? (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      A linked article already exists for this story. Opening another one from the
+                      same source will be blocked.{' '}
+                      <Link
+                        href={`/admin/articles/${sourceStory.linkedArticleId}/edit`}
+                        className="font-semibold underline"
+                      >
+                        Open linked article
+                      </Link>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+                <p className="font-medium">Draft & Local Restore</p>
+                <p className="mt-1 text-blue-800">
+                  Draft autosaves every {AUTOSAVE_INTERVAL_MS / 1000} seconds.
+                  {draftSavedAt
+                    ? ` Last saved: ${formatDraftTimestamp(draftSavedAt)}.`
+                    : ' No local draft yet.'}
+                </p>
+                {draftRestored ? (
+                  <p className="mt-1 text-blue-800">
+                    Draft restored from local storage.
+                  </p>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={persistDraft}
+                    className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+                  >
+                    Save Draft Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearDraft}
+                    className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+                  >
+                    Discard Local Draft
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-semibold text-gray-900">SEO Settings</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Meta Title
+                  </label>
+                  <input
+                    type="text"
+                    name="seoTitle"
+                    value={formData.seoTitle}
+                    onChange={handleInputChange}
+                    placeholder="Optional SEO title (recommended under 60 chars)"
+                    maxLength={160}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.seoTitle.length}/160
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Meta Description
+                  </label>
+                  <textarea
+                    name="seoDescription"
+                    value={formData.seoDescription}
+                    onChange={handleInputChange}
+                    placeholder="Optional SEO description"
+                    rows={3}
+                    maxLength={320}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.seoDescription.length}/320
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    OG Image URL
+                  </label>
+                  <input
+                    type="text"
+                    name="ogImage"
+                    value={formData.ogImage}
+                    onChange={handleInputChange}
+                    placeholder="https://example.com/image.jpg or /uploads/image.jpg"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Leave empty to auto-use featured image as 1200x630 OG preview.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Canonical URL
+                  </label>
+                  <input
+                    type="url"
+                    name="canonicalUrl"
+                    value={formData.canonicalUrl}
+                    onChange={handleInputChange}
+                    placeholder="https://example.com/main/article/slug"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Leave empty to use the default public article permalink after publish. You can
+                    override it here for migrated or syndicated stories.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-white p-4">
+                <label className="block text-sm font-medium text-gray-900 mb-3">
+                  Featured Image <span className="text-red-500">*</span>
+                </label>
+                <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-spanish-red hover:bg-gray-50 transition-colors">
+                  <div className="flex flex-col items-center gap-2">
+                    <ImageIcon className="w-6 h-6 text-gray-400" />
+                    <span className="text-sm font-medium text-gray-700">Click to upload image</span>
+                    <span className="text-xs text-gray-500">PNG, JPG, WebP up to 5MB</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    required={!imagePreview}
+                  />
+                </label>
+                <p className="mt-2 text-xs text-gray-500">{ARTICLE_IMAGE_UPLOAD_GUIDE}</p>
+                {imageQualityNote ? (
+                  <p className="mt-1 text-xs font-medium text-amber-700">{imageQualityNote}</p>
+                ) : null}
+
+                {imagePreview && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="mt-4 rounded-lg overflow-hidden border border-gray-200"
+                  >
+                    <img src={imagePreview} alt="Preview" className="w-full h-52 object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageFile(null);
+                        setImagePreview('');
+                        setImageQualityNote('');
+                      }}
+                      className="w-full py-2 bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-sm font-medium"
+                    >
+                      Remove Image
+                    </button>
+                  </motion.div>
                 )}
-              </button>
-              <Link href="/admin">
-                <button
-                  type="button"
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </Link>
-            </div>
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-medium text-gray-900">Article Status</p>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isBreaking"
+                    checked={formData.isBreaking}
+                    onChange={handleInputChange}
+                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                  />
+                  <span className="text-sm text-gray-700">Mark as Breaking News</span>
+                </label>
+                {formData.isBreaking ? (
+                  <p className="text-xs text-gray-600">
+                    Breaking articles generate reusable voice cache automatically after publish.
+                  </p>
+                ) : null}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isTrending"
+                    checked={formData.isTrending}
+                    onChange={handleInputChange}
+                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                  />
+                  <span className="text-sm text-gray-700">Mark as Trending</span>
+                </label>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-semibold text-gray-900">Ready to send</p>
+                <p className="mt-1 text-xs text-gray-600">
+                  Submit from here after checking title, summary, featured image, and structure.
+                </p>
+                <div className="mt-4 flex flex-col gap-3">
+                  <button
+                    type="submit"
+                    disabled={
+                      isLoading ||
+                      isLoadingImage ||
+                      Boolean(sourceStory?.linkedArticleId)
+                    }
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red py-3 text-white font-medium transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading || isLoadingImage ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        {submitVerb}...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        {submitLabel}
+                      </>
+                    )}
+                  </button>
+                  <Link href="/admin" className="w-full">
+                    <button
+                      type="button"
+                      className="w-full rounded-lg border border-gray-300 px-6 py-3 text-gray-700 transition-colors hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </Link>
+                </div>
+              </div>
+
+              <ArticleEditorSidebar
+                title={formData.title}
+                summary={formData.summary}
+                content={formData.content}
+                className="space-y-3"
+              />
+            </CmsEditorSidebar>
+            ) : (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-semibold text-gray-900">Finish & Submit</p>
+                <p className="mt-1 text-xs text-gray-600">
+                  Exit focus to review SEO, featured image, and publishing details before sending the article.
+                </p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="submit"
+                    disabled={
+                      isLoading ||
+                      isLoadingImage ||
+                      Boolean(sourceStory?.linkedArticleId)
+                    }
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red py-3 text-white font-medium transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading || isLoadingImage ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        {submitVerb}...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        {submitLabel}
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsFocusMode(false)}
+                    className="w-full rounded-lg border border-gray-300 px-6 py-3 text-gray-700 transition-colors hover:bg-gray-50 sm:w-auto"
+                  >
+                    Exit Focus
+                  </button>
+                </div>
+              </div>
+            )}
+            </CmsEditorColumns>
           </form>
         </div>
+        </CmsEditorCanvas>
       </motion.div>
     </div>
   );

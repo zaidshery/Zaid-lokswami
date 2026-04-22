@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import {
+  normalizeSocialAutomationProvider,
   normalizeSocialPlatform,
   normalizeSocialPostStatus,
   type SocialPlatform,
@@ -85,6 +86,16 @@ function normalizeSocialPost(input: unknown): SocialPostRecord | null {
     externalUrl:
       typeof source.externalUrl === 'string' ? source.externalUrl.trim() : '',
     lastError: typeof source.lastError === 'string' ? source.lastError.trim() : '',
+    automationProvider: normalizeSocialAutomationProvider(source.automationProvider),
+    automationDispatchedAt: normalizeOptionalDateString(source.automationDispatchedAt),
+    automationExecutionId:
+      typeof source.automationExecutionId === 'string'
+        ? source.automationExecutionId.trim()
+        : '',
+    automationExecutionUrl:
+      typeof source.automationExecutionUrl === 'string'
+        ? source.automationExecutionUrl.trim()
+        : '',
     createdAt:
       normalizeOptionalDateString(source.createdAt) || new Date().toISOString(),
     updatedAt:
@@ -175,6 +186,10 @@ export async function createStoredSocialPost(input: CreateSocialPostInput) {
     externalPostId: input.externalPostId.trim(),
     externalUrl: input.externalUrl.trim(),
     lastError: input.lastError.trim(),
+    automationProvider: normalizeSocialAutomationProvider(input.automationProvider),
+    automationDispatchedAt: normalizeOptionalDateString(input.automationDispatchedAt),
+    automationExecutionId: input.automationExecutionId.trim(),
+    automationExecutionUrl: input.automationExecutionUrl.trim(),
     createdAt: now,
     updatedAt: now,
     createdBy: input.createdBy,
@@ -213,6 +228,10 @@ export async function upsertStoredSocialPostByStoryAndPlatform(
       externalPostId: input.externalPostId || '',
       externalUrl: input.externalUrl || '',
       lastError: input.lastError || '',
+      automationProvider: input.automationProvider || 'manual',
+      automationDispatchedAt: input.automationDispatchedAt || null,
+      automationExecutionId: input.automationExecutionId || '',
+      automationExecutionUrl: input.automationExecutionUrl || '',
       createdBy: input.createdBy || null,
     });
     return created;
@@ -265,6 +284,22 @@ export async function upsertStoredSocialPostByStoryAndPlatform(
       typeof input.lastError === 'string'
         ? input.lastError.trim()
         : current.lastError,
+    automationProvider:
+      input.automationProvider !== undefined
+        ? normalizeSocialAutomationProvider(input.automationProvider)
+        : current.automationProvider,
+    automationDispatchedAt:
+      input.automationDispatchedAt !== undefined
+        ? normalizeOptionalDateString(input.automationDispatchedAt)
+        : current.automationDispatchedAt,
+    automationExecutionId:
+      typeof input.automationExecutionId === 'string'
+        ? input.automationExecutionId.trim()
+        : current.automationExecutionId,
+    automationExecutionUrl:
+      typeof input.automationExecutionUrl === 'string'
+        ? input.automationExecutionUrl.trim()
+        : current.automationExecutionUrl,
     createdBy: input.createdBy !== undefined ? input.createdBy : current.createdBy,
   };
 
@@ -331,6 +366,22 @@ export async function updateStoredSocialPost(id: string, updates: UpdateSocialPo
       typeof updates.lastError === 'string'
         ? updates.lastError.trim()
         : current.lastError,
+    automationProvider:
+      updates.automationProvider !== undefined
+        ? normalizeSocialAutomationProvider(updates.automationProvider)
+        : current.automationProvider,
+    automationDispatchedAt:
+      updates.automationDispatchedAt !== undefined
+        ? normalizeOptionalDateString(updates.automationDispatchedAt)
+        : current.automationDispatchedAt,
+    automationExecutionId:
+      typeof updates.automationExecutionId === 'string'
+        ? updates.automationExecutionId.trim()
+        : current.automationExecutionId,
+    automationExecutionUrl:
+      typeof updates.automationExecutionUrl === 'string'
+        ? updates.automationExecutionUrl.trim()
+        : current.automationExecutionUrl,
     createdBy: updates.createdBy !== undefined ? updates.createdBy : current.createdBy,
   };
 

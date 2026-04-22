@@ -5,6 +5,7 @@ import SocialPost from '@/lib/models/SocialPost';
 import { getAdminSession } from '@/lib/auth/admin';
 import { isSuperAdminRole } from '@/lib/auth/roles';
 import {
+  normalizeSocialAutomationProvider,
   normalizeSocialPlatform,
   normalizeSocialPostStatus,
 } from '@/lib/content/newsroomPublishing';
@@ -53,8 +54,20 @@ function normalizeUpdates(body: unknown) {
   }
   if (typeof source.externalUrl === 'string') updates.externalUrl = source.externalUrl.trim();
   if (typeof source.lastError === 'string') updates.lastError = source.lastError.trim();
+  if (source.automationProvider !== undefined) {
+    updates.automationProvider = normalizeSocialAutomationProvider(source.automationProvider);
+  }
+  if (typeof source.automationExecutionId === 'string') {
+    updates.automationExecutionId = source.automationExecutionId.trim();
+  }
+  if (typeof source.automationExecutionUrl === 'string') {
+    updates.automationExecutionUrl = source.automationExecutionUrl.trim();
+  }
   if (source.platform !== undefined) updates.platform = normalizeSocialPlatform(source.platform);
   if (source.status !== undefined) updates.status = normalizeSocialPostStatus(source.status);
+  if (source.automationDispatchedAt !== undefined) {
+    updates.automationDispatchedAt = normalizeOptionalDateString(source.automationDispatchedAt);
+  }
   if (source.scheduledAt !== undefined) {
     updates.scheduledAt = normalizeOptionalDateString(source.scheduledAt);
   }

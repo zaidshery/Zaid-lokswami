@@ -7,6 +7,7 @@ import {
   normalizeSocialPlatform,
   normalizeSocialPostStatus,
 } from '@/lib/content/newsroomPublishing';
+import { getSocialAutomationPublicConfig } from '@/lib/server/socialAutomation';
 import { listStoredSocialPosts } from '@/lib/storage/socialPostsFile';
 
 function canReadSocialPosts(role: string | null | undefined) {
@@ -50,7 +51,13 @@ export async function GET(req: NextRequest) {
 
     if (await shouldUseFileStore()) {
       const posts = await listStoredSocialPosts(filters);
-      return NextResponse.json({ success: true, data: posts });
+      return NextResponse.json({
+        success: true,
+        data: posts,
+        meta: {
+          automation: getSocialAutomationPublicConfig(),
+        },
+      });
     }
 
     const query: Record<string, unknown> = {};
@@ -63,7 +70,13 @@ export async function GET(req: NextRequest) {
       .sort({ updatedAt: -1, _id: -1 })
       .lean();
 
-    return NextResponse.json({ success: true, data: posts });
+    return NextResponse.json({
+      success: true,
+      data: posts,
+      meta: {
+        automation: getSocialAutomationPublicConfig(),
+      },
+    });
   } catch (error) {
     console.error('Error fetching social posts:', error);
     return NextResponse.json(
