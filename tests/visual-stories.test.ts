@@ -19,7 +19,7 @@ describe('visual stories mapping', () => {
             key: 'stories/images/image-1.jpg',
             mimeType: 'image/jpeg',
             sizeBytes: 1024,
-            storageProvider: 'cloudinary',
+            storageProvider: 'do-spaces',
             originalFileName: 'image-1.jpg',
             order: 0,
             createdAt: '2026-04-20T10:00:00.000Z',

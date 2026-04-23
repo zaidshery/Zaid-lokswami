@@ -91,30 +91,38 @@ function buildSignal(
 }
 
 export function buildUploadRuntimeSummary(): UploadRuntimeSummary {
-  const cloudName = String(process.env.CLOUDINARY_CLOUD_NAME || '').trim();
-  const apiKey = String(process.env.CLOUDINARY_API_KEY || '').trim();
-  const apiSecret = String(process.env.CLOUDINARY_API_SECRET || '').trim();
-  const configuredCount = [cloudName, apiKey, apiSecret].filter(Boolean).length;
+  const accessKey = String(process.env.DIGITALOCEAN_SPACES_ACCESS_KEY || '').trim();
+  const secretKey = String(process.env.DIGITALOCEAN_SPACES_SECRET_KEY || '').trim();
+  const bucket = String(process.env.DIGITALOCEAN_SPACES_BUCKET || '').trim();
+  const region = String(process.env.DIGITALOCEAN_SPACES_REGION || '').trim();
+  const cdnBaseUrl = String(process.env.DIGITALOCEAN_SPACES_CDN_BASE_URL || '').trim();
+  const configuredCount = [accessKey, secretKey, bucket, region].filter(Boolean).length;
+  const coreReady = configuredCount === 4;
 
   const status: SystemHealthStatus =
-    configuredCount === 3 ? 'healthy' : configuredCount > 0 ? 'watch' : 'critical';
+    coreReady && cdnBaseUrl ? 'healthy' : coreReady ? 'watch' : 'critical';
 
   return {
     status,
     summary:
       status === 'healthy'
-        ? 'Cloudinary upload delivery is configured for newsroom assets.'
+        ? 'DigitalOcean Spaces upload delivery is configured for newsroom assets.'
         : status === 'watch'
-          ? 'Cloudinary upload configuration is only partially set.'
-          : 'Cloudinary upload configuration is missing.',
+          ? 'DigitalOcean Spaces is configured, but the CDN URL is not pinned.'
+          : configuredCount > 0
+            ? 'DigitalOcean Spaces upload configuration is only partially set.'
+            : 'DigitalOcean Spaces upload configuration is missing.',
     detail:
       status === 'healthy'
-        ? 'Admin uploads can use the shared Cloudinary pipeline for images, thumbnails, and e-paper assets.'
+        ? 'Admin uploads, story images, thumbnails, and e-paper assets can use the shared DigitalOcean Spaces pipeline.'
         : status === 'watch'
-          ? 'Some Cloudinary environment values are present, but uploads may still fail until the full set is configured.'
-          : 'Uploads depend on Cloudinary. Set cloud name, API key, and API secret before relying on admin upload flows.',
+          ? 'Uploads can run with the derived Spaces CDN URL, but setting DIGITALOCEAN_SPACES_CDN_BASE_URL keeps public media URLs explicit.'
+          : 'Uploads depend on DigitalOcean Spaces. Set access key, secret key, bucket, and region before relying on admin upload flows.',
     signals: [
-      buildSignal('Upload Provider', configuredCount === 3 ? 'Cloudinary ready' : 'Cloudinary not ready', configuredCount === 3 ? 'good' : configuredCount > 0 ? 'warning' : 'critical'),
+      buildSignal('Upload Provider', coreReady ? 'DigitalOcean Spaces ready' : 'DigitalOcean Spaces not ready', coreReady ? 'good' : configuredCount > 0 ? 'warning' : 'critical'),
+      buildSignal('Spaces Bucket', bucket || 'Missing', bucket ? 'good' : 'critical'),
+      buildSignal('Spaces Region', region || 'Missing', region ? 'good' : 'critical'),
+      buildSignal('Spaces CDN', cdnBaseUrl ? 'Configured' : coreReady ? 'Derived URL' : 'Missing', cdnBaseUrl ? 'good' : coreReady ? 'warning' : 'critical'),
       buildSignal('Image Limit', '5 MB', 'neutral'),
       buildSignal('Thumb Limit', '10 MB', 'neutral'),
       buildSignal('E-Paper PDF Limit', '25 MB', 'neutral'),

@@ -1,9 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 import {
-  deleteCloudinaryAssetByUrl,
-  uploadBufferToCloudinary,
-} from '@/lib/utils/cloudinary';
+  deleteDigitalOceanSpacesAssetByUrl,
+  uploadBufferToDigitalOceanSpaces,
+} from '@/lib/utils/digitalOceanSpaces';
 
 export const EPAPER_PDF_MAX_BYTES = 25 * 1024 * 1024;
 export const EPAPER_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
@@ -250,7 +250,7 @@ export async function saveUpload(file: File, targetDir: string, targetName: stri
 
   const extension = path.extname(safeName).toLowerCase();
   const folder = safeDir ? `lokswami/epapers/${safeDir}` : 'lokswami/epapers';
-  const uploaded = await uploadBufferToCloudinary(buffer, {
+  const uploaded = await uploadBufferToDigitalOceanSpaces(buffer, {
     folder,
     resourceType: extension === '.pdf' ? 'raw' : 'image',
     originalFilename: safeName,
@@ -342,7 +342,7 @@ export function normalizeAssetPath(assetPath: string) {
 
 export async function deleteAssetFile(assetPath: string) {
   if (isLikelyHttpUrl(assetPath.trim())) {
-    await deleteCloudinaryAssetByUrl(assetPath).catch(() => undefined);
+    await deleteDigitalOceanSpacesAssetByUrl(assetPath).catch(() => undefined);
     return;
   }
 
@@ -386,7 +386,7 @@ export async function deleteEpaperDirectory(citySlug: string, publishDateFolder:
 
 export async function deleteEpaperDirectoryByAssetPath(assetPath: string) {
   if (isLikelyHttpUrl(assetPath.trim())) {
-    await deleteCloudinaryAssetByUrl(assetPath).catch(() => undefined);
+    await deleteDigitalOceanSpacesAssetByUrl(assetPath).catch(() => undefined);
     return;
   }
 

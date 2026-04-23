@@ -2,14 +2,14 @@ import type { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getAdminSessionMock = vi.fn();
-const uploadBufferToCloudinaryMock = vi.fn();
+const uploadBufferToSpacesMock = vi.fn();
 
 vi.mock('@/lib/auth/admin', () => ({
   getAdminSession: getAdminSessionMock,
 }));
 
-vi.mock('@/lib/utils/cloudinary', () => ({
-  uploadBufferToCloudinary: uploadBufferToCloudinaryMock,
+vi.mock('@/lib/utils/digitalOceanSpaces', () => ({
+  uploadBufferToDigitalOceanSpaces: uploadBufferToSpacesMock,
 }));
 
 function createRequest(formData: FormData) {
@@ -42,7 +42,7 @@ describe('/api/admin/upload POST', () => {
       success: false,
       error: 'Unauthorized',
     });
-    expect(uploadBufferToCloudinaryMock).not.toHaveBeenCalled();
+    expect(uploadBufferToSpacesMock).not.toHaveBeenCalled();
   });
 
   it('rejects unsupported image file types before upload', async () => {
@@ -60,7 +60,7 @@ describe('/api/admin/upload POST', () => {
       success: false,
       error: 'Only JPG, JPEG, PNG, or WEBP image files are allowed',
     });
-    expect(uploadBufferToCloudinaryMock).not.toHaveBeenCalled();
+    expect(uploadBufferToSpacesMock).not.toHaveBeenCalled();
   });
 
   it('rejects oversized e-paper PDFs', async () => {
@@ -85,14 +85,14 @@ describe('/api/admin/upload POST', () => {
       success: false,
       error: 'E-paper PDF size must be less than 25MB',
     });
-    expect(uploadBufferToCloudinaryMock).not.toHaveBeenCalled();
+    expect(uploadBufferToSpacesMock).not.toHaveBeenCalled();
   });
 
-  it('uploads valid e-paper PDFs with the raw Cloudinary pipeline', async () => {
+  it('uploads valid e-paper PDFs with the raw DigitalOcean Spaces pipeline', async () => {
     getAdminSessionMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
-    uploadBufferToCloudinaryMock.mockResolvedValue({
-      secureUrl: 'https://res.cloudinary.com/demo/raw/upload/v1/lokswami/epapers/papers/edition.pdf',
-      publicId: 'lokswami/epapers/papers/edition',
+    uploadBufferToSpacesMock.mockResolvedValue({
+      secureUrl: 'https://lokswami-storage-2026.sgp1.cdn.digitaloceanspaces.com/lokswami/epapers/papers/edition.pdf',
+      publicId: 'lokswami/epapers/papers/edition.pdf',
       resourceType: 'raw',
       bytes: 1234,
     });
@@ -106,9 +106,9 @@ describe('/api/admin/upload POST', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(201);
-    expect(uploadBufferToCloudinaryMock).toHaveBeenCalledTimes(1);
+    expect(uploadBufferToSpacesMock).toHaveBeenCalledTimes(1);
 
-    const [buffer, options] = uploadBufferToCloudinaryMock.mock.calls[0];
+    const [buffer, options] = uploadBufferToSpacesMock.mock.calls[0];
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(options).toEqual({
       folder: 'lokswami/epapers/papers',
@@ -120,11 +120,12 @@ describe('/api/admin/upload POST', () => {
       success: true,
       message: 'File uploaded successfully',
       data: {
-        url: 'https://res.cloudinary.com/demo/raw/upload/v1/lokswami/epapers/papers/edition.pdf',
+        url: 'https://lokswami-storage-2026.sgp1.cdn.digitaloceanspaces.com/lokswami/epapers/papers/edition.pdf',
         secureUrl:
-          'https://res.cloudinary.com/demo/raw/upload/v1/lokswami/epapers/papers/edition.pdf',
-        publicId: 'lokswami/epapers/papers/edition',
+          'https://lokswami-storage-2026.sgp1.cdn.digitaloceanspaces.com/lokswami/epapers/papers/edition.pdf',
+        publicId: 'lokswami/epapers/papers/edition.pdf',
         resourceType: 'raw',
+        storageProvider: 'do-spaces',
         filename: 'edition.pdf',
         size: 1234,
         type: 'application/pdf',

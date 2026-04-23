@@ -12,6 +12,7 @@ const defaultImageHosts = [
   'i4.ytimg.com',
   'api.dicebear.com',
   'res.cloudinary.com',
+  '**.digitaloceanspaces.com',
   '**.googleusercontent.com',
 ];
 const extraImageHosts = (process.env.NEXT_IMAGE_ALLOWED_HOSTS || '')

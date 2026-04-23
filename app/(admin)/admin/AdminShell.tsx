@@ -89,6 +89,10 @@ const HI = {
   newsroomSettings: '\u0928\u094d\u092f\u0942\u091c\u0930\u0942\u092e \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938',
   logout: '\u0932\u0949\u0917\u0906\u0909\u091f',
   viewSite: '\u0938\u093e\u0907\u091f \u0926\u0947\u0916\u0947\u0902',
+  language: '\u092d\u093e\u0937\u093e',
+  switchToHindi: '\u0939\u093f\u0928\u094d\u0926\u0940 \u092e\u0947\u0902 \u092c\u0926\u0932\u0947\u0902',
+  switchToEnglish: '\u0905\u0902\u0917\u094d\u0930\u0947\u091c\u0940 \u092e\u0947\u0902 \u092c\u0926\u0932\u0947\u0902',
+  theme: '\u0925\u0940\u092e',
   lightTheme: '\u0932\u093e\u0907\u091f',
   darkTheme: '\u0921\u093e\u0930\u094d\u0915',
 } as const;
@@ -435,7 +439,12 @@ export default function AdminShell({
       <main
         className="relative min-h-screen min-w-0 flex-1 overflow-y-auto transition-colors lg:ml-[272px] lg:h-screen"
       >
-        <header className="admin-shell-surface sticky top-0 z-20 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 py-3 sm:px-6">
+        <header
+          className={cx(
+            'admin-shell-surface sticky top-0 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 py-3 sm:px-6',
+            mobileToolsOpen ? 'z-50' : 'z-20'
+          )}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -468,10 +477,14 @@ export default function AdminShell({
             </button>
             <button
               type="button"
-              onClick={() => setMobileToolsOpen((current) => !current)}
+              onClick={() => {
+                setMobileNavOpen(false);
+                setMobileToolsOpen((current) => !current);
+              }}
               className="admin-shell-toolbar-btn inline-flex h-10 w-10 items-center justify-center rounded-xl sm:hidden"
               aria-label={mobileToolsOpen ? 'Close display and language tools' : 'Open display and language tools'}
               aria-expanded={mobileToolsOpen}
+              aria-controls="admin-mobile-tools-menu"
             >
               <Settings2 className="h-4 w-4" />
             </button>
@@ -502,21 +515,29 @@ export default function AdminShell({
             </div>
 
             {mobileToolsOpen ? (
-              <div className="admin-shell-surface-strong absolute right-12 top-12 z-40 w-56 rounded-[24px] p-3 shadow-[var(--admin-shell-shadow-strong)] sm:hidden">
+              <div
+                id="admin-mobile-tools-menu"
+                className="admin-shell-surface-strong absolute right-0 top-12 z-50 w-[min(calc(100vw-2rem),18rem)] rounded-[24px] p-3 shadow-[var(--admin-shell-shadow-strong)] sm:hidden"
+              >
+                <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
+                  {isHindi ? HI.language : 'Language'}
+                </p>
                 <button
                   type="button"
                   onClick={() => {
                     toggleLanguage();
                     setMobileToolsOpen(false);
                   }}
-                  className="admin-shell-toolbar-btn flex w-full items-center justify-between rounded-2xl px-3 py-2 text-sm font-semibold"
+                  aria-label={isHindi ? HI.switchToEnglish : HI.switchToHindi}
+                  className="admin-shell-toolbar-btn mt-2 flex w-full items-center justify-between rounded-2xl px-3 py-2 text-sm font-semibold [&>span:first-child]:hidden"
                 >
                   <span>{isHindi ? 'English' : 'हिन्दी'}</span>
+                  <span>{isHindi ? HI.switchToEnglish : HI.switchToHindi}</span>
                   <span className="text-xs text-[color:var(--admin-shell-text-muted)]">{isHindi ? 'EN' : 'HI'}</span>
                 </button>
                 <div className="mt-3">
                   <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-                    Theme
+                    {isHindi ? HI.theme : 'Theme'}
                   </p>
                   <div className="mt-2">
                     <ThemeModeSwitcher

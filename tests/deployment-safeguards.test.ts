@@ -31,9 +31,12 @@ describe('getDeploymentSafeguardsSnapshot', () => {
     process.env.NEXTAUTH_SECRET = 'secret';
     process.env.NEXTAUTH_URL = 'https://lokswami.com';
     process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com';
-    process.env.CLOUDINARY_CLOUD_NAME = 'cloud';
-    process.env.CLOUDINARY_API_KEY = 'key';
-    process.env.CLOUDINARY_API_SECRET = 'secret';
+    process.env.DIGITALOCEAN_SPACES_ACCESS_KEY = 'access-key';
+    process.env.DIGITALOCEAN_SPACES_SECRET_KEY = 'secret-key';
+    process.env.DIGITALOCEAN_SPACES_BUCKET = 'lokswami-storage-2026';
+    process.env.DIGITALOCEAN_SPACES_REGION = 'sgp1';
+    process.env.DIGITALOCEAN_SPACES_CDN_BASE_URL =
+      'https://lokswami-storage-2026.sgp1.cdn.digitaloceanspaces.com';
     process.env.GEMINI_API_KEY = 'gemini';
     process.env.LEADERSHIP_REPORT_CRON_SECRET = 'cron-secret';
     process.env.RESEND_API_KEY = 'resend';

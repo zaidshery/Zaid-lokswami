@@ -50,7 +50,7 @@ Work:
 
 - add tests for e-paper upload and import edge cases
 - improve error messages for upload failures so editors can tell whether the issue is auth, file type, file size, storage, or config
-- verify Cloudinary and local-storage fallback behavior is intentional
+- verify DigitalOcean Spaces and local-storage fallback behavior is intentional
 - document recovery steps for a failed e-paper upload or failed page-image generation
 
 Done when:

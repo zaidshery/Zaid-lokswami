@@ -71,6 +71,13 @@ function validateOptionalEnvGroup(label, names, env, warnings) {
   }
 }
 
+function validateRequiredEnvGroup(label, names, env, errors) {
+  const missing = names.filter((name) => !readEnv(name, env));
+  if (missing.length > 0) {
+    errors.push(`${label} is missing required env: ${missing.join(', ')}`);
+  }
+}
+
 function validateProductionEnv(env = process.env) {
   const errors = [];
   const warnings = [];
@@ -184,12 +191,23 @@ function validateProductionEnv(env = process.env) {
     );
   }
 
-  validateOptionalEnvGroup(
-    'Cloudinary uploads',
-    ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'],
+  validateRequiredEnvGroup(
+    'DigitalOcean Spaces uploads',
+    [
+      'DIGITALOCEAN_SPACES_ACCESS_KEY',
+      'DIGITALOCEAN_SPACES_SECRET_KEY',
+      'DIGITALOCEAN_SPACES_BUCKET',
+      'DIGITALOCEAN_SPACES_REGION',
+    ],
     env,
-    warnings
+    errors
   );
+  if (!readEnv('DIGITALOCEAN_SPACES_CDN_BASE_URL', env)) {
+    warnings.push(
+      'DIGITALOCEAN_SPACES_CDN_BASE_URL is missing. Set it to the Spaces CDN base URL used for public media delivery.'
+    );
+  }
+
   validateOptionalEnvGroup(
     'Google login',
     ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'],

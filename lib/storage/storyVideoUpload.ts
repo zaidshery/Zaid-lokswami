@@ -63,8 +63,8 @@ function getEnv(name: string) {
 function getSpacesConfig(): SpacesConfig {
   const accessKey = getEnv('DIGITALOCEAN_SPACES_ACCESS_KEY');
   const secretKey = getEnv('DIGITALOCEAN_SPACES_SECRET_KEY');
-  const bucket = getEnv('DIGITALOCEAN_SPACES_BUCKET');
-  const region = getEnv('DIGITALOCEAN_SPACES_REGION') || 'blr1';
+  const bucket = getEnv('DIGITALOCEAN_SPACES_BUCKET').toLowerCase();
+  const region = getEnv('DIGITALOCEAN_SPACES_REGION').toLowerCase();
 
   if (!accessKey || !secretKey || !bucket || !region) {
     throw new Error(

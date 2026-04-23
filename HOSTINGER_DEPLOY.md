@@ -34,15 +34,20 @@ NEXTAUTH_URL=https://lokswami.com
 NEXT_PUBLIC_SITE_URL=https://lokswami.com
 ```
 
-Recommended if uploads are enabled:
+Required if uploads are enabled:
 
 ```env
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
+DIGITALOCEAN_SPACES_ACCESS_KEY=
+DIGITALOCEAN_SPACES_SECRET_KEY=
+DIGITALOCEAN_SPACES_BUCKET=
+DIGITALOCEAN_SPACES_REGION=sgp1
+DIGITALOCEAN_SPACES_CDN_BASE_URL=https://your-bucket.sgp1.cdn.digitaloceanspaces.com
 EPAPER_STORAGE_UPLOADS_BASE_DIR=storage/uploads
 EPAPER_FORCE_STORAGE=1
 ```
+
+The same DigitalOcean Spaces variables power story videos, story images, thumbnails, and e-paper assets.
+
 
 Optional if you use Google login:
 
@@ -214,7 +219,7 @@ EPAPER_STORAGE_UPLOADS_BASE_DIR=/absolute/path/to/writable/storage/uploads
 
 - Do not rely on local JSON data as your primary production database.
 - Use MongoDB in production.
-- If production uploads are important, configure Cloudinary.
+- If production uploads are important, configure DigitalOcean Spaces.
 - Keep `NEXTAUTH_URL` and `NEXT_PUBLIC_SITE_URL` on the same final domain.
 - Regenerate `NEXTAUTH_SECRET` only if you are okay invalidating sessions.
 - Do not delete `.hostinger/` between deploys. It stores the active release plus recent static snapshots for safe chunk overlap.

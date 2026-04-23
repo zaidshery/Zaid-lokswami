@@ -3,9 +3,9 @@ import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import {
-  buildSignedCloudinaryRawUploadUrl,
-  parseCloudinaryAssetFromUrl,
-} from '@/lib/utils/cloudinary';
+  buildDigitalOceanSpacesRawAssetUrl,
+  parseDigitalOceanSpacesAssetFromUrl,
+} from '@/lib/utils/digitalOceanSpaces';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -41,7 +41,7 @@ function resolvePdfFormatFromUrl(value: string) {
   }
 }
 
-function resolveCloudinaryPdfInfo(source: Record<string, unknown>) {
+function resolveSpacesPdfInfo(source: Record<string, unknown>) {
   const explicitPublicId = firstNonEmptyString(source.pdfPublicId);
   const explicitFormat = normalizePdfFormat(String(source.pdfFormat || ''));
 
@@ -55,7 +55,7 @@ function resolveCloudinaryPdfInfo(source: Record<string, unknown>) {
   const pdfUrl = firstNonEmptyString(source.pdfUrl, source.pdfPath);
   if (!pdfUrl) return null;
 
-  const parsed = parseCloudinaryAssetFromUrl(pdfUrl);
+  const parsed = parseDigitalOceanSpacesAssetFromUrl(pdfUrl);
   if (!parsed || parsed.resourceType !== 'raw') return null;
 
   return {
@@ -87,31 +87,31 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     }
 
     const source = asObject(epaper);
-    const cloudinaryPdf = resolveCloudinaryPdfInfo(source);
-    if (!cloudinaryPdf) {
+    const spacesPdf = resolveSpacesPdfInfo(source);
+    if (!spacesPdf) {
       return NextResponse.json(
-        { success: false, error: 'Cloudinary PDF metadata not available' },
+        { success: false, error: 'DigitalOcean Spaces PDF metadata not available' },
         { status: 502 }
       );
     }
 
     let signedUrl = '';
     try {
-      signedUrl = buildSignedCloudinaryRawUploadUrl({
-        publicId: cloudinaryPdf.publicId,
-        format: cloudinaryPdf.format || 'pdf',
+      signedUrl = buildDigitalOceanSpacesRawAssetUrl({
+        publicId: spacesPdf.publicId,
+        format: spacesPdf.format || 'pdf',
       });
     } catch (error) {
-      console.error('Failed to generate signed Cloudinary PDF URL:', error);
+      console.error('Failed to generate DigitalOcean Spaces PDF URL:', error);
       return NextResponse.json(
-        { success: false, error: 'Failed to create signed Cloudinary URL' },
+        { success: false, error: 'Failed to create DigitalOcean Spaces URL' },
         { status: 502 }
       );
     }
 
     if (!signedUrl) {
       return NextResponse.json(
-        { success: false, error: 'Failed to create signed Cloudinary URL' },
+        { success: false, error: 'Failed to create DigitalOcean Spaces URL' },
         { status: 502 }
       );
     }
@@ -127,4 +127,3 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     );
   }
 }
-

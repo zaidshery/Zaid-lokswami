@@ -77,7 +77,7 @@ Also supported:
 - `JWT_SECRET` or `AUTH_SECRET`
 - `ADMIN_EMAILS`, `ADMIN_GOOGLE_LOGIN_ENABLED`
 - `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GTM_ID`
-- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- `DIGITALOCEAN_SPACES_ACCESS_KEY`, `DIGITALOCEAN_SPACES_SECRET_KEY`, `DIGITALOCEAN_SPACES_BUCKET`, `DIGITALOCEAN_SPACES_REGION`, `DIGITALOCEAN_SPACES_CDN_BASE_URL`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
 - `GEMINI_API_KEY`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE`
 - `OCR_*`
@@ -195,7 +195,7 @@ Hostinger Node deployment is the supported production path for this repo.
 - Add `https://<your-domain>/api/auth/callback/google` to the Google OAuth client if Google login is enabled
 - Keep `NEXTAUTH_SECRET` at 32+ characters
 - Use a persistent MongoDB instance
-- Configure Cloudinary if production uploads are enabled
+- Configure DigitalOcean Spaces if production uploads are enabled
 - `public/uploads/*` and `data/articles.json` are gitignored local/generated data
 - Deploy with `npm run build` and `npm start`
 - Do not swap production start to `next start` or `node .next/standalone/server.js`, because that bypasses the managed Hostinger release flow
@@ -211,7 +211,7 @@ Vercel is also supported for the `zaidshery/Zaid-lokswami` GitHub repo with Git-
 - Vercel should use `npm run build:vercel` as the build command
 - Keep `main` as the production branch in Vercel
 - Configure production env vars before the first live deploy: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_SITE_URL`
-- Add Cloudinary env vars as well if uploads or e-paper assets are used in production
+- Add DigitalOcean Spaces env vars as well if uploads or e-paper assets are used in production
 - See `VERCEL_CICD_SETUP.md` for the full setup and branch-protection checklist
 
 ## Project Docs

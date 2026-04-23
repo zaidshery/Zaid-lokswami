@@ -1015,10 +1015,10 @@ export default function EditStoryPage() {
     return createStoryMediaAsset({
       kind: 'image',
       url: String(data.data?.url || ''),
-      key: '',
+      key: String(data.data?.publicId || ''),
       mimeType: file.type || 'image/jpeg',
       sizeBytes: file.size,
-      storageProvider: 'cloudinary',
+      storageProvider: String(data.data?.storageProvider || SPACES_STORAGE_PROVIDER),
       originalFileName: file.name,
       order,
     });

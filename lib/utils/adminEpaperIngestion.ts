@@ -14,9 +14,9 @@ import {
   resolveImageTargetName,
 } from '@/lib/utils/epaperStorage';
 import {
-  deleteCloudinaryAssetByPublicId,
-  uploadBufferToCloudinary,
-} from '@/lib/utils/cloudinary';
+  deleteDigitalOceanSpacesAssetByPublicId,
+  uploadBufferToDigitalOceanSpaces,
+} from '@/lib/utils/digitalOceanSpaces';
 
 type AdminSourceType = 'manual-upload' | 'drive-import' | 'remote-import';
 
@@ -322,7 +322,7 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
       throw new Error('pageCount is too high (max 1000)');
     }
 
-    const pdfUpload = await uploadBufferToCloudinary(
+    const pdfUpload = await uploadBufferToDigitalOceanSpaces(
       Buffer.from(await input.pdfFile.arrayBuffer()),
       {
         folder: baseFolder,
@@ -332,7 +332,7 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
     );
     uploadedAssetRefs.push({ publicId: pdfUpload.publicId, resourceType: 'raw' });
 
-    const thumbnailUpload = await uploadBufferToCloudinary(
+    const thumbnailUpload = await uploadBufferToDigitalOceanSpaces(
       Buffer.from(await input.thumbnailFile.arrayBuffer()),
       {
         folder: baseFolder,
@@ -354,7 +354,7 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
     for (let index = 0; index < pageImageFiles.length; index += 1) {
       const file = pageImageFiles[index];
       const pageNumber = index + 1;
-      const uploadedPage = await uploadBufferToCloudinary(Buffer.from(await file.arrayBuffer()), {
+      const uploadedPage = await uploadBufferToDigitalOceanSpaces(Buffer.from(await file.arrayBuffer()), {
         folder: `${baseFolder}/pages`,
         resourceType: 'image',
         originalFilename: resolveImageTargetName('page', file, pageNumber),
@@ -398,7 +398,7 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
   } catch (error) {
     await Promise.all(
       uploadedAssetRefs.map((asset) =>
-        deleteCloudinaryAssetByPublicId(asset.publicId, asset.resourceType).catch(
+        deleteDigitalOceanSpacesAssetByPublicId(asset.publicId, asset.resourceType).catch(
           () => undefined
         )
       )

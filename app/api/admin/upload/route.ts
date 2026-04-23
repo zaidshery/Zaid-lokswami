@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession } from '@/lib/auth/admin';
-import { uploadBufferToCloudinary } from '@/lib/utils/cloudinary';
+import { uploadBufferToDigitalOceanSpaces } from '@/lib/utils/digitalOceanSpaces';
 
 type UploadPurpose =
   | 'image'
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const uploaded = await uploadBufferToCloudinary(buffer, {
+    const uploaded = await uploadBufferToDigitalOceanSpaces(buffer, {
       folder: rule.folder,
       resourceType: rule.resourceType,
       originalFilename: file.name || undefined,
@@ -149,6 +149,7 @@ export async function POST(req: NextRequest) {
           secureUrl: uploaded.secureUrl,
           publicId: uploaded.publicId,
           resourceType: uploaded.resourceType,
+          storageProvider: 'do-spaces',
           filename: file.name,
           size: uploaded.bytes || file.size,
           type: file.type,

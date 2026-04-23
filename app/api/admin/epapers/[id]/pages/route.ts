@@ -17,9 +17,9 @@ import {
   resolveImageTargetName,
 } from '@/lib/utils/epaperStorage';
 import {
-  deleteCloudinaryAssetByUrl,
-  uploadBufferToCloudinary,
-} from '@/lib/utils/cloudinary';
+  deleteDigitalOceanSpacesAssetByUrl,
+  uploadBufferToDigitalOceanSpaces,
+} from '@/lib/utils/digitalOceanSpaces';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -209,7 +209,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
           );
         }
 
-        const uploaded = await uploadBufferToCloudinary(Buffer.from(await imageFile.arrayBuffer()), {
+        const uploaded = await uploadBufferToDigitalOceanSpaces(Buffer.from(await imageFile.arrayBuffer()), {
           folder: basePageFolder,
           resourceType: 'image',
           originalFilename: resolveImageTargetName('page', imageFile, pageNumber),
@@ -249,7 +249,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       ).lean();
 
       if (previous && previous !== imagePath) {
-        await deleteCloudinaryAssetByUrl(previous).catch(() => undefined);
+        await deleteDigitalOceanSpacesAssetByUrl(previous).catch(() => undefined);
       }
 
       await recordEpaperActivity({

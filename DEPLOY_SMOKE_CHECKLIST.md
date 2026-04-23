@@ -89,7 +89,7 @@ For the required upload smoke test, prefer one of these:
 - upload a small article image from `/admin/articles/new`
 - upload a small e-paper thumbnail from `/admin/epapers/new`
 
-If the deploy changed e-paper storage, Cloudinary config, or file permissions, test an e-paper upload specifically.
+If the deploy changed e-paper storage, DigitalOcean Spaces config, or file permissions, test an e-paper upload specifically.
 
 ## Release Rule
 
