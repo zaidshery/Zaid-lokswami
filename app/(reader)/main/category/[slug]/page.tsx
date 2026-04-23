@@ -13,6 +13,9 @@ import {
   resolveNewsCategory,
 } from '@/lib/constants/newsCategories';
 
+const CATEGORY_INITIAL_VISIBLE_COUNT = 10;
+const CATEGORY_LOAD_MORE_STEP = 9;
+
 type CategoryMeta = {
   id: string;
   slug: string;
@@ -39,6 +42,7 @@ export default function CategoryPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
   const [articlesData, setArticlesData] = useState<Article[]>(mockArticles);
+  const [visibleCount, setVisibleCount] = useState(CATEGORY_INITIAL_VISIBLE_COUNT);
 
   useEffect(() => {
     let active = true;
@@ -89,7 +93,13 @@ export default function CategoryPage() {
   }, [categoryArticles, sortBy]);
 
   const heroArticle = sortedArticles[0];
-  const otherArticles = sortedArticles.slice(1);
+  const visibleArticles = sortedArticles.slice(0, visibleCount);
+  const otherArticles = visibleArticles.slice(1);
+  const hasMoreStories = visibleCount < sortedArticles.length;
+
+  useEffect(() => {
+    setVisibleCount(CATEGORY_INITIAL_VISIBLE_COUNT);
+  }, [slug, sortBy, articlesData.length]);
 
   return (
     <div className="space-y-6">
@@ -163,10 +173,18 @@ export default function CategoryPage() {
         </div>
       )}
 
-      {otherArticles.length > 0 ? (
+      {hasMoreStories ? (
         <div className="pt-8 text-center">
-          <button className="rounded-full border border-lokswami-border bg-lokswami-surface px-8 py-3 text-lokswami-text-secondary transition-colors hover:border-lokswami-red hover:text-lokswami-white">
-            {language === 'hi' ? '\u0914\u0930 \u0932\u094b\u0921 \u0915\u0930\u0947\u0902' : 'Load More'}
+          <button
+            type="button"
+            onClick={() =>
+              setVisibleCount((current) =>
+                Math.min(current + CATEGORY_LOAD_MORE_STEP, sortedArticles.length)
+              )
+            }
+            className="rounded-full border border-lokswami-border bg-lokswami-surface px-8 py-3 text-lokswami-text-secondary transition-colors hover:border-lokswami-red hover:text-lokswami-white"
+          >
+            {language === 'hi' ? '\u0914\u0930 \u0916\u092c\u0930\u0947\u0902 \u0932\u094b\u0921 \u0915\u0930\u0947\u0902' : 'Load More Stories'}
           </button>
         </div>
       ) : null}

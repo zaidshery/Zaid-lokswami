@@ -52,6 +52,9 @@ const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
 const LOCAL_NEWS_FALLBACK_IMAGE = '/placeholders/news-16x9.svg';
 const MONGO_OBJECT_ID_REGEX = /^[a-fA-F0-9]{24}$/;
 const DEVANAGARI_REGEX = /[\u0900-\u097F]/;
+const RELATED_STORIES_INITIAL_COUNT = 4;
+const RELATED_STORIES_LOAD_STEP = 4;
+const RELATED_STORIES_MAX_COUNT = 20;
 
 function normalizeArticleImage(input: string) {
   const image = input.trim();
@@ -104,7 +107,7 @@ function normalizeApiArticle(raw: ApiArticle | null | undefined): Article | null
 
 function buildRelatedArticles(source: Article[], current: Article | null) {
   if (!source.length) return [];
-  if (!current) return source.slice(0, 4);
+  if (!current) return source.slice(0, RELATED_STORIES_MAX_COUNT);
 
   const sameCategory = source.filter(
     (item) =>
@@ -117,7 +120,7 @@ function buildRelatedArticles(source: Article[], current: Article | null) {
       item.category.toLowerCase() !== current.category.toLowerCase()
   );
 
-  return [...sameCategory, ...others].slice(0, 4);
+  return [...sameCategory, ...others].slice(0, RELATED_STORIES_MAX_COUNT);
 }
 
 function toPlainText(html: string) {
@@ -158,6 +161,9 @@ export default function ArticleDetailPage() {
   const savedArticleIds = useAppStore((state) => state.currentUser?.savedArticles ?? null);
   const [article, setArticle] = useState<Article | null>(null);
   const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
+  const [visibleRelatedCount, setVisibleRelatedCount] = useState(
+    RELATED_STORIES_INITIAL_COUNT
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [readingProgress, setReadingProgress] = useState(0);
   const [aiBullets, setAiBullets] = useState<string[]>([]);
@@ -179,6 +185,8 @@ export default function ArticleDetailPage() {
   const isBookmarked = Boolean(
     article && Array.isArray(savedArticleIds) && savedArticleIds.includes(article.id)
   );
+  const visibleRelatedArticles = relatedArticles.slice(0, visibleRelatedCount);
+  const hasMoreRelatedStories = visibleRelatedCount < relatedArticles.length;
 
   useEffect(() => {
     let active = true;
@@ -188,6 +196,7 @@ export default function ArticleDetailPage() {
       setAiBullets([]);
       setAiSummaryError('');
       setListenError('');
+      setVisibleRelatedCount(RELATED_STORIES_INITIAL_COUNT);
       if (!routeId) {
         setArticle(null);
         setRelatedArticles([]);
@@ -293,6 +302,7 @@ export default function ArticleDetailPage() {
 
   useEffect(() => {
     hasTrackedReadRef.current = false;
+    setVisibleRelatedCount(RELATED_STORIES_INITIAL_COUNT);
   }, [article?.id]);
 
   useEffect(() => {
@@ -788,95 +798,78 @@ export default function ArticleDetailPage() {
             {article.summary}
           </p>
 
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60 sm:p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="inline-flex items-center gap-2 text-base font-bold text-zinc-900 dark:text-zinc-100">
-                    <Sparkles className="h-4 w-4 text-orange-500" />
-                    Lokswami AI
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleGenerateSummary()}
-                disabled={isGeneratingSummary}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 transition hover:bg-orange-50 disabled:opacity-60 dark:border-orange-700 dark:bg-zinc-950 dark:text-orange-300 dark:hover:bg-zinc-900 sm:h-auto"
-              >
-                {isGeneratingSummary ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                {language === 'hi' ? 'Summary' : 'Summary'}
-              </button>
-            </div>
+          <section
+            aria-label={language === 'hi' ? 'Lokswami AI tools' : 'Lokswami AI tools'}
+            className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+          >
+            <div
+              className={`flex items-center gap-1.5 bg-zinc-50 px-2.5 py-2 dark:bg-zinc-900/70 sm:gap-2 sm:px-4 sm:py-2.5 ${
+                aiBullets.length || listenError
+                  ? 'border-b border-zinc-200 dark:border-zinc-800'
+                  : ''
+              }`}
+            >
+              <div className="relative h-7 w-[104px] shrink-0 sm:h-8 sm:w-44">
+                <Image
+                  src="/logo-wordmark-final.png"
+                  alt="Lokswami"
+                  fill
+                  sizes="176px"
+                  className="object-contain object-left"
+                  priority={false}
+                />
+              </div>
 
-            {aiBullets.length ? (
-              <ul className="mt-3 space-y-1.5 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                {aiBullets.map((bullet) => (
-                  <li key={bullet} className="flex items-start gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-orange-500" />
-                    <span>{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/80">
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={listenLanguageCode}
-                  onChange={(event) => setListenLanguageCode(event.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 sm:w-auto"
-                >
-                  {listenLanguageOptions.map((option) => (
-                    <option key={option.code} value={option.code}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-
-                {listenVoiceOptions.length ? (
-                  <select
-                    value={listenVoiceId}
-                    onChange={(event) => setListenVoiceId(event.target.value)}
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 sm:w-auto"
-                  >
-                    <option value="">
-                      {language === 'hi' ? 'Auto Gemini Voice' : 'Auto Gemini Voice'}
-                    </option>
-                    {listenVoiceOptions.map((voice) => (
-                      <option key={voice.id} value={voice.id}>
-                        {voice.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-
+              <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-1 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => void handleListen()}
                   disabled={isPreparingListen}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30 sm:h-auto"
+                  className="inline-flex h-7 items-center justify-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 text-[10px] font-bold leading-none text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs"
                 >
-                  {isPreparingListen ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Volume2 className="h-3.5 w-3.5" />}
-                  {language === 'hi' ? 'Listen' : 'Listen'}
+                  {isPreparingListen ? <Loader2 className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5" /> : <Volume2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+                  {language === 'hi' ? '\u0938\u0941\u0928\u0947\u0902' : 'Listen'}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => stopListening()}
                   disabled={!isPlayingAudio && !isPreparingListen}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700 sm:h-auto"
+                  className="inline-flex h-7 items-center justify-center gap-1 rounded-full border border-zinc-300 bg-white px-2 text-[10px] font-bold leading-none text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs"
                 >
-                  <PauseCircle className="h-3.5 w-3.5" />
-                  Stop
+                  <PauseCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  {language === 'hi' ? '\u0930\u094b\u0915\u0947\u0902' : 'Stop'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateSummary()}
+                  disabled={isGeneratingSummary}
+                  className="inline-flex h-7 items-center justify-center gap-1 rounded-full border border-red-200 bg-white px-2 text-[10px] font-bold leading-none text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/70 dark:bg-zinc-950 dark:text-red-300 dark:hover:bg-red-950/30 sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs"
+                >
+                  {isGeneratingSummary ? <Loader2 className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5" /> : <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+                  {language === 'hi' ? '\u0938\u093e\u0930\u093e\u0902\u0936' : 'Summary'}
                 </button>
               </div>
-
-              {listenError ? (
-                <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
-                  {listenError}
-                </p>
-              ) : null}
             </div>
-          </div>
+
+            {aiBullets.length ? (
+              <ul className="space-y-2 px-3 py-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300 sm:px-4">
+                {aiBullets.map((bullet) => (
+                  <li key={bullet} className="flex items-start gap-2.5">
+                    <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-red-600" />
+                    <span>{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {listenError ? (
+              <p className="border-t border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300 sm:px-4">
+                {listenError}
+              </p>
+            ) : null}
+          </section>
 
           <div className="h-px w-full bg-zinc-200 dark:bg-zinc-800" />
 
@@ -893,10 +886,26 @@ export default function ArticleDetailPage() {
             {language === 'hi' ? 'संबंधित खबरें' : 'Related News'}
           </h2>
           <div className="space-y-3">
-            {relatedArticles.map((item, index) => (
+            {visibleRelatedArticles.map((item, index) => (
               <NewsCard key={item.id} article={item} variant="horizontal" index={index} />
             ))}
           </div>
+
+          {hasMoreRelatedStories ? (
+            <div className="flex justify-center pt-3 sm:pt-4">
+              <button
+                type="button"
+                onClick={() =>
+                  setVisibleRelatedCount((current) =>
+                    Math.min(current + RELATED_STORIES_LOAD_STEP, relatedArticles.length)
+                  )
+                }
+                className="rounded-full border border-zinc-300 bg-white px-6 py-2 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:px-8 sm:py-3 sm:text-sm"
+              >
+                {language === 'hi' ? '\u0914\u0930 \u0916\u092c\u0930\u0947\u0902 \u0932\u094b\u0921 \u0915\u0930\u0947\u0902' : 'Load More Stories'}
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>
