@@ -27,7 +27,6 @@ import {
   getTotalStoryVideoBytes,
   validateStoryMediaAssets,
   STORY_MAX_IMAGE_COUNT,
-  STORY_MAX_TOTAL_VIDEO_BYTES,
   STORY_MAX_VIDEO_COUNT,
   type StoryMediaAsset,
 } from '@/lib/content/storyMedia';
@@ -250,7 +249,7 @@ const REPORTER_COPY = {
     },
     media: {
       thumbnailHelp: 'JPG, PNG, or WEBP up to 5MB',
-      videoHelp: 'Uploads go directly to DigitalOcean Spaces. Allowed size: 1 MB to 100 MB each, 500 MB total per story.',
+      videoHelp: 'Uploads go directly to DigitalOcean Spaces. Allowed size: up to 1.9 GB per video with no total story upload limit.',
       selectPhoto: 'Select photo',
       selectVideo: 'Select MP4 video',
       uploadVideoInProgress: 'Uploading video...',
@@ -291,11 +290,11 @@ const REPORTER_COPY = {
       thumbnailImageOnly: 'Thumbnail must be an image file.',
       thumbnailTooLarge: 'Thumbnail image size must be less than 5MB.',
       titleRequired: 'Story title is required.',
-      packageRequired: 'At least 1 image and 1 video are required. You can upload up to 5 images, 10 videos, and 500 MB total video size per story.',
+      packageRequired: 'At least 1 image and 1 video are required. You can upload up to 5 images and 10 videos per story.',
       imageTypeInvalid: 'Photos must be JPG, PNG, or WEBP files.',
       imageLimitExceeded: 'You can upload up to 5 images per story.',
       videoLimitExceeded: 'You can upload up to 10 videos per story.',
-      videoTotalSizeExceeded: 'Total video size must stay within 500 MB per story.',
+      videoTotalSizeExceeded: 'There is no total video upload size limit per story.',
       waitForVideo: 'Please wait for all video uploads to finish.',
       thumbnailRequired: 'Please provide a story thumbnail.',
       durationInvalid: 'Duration must be between 2 and 180 seconds.',
@@ -347,7 +346,7 @@ const REPORTER_COPY = {
     },
     media: {
       thumbnailHelp: 'JPG, PNG या WEBP, अधिकतम 5MB',
-      videoHelp: 'वीडियो सीधे DigitalOcean Spaces पर जाएगा। हर वीडियो 1 MB से 100 MB और एक स्टोरी में कुल वीडियो साइज 500 MB तक हो सकती है।',
+      videoHelp: 'वीडियो सीधे DigitalOcean Spaces पर जाएगा। हर वीडियो अधिकतम 1.9 GB तक हो सकता है और कुल स्टोरी अपलोड साइज पर कोई सीमा नहीं है।',
       selectPhoto: 'फोटो चुनें',
       selectVideo: 'MP4 वीडियो चुनें',
       uploadVideoInProgress: 'वीडियो अपलोड हो रहा है...',
@@ -388,11 +387,11 @@ const REPORTER_COPY = {
       thumbnailImageOnly: 'थंबनेल केवल इमेज फाइल होनी चाहिए।',
       thumbnailTooLarge: 'थंबनेल इमेज 5MB से कम होनी चाहिए।',
       titleRequired: 'स्टोरी शीर्षक जरूरी है।',
-      packageRequired: 'कम से कम 1 फोटो और 1 वीडियो जरूरी है। एक स्टोरी में अधिकतम 5 फोटो, 10 वीडियो और कुल 500 MB वीडियो जोड़ सकते हैं।',
+      packageRequired: 'कम से कम 1 फोटो और 1 वीडियो जरूरी है। एक स्टोरी में अधिकतम 5 फोटो और 10 वीडियो जोड़ सकते हैं।',
       imageTypeInvalid: 'फोटो केवल JPG, PNG या WEBP फाइल होनी चाहिए।',
       imageLimitExceeded: 'एक स्टोरी में अधिकतम 5 फोटो जोड़ सकते हैं।',
       videoLimitExceeded: 'एक स्टोरी में अधिकतम 10 वीडियो जोड़ सकते हैं।',
-      videoTotalSizeExceeded: 'एक स्टोरी में कुल वीडियो साइज 500 MB से ज्यादा नहीं हो सकती।',
+      videoTotalSizeExceeded: 'एक स्टोरी में कुल वीडियो अपलोड साइज पर कोई सीमा नहीं है।',
       waitForVideo: 'कृपया सभी वीडियो अपलोड पूरे होने तक इंतजार करें।',
       thumbnailRequired: 'कृपया एक थंबनेल जोड़ें।',
       durationInvalid: 'समय 2 से 180 सेकंड के बीच होना चाहिए।',
@@ -468,7 +467,6 @@ export default function CreateStoryPage() {
   const canPublishNow = role === 'admin' || role === 'super_admin';
   const canUseDesk = isAdminRole(role);
   const isReporterFlow = isReporterDeskRole(role);
-  const showMobileReporterActions = isReporterFlow && !canPublishNow;
   const defaultAuthor = isReporterFlow && sessionName ? sessionName : 'Desk';
   const isHindi = isHydrated ? language === 'hi' : true;
   const t = REPORTER_COPY[isHindi ? 'hi' : 'en'];
@@ -476,7 +474,6 @@ export default function CreateStoryPage() {
   const getLocalizedMediaValidationMessage = (message: string) => {
     if (message.includes('up to 5 images')) return t.validation.imageLimitExceeded;
     if (message.includes('up to 10 videos')) return t.validation.videoLimitExceeded;
-    if (message.includes('Total video size')) return t.validation.videoTotalSizeExceeded;
     if (message.includes('At least 1 image') || message.includes('At least 1 video')) {
       return t.validation.packageRequired;
     }
@@ -784,14 +781,6 @@ export default function CreateStoryPage() {
       }
     }
 
-    const currentVideoBytes = getTotalStoryVideoBytes(videoAssets);
-    const nextVideoBytes = files.reduce((total, file) => total + file.size, currentVideoBytes);
-    if (nextVideoBytes > STORY_MAX_TOTAL_VIDEO_BYTES) {
-      setError(t.validation.videoTotalSizeExceeded);
-      e.target.value = '';
-      return;
-    }
-
     try {
       const nextAssets: StoryMediaAsset[] = [];
       for (const file of files) {
@@ -816,15 +805,6 @@ export default function CreateStoryPage() {
     const validationError = validateStoryVideoFile(file);
     if (validationError) {
       setError(validationError);
-      e.target.value = '';
-      return;
-    }
-
-    const existingAsset = videoAssets.find((asset) => asset.id === assetId);
-    const currentVideoBytes = getTotalStoryVideoBytes(videoAssets);
-    const nextVideoBytes = currentVideoBytes - (existingAsset?.sizeBytes || 0) + file.size;
-    if (nextVideoBytes > STORY_MAX_TOTAL_VIDEO_BYTES) {
-      setError(t.validation.videoTotalSizeExceeded);
       e.target.value = '';
       return;
     }
@@ -1020,7 +1000,9 @@ export default function CreateStoryPage() {
               <div className="rounded-[18px] border border-gray-200 bg-white p-3 sm:rounded-xl sm:p-4">
                 <div className="mb-4">
                   <p className="text-sm font-semibold text-gray-900">{t.sections.uploadSummary}</p>
-                  <p className="mt-1 text-xs text-gray-500">{t.media.noFilesYet}</p>
+                  {!isReporterFlow ? (
+                    <p className="mt-1 text-xs text-gray-500">{t.media.noFilesYet}</p>
+                  ) : null}
                 </div>
 
                 <div className="grid gap-3 sm:gap-4">
@@ -1028,9 +1010,11 @@ export default function CreateStoryPage() {
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{t.fields.thumbnailUpload}</p>
-                        <p className="mt-1 text-xs text-gray-500">{t.media.thumbnailHelp}</p>
+                        {!isReporterFlow ? (
+                          <p className="mt-1 text-xs text-gray-500">{t.media.thumbnailHelp}</p>
+                        ) : null}
                       </div>
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+                      <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
                         {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
                       </span>
                     </div>
@@ -1089,9 +1073,11 @@ export default function CreateStoryPage() {
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{t.fields.videoUpload}</p>
-                        <p className="mt-1 text-xs text-gray-500">{t.media.videoHelp}</p>
+                        {!isReporterFlow ? (
+                          <p className="mt-1 text-xs text-gray-500">{t.media.videoHelp}</p>
+                        ) : null}
                       </div>
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+                      <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
                         {mediaCounts.videos}/{STORY_MAX_VIDEO_COUNT}
                       </span>
                     </div>
@@ -1403,7 +1389,9 @@ export default function CreateStoryPage() {
 
                 <div className="rounded-[20px] border border-gray-200 bg-gray-50 p-4 sm:rounded-xl">
                   <p className="text-sm font-semibold text-gray-900">{t.sections.uploadSummary}</p>
-                  <p className="mt-1 text-xs text-gray-600">{t.media.noFilesYet}</p>
+                  {!isReporterFlow ? (
+                    <p className="mt-1 text-xs text-gray-600">{t.media.noFilesYet}</p>
+                  ) : null}
 
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-gray-200 bg-white p-3">
@@ -1462,11 +1450,11 @@ export default function CreateStoryPage() {
                   ) : null}
                 </div>
 
-                <div className={cx('rounded-[18px] border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 sm:rounded-lg sm:p-4', showMobileReporterActions && 'hidden sm:block')}>
+                <div className="rounded-[18px] border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 sm:rounded-lg sm:p-4">
               {t.helper.draftNotice}
                 </div>
 
-                <div className={cx('flex flex-col gap-3 rounded-[18px] border border-gray-200 bg-gray-50 p-3 sm:rounded-lg sm:p-4', showMobileReporterActions && 'hidden sm:flex')}>
+                <div className="flex flex-col gap-3 rounded-[18px] border border-gray-200 bg-gray-50 p-3 sm:rounded-lg sm:p-4">
             <button
                 type="button"
                 disabled={isLoading || isUploadingImages || isUploadingVideo}
@@ -1538,46 +1526,6 @@ export default function CreateStoryPage() {
         </div>
         </CmsEditorCanvas>
       </motion.div>
-
-      {showMobileReporterActions ? (
-        <div className="fixed inset-x-4 bottom-24 z-20 rounded-[24px] border border-gray-200 bg-white/95 p-3 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.28)] backdrop-blur sm:hidden">
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              disabled={isLoading || isUploadingImages || isUploadingVideo}
-              onClick={() => void handleSubmit('draft')}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {runningIntent === 'draft' ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {t.actions.savingDraft}
-                </>
-              ) : (
-                t.actions.saveDraft
-              )}
-            </button>
-            <button
-              type="button"
-              disabled={isLoading || isUploadingImages || isUploadingVideo}
-              onClick={() => void handleSubmit('submit')}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-spanish-red px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {runningIntent === 'submit' ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {t.actions.submitting}
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  {t.actions.submit}
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {previewAsset ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">

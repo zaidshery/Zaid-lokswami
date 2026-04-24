@@ -85,9 +85,9 @@ export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
   content_queue: ['super_admin', 'admin'],
   push_alerts: ['super_admin', 'admin'],
   copy_desk: ['super_admin', 'admin', 'copy_editor'],
-  articles: ['super_admin', 'admin', 'reporter', 'copy_editor'],
-  article_create: ['super_admin', 'admin', 'reporter', 'copy_editor'],
-  article_edit: ['super_admin', 'admin', 'reporter', 'copy_editor'],
+  articles: ['super_admin', 'admin', 'copy_editor'],
+  article_create: ['super_admin', 'admin', 'copy_editor'],
+  article_edit: ['super_admin', 'admin', 'copy_editor'],
   stories: ['super_admin', 'admin', 'reporter', 'copy_editor'],
   story_create: ['super_admin', 'admin', 'reporter'],
   story_edit: ['super_admin', 'admin', 'reporter', 'copy_editor'],
@@ -362,7 +362,7 @@ export function canCreateContent(
   }
 
   if (isReporterDeskRole(role)) {
-    return contentType === 'article' || contentType === 'story';
+    return contentType === 'story';
   }
 
   return false;

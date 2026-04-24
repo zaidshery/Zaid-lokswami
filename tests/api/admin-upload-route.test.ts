@@ -63,6 +63,46 @@ describe('/api/admin/upload POST', () => {
     expect(uploadBufferToSpacesMock).not.toHaveBeenCalled();
   });
 
+  it('allows reporters to upload regular image assets', async () => {
+    getAdminSessionMock.mockResolvedValue({ id: 'reporter-1', role: 'reporter' });
+    uploadBufferToSpacesMock.mockResolvedValue({
+      secureUrl: 'https://cdn.example.com/lokswami/images/image.jpg',
+      publicId: 'lokswami/images/image.jpg',
+      resourceType: 'image',
+      bytes: 2048,
+    });
+
+    const formData = new FormData();
+    formData.set('file', createFile('image.jpg', 'image/jpeg'));
+
+    const { POST } = await import('@/app/api/admin/upload/route');
+    const response = await POST(createRequest(formData));
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(uploadBufferToSpacesMock).toHaveBeenCalledTimes(1);
+    expect(payload.data.url).toBe('https://cdn.example.com/lokswami/images/image.jpg');
+  });
+
+  it('blocks reporter uploads for desk-only purposes', async () => {
+    getAdminSessionMock.mockResolvedValue({ id: 'reporter-1', role: 'reporter' });
+
+    const formData = new FormData();
+    formData.set('purpose', 'epaper-paper');
+    formData.set('file', createFile('edition.pdf', 'application/pdf', 'pdf'));
+
+    const { POST } = await import('@/app/api/admin/upload/route');
+    const response = await POST(createRequest(formData));
+    const payload = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(payload).toEqual({
+      success: false,
+      error: 'Reporters can only upload image assets from this workspace.',
+    });
+    expect(uploadBufferToSpacesMock).not.toHaveBeenCalled();
+  });
+
   it('rejects oversized e-paper PDFs', async () => {
     getAdminSessionMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
 

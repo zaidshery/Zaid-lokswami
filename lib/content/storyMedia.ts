@@ -2,7 +2,7 @@ export const STORY_MIN_IMAGE_COUNT = 1;
 export const STORY_MAX_IMAGE_COUNT = 5;
 export const STORY_MIN_VIDEO_COUNT = 1;
 export const STORY_MAX_VIDEO_COUNT = 10;
-export const STORY_MAX_TOTAL_VIDEO_BYTES = 500 * 1024 * 1024;
+export const STORY_MAX_TOTAL_VIDEO_BYTES = Number.POSITIVE_INFINITY;
 
 export type StoryMediaAssetKind = 'image' | 'video';
 
@@ -121,7 +121,10 @@ export function validateStoryMediaAssets(
     return `You can upload up to ${STORY_MAX_VIDEO_COUNT} videos per story.`;
   }
 
-  if (totalVideoBytes > STORY_MAX_TOTAL_VIDEO_BYTES) {
+  if (
+    Number.isFinite(STORY_MAX_TOTAL_VIDEO_BYTES) &&
+    totalVideoBytes > STORY_MAX_TOTAL_VIDEO_BYTES
+  ) {
     return `Total video size must be ${Math.round(STORY_MAX_TOTAL_VIDEO_BYTES / (1024 * 1024))} MB or smaller per story.`;
   }
 

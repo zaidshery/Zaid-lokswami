@@ -43,7 +43,6 @@ import {
   normalizeStoryMediaAssets,
   validateStoryMediaAssets,
   STORY_MAX_IMAGE_COUNT,
-  STORY_MAX_TOTAL_VIDEO_BYTES,
   STORY_MAX_VIDEO_COUNT,
   type StoryMediaAsset,
 } from '@/lib/content/storyMedia';
@@ -170,7 +169,6 @@ type PreviewAssetState = {
 const categories = ['General', ...NEWS_CATEGORIES.map((category) => category.nameEn)];
 const THUMBNAIL_MAX_SIZE = 5 * 1024 * 1024;
 const SPACES_STORAGE_PROVIDER = 'do-spaces';
-const STORY_MAX_TOTAL_VIDEO_MB = Math.round(STORY_MAX_TOTAL_VIDEO_BYTES / (1024 * 1024));
 const WORKFLOW_PRIORITIES: WorkflowPriority[] = ['low', 'normal', 'high', 'urgent'];
 
 function isAllowedImageFile(file: File) {
@@ -1289,14 +1287,6 @@ export default function EditStoryPage() {
       }
     }
 
-    const currentVideoBytes = getTotalStoryVideoBytes(videoAssets);
-    const nextVideoBytes = files.reduce((total, file) => total + file.size, currentVideoBytes);
-    if (nextVideoBytes > STORY_MAX_TOTAL_VIDEO_BYTES) {
-      setError(`Total video size must stay within ${STORY_MAX_TOTAL_VIDEO_MB} MB per story.`);
-      e.target.value = '';
-      return;
-    }
-
     try {
       const nextAssets: StoryMediaAsset[] = [];
       for (const file of files) {
@@ -1325,15 +1315,6 @@ export default function EditStoryPage() {
     const validationError = validateStoryVideoFile(file);
     if (validationError) {
       setError(validationError);
-      e.target.value = '';
-      return;
-    }
-
-    const existingAsset = videoAssets.find((asset) => asset.id === assetId);
-    const currentVideoBytes = getTotalStoryVideoBytes(videoAssets);
-    const nextVideoBytes = currentVideoBytes - (existingAsset?.sizeBytes || 0) + file.size;
-    if (nextVideoBytes > STORY_MAX_TOTAL_VIDEO_BYTES) {
-      setError(`Total video size must stay within ${STORY_MAX_TOTAL_VIDEO_MB} MB per story.`);
       e.target.value = '';
       return;
     }
@@ -1817,7 +1798,7 @@ export default function EditStoryPage() {
                       Upload up to {STORY_MAX_IMAGE_COUNT} JPG, PNG, or WEBP files. The first image becomes the cover thumbnail.
                     </p>
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700">
+                  <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
                     Images: {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
                   </span>
                 </div>
@@ -1897,7 +1878,7 @@ export default function EditStoryPage() {
                       This gallery is read-only at your current workflow stage.
                     </p>
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700">
+                  <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
                     Images: {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
                   </span>
                 </div>
@@ -1941,11 +1922,13 @@ export default function EditStoryPage() {
                     <label className="mb-2 block text-sm font-medium text-gray-900">
                       Story Videos (MP4)
                     </label>
-                    <p className="text-xs text-gray-500">
-                      Uploads go directly to DigitalOcean Spaces. Allowed size: 1 MB to 100 MB each, 500 MB total per story.
-                    </p>
+                    {!isReporterView ? (
+                      <p className="text-xs text-gray-500">
+                        Uploads go directly to DigitalOcean Spaces. Allowed size: up to 1.9 GB per video with no total story upload limit.
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700">
+                  <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
                     Videos: {mediaCounts.videos}/{STORY_MAX_VIDEO_COUNT}
                   </span>
                 </div>

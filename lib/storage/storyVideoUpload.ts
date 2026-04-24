@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 
 export const STORY_VIDEO_STORAGE_PROVIDER = 'do-spaces' as const;
-export const STORY_VIDEO_MIN_BYTES = 1 * 1024 * 1024;
-export const STORY_VIDEO_MAX_BYTES = 100 * 1024 * 1024;
+export const STORY_VIDEO_MIN_BYTES = 1;
+export const STORY_VIDEO_MAX_BYTES = Math.round(1.9 * 1024 * 1024 * 1024);
 export const STORY_VIDEO_UPLOAD_EXPIRY_SECONDS = 10 * 60;
 
 type SpacesConfig = {
@@ -144,8 +144,8 @@ export function validateStoryVideoSelection(input: {
   if (!fileName.toLowerCase().endsWith('.mp4')) return 'Video must be an MP4 file.';
   if (fileType && fileType !== 'video/mp4') return 'Video must be an MP4 file.';
   if (!Number.isFinite(fileSize) || fileSize <= 0) return 'Video size is invalid.';
-  if (fileSize < STORY_VIDEO_MIN_BYTES) return 'Video must be at least 1 MB.';
-  if (fileSize > STORY_VIDEO_MAX_BYTES) return 'Video must be 100 MB or smaller.';
+  if (fileSize < STORY_VIDEO_MIN_BYTES) return 'Video size is invalid.';
+  if (fileSize > STORY_VIDEO_MAX_BYTES) return 'Video must be 1.9 GB or smaller.';
 
   return null;
 }
@@ -195,7 +195,7 @@ export function createStoryVideoUploadTarget(input: StoryVideoUploadInitInput) {
   });
   const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`;
   const canonicalUri = buildCanonicalUri(key);
-  const signedHeaders = 'host;x-amz-acl';
+  const signedHeaders = 'host';
   const query = buildCanonicalQuery({
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
     'X-Amz-Credential': `${config.accessKey}/${credentialScope}`,
@@ -203,7 +203,7 @@ export function createStoryVideoUploadTarget(input: StoryVideoUploadInitInput) {
     'X-Amz-Expires': String(STORY_VIDEO_UPLOAD_EXPIRY_SECONDS),
     'X-Amz-SignedHeaders': signedHeaders,
   });
-  const canonicalHeaders = `host:${config.originHost}\nx-amz-acl:public-read\n`;
+  const canonicalHeaders = `host:${config.originHost}\n`;
   const canonicalRequest = [
     'PUT',
     canonicalUri,
@@ -229,7 +229,6 @@ export function createStoryVideoUploadTarget(input: StoryVideoUploadInitInput) {
     uploadUrl: `https://${config.originHost}${canonicalUri}?${query}&X-Amz-Signature=${signature}`,
     uploadHeaders: {
       'Content-Type': 'video/mp4',
-      'x-amz-acl': 'public-read',
     },
     expiresAt: new Date(now.getTime() + STORY_VIDEO_UPLOAD_EXPIRY_SECONDS * 1000).toISOString(),
   };
@@ -304,11 +303,11 @@ export async function verifyStoryVideoUpload(mediaKey: string): Promise<StoryVid
   const mediaMimeType = String(response.headers.get('content-type') || '').trim().toLowerCase();
 
   if (!Number.isFinite(mediaSizeBytes) || mediaSizeBytes < STORY_VIDEO_MIN_BYTES) {
-    throw new Error('Uploaded video must be at least 1 MB.');
+    throw new Error('Uploaded video size is invalid.');
   }
 
   if (mediaSizeBytes > STORY_VIDEO_MAX_BYTES) {
-    throw new Error('Uploaded video must be 100 MB or smaller.');
+    throw new Error('Uploaded video must be 1.9 GB or smaller.');
   }
 
   if (mediaMimeType && mediaMimeType !== 'video/mp4') {

@@ -1,5 +1,5 @@
-export const STORY_VIDEO_MIN_BYTES = 1 * 1024 * 1024;
-export const STORY_VIDEO_MAX_BYTES = 100 * 1024 * 1024;
+export const STORY_VIDEO_MIN_BYTES = 1;
+export const STORY_VIDEO_MAX_BYTES = Math.round(1.9 * 1024 * 1024 * 1024);
 
 export function validateStoryVideoFile(file: File) {
   const normalizedType = String(file.type || '').trim().toLowerCase();
@@ -10,11 +10,11 @@ export function validateStoryVideoFile(file: File) {
   }
 
   if (file.size < STORY_VIDEO_MIN_BYTES) {
-    return 'Video must be at least 1 MB.';
+    return 'Video size is invalid.';
   }
 
   if (file.size > STORY_VIDEO_MAX_BYTES) {
-    return 'Video must be 100 MB or smaller.';
+    return 'Video must be 1.9 GB or smaller.';
   }
 
   return null;
@@ -47,6 +47,8 @@ export function uploadFileToSignedUrl(options: {
   onProgress?: (progress: number) => void;
 }) {
   const { file, uploadUrl, uploadHeaders = {}, onProgress } = options;
+  const corsHelpMessage =
+    'Direct video upload to DigitalOcean Spaces was blocked. Add your site origin to the bucket CORS rules and allow PUT, GET, and HEAD with the Content-Type header.';
 
   return new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
@@ -69,11 +71,16 @@ export function uploadFileToSignedUrl(options: {
         return;
       }
 
+      if (request.status === 0) {
+        reject(new Error(corsHelpMessage));
+        return;
+      }
+
       reject(new Error(`Video upload failed (${request.status}).`));
     });
 
     request.addEventListener('error', () => {
-      reject(new Error('Video upload failed.'));
+      reject(new Error(corsHelpMessage));
     });
 
     request.addEventListener('abort', () => {

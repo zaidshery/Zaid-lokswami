@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import Article from '@/lib/models/Article';
 import { getAdminSession } from '@/lib/auth/admin';
-import { canReadContent } from '@/lib/auth/permissions';
+import { canReadContent, canViewPage } from '@/lib/auth/permissions';
 import { listArticleActivity } from '@/lib/server/articleActivity';
 import { getStoredArticleById } from '@/lib/storage/articlesFile';
 import { resolveArticleWorkflow } from '@/lib/workflow/article';
@@ -58,6 +58,10 @@ export async function GET(_req: Request, context: RouteContext) {
     const user = await getAdminSession();
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!canViewPage(user.role, 'articles')) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     const { id } = await context.params;

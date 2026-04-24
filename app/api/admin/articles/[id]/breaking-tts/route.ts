@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import { getAdminSession } from '@/lib/auth/admin';
-import { canEditContent } from '@/lib/auth/permissions';
+import { canEditContent, canViewPage } from '@/lib/auth/permissions';
 import Article from '@/lib/models/Article';
 import { resolveArticleWorkflow } from '@/lib/workflow/article';
 import {
@@ -36,6 +36,13 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    if (!canViewPage(user.role, 'article_edit')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

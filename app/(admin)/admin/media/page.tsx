@@ -97,11 +97,11 @@ export default function MediaLibrary() {
   const libraryBadge = isReporterView ? 'Your Uploads' : 'Media Control';
   const libraryTitle = isReporterView ? 'My Media' : 'Media Library';
   const libraryDescription = isReporterView
-    ? 'Upload and review the images and videos you filed for your reporting work. Only media uploaded by you appears here.'
+    ? 'Upload and review the image assets you filed for your reporting work. Only media uploaded by you appears here.'
     : 'Upload, review, and clean shared image and video assets from one calmer library surface built for newsroom operations.';
   const uploadWorkspaceTitle = isReporterView ? 'Your Upload Desk' : 'Upload Workspace';
   const uploadWorkspaceDescription = isReporterView
-    ? 'Supports image and video assets for your reporting work.'
+    ? 'Image uploads only. MP4 story videos stay inside each story draft.'
     : 'Supports image and video assets for the shared desk.';
   const refreshLabel = isReporterView ? 'Refresh My Uploads' : 'Refresh Library';
   const assetsLabel = isReporterView ? 'Your Assets' : 'Assets';
@@ -115,8 +115,10 @@ export default function MediaLibrary() {
     ? 'Photos and visual uploads filed from your desk.'
     : 'Thumbnails, story cards, and general visual assets.';
   const videoAssetsDescription = isReporterView
-    ? 'Video clips and motion assets from your reporting work.'
+    ? 'Previously uploaded reporter video assets still stored in your library.'
     : 'Motion assets available for video and multimedia surfaces.';
+  const uploadInputAccept = isReporterView ? 'image/*' : 'image/*,video/*';
+  const uploadPromptLabel = isReporterView ? 'Choose image to upload' : 'Choose media to upload';
 
   const fetchMedia = useCallback(async () => {
     setLoading(true);
@@ -163,7 +165,17 @@ export default function MediaLibrary() {
   );
 
   const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFile(event.target.files?.[0] || null);
+    const nextFile = event.target.files?.[0] || null;
+
+    if (isReporterView && nextFile && !nextFile.type.startsWith('image/')) {
+      setFile(null);
+      setError('Reporter media desk only accepts image uploads. Add MP4 clips from the story editor.');
+      setSuccess('');
+      event.target.value = '';
+      return;
+    }
+
+    setFile(nextFile);
     setError('');
     setSuccess('');
   };
@@ -181,6 +193,9 @@ export default function MediaLibrary() {
     try {
       const fd = new FormData();
       fd.append('file', file);
+      if (isReporterView) {
+        fd.append('purpose', 'image');
+      }
 
       const uploadRes = await fetch('/api/admin/upload', {
         method: 'POST',
@@ -277,10 +292,12 @@ export default function MediaLibrary() {
                 <span>Images</span>
                 <strong className="text-[color:var(--admin-shell-text)]">{imageCount}</strong>
               </div>
-              <div className={META_CHIP_CLASS}>
-                <span>Videos</span>
-                <strong className="text-[color:var(--admin-shell-text)]">{videoCount}</strong>
-              </div>
+              {!isReporterView ? (
+                <div className={META_CHIP_CLASS}>
+                  <span>Videos</span>
+                  <strong className="text-[color:var(--admin-shell-text)]">{videoCount}</strong>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -296,7 +313,7 @@ export default function MediaLibrary() {
                 <Upload className="h-6 w-6 text-zinc-500 dark:text-zinc-300" />
                 <div>
                   <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                    Choose media to upload
+                    {uploadPromptLabel}
                   </p>
                   <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
                     {uploadWorkspaceDescription}
@@ -306,7 +323,7 @@ export default function MediaLibrary() {
               <input
                 id="media-file"
                 type="file"
-                accept="image/*,video/*"
+                accept={uploadInputAccept}
                 onChange={handleFile}
                 className="sr-only"
               />
@@ -325,7 +342,9 @@ export default function MediaLibrary() {
                 </div>
               ) : (
                 <div className={EMPTY_STATE_CLASS}>
-                  No file selected yet. Pick an asset to start the upload flow.
+                  {isReporterView
+                    ? 'No file selected yet. Pick an image asset to start the upload flow.'
+                    : 'No file selected yet. Pick an asset to start the upload flow.'}
                 </div>
               )}
 
@@ -374,7 +393,7 @@ export default function MediaLibrary() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className={cx('grid grid-cols-1 gap-4', isReporterView ? 'md:grid-cols-2' : 'md:grid-cols-3')}>
         <div className={METRIC_CARD_CLASS}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
             {totalAssetsLabel}
@@ -397,17 +416,19 @@ export default function MediaLibrary() {
             {imageAssetsDescription}
           </p>
         </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
-            {videoAssetsLabel}
-          </p>
-          <p className="mt-4 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)]">
-            {videoCount}
-          </p>
-          <p className="mt-3 text-sm text-[color:var(--admin-shell-text-muted)]">
-            {videoAssetsDescription}
-          </p>
-        </div>
+        {!isReporterView ? (
+          <div className={METRIC_CARD_CLASS}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
+              {videoAssetsLabel}
+            </p>
+            <p className="mt-4 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)]">
+              {videoCount}
+            </p>
+            <p className="mt-3 text-sm text-[color:var(--admin-shell-text-muted)]">
+              {videoAssetsDescription}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {loading && media.length === 0 ? (

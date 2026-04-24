@@ -124,7 +124,29 @@ describe('/api/admin/articles route', () => {
     });
   });
 
-  it('prevents reporters from publishing articles directly through the API', async () => {
+  it('prevents reporters from opening the article list API', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'reporter-1',
+      email: 'reporter@example.com',
+      name: 'Reporter',
+      role: 'reporter',
+    });
+
+    const { GET } = await import('@/app/api/admin/articles/route');
+    const response = await GET(
+      new Request('http://localhost/api/admin/articles?limit=all') as unknown as NextRequest
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(payload).toEqual({
+      success: false,
+      error: 'Forbidden',
+    });
+    expect(listAllStoredArticlesMock).not.toHaveBeenCalled();
+  });
+
+  it('prevents reporters from creating articles through the API', async () => {
     getAdminSessionMock.mockResolvedValue({
       id: 'reporter-1',
       email: 'reporter@example.com',
@@ -145,7 +167,7 @@ describe('/api/admin/articles route', () => {
     expect(response.status).toBe(403);
     expect(payload).toEqual({
       success: false,
-      error: 'You do not have permission to publish articles directly.',
+      error: 'Forbidden',
     });
     expect(createStoredArticleMock).not.toHaveBeenCalled();
     expect(recordArticleActivityMock).not.toHaveBeenCalled();

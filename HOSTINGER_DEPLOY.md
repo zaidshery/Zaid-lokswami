@@ -48,6 +48,28 @@ EPAPER_FORCE_STORAGE=1
 
 The same DigitalOcean Spaces variables power story videos, story images, thumbnails, and e-paper assets.
 
+If story videos upload directly from the browser, the Spaces bucket also needs a CORS rule for your app origin.
+
+Minimum rule to allow direct story video uploads:
+
+```xml
+<CORSConfiguration>
+  <CORSRule>
+    <AllowedOrigin>http://localhost:3000</AllowedOrigin>
+    <AllowedOrigin>https://your-domain.com</AllowedOrigin>
+    <AllowedMethod>PUT</AllowedMethod>
+    <AllowedMethod>GET</AllowedMethod>
+    <AllowedMethod>HEAD</AllowedMethod>
+    <AllowedHeader>Content-Type</AllowedHeader>
+    <AllowedHeader>*</AllowedHeader>
+    <ExposeHeader>ETag</ExposeHeader>
+    <MaxAgeSeconds>3000</MaxAgeSeconds>
+  </CORSRule>
+</CORSConfiguration>
+```
+
+Replace the origins with your real dev and production domains. Without this, reporter story video uploads will fail in the browser before the file reaches Spaces.
+
 
 Optional if you use Google login:
 
@@ -220,6 +242,7 @@ EPAPER_STORAGE_UPLOADS_BASE_DIR=/absolute/path/to/writable/storage/uploads
 - Do not rely on local JSON data as your primary production database.
 - Use MongoDB in production.
 - If production uploads are important, configure DigitalOcean Spaces.
+- If story videos upload directly from the browser, add the app origin to the Spaces bucket CORS rules.
 - Keep `NEXTAUTH_URL` and `NEXT_PUBLIC_SITE_URL` on the same final domain.
 - Regenerate `NEXTAUTH_SECRET` only if you are okay invalidating sessions.
 - Do not delete `.hostinger/` between deploys. It stores the active release plus recent static snapshots for safe chunk overlap.

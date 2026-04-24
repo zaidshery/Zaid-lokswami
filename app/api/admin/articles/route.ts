@@ -12,6 +12,7 @@ import {
   canCreateContent,
   canReadContent,
   canTransitionContent,
+  canViewPage,
   isAssignedContent,
   isOwnContent,
 } from '@/lib/auth/permissions';
@@ -340,6 +341,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    if (!canViewPage(user.role, 'articles')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const category = searchParams.get('category');
     const requestedScope = normalizeScope(searchParams.get('scope'));
@@ -453,6 +461,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+    if (!canViewPage(user.role, 'article_create')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
       );
     }
     if (!canCreateContent(user.role, 'article')) {

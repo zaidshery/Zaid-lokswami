@@ -74,7 +74,6 @@ describe('story video upload admin routes', () => {
       uploadUrl: 'https://origin.example.com/signed-put',
       uploadHeaders: {
         'Content-Type': 'video/mp4',
-        'x-amz-acl': 'public-read',
       },
       expiresAt: '2026-04-18T12:00:00.000Z',
     });
@@ -106,7 +105,6 @@ describe('story video upload admin routes', () => {
         uploadUrl: 'https://origin.example.com/signed-put',
         uploadHeaders: {
           'Content-Type': 'video/mp4',
-          'x-amz-acl': 'public-read',
         },
         expiresAt: '2026-04-18T12:00:00.000Z',
       },

@@ -1975,7 +1975,7 @@ export default async function AdminDashboardPage({
   const blockedEditionItems = superAdminDashboard?.blockedEditionItems || [];
   const actionGroups = superAdminDashboard?.actionGroups || [];
   const growthHighlights = superAdminDashboard?.growthHighlights || [];
-  const myAssignedDeskCount =
+  const deskAssignedCount =
     Number(myWork?.counts.assigned || 0) +
     Number(myWork?.counts.in_review || 0) +
     Number(myWork?.counts.copy_edit || 0) +
@@ -1984,6 +1984,10 @@ export default async function AdminDashboardPage({
     Number(myWork?.productionCounts.hotspot_mapping || 0) +
     Number(myWork?.productionCounts.qa_review || 0) +
     Number(myWork?.productionCounts.ready_to_publish || 0);
+  const reporterActiveDeskCount =
+    Number(myWork?.counts.assigned || 0) +
+    Number(myWork?.counts.in_review || 0) +
+    Number(myWork?.counts.copy_edit || 0);
   const readyEditionCount =
     superAdminDashboard?.metrics.readyEditionCount ||
     Number(reviewQueue?.productionCounts.ready_to_publish || 0);
@@ -2027,9 +2031,9 @@ export default async function AdminDashboardPage({
             tone: 'bg-violet-500/15 text-violet-600',
           },
           {
-            label: 'Assigned To Me',
-            value: myAssignedDeskCount,
-            note: 'Workflow items actively sitting with you right now.',
+            label: 'With Desk',
+            value: reporterActiveDeskCount,
+            note: 'Stories actively assigned, reviewed, or copy-checked by the desk right now.',
             icon: CheckCircle2,
             tone: 'bg-amber-500/15 text-amber-600',
           },
@@ -2069,7 +2073,7 @@ export default async function AdminDashboardPage({
             },
             {
               label: 'Assigned To Me',
-              value: myAssignedDeskCount,
+              value: deskAssignedCount,
               note: 'Your active copy desk and edition workload right now.',
               icon: FileText,
               tone: 'bg-orange-500/15 text-orange-600',

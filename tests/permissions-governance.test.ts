@@ -79,12 +79,13 @@ describe('governance permission helpers', () => {
     expect(canViewPage(admin.role, 'content_queue')).toBe(true);
     expect(canViewPage(admin.role, 'push_alerts')).toBe(true);
     expect(canViewPage(copyEditor.role, 'copy_desk')).toBe(true);
+    expect(canViewPage(reporter.role, 'articles')).toBe(false);
     expect(canViewPage(reporter.role, 'copy_desk')).toBe(false);
     expect(canViewPage(reporter.role, 'push_alerts')).toBe(false);
   });
 
   it('limits content creation by role', () => {
-    expect(canCreateContent(reporter.role, 'article')).toBe(true);
+    expect(canCreateContent(reporter.role, 'article')).toBe(false);
     expect(canCreateContent(reporter.role, 'story')).toBe(true);
     expect(canCreateContent(reporter.role, 'video')).toBe(false);
     expect(canCreateContent(copyEditor.role, 'article')).toBe(true);

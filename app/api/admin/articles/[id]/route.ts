@@ -624,6 +624,13 @@ export async function GET(
       return NextResponse.json({ success: true, data: mapEpaperArticle(epaperArticle) });
     }
 
+    if (!canViewPage(user.role, 'articles')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
     if (await shouldUseFileStore()) {
       const article = await getStoredArticleById(id);
       if (!article) {
@@ -727,6 +734,13 @@ export async function PATCH(
       }
       const result = await updateEpaperArticleById(id, body, false);
       return NextResponse.json(result.payload, { status: result.status });
+    }
+
+    if (!canViewPage(user.role, 'article_edit')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
     }
 
     if (isWorkflowAction((body as WorkflowActionBody).action)) {
@@ -1166,6 +1180,13 @@ export async function PUT(
       return NextResponse.json(result.payload, { status: result.status });
     }
 
+    if (!canViewPage(user.role, 'article_edit')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
     const input = normalizeFullInput(body);
     const validationError = validateRequired(input);
     if (validationError) {
@@ -1380,6 +1401,13 @@ export async function DELETE(
         success: true,
         message: 'Article deleted successfully',
       });
+    }
+
+    if (!canViewPage(user.role, 'article_edit')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
     }
 
     if (await shouldUseFileStore()) {

@@ -256,7 +256,7 @@ function validateStoryInput(
     }
 
     if (input.mediaSizeBytes < STORY_VIDEO_MIN_BYTES || input.mediaSizeBytes > STORY_VIDEO_MAX_BYTES) {
-      return 'Uploaded video must be between 1 MB and 100 MB';
+      return 'Uploaded video must be larger than 0 bytes and 1.9 GB or smaller';
     }
 
     if (input.mediaMimeType !== 'video/mp4') {

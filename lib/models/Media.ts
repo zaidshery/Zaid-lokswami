@@ -9,5 +9,7 @@ const MediaSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+MediaSchema.index({ uploadedBy: 1, createdAt: -1 });
+
 const Media = mongoose.models.Media || mongoose.model('Media', MediaSchema);
 export default Media;

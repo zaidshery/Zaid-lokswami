@@ -441,7 +441,7 @@ export default function AdminShell({
       >
         <header
           className={cx(
-            'admin-shell-surface sticky top-0 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 py-3 sm:px-6',
+            'admin-shell-surface fixed left-0 right-0 top-0 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 py-3 sm:px-6 lg:left-[272px]',
             mobileToolsOpen ? 'z-50' : 'z-20'
           )}
         >
@@ -563,7 +563,12 @@ export default function AdminShell({
           </div>
         </header>
 
-        <div className={cx('relative p-4 sm:p-6 lg:p-8', isReporterView && 'pb-28 lg:pb-8')}>
+        <div
+          className={cx(
+            'relative p-4 pt-24 sm:p-6 sm:pt-28 lg:p-8 lg:pt-28',
+            isReporterView && 'pb-28 lg:pb-8'
+          )}
+        >
           {children}
         </div>
       </main>

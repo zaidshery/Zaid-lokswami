@@ -196,6 +196,7 @@ Hostinger Node deployment is the supported production path for this repo.
 - Keep `NEXTAUTH_SECRET` at 32+ characters
 - Use a persistent MongoDB instance
 - Configure DigitalOcean Spaces if production uploads are enabled
+  Story video direct uploads also require a bucket CORS rule that allows your app origin, the `PUT`/`GET`/`HEAD` methods, and the `Content-Type` request header.
 - `public/uploads/*` and `data/articles.json` are gitignored local/generated data
 - Deploy with `npm run build` and `npm start`
 - Do not swap production start to `next start` or `node .next/standalone/server.js`, because that bypasses the managed Hostinger release flow
@@ -212,6 +213,7 @@ Vercel is also supported for the `zaidshery/Zaid-lokswami` GitHub repo with Git-
 - Keep `main` as the production branch in Vercel
 - Configure production env vars before the first live deploy: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_SITE_URL`
 - Add DigitalOcean Spaces env vars as well if uploads or e-paper assets are used in production
+  If story videos upload directly from the browser, add the deployed app origin to the bucket CORS rules too.
 - See `VERCEL_CICD_SETUP.md` for the full setup and branch-protection checklist
 
 ## Project Docs

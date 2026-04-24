@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { FileText, Image as ImageIcon, Newspaper, Video } from 'lucide-react';
+import { CheckCircle2, FileText, Image as ImageIcon, Newspaper, Video } from 'lucide-react';
 import { getAdminSession } from '@/lib/auth/admin';
 import { getMyWorkOverview } from '@/lib/admin/articleWorkflowOverview';
 import { canViewPage } from '@/lib/auth/permissions';
@@ -55,7 +55,7 @@ function getWorkflowFeedbackToneClass(tone: WorkflowFeedbackTone) {
 function getIntro(role: string) {
   switch (role) {
     case 'reporter':
-      return 'Reporter desk for your drafts, submissions, assignments, and media work across articles and stories.';
+      return 'Reporter desk for your story drafts, submissions, assignments, and media work.';
     case 'copy_editor':
       return 'Copy desk view for the work you are actively shaping across articles, stories, videos, and e-paper editions.';
     case 'admin':
@@ -68,48 +68,51 @@ function getIntro(role: string) {
 
 function getLinkCards(role: string): LinkCard[] {
   const isReporter = isReporterDeskRole(role);
-  const cards: LinkCard[] = [
-    {
-      title: isReporter ? 'My Articles' : 'Article Desk',
-      description:
-        isReporter
-          ? 'Open the article list already scoped to your byline.'
-          : 'Jump into article editing and current desk content.',
-      href: isReporter ? '/admin/articles?scope=mine' : '/admin/articles',
-      icon: FileText,
-      tone: 'bg-blue-500/10 text-blue-600',
-    },
-    {
-      title: 'Media Library',
-      description: 'Upload or manage the images and media tied to your current work.',
-      href: '/admin/media',
-      icon: ImageIcon,
-      tone: 'bg-emerald-500/10 text-emerald-600',
-    },
-  ];
+  const cards: LinkCard[] = [];
 
   if (isReporter) {
-    cards.unshift({
+    cards.push({
       title: 'Create Story',
       description: 'Start a new reporting draft with media, source notes, and desk handoff details.',
       href: '/admin/stories/new',
       icon: Video,
       tone: 'bg-fuchsia-500/10 text-fuchsia-600',
     });
-    cards.splice(1, 0, {
+    cards.push({
       title: 'My Stories',
       description: 'Open the story desk for the cards you created or that are assigned to you.',
       href: '/admin/stories',
       icon: Video,
       tone: 'bg-fuchsia-500/10 text-fuchsia-600',
     });
+    cards.push({
+      title: 'Media Library',
+      description: 'Upload or manage the image assets tied to your current story work.',
+      href: '/admin/media',
+      icon: ImageIcon,
+      tone: 'bg-emerald-500/10 text-emerald-600',
+    });
   } else {
-    cards.unshift({
+    cards.push({
       title: 'Review Queue',
       description: 'Move into the shared editorial queue for articles, videos, stories, and e-papers.',
       href: '/admin/review-queue',
       icon: FileText,
       tone: 'bg-violet-500/10 text-violet-600',
+    });
+    cards.push({
+      title: 'Article Desk',
+      description: 'Jump into article editing and current desk content.',
+      href: '/admin/articles',
+      icon: FileText,
+      tone: 'bg-blue-500/10 text-blue-600',
+    });
+    cards.push({
+      title: 'Media Library',
+      description: 'Upload or manage the images and media tied to your current work.',
+      href: '/admin/media',
+      icon: ImageIcon,
+      tone: 'bg-emerald-500/10 text-emerald-600',
     });
     cards.push({
       title: 'E-Paper Desk',
@@ -144,14 +147,14 @@ export default async function AdminMyWorkPage() {
   const cards = getLinkCards(admin.role);
   const isReporter = isReporterDeskRole(admin.role);
   const emptyStateMessage = isReporter
-    ? 'No drafts, submissions, or assignments yet. Your article and story work will appear here as soon as it starts moving through the desk.'
+    ? 'No drafts, submissions, or assignments yet. Your story work will appear here as soon as it starts moving through the desk.'
     : 'No owned or assigned workflow items yet. Content and edition desk work will appear here as it lands.';
   const contextStats = isReporter
     ? [
         {
           label: 'My Drafts',
           value: myWork.counts.draft || 0,
-          note: 'Draft articles and story cards still being prepared',
+          note: 'Draft story cards still being prepared',
           tone: 'bg-blue-500/10 text-blue-600',
           icon: FileText,
         },
@@ -165,7 +168,7 @@ export default async function AdminMyWorkPage() {
             Number(myWork.counts.ready_for_approval || 0) +
             Number(myWork.counts.approved || 0) +
             Number(myWork.counts.scheduled || 0),
-          note: 'Submitted items currently moving through desk review and approval',
+          note: 'Submitted stories currently moving through desk review and approval',
           tone: 'bg-violet-500/10 text-violet-600',
           icon: Video,
         },
@@ -177,17 +180,14 @@ export default async function AdminMyWorkPage() {
           icon: FileText,
         },
         {
-          label: 'Assigned To Me',
+          label: 'In Active Review',
           value:
             Number(myWork.counts.assigned || 0) +
-            Number(myWork.productionCounts.pages_ready || 0) +
-            Number(myWork.productionCounts.ocr_review || 0) +
-            Number(myWork.productionCounts.hotspot_mapping || 0) +
-            Number(myWork.productionCounts.qa_review || 0) +
-            Number(myWork.productionCounts.ready_to_publish || 0),
-          note: 'Owned content, assignments, and edition items currently on your plate',
+            Number(myWork.counts.in_review || 0) +
+            Number(myWork.counts.copy_edit || 0),
+          note: 'Stories currently assigned, reviewed, or copy-checked by the desk',
           tone: 'bg-orange-500/10 text-orange-600',
-          icon: Newspaper,
+          icon: CheckCircle2,
         },
       ]
     : [
@@ -249,7 +249,7 @@ export default async function AdminMyWorkPage() {
       <section
         className={cx(
           'grid gap-4',
-          isReporter ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 lg:grid-cols-3'
+          isReporter ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 lg:grid-cols-3'
         )}
       >
         {cards.map((card) => {
@@ -289,7 +289,9 @@ export default async function AdminMyWorkPage() {
               Current Work
             </h2>
             <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
-              Your current ownership and assignment view across content and edition production.
+              {isReporter
+                ? 'Your current ownership and assignment view across active story work.'
+                : 'Your current ownership and assignment view across content and edition production.'}
             </p>
           </div>
         </div>

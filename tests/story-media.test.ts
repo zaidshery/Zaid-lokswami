@@ -45,7 +45,7 @@ describe('story media helpers', () => {
     expect(validateStoryMediaAssets(images)).toBe('You can upload up to 5 images per story.');
   });
 
-  it('rejects packages above the configured total video size cap', () => {
+  it('allows large combined video uploads when each file is otherwise valid', () => {
     const videos = Array.from({ length: 6 }, (_, index) =>
       createStoryMediaAsset({
         kind: 'video',
@@ -59,7 +59,7 @@ describe('story media helpers', () => {
       })
     );
 
-    expect(validateStoryMediaAssets(videos)).toBe('Total video size must be 500 MB or smaller per story.');
+    expect(validateStoryMediaAssets(videos)).toBeNull();
   });
 
   it('derives the primary story thumbnail and lead video from the asset list', () => {

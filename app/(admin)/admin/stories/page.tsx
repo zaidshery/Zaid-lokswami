@@ -700,7 +700,7 @@ export default function StoriesManagementPage() {
                       ) : null}
                     </div>
 
-                    {story.linkedArticleId ? (
+                    {!isReporterFlow && story.linkedArticleId ? (
                       <div className="mt-4 rounded-[20px] border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
                         Linked article is ready in the article desk.&nbsp;
                         <Link
@@ -740,7 +740,7 @@ export default function StoriesManagementPage() {
                       </Link>
                     ) : null}
 
-                    {story.linkedArticleId ? (
+                    {!isReporterFlow && story.linkedArticleId ? (
                       <Link
                         href={`/admin/articles/${story.linkedArticleId}/edit`}
                         className={SECONDARY_BUTTON_CLASS}

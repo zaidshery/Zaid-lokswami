@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import { getAdminSession } from '@/lib/auth/admin';
-import { canEditContent, canReadContent } from '@/lib/auth/permissions';
+import { canEditContent, canReadContent, canViewPage } from '@/lib/auth/permissions';
 import Article from '@/lib/models/Article';
 import { resolveArticleWorkflow } from '@/lib/workflow/article';
 import {
@@ -108,6 +108,13 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       );
     }
 
+    if (!canViewPage(admin.role, 'articles')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
     const mongoError = await requireMongoBackedTts();
     if (mongoError) {
       return NextResponse.json(
@@ -191,6 +198,13 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    if (!canViewPage(admin.role, 'article_edit')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

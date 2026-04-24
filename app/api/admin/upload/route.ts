@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession } from '@/lib/auth/admin';
+import { isReporterDeskRole } from '@/lib/auth/roles';
 import { uploadBufferToDigitalOceanSpaces } from '@/lib/utils/digitalOceanSpaces';
 
 type UploadPurpose =
@@ -110,6 +111,14 @@ function getUploadRule(purpose: UploadPurpose): UploadRule {
   };
 }
 
+function canUseUploadPurpose(role: string | null | undefined, purpose: UploadPurpose) {
+  if (!isReporterDeskRole(role)) {
+    return true;
+  }
+
+  return purpose === 'image' || purpose === 'story-thumbnail';
+}
+
 export async function POST(req: NextRequest) {
   try {
     const user = await getAdminSession();
@@ -123,6 +132,16 @@ export async function POST(req: NextRequest) {
 
     if (!(file instanceof File)) {
       return NextResponse.json({ success: false, error: 'No file provided' }, { status: 400 });
+    }
+
+    if (!canUseUploadPurpose(user.role, purpose)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Reporters can only upload image assets from this workspace.',
+        },
+        { status: 403 }
+      );
     }
 
     const rule = getUploadRule(purpose);
