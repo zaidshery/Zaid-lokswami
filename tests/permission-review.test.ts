@@ -13,6 +13,7 @@ describe('getPermissionReviewData', () => {
       review.superAdminOnlyPages.some((entry) => entry.key === 'operations_diagnostics')
     ).toBe(true);
     expect(review.broadAccessPages.some((entry) => entry.key === 'dashboard')).toBe(true);
-    expect(review.broadAccessPages.some((entry) => entry.key === 'articles')).toBe(true);
+    expect(review.broadAccessPages.some((entry) => entry.key === 'stories')).toBe(true);
+    expect(review.broadAccessPages.some((entry) => entry.key === 'articles')).toBe(false);
   });
 });
