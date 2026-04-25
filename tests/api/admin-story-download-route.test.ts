@@ -190,6 +190,55 @@ describe('story asset download route', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('lets copy editors download unassigned submitted story assets from the shared queue', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'copy-editor-1',
+      email: 'copy@example.com',
+      name: 'Copy Editor',
+      role: 'copy_editor',
+    });
+    getStoredStoryByIdMock.mockResolvedValue({
+      _id: 'story-1',
+      title: 'Submitted Story',
+      author: 'Reporter One',
+      thumbnail: 'https://cdn.example.com/thumb.jpg',
+      workflow: {
+        status: 'submitted',
+        createdBy: {
+          id: 'reporter-1',
+          name: 'Reporter One',
+          email: 'reporter@example.com',
+          role: 'reporter',
+        },
+        assignedTo: null,
+      },
+      isPublished: false,
+      updatedAt: '2026-04-18T10:30:00.000Z',
+    });
+    fetchMock.mockResolvedValue(
+      new Response('thumb-bytes', {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/jpeg',
+        },
+      })
+    );
+
+    const { GET } = await import('@/app/api/admin/stories/[id]/download/route');
+    const response = await GET(createGetRequest('thumbnail'), {
+      params: Promise.resolve({ id: 'story-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://cdn.example.com/thumb.jpg',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(response.headers.get('content-disposition')).toContain(
+      'submitted-story-thumbnail.jpg'
+    );
+  });
+
   it('lets reporters download thumbnail assets for their own stories', async () => {
     getAdminSessionMock.mockResolvedValue({
       id: 'reporter-1',

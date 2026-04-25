@@ -45,6 +45,15 @@ describe('story editing capabilities', () => {
     legacyAuthorName: reporter.name,
   };
 
+  const submittedQueueRecord = {
+    workflow: {
+      status: 'submitted' as const,
+      createdBy: { id: reporter.id },
+      assignedTo: null,
+    },
+    legacyAuthorName: reporter.name,
+  };
+
   const someoneElsesStoryRecord = {
     workflow: {
       status: 'submitted' as const,
@@ -74,6 +83,14 @@ describe('story editing capabilities', () => {
     expect(capabilities.canEditCopyDeskFields).toBe(true);
     expect(capabilities.canEditReporterFields).toBe(false);
     expect(capabilities.canEditMediaFields).toBe(false);
+    expect(capabilities.canDownloadStoryAssets).toBe(true);
+  });
+
+  it('lets copy editors download but not edit shared submitted stories', () => {
+    const capabilities = getStoryEditCapabilities(copyEditor, submittedQueueRecord);
+
+    expect(capabilities.canSaveStory).toBe(false);
+    expect(capabilities.canEditCopyDeskFields).toBe(false);
     expect(capabilities.canDownloadStoryAssets).toBe(true);
   });
 

@@ -288,9 +288,6 @@ export default function VideosManagementPage() {
               Desk Actions
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href="/admin/review-queue" className={SECONDARY_BUTTON_CLASS}>
-                Review Queue
-              </Link>
               {canCreateVideos ? (
                 <Link href="/admin/videos/new" className={PRIMARY_BUTTON_CLASS}>
                   <Plus className="h-4 w-4" />

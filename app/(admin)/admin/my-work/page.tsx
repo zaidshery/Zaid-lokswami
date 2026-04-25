@@ -4,7 +4,7 @@ import { CheckCircle2, FileText, Image as ImageIcon, Newspaper, Video } from 'lu
 import { getAdminSession } from '@/lib/auth/admin';
 import { getMyWorkOverview } from '@/lib/admin/articleWorkflowOverview';
 import { canViewPage } from '@/lib/auth/permissions';
-import { formatUserRoleLabel, isReporterDeskRole } from '@/lib/auth/roles';
+import { formatUserRoleLabel, isCopyEditorRole, isReporterDeskRole } from '@/lib/auth/roles';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
 import {
@@ -93,13 +93,23 @@ function getLinkCards(role: string): LinkCard[] {
       tone: 'bg-emerald-500/10 text-emerald-600',
     });
   } else {
-    cards.push({
-      title: 'Review Queue',
-      description: 'Move into the shared editorial queue for articles, videos, stories, and e-papers.',
-      href: '/admin/review-queue',
-      icon: FileText,
-      tone: 'bg-violet-500/10 text-violet-600',
-    });
+    if (isCopyEditorRole(role)) {
+      cards.push({
+        title: 'Copy Desk',
+        description: 'Pick up submitted reporter stories and continue active copy desk work.',
+        href: '/admin/copy-desk',
+        icon: FileText,
+        tone: 'bg-violet-500/10 text-violet-600',
+      });
+    } else {
+      cards.push({
+        title: 'Review Queue',
+        description: 'Move into the shared editorial queue for articles, videos, stories, and e-papers.',
+        href: '/admin/review-queue',
+        icon: FileText,
+        tone: 'bg-violet-500/10 text-violet-600',
+      });
+    }
     cards.push({
       title: 'Article Desk',
       description: 'Jump into article editing and current desk content.',
@@ -146,6 +156,7 @@ export default async function AdminMyWorkPage() {
   const myWork = await getMyWorkOverview(admin);
   const cards = getLinkCards(admin.role);
   const isReporter = isReporterDeskRole(admin.role);
+  const isCopyEditor = isCopyEditorRole(admin.role);
   const emptyStateMessage = isReporter
     ? 'No drafts, submissions, or assignments yet. Your story work will appear here as soon as it starts moving through the desk.'
     : 'No owned or assigned workflow items yet. Content and edition desk work will appear here as it lands.';
@@ -238,10 +249,10 @@ export default async function AdminMyWorkPage() {
             </p>
           </div>
           <Link
-            href={isReporterDeskRole(admin.role) ? '/admin/stories/new' : '/admin/review-queue'}
+            href={isReporter ? '/admin/stories/new' : isCopyEditor ? '/admin/copy-desk' : '/admin/review-queue'}
             className="admin-shell-toolbar-btn inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold"
           >
-            {isReporterDeskRole(admin.role) ? 'Create Story' : 'Open Review Queue'}
+            {isReporter ? 'Create Story' : isCopyEditor ? 'Open Copy Desk' : 'Open Review Queue'}
           </Link>
         </div>
       </section>
@@ -249,7 +260,8 @@ export default async function AdminMyWorkPage() {
       <section
         className={cx(
           'grid gap-4',
-          isReporter ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 lg:grid-cols-3'
+          isReporter ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 lg:grid-cols-3',
+          isCopyEditor && 'hidden lg:grid'
         )}
       >
         {cards.map((card) => {
@@ -281,6 +293,32 @@ export default async function AdminMyWorkPage() {
           );
         })}
       </section>
+
+      {isCopyEditor ? (
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {contextStats.map((stat) => (
+            <div
+              key={stat.label}
+              className="admin-shell-surface-strong rounded-[24px] p-4 sm:rounded-[28px] sm:p-6"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium text-[color:var(--admin-shell-text-muted)] sm:text-sm">
+                    {stat.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)] sm:mt-3 sm:text-3xl">
+                    {formatNumber(stat.value)}
+                  </p>
+                </div>
+                <div className={`rounded-2xl p-2.5 sm:p-3 ${stat.tone}`}>
+                  <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+              </div>
+              <p className="mt-4 hidden text-sm text-[color:var(--admin-shell-text-muted)] sm:block">{stat.note}</p>
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       <section className={PANEL_CLASS}>
         <div>
@@ -384,7 +422,8 @@ export default async function AdminMyWorkPage() {
       <section
         className={cx(
           'grid gap-4',
-          isReporter ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 lg:grid-cols-3'
+          isReporter ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 lg:grid-cols-3',
+          isCopyEditor && 'hidden'
         )}
       >
         {contextStats.map((stat) => (
@@ -409,6 +448,28 @@ export default async function AdminMyWorkPage() {
           </div>
         ))}
       </section>
+
+      {isCopyEditor ? (
+        <section className="grid grid-cols-2 gap-4 lg:hidden">
+          {cards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <Link
+                key={`${card.href}-mobile`}
+                href={card.href}
+                className="admin-shell-surface-strong rounded-[24px] p-4 transition-all hover:-translate-y-0.5"
+              >
+                <div className={cx('inline-flex rounded-2xl p-2.5', card.tone)}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <h2 className="mt-4 text-base font-bold text-[color:var(--admin-shell-text)]">
+                  {card.title}
+                </h2>
+              </Link>
+            );
+          })}
+        </section>
+      ) : null}
     </div>
   );
 }

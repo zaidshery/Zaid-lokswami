@@ -174,7 +174,7 @@ describe('/api/admin/articles route', () => {
     expect(ensureBreakingTtsForArticleMock).not.toHaveBeenCalled();
   });
 
-  it('allows copy editors to create linked articles from approved stories', async () => {
+  it('allows copy editors to create linked articles from claimed story reviews', async () => {
     getAdminSessionMock.mockResolvedValue({
       id: 'copy-1',
       email: 'copy@example.com',
@@ -184,7 +184,15 @@ describe('/api/admin/articles route', () => {
     getStoryRecordForArticleLinkingMock.mockResolvedValue({
       _id: 'story-1',
       title: 'Reporter Story Title',
-      workflow: { status: 'approved' },
+      workflow: {
+        status: 'in_review',
+        assignedTo: {
+          id: 'copy-1',
+          email: 'copy@example.com',
+          name: 'Copy Editor',
+          role: 'copy_editor',
+        },
+      },
     });
     createStoredArticleMock.mockResolvedValue({
       _id: 'article-2',

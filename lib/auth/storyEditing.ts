@@ -3,6 +3,7 @@ import {
   isAssignedContent,
   isOwnContent,
   canManageWorkflowAssignments,
+  resolveWorkflowStatus,
   type PermissionContentRecord,
   type PermissionUser,
 } from '@/lib/auth/permissions';
@@ -130,7 +131,7 @@ export function getCanDownloadStoryAssets(
   }
 
   if (isCopyEditorRole(user.role)) {
-    return isAssignedContent(user, content);
+    return isAssignedContent(user, content) || resolveWorkflowStatus(content) === 'submitted';
   }
 
   return false;

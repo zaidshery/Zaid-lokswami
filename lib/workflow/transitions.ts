@@ -6,7 +6,7 @@ import type {
 
 const WORKFLOW_TRANSITIONS: Record<WorkflowStatus, readonly WorkflowStatus[]> = {
   draft: ['submitted', 'archived'],
-  submitted: ['assigned', 'changes_requested', 'rejected'],
+  submitted: ['assigned', 'in_review', 'changes_requested', 'rejected'],
   assigned: ['assigned', 'in_review', 'changes_requested', 'rejected'],
   in_review: ['assigned', 'copy_edit', 'ready_for_approval', 'changes_requested', 'rejected'],
   copy_edit: ['assigned', 'ready_for_approval', 'changes_requested', 'rejected'],

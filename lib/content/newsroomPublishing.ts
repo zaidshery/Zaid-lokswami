@@ -203,6 +203,19 @@ export function isStoryReadyForArticleCreation(
   return status === 'approved' || status === 'scheduled' || status === 'published';
 }
 
+export function isStoryReadyForArticleDrafting(
+  status: WorkflowStatus | string | null | undefined
+) {
+  return (
+    status === 'submitted' ||
+    status === 'assigned' ||
+    status === 'in_review' ||
+    status === 'copy_edit' ||
+    status === 'ready_for_approval' ||
+    isStoryReadyForArticleCreation(status)
+  );
+}
+
 export function isSocialPlatform(value: unknown): value is SocialPlatform {
   return typeof value === 'string' && SOCIAL_PLATFORMS.includes(value as SocialPlatform);
 }

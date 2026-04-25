@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyStoryVideoProduction,
   getLinkedArticleStatusFromWorkflowStatus,
+  isStoryReadyForArticleDrafting,
   isStoryReadyForArticleCreation,
   normalizeStoryVideoProduction,
 } from '@/lib/content/newsroomPublishing';
@@ -21,6 +22,15 @@ describe('newsroom publishing helpers', () => {
     expect(isStoryReadyForArticleCreation('approved')).toBe(true);
     expect(isStoryReadyForArticleCreation('scheduled')).toBe(true);
     expect(isStoryReadyForArticleCreation('published')).toBe(true);
+  });
+
+  it('allows article drafting from submitted and copy desk story stages', () => {
+    expect(isStoryReadyForArticleDrafting('draft')).toBe(false);
+    expect(isStoryReadyForArticleDrafting('submitted')).toBe(true);
+    expect(isStoryReadyForArticleDrafting('in_review')).toBe(true);
+    expect(isStoryReadyForArticleDrafting('copy_edit')).toBe(true);
+    expect(isStoryReadyForArticleDrafting('ready_for_approval')).toBe(true);
+    expect(isStoryReadyForArticleDrafting('published')).toBe(true);
   });
 
   it('normalizes video production state into a stable stored shape', () => {

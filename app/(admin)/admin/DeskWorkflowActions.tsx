@@ -33,6 +33,8 @@ type DeskWorkflowActionsProps = {
   contentId: string;
   status: WorkflowStatus | string;
   editHref: string;
+  hasAssignment?: boolean;
+  isAssignedToCurrentUser?: boolean;
   assignedToName?: string;
 };
 
@@ -87,6 +89,8 @@ export default function DeskWorkflowActions({
   contentId,
   status,
   editHref,
+  hasAssignment,
+  isAssignedToCurrentUser,
   assignedToName,
 }: DeskWorkflowActionsProps) {
   const router = useRouter();
@@ -111,13 +115,19 @@ export default function DeskWorkflowActions({
   const canAssign =
     isAdminDesk &&
     ['submitted', 'assigned', 'in_review', 'copy_edit', 'ready_for_approval'].includes(status);
-  const canStartReview = isCopyEditorDesk && status === 'assigned';
-  const canMoveToCopyEdit = isCopyEditorDesk && status === 'in_review';
+  const copyEditorOwnsItem = Boolean(isAssignedToCurrentUser);
+  const itemHasAssignment = Boolean(hasAssignment || assignedToName);
+  const canStartReview =
+    isCopyEditorDesk &&
+    ((status === 'submitted' && !itemHasAssignment) ||
+      (status === 'assigned' && copyEditorOwnsItem));
+  const canMoveToCopyEdit = isCopyEditorDesk && copyEditorOwnsItem && status === 'in_review';
   const canRequestChanges =
     (isAdminDesk || isCopyEditorDesk) &&
+    (isAdminDesk || copyEditorOwnsItem) &&
     ['assigned', 'in_review', 'copy_edit', 'ready_for_approval'].includes(status);
   const canReadyForApproval =
-    isCopyEditorDesk && ['in_review', 'copy_edit'].includes(status);
+    isCopyEditorDesk && copyEditorOwnsItem && ['in_review', 'copy_edit'].includes(status);
   const canApprove = isAdminDesk && status === 'ready_for_approval';
   const canReject =
     isAdminDesk &&
@@ -296,7 +306,7 @@ export default function DeskWorkflowActions({
             className={cx(ACTION_BUTTON_CLASS, PRIMARY_ACTION_CLASS)}
           >
             <ClipboardList className="h-4 w-4" />
-            Start Review
+            {status === 'submitted' ? 'Claim Story' : 'Start Review'}
           </button>
         ) : null}
 

@@ -52,7 +52,9 @@ function withQueueMeta(item: WorkflowArticleCard): NewsroomQueueItem {
   const queueLabel = item.assignedToName
     ? `Assigned to ${item.assignedToName}`
     : item.status === 'submitted'
-      ? 'Awaiting admin triage'
+      ? item.contentType === 'story'
+        ? 'Open for copy desk pickup'
+        : 'Awaiting admin triage'
       : item.status === 'changes_requested'
         ? 'Returned for reporting changes'
         : item.status === 'ready_for_approval'
@@ -122,7 +124,9 @@ export async function getNewsroomControlCenterData(): Promise<NewsroomControlCen
     ['submitted', 'ready_for_approval', 'approved', 'scheduled'].includes(item.status)
   );
   const copyDesk = queueItems.filter((item) =>
-    ['assigned', 'in_review', 'copy_edit'].includes(item.status)
+    item.contentType === 'story'
+      ? ['submitted', 'assigned', 'in_review', 'copy_edit'].includes(item.status)
+      : ['assigned', 'in_review', 'copy_edit'].includes(item.status)
   );
 
   return {

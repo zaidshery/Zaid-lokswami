@@ -63,7 +63,7 @@ function cx(...classes: Array<string | undefined | false>) {
 }
 
 const SECTION_LINK_CLASS =
-  'admin-shell-toolbar-btn inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em]';
+  'admin-shell-toolbar-btn inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] sm:text-xs sm:tracking-[0.14em]';
 
 const PANEL_CLASS =
   'admin-shell-surface-strong rounded-[28px] p-4 sm:rounded-[32px] sm:p-6';
@@ -2216,13 +2216,17 @@ export default async function AdminDashboardPage({
                   {formatNewsroomRoleLabel(admin.role)}
                 </p>
                 <h1 className="mt-2 text-2xl font-black text-zinc-900 dark:text-zinc-100 sm:text-3xl">
-                  {isReporterDashboard ? reporterDeskTitle : 'Newsroom Dashboard'}
+                  {isReporterDashboard
+                    ? reporterDeskTitle
+                    : admin.role === 'copy_editor'
+                      ? 'Copy Editor Dashboard'
+                      : 'Newsroom Dashboard'}
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
                   {isReporterDashboard
                     ? 'Create story drafts, track desk feedback, and stay on top of your active reporting queue.'
                     : admin.role === 'copy_editor'
-                      ? 'See the editorial queue, your copy desk workload, and e-paper production pressure first.'
+                      ? 'Pick up submitted stories, review assigned work, and send clean items to admin approval.'
                       : admin.role === 'admin'
                         ? 'See queue pressure, publish-ready work, edition production, inbox load, and editorial operations first.'
                         : 'See newsroom output and live workflow pressure at a glance.'}
@@ -2231,16 +2235,18 @@ export default async function AdminDashboardPage({
             </div>
           </section>
 
-          <section
-            className={cx(
-              'grid gap-4 xl:grid-cols-4',
-              isReporterDashboard ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'
-            )}
-          >
-            {quickActions.map((action) => (
-              <QuickActionCard key={action.href} action={action} compactOnMobile={isReporterDashboard} />
-            ))}
-          </section>
+          {admin.role !== 'copy_editor' ? (
+            <section
+              className={cx(
+                'grid gap-4 xl:grid-cols-4',
+                isReporterDashboard ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'
+              )}
+            >
+              {quickActions.map((action) => (
+                <QuickActionCard key={action.href} action={action} compactOnMobile={isReporterDashboard} />
+              ))}
+            </section>
+          ) : null}
         </>
       )}
 
@@ -2258,7 +2264,11 @@ export default async function AdminDashboardPage({
           admin.role === 'super_admin' ? (
             <LeadershipStatCard key={stat.label} stat={stat} />
           ) : (
-            <StatCard key={stat.label} stat={stat} compactOnMobile={isReporterDashboard} />
+            <StatCard
+              key={stat.label}
+              stat={stat}
+              compactOnMobile={isReporterDashboard || admin.role === 'copy_editor'}
+            />
           )
         )}
       </section>
@@ -2329,11 +2339,12 @@ export default async function AdminDashboardPage({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <WorkflowListSection
             title="Copy Desk Queue"
-            description="Submitted content and production-stage editions needing copy and quality handling."
+            description="Submitted stories waiting for pickup and active copy desk review."
             href="/admin/copy-desk"
             linkLabel="Open Copy Desk"
             items={activeReviewItems}
-            emptyMessage="No live review items are waiting right now."
+            emptyMessage="No submitted stories are waiting right now."
+            compactOnMobile
           />
           <WorkflowListSection
             title="My Desk"
@@ -2342,8 +2353,17 @@ export default async function AdminDashboardPage({
             linkLabel="Open My Work"
             items={myItems}
             emptyMessage="No current desk items are assigned to you yet."
+            compactOnMobile
           />
         </div>
+      ) : null}
+
+      {admin.role === 'copy_editor' ? (
+        <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {quickActions.map((action) => (
+            <QuickActionCard key={action.href} action={action} compactOnMobile />
+          ))}
+        </section>
       ) : null}
 
       {admin.role === 'admin' ? (

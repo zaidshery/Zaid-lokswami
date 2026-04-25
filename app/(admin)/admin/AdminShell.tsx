@@ -31,6 +31,7 @@ import {
 import Logo from '@/components/layout/Logo';
 import {
   formatUserRoleLabel,
+  isCopyEditorRole,
   isReporterDeskRole,
   isSuperAdminRole,
   type UserRole,
@@ -56,9 +57,11 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 const HI = {
   adminPanel: '\u090f\u0921\u092e\u093f\u0928 \u092a\u0948\u0928\u0932',
+  copyEditorPanel: '\u0915\u0949\u092a\u0940 \u090f\u0921\u093f\u091f\u0930 \u092a\u0948\u0928\u0932',
   reporterPanel: '\u0930\u093f\u092a\u094b\u0930\u094d\u091f\u0930 \u092a\u0948\u0928\u0932',
   leadershipConsole: '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0932\u0940\u0921\u0930\u0936\u093f\u092a',
   adminDashboard: '\u090f\u0921\u092e\u093f\u0928 \u0921\u0948\u0936\u092c\u094b\u0930\u094d\u0921',
+  copyEditorDashboard: '\u0915\u0949\u092a\u0940 \u090f\u0921\u093f\u091f\u0930 \u0921\u0948\u0936\u092c\u094b\u0930\u094d\u0921',
   reporterDesk: '\u0930\u093f\u092a\u094b\u0930\u094d\u091f\u0930 \u0921\u0947\u0938\u094d\u0915',
   leadershipDashboard: '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0932\u0940\u0921\u0930\u0936\u093f\u092a',
   dashboard: '\u0921\u0948\u0936\u092c\u094b\u0930\u094d\u0921',
@@ -143,7 +146,6 @@ const ADMIN_ITEMS: SidebarItem[] = [
 
 const COPY_EDITOR_ITEMS: SidebarItem[] = [
   { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
-  { icon: FileText, labelEn: 'Review Queue', labelHi: HI.reviewQueue, href: '/admin/review-queue' },
   { icon: FileText, labelEn: 'Copy Desk', labelHi: HI.copyDesk, href: '/admin/copy-desk' },
   { icon: FileText, labelEn: 'My Work', labelHi: HI.myWork, href: '/admin/my-work' },
   { icon: FileText, labelEn: 'Articles', labelHi: HI.articles, href: '/admin/articles' },
@@ -195,6 +197,10 @@ function getConsoleLabel(role: UserRole | undefined, isHindi: boolean) {
     return isHindi ? HI.reporterPanel : 'Reporter Panel';
   }
 
+  if (isCopyEditorRole(role)) {
+    return isHindi ? HI.copyEditorPanel : 'Copy Editor Panel';
+  }
+
   return isHindi ? HI.adminPanel : 'Admin Panel';
 }
 
@@ -205,6 +211,10 @@ function getHeaderLabel(role: UserRole | undefined, isHindi: boolean) {
 
   if (isReporterDeskRole(role)) {
     return isHindi ? HI.reporterDesk : 'Reporter Desk';
+  }
+
+  if (isCopyEditorRole(role)) {
+    return isHindi ? HI.copyEditorDashboard : 'Copy Editor Dashboard';
   }
 
   return isHindi ? HI.adminDashboard : 'Admin Dashboard';
@@ -329,8 +339,20 @@ export default function AdminShell({
   const consoleLabel = getConsoleLabel(resolvedUser.role, isHindi);
   const headerLabel = getHeaderLabel(resolvedUser.role, isHindi);
   const isReporterView = isReporterDeskRole(resolvedUser.role);
-  const sidebarLabel = isReporterView ? adminName : consoleLabel;
-  const headerSubtitle = isReporterView ? adminName : adminRoleLabel;
+  const isCopyEditorView = isCopyEditorRole(resolvedUser.role);
+  const sidebarLabel = isReporterView
+    ? adminName
+    : isCopyEditorView
+      ? adminName
+      : consoleLabel;
+  const headerSubtitle = isReporterView || isCopyEditorView
+    ? adminName
+    : adminRoleLabel;
+  const mobileHeaderLabel = isCopyEditorView
+    ? isHindi
+      ? HI.dashboard
+      : 'Dashboard'
+    : headerLabel;
 
   const handleLogout = async () => {
     try {
@@ -441,11 +463,11 @@ export default function AdminShell({
       >
         <header
           className={cx(
-            'admin-shell-surface fixed left-0 right-0 top-0 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 py-3 sm:px-6 lg:left-[272px]',
+            'admin-shell-surface fixed left-0 right-0 top-0 flex min-h-16 flex-nowrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 py-3 sm:px-6 lg:left-[272px]',
             mobileToolsOpen ? 'z-50' : 'z-20'
           )}
         >
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               type="button"
               onClick={() => setMobileNavOpen((current) => !current)}
@@ -457,7 +479,8 @@ export default function AdminShell({
             </button>
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-[color:var(--admin-shell-text)] sm:text-lg">
-                {headerLabel}
+                <span className="sm:hidden">{mobileHeaderLabel}</span>
+                <span className="hidden sm:inline">{headerLabel}</span>
               </h1>
               <p className="truncate text-xs text-[color:var(--admin-shell-text-muted)]">
                 {headerSubtitle}

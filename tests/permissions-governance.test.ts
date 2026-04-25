@@ -78,6 +78,7 @@ describe('governance permission helpers', () => {
     expect(canViewPage(admin.role, 'assignments')).toBe(true);
     expect(canViewPage(admin.role, 'content_queue')).toBe(true);
     expect(canViewPage(admin.role, 'push_alerts')).toBe(true);
+    expect(canViewPage(copyEditor.role, 'review_queue')).toBe(false);
     expect(canViewPage(copyEditor.role, 'copy_desk')).toBe(true);
     expect(canViewPage(reporter.role, 'articles')).toBe(false);
     expect(canViewPage(reporter.role, 'copy_desk')).toBe(false);
@@ -114,8 +115,16 @@ describe('governance permission helpers', () => {
 
   it('lets copy editors work only on assigned review items', () => {
     const assignedContent = { ...baseContent, workflowStatus: 'assigned' as const };
+    const submittedQueueContent = {
+      ...baseContent,
+      workflowStatus: 'submitted' as const,
+      assignedToId: '',
+    };
 
     expect(canReadContent(copyEditor, assignedContent)).toBe(true);
+    expect(canReadContent(copyEditor, submittedQueueContent)).toBe(true);
+    expect(canEditContent(copyEditor, submittedQueueContent)).toBe(false);
+    expect(canTransitionContent(copyEditor, submittedQueueContent, 'start_review')).toBe(true);
     expect(canEditContent(copyEditor, assignedContent)).toBe(true);
     expect(
       canEditContent(copyEditor, { ...assignedContent, workflowStatus: 'ready_for_approval' })
@@ -126,9 +135,17 @@ describe('governance permission helpers', () => {
     expect(canTransitionContent(copyEditor, assignedContent, 'mark_ready_for_approval')).toBe(true);
     expect(canTransitionContent(copyEditor, assignedContent, 'approve')).toBe(false);
     expect(canTransitionContent(copyEditor, assignedContent, 'reject')).toBe(false);
+    expect(canTransitionContent(copyEditor, assignedContent, 'schedule')).toBe(false);
     expect(canTransitionContent(copyEditor, assignedContent, 'publish')).toBe(false);
     expect(
       canEditContent(copyEditor, { ...assignedContent, assignedToId: 'someone-else' })
+    ).toBe(false);
+    expect(
+      canTransitionContent(
+        copyEditor,
+        { ...submittedQueueContent, assignedToId: 'someone-else' },
+        'start_review'
+      )
     ).toBe(false);
   });
 

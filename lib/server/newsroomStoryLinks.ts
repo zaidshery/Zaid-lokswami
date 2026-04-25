@@ -11,7 +11,7 @@ import {
 } from '@/lib/storage/storiesFile';
 import {
   getLinkedArticleStatusFromWorkflowStatus,
-  isStoryReadyForArticleCreation,
+  isStoryReadyForArticleDrafting,
   type LinkedArticleStatus,
 } from '@/lib/content/newsroomPublishing';
 import {
@@ -189,8 +189,8 @@ export function validateStoryForArticleCreation(story: StoryRecord | null) {
     updatedAt: story.updatedAt,
   });
 
-  if (!isStoryReadyForArticleCreation(workflow.status)) {
-    return 'Only approved stories can create linked articles.';
+  if (!isStoryReadyForArticleDrafting(workflow.status)) {
+    return 'Only submitted or desk-stage stories can create linked articles.';
   }
 
   if (

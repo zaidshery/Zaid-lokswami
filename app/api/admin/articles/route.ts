@@ -517,7 +517,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Reporters cannot create linked articles directly from approved stories.',
+            error: 'Reporters cannot create linked articles directly from story packages.',
           },
           { status: 403 }
         );

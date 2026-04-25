@@ -32,6 +32,7 @@ import {
 import { getStoryEditCapabilities } from '@/lib/auth/storyEditing';
 import {
   isAdminRole,
+  isCopyEditorRole,
   isReporterDeskRole,
   type AdminRole,
 } from '@/lib/auth/roles';
@@ -66,6 +67,9 @@ import {
   CmsEditorMain,
   CmsEditorSidebar,
 } from '@/components/admin/CmsEditorLayout';
+import ArticleEditorStudio, {
+  type ArticleEditorStudioMode,
+} from '@/components/forms/ArticleEditorStudio';
 
 interface StoryFormData {
   title: string;
@@ -164,6 +168,17 @@ type AssignableUserOption = {
 type PreviewAssetState = {
   asset: StoryMediaAsset;
   title: string;
+};
+
+type LinkedArticleStatus = 'not_created' | 'draft' | 'submitted' | 'published' | string;
+
+type ArticleBuilderForm = {
+  title: string;
+  summary: string;
+  content: string;
+  image: string;
+  category: string;
+  author: string;
 };
 
 const categories = ['General', ...NEWS_CATEGORIES.map((category) => category.nameEn)];
@@ -354,6 +369,15 @@ const initialFormData: StoryFormData = {
   durationSeconds: '6',
   priority: '0',
   views: '0',
+};
+
+const initialArticleBuilderForm: ArticleBuilderForm = {
+  title: '',
+  summary: '',
+  content: '',
+  image: '',
+  category: 'General',
+  author: 'Desk',
 };
 
 const EMPTY_WORKFLOW: WorkflowState = {
@@ -640,6 +664,13 @@ export default function EditStoryPage() {
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
   const [downloadingAsset, setDownloadingAsset] = useState<'' | 'thumbnail' | 'media'>('');
   const [previewAsset, setPreviewAsset] = useState<PreviewAssetState | null>(null);
+  const [linkedArticleId, setLinkedArticleId] = useState('');
+  const [linkedArticleStatus, setLinkedArticleStatus] = useState<LinkedArticleStatus>('not_created');
+  const [articleBuilderForm, setArticleBuilderForm] =
+    useState<ArticleBuilderForm>(initialArticleBuilderForm);
+  const [articleBuilderIntent, setArticleBuilderIntent] = useState<'' | 'draft' | 'submit'>('');
+  const [articleBuilderMode, setArticleBuilderMode] =
+    useState<ArticleEditorStudioMode>('split');
 
   const mediaCounts = useMemo(() => countStoryMediaAssets(mediaAssets), [mediaAssets]);
   const imageAssets = useMemo(
@@ -700,6 +731,14 @@ export default function EditStoryPage() {
   const canUseManualVideoUrl = storyEditCapabilities.canUseManualVideoUrl;
   const canDownloadStoryAssets = storyEditCapabilities.canDownloadStoryAssets;
   const isReporterView = isReporterDeskRole(permissionUser?.role);
+  const isCopyEditorView = isCopyEditorRole(permissionUser?.role);
+  const isCopyEditorSharedSubmittedStory =
+    isCopyEditorView && workflow.status === 'submitted' && !workflow.assignedTo;
+  const canBuildLinkedArticle =
+    !isReporterView &&
+    !linkedArticleId &&
+    (canEditCopyDeskMeta || canEditAdminFields);
+  const showStoryEditFields = !isCopyEditorView || canEditAdminFields;
   const hasUnsavedChanges =
     Boolean(thumbnailFile) ||
     buildFormSnapshot(formData, previewThumbnail, mediaAssets) !== savedFormSnapshot;
@@ -715,13 +754,58 @@ export default function EditStoryPage() {
   const availableWorkflowActions = useMemo(() => {
     if (!permissionUser) return [] as ContentTransitionAction[];
 
-    return getAllowedWorkflowTransitions(workflow.status)
+    const actions = getAllowedWorkflowTransitions(workflow.status)
       .map((status) => STATUS_TO_ACTION[status])
       .filter((action): action is ContentTransitionAction => Boolean(action))
       .filter((action) =>
         canTransitionContent(permissionUser, workflowPermissionRecord, action)
       );
+
+    if (
+      workflow.status === 'submitted' &&
+      canTransitionContent(permissionUser, workflowPermissionRecord, 'start_review') &&
+      !actions.includes('start_review')
+    ) {
+      return ['start_review' as ContentTransitionAction, ...actions];
+    }
+
+    return actions;
   }, [permissionUser, workflow.status, workflowPermissionRecord]);
+
+  const workflowMetaItems = [
+    {
+      label: 'Created By',
+      value: workflow.createdBy?.name || workflow.createdBy?.email || 'Unknown',
+    },
+    {
+      label: 'Assigned To',
+      value: workflow.assignedTo?.name || workflow.assignedTo?.email || 'Unassigned',
+    },
+    {
+      label: 'Reviewed By',
+      value: workflow.reviewedBy?.name || workflow.reviewedBy?.email || 'Not started',
+    },
+    {
+      label: 'Priority',
+      value: workflowPriority,
+    },
+    {
+      label: 'Submitted',
+      value: workflow.submittedAt ? formatDateTime(workflow.submittedAt) : 'Not submitted',
+    },
+    {
+      label: 'Scheduled',
+      value: workflow.scheduledFor ? formatDateTime(workflow.scheduledFor) : 'Not scheduled',
+    },
+    {
+      label: 'Published',
+      value: workflow.publishedAt ? formatDateTime(workflow.publishedAt) : 'Not published',
+    },
+    {
+      label: 'Due',
+      value: workflow.dueAt ? formatDateTime(workflow.dueAt) : 'No due date',
+    },
+  ];
 
   const recentWorkflowComments = useMemo(
     () =>
@@ -825,6 +909,14 @@ export default function EditStoryPage() {
       } satisfies StoryFormData;
       const nextWorkflow = normalizeWorkflowState(story.workflow);
       const nextMediaAssets = getInitialStoryMediaAssets(story);
+      const nextPrimaryMedia = derivePrimaryStoryMedia(
+        nextMediaAssets,
+        String(story.thumbnail || '')
+      );
+      const nextLinkedArticleId = String(story.linkedArticleId || '').trim();
+      const nextLinkedArticleStatus = String(
+        story.linkedArticleStatus || 'not_created'
+      ) as LinkedArticleStatus;
 
       setFormData(nextForm);
       setMediaAssets(nextMediaAssets);
@@ -835,10 +927,20 @@ export default function EditStoryPage() {
       setSavedFormSnapshot(
         buildFormSnapshot(
           nextForm,
-          derivePrimaryStoryMedia(nextMediaAssets, String(story.thumbnail || '')).thumbnail,
+          nextPrimaryMedia.thumbnail,
           nextMediaAssets
         )
       );
+      setLinkedArticleId(nextLinkedArticleId);
+      setLinkedArticleStatus(nextLinkedArticleStatus);
+      setArticleBuilderForm({
+        title: nextForm.title,
+        summary: nextForm.caption.slice(0, 500),
+        content: nextForm.caption,
+        image: nextPrimaryMedia.thumbnail || nextForm.thumbnail,
+        category: nextForm.category,
+        author: nextForm.author || 'Desk',
+      });
       setWorkflow(nextWorkflow);
       setWorkflowPriority(nextWorkflow.priority);
       setWorkflowAssigneeId(nextWorkflow.assignedTo?.id || '');
@@ -960,6 +1062,16 @@ export default function EditStoryPage() {
         [name]: nextValue,
       };
     });
+  };
+
+  const handleArticleBuilderChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setArticleBuilderForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
   };
 
   const replaceMediaAsset = (assetId: string, nextAsset: StoryMediaAsset) => {
@@ -1544,6 +1656,101 @@ export default function EditStoryPage() {
     }
   };
 
+  const handleCreateLinkedArticle = async (intent: 'draft' | 'submit') => {
+    setError('');
+    setSuccess('');
+
+    if (!canBuildLinkedArticle) {
+      setError(
+        isCopyEditorSharedSubmittedStory
+          ? 'Claim this story before writing the linked article.'
+          : 'You do not have permission to create an article from this story right now.'
+      );
+      return;
+    }
+
+    if (hasUnsavedChanges) {
+      setError('Save story changes before creating the linked article.');
+      return;
+    }
+
+    const title = articleBuilderForm.title.trim();
+    const summary = articleBuilderForm.summary.trim();
+    const content = articleBuilderForm.content.trim();
+    const image = articleBuilderForm.image.trim();
+    const category = articleBuilderForm.category.trim();
+    const author = articleBuilderForm.author.trim();
+
+    if (!title || !summary || !content || !image || !category || !author) {
+      setError('Fill the article headline, summary, body, image, category, and author before submitting.');
+      return;
+    }
+
+    setArticleBuilderIntent(intent);
+    try {
+      const response = await fetch('/api/admin/articles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          intent,
+          title,
+          summary,
+          content,
+          image,
+          category,
+          author,
+          sourceStoryId: storyId,
+          reporterMeta: {
+            locationTag: formData.locationTag,
+            sourceInfo: formData.sourceInfo,
+            sourceConfidential: formData.sourceConfidential,
+            reporterNotes: formData.reporterNotes,
+          },
+          copyEditorMeta: {
+            proofreadComplete: formData.proofreadComplete,
+            factCheckStatus: formData.factCheckStatus,
+            headlineStatus: formData.headlineStatus,
+            imageOptimizationStatus: formData.imageOptimizationStatus,
+            copyEditorNotes: formData.copyEditorNotes,
+            returnForChangesReason: formData.returnForChangesReason,
+          },
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          _id?: string;
+          workflow?: {
+            status?: string;
+          };
+        };
+      };
+
+      if (!response.ok || !data.success) {
+        setError(data.error || 'Failed to create the linked article.');
+        return;
+      }
+
+      setLinkedArticleId(data.data?._id || '');
+      setLinkedArticleStatus(intent === 'draft' ? 'draft' : 'submitted');
+      setSuccess(
+        intent === 'draft'
+          ? 'Linked article draft created from this story.'
+          : 'Linked article submitted to the admin desk for final approval and publishing.'
+      );
+      await fetchStory();
+      await fetchStoryActivity();
+    } catch {
+      setError('Failed to create the linked article. Please try again.');
+    } finally {
+      setArticleBuilderIntent('');
+    }
+  };
+
   const handleWorkflowAction = async (action: ContentTransitionAction) => {
     setError('');
     setSuccess('');
@@ -1558,8 +1765,15 @@ export default function EditStoryPage() {
       return;
     }
 
-    if (action === 'reject' && !workflowRejectionReason.trim()) {
-      setError('Add a rejection reason before rejecting this story.');
+    if (
+      (action === 'reject' || action === 'request_changes') &&
+      !workflowRejectionReason.trim()
+    ) {
+      setError(
+        action === 'reject'
+          ? 'Add a rejection reason before rejecting this story.'
+          : 'Add a clear change reason before sending this story back.'
+      );
       return;
     }
 
@@ -1653,7 +1867,9 @@ export default function EditStoryPage() {
           <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-bold text-gray-900">Edit Story</h1>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {isCopyEditorView ? 'Create Article From Story' : 'Edit Story'}
+                </h1>
                 <WorkflowPill status={workflow.status} />
                 {hasUnsavedChanges ? (
                   <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
@@ -1661,7 +1877,11 @@ export default function EditStoryPage() {
                   </span>
                 ) : null}
               </div>
-              <p className="mt-2 text-gray-600">Refine story visuals, workflow, and desk status</p>
+              <p className="mt-2 text-gray-600">
+                {isCopyEditorView
+                  ? 'Review the reporter package, write the article, and send it to admin approval.'
+                  : 'Refine story visuals, workflow, and desk status'}
+              </p>
             </div>
           </div>
 
@@ -1681,7 +1901,9 @@ export default function EditStoryPage() {
 
           {!canSaveStory ? (
             <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-              This story is read-only right now. Reporters can edit drafts or stories returned for changes, copy editors can edit assigned review items, and admins can edit at any stage.
+              {isCopyEditorSharedSubmittedStory
+                ? 'This story is submitted and waiting for a copy editor to claim it. You can review and download the reporter resources now, then use Claim Story to start review.'
+                : 'This story is read-only right now. Reporters can edit drafts or stories returned for changes, copy editors can edit assigned review items, and admins can edit at any stage.'}
             </div>
           ) : null}
 
@@ -1689,6 +1911,7 @@ export default function EditStoryPage() {
             <CmsEditorColumns>
             <CmsEditorMain className="space-y-4">
 
+            <div className={showStoryEditFields ? 'space-y-4' : 'hidden'}>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-900">
                 Story Title <span className="text-red-500">*</span>
@@ -2160,6 +2383,295 @@ export default function EditStoryPage() {
                 </div>
               </div>
             ) : null}
+            </div>
+
+            {!isReporterView ? (
+              <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 lg:grid-cols-2">
+                <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                      Reporter Package
+                    </p>
+                    <h2 className="mt-1 text-lg font-bold text-gray-900">
+                      Submitted story resources
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Review the original story, notes, source details, and media before writing the article.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        Images
+                      </p>
+                      <p className="mt-1 font-bold text-gray-900">{mediaCounts.images}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        Videos
+                      </p>
+                      <p className="mt-1 font-bold text-gray-900">{mediaCounts.videos}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        Location
+                      </p>
+                      <p className="mt-1 font-semibold text-gray-900">
+                        {formData.locationTag.trim() || 'Not provided'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        Source
+                      </p>
+                      <p className="mt-1 font-semibold text-gray-900">
+                        {formData.sourceConfidential ? 'Confidential' : 'Visible to desk'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Reporter Script
+                    </p>
+                    <div className="min-h-[120px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
+                      {formData.caption.trim() || 'No reporter script was provided.'}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Reporter Notes
+                      </p>
+                      <div className="min-h-[88px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
+                        {formData.reporterNotes.trim() || 'No reporter notes.'}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Source Info
+                      </p>
+                      <div className="min-h-[88px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
+                        {formData.sourceInfo.trim() || 'No source information.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {canDownloadStoryAssets ? (
+                    <div className="flex flex-wrap gap-2">
+                      {previewThumbnail ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleDownloadAsset('thumbnail')}
+                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={downloadingAsset === 'thumbnail'}
+                        >
+                          {downloadingAsset === 'thumbnail' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          Download Thumbnail
+                        </button>
+                      ) : null}
+                      {videoAssets.length > 0 || (!usesMediaCollection && formData.mediaUrl) ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleDownloadAsset('media')}
+                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={downloadingAsset === 'media'}
+                        >
+                          {downloadingAsset === 'media' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          Download Video
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </section>
+
+                <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Article Builder
+                      </p>
+                      <h2 className="mt-1 text-lg font-bold text-gray-900">
+                        Write article from this story
+                      </h2>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Save a draft or submit to admin. Only admins can final publish.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold capitalize text-gray-700">
+                      {linkedArticleId ? linkedArticleStatus : 'Not created'}
+                    </span>
+                  </div>
+
+                  {linkedArticleId ? (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                      <p className="font-semibold">A linked article already exists for this story.</p>
+                      <Link
+                        href={`/admin/articles/${linkedArticleId}/edit`}
+                        className="mt-3 inline-flex items-center rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-800"
+                      >
+                        Open Linked Article
+                      </Link>
+                    </div>
+                  ) : (
+                    <>
+                      {!canBuildLinkedArticle ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                          {isCopyEditorSharedSubmittedStory
+                            ? 'Claim this submitted story first. After claiming, this article builder becomes editable.'
+                            : 'Article creation is available after the story is in a desk-editable stage.'}
+                        </div>
+                      ) : null}
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-900">
+                          Article Headline
+                        </label>
+                        <input
+                          type="text"
+                          name="title"
+                          value={articleBuilderForm.title}
+                          onChange={handleArticleBuilderChange}
+                          className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                          disabled={!canBuildLinkedArticle}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-900">
+                          Summary
+                        </label>
+                        <textarea
+                          name="summary"
+                          value={articleBuilderForm.summary}
+                          onChange={handleArticleBuilderChange}
+                          rows={3}
+                          className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                          disabled={!canBuildLinkedArticle}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-900">
+                          Article Body
+                        </label>
+                        <div className="mb-3 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900 sm:grid-cols-2">
+                          <div>
+                            <p className="font-semibold">Use full article tools</p>
+                            <p className="mt-1">Add headings, links, quotes, resources, tables, images, and YouTube embeds.</p>
+                          </div>
+                          <div>
+                            <p className="font-semibold">Admin final publish</p>
+                            <p className="mt-1">Copy editor submits the article to admin. Publish controls stay admin-only.</p>
+                          </div>
+                        </div>
+                        <div className={!canBuildLinkedArticle ? 'pointer-events-none opacity-60' : undefined}>
+                          <ArticleEditorStudio
+                            title={articleBuilderForm.title}
+                            summary={articleBuilderForm.summary}
+                            content={articleBuilderForm.content}
+                            mode={articleBuilderMode}
+                            showSidebar={false}
+                            onModeChange={setArticleBuilderMode}
+                            onContentChange={(content) =>
+                              setArticleBuilderForm((current) => ({ ...current, content }))
+                            }
+                            placeholder="Write the full article from the reporter package. Use the toolbar for formatting."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-900">
+                            Category
+                          </label>
+                          <select
+                            name="category"
+                            value={articleBuilderForm.category}
+                            onChange={handleArticleBuilderChange}
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                            disabled={!canBuildLinkedArticle}
+                          >
+                            {categories.map((category) => (
+                              <option key={category} value={category}>
+                                {category}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-900">
+                            Author
+                          </label>
+                          <input
+                            type="text"
+                            name="author"
+                            value={articleBuilderForm.author}
+                            onChange={handleArticleBuilderChange}
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                            disabled={!canBuildLinkedArticle}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-900">
+                          Article Image URL
+                        </label>
+                        <input
+                          type="url"
+                          name="image"
+                          value={articleBuilderForm.image}
+                          onChange={handleArticleBuilderChange}
+                          className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                          disabled={!canBuildLinkedArticle}
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleCreateLinkedArticle('draft')}
+                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={!canBuildLinkedArticle || Boolean(articleBuilderIntent)}
+                        >
+                          {articleBuilderIntent === 'draft' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          Save Article Draft
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleCreateLinkedArticle('submit')}
+                          className="inline-flex items-center gap-2 rounded-md bg-spanish-red px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-spanish-red/90 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={!canBuildLinkedArticle || Boolean(articleBuilderIntent)}
+                        >
+                          {articleBuilderIntent === 'submit' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4" />
+                          )}
+                          Submit To Admin
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </section>
+              </div>
+            ) : null}
 
             </CmsEditorMain>
 
@@ -2176,28 +2688,16 @@ export default function EditStoryPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Created By</p>
-                    <p className="mt-1 text-sm font-medium text-gray-900">
-                      {workflow.createdBy?.name || workflow.createdBy?.email || 'Unknown'}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Assigned To</p>
-                    <p className="mt-1 text-sm font-medium text-gray-900">
-                      {workflow.assignedTo?.name || workflow.assignedTo?.email || 'Unassigned'}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Reviewed By</p>
-                    <p className="mt-1 text-sm font-medium text-gray-900">
-                      {workflow.reviewedBy?.name || workflow.reviewedBy?.email || 'Not started'}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Priority</p>
-                    <p className="mt-1 text-sm font-medium capitalize text-gray-900">{workflowPriority}</p>
-                  </div>
+                  {workflowMetaItems.map((item) => (
+                    <div key={item.label} className="rounded-lg border border-gray-200 bg-white p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 text-sm font-medium capitalize text-gray-900">
+                        {item.value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
 
                 <div className={`rounded-lg border p-4 ${getWorkflowFeedbackToneClass(workflowFeedback.tone)}`}>
@@ -2293,9 +2793,22 @@ export default function EditStoryPage() {
                   </div>
                 ) : null}
 
-                {availableWorkflowActions.includes('reject') || workflow.rejectionReason ? (
+                {isCopyEditorView ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p className="font-semibold">Admin-only final approval</p>
+                    <p className="mt-1 leading-6">
+                      Copy editors can claim, review, copy edit, request changes, and mark ready for approval. Approve, schedule, and publish stay with the admin desk.
+                    </p>
+                  </div>
+                ) : null}
+
+                {availableWorkflowActions.includes('reject') ||
+                availableWorkflowActions.includes('request_changes') ||
+                workflow.rejectionReason ? (
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">Rejection Reason</label>
+                    <label className="block text-sm font-medium text-gray-900">
+                      Change / Rejection Reason
+                    </label>
                     <textarea
                       value={workflowRejectionReason}
                       onChange={(event) => setWorkflowRejectionReason(event.target.value)}
@@ -2323,7 +2836,9 @@ export default function EditStoryPage() {
                   <div className="flex flex-wrap gap-2">
                     {availableWorkflowActions.map((action) => {
                       const needsAssignee = action === 'assign' && !workflowAssigneeId.trim();
-                      const needsReason = action === 'reject' && !workflowRejectionReason.trim();
+                      const needsReason =
+                        (action === 'reject' || action === 'request_changes') &&
+                        !workflowRejectionReason.trim();
                       const needsSchedule = action === 'schedule' && !workflowScheduledFor.trim();
                       const disabled =
                         Boolean(runningWorkflowAction) ||
@@ -2332,16 +2847,29 @@ export default function EditStoryPage() {
                         needsReason ||
                         needsSchedule;
 
+                      const toneClass =
+                        action === 'reject'
+                          ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                          : action === 'publish'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            : action === 'approve' || action === 'mark_ready_for_approval'
+                              ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                              : action === 'start_review' && isCopyEditorSharedSubmittedStory
+                                ? 'border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800'
+                                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50';
+
                       return (
                         <button
                           key={action}
                           type="button"
                           onClick={() => void handleWorkflowAction(action)}
                           disabled={disabled}
-                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${toneClass}`}
                         >
                           {runningWorkflowAction === action ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          {ACTION_LABELS[action]}
+                          {action === 'start_review' && isCopyEditorSharedSubmittedStory
+                            ? 'Claim Story'
+                            : ACTION_LABELS[action]}
                         </button>
                       );
                     })}

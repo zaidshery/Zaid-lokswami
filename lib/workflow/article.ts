@@ -201,6 +201,8 @@ export function applyArticleWorkflowAction(params: WorkflowActionParams) {
     assignedTo:
       params.action === 'assign'
         ? params.assignedTo ?? params.currentWorkflow.assignedTo
+        : params.action === 'start_review'
+          ? params.currentWorkflow.assignedTo ?? actorRef
         : params.action === 'archive'
           ? params.currentWorkflow.assignedTo
           : params.currentWorkflow.assignedTo,

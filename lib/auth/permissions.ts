@@ -80,7 +80,7 @@ export type PermissionContentRecord = {
 export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
   dashboard: ['super_admin', 'admin', 'reporter', 'copy_editor'],
   my_work: ['admin', 'reporter', 'copy_editor'],
-  review_queue: ['super_admin', 'admin', 'copy_editor'],
+  review_queue: ['super_admin', 'admin'],
   assignments: ['super_admin', 'admin'],
   content_queue: ['super_admin', 'admin'],
   push_alerts: ['super_admin', 'admin'],
@@ -157,6 +157,7 @@ const COPY_EDITOR_EDITABLE_WORKFLOW_STATUSES: WorkflowStatus[] = [
   'in_review',
   'copy_edit',
 ];
+const COPY_EDITOR_SHARED_QUEUE_STATUSES: WorkflowStatus[] = ['submitted'];
 
 function matchesActor(user: PermissionUser, actorId: string | null | undefined): boolean {
   if (!actorId) return false;
@@ -288,6 +289,8 @@ export function canReadContent(
 ): boolean {
   if (!user) return false;
 
+  const workflowStatus = resolveWorkflowStatus(content);
+
   switch (user.role) {
     case 'super_admin':
     case 'admin':
@@ -295,7 +298,12 @@ export function canReadContent(
     case 'reporter':
       return isOwnContent(user, content) || isAssignedContent(user, content);
     case 'copy_editor':
-      return isAssignedContent(user, content);
+      return (
+        isAssignedContent(user, content) ||
+        Boolean(
+          workflowStatus && COPY_EDITOR_SHARED_QUEUE_STATUSES.includes(workflowStatus)
+        )
+      );
     default:
       return false;
   }
@@ -389,6 +397,10 @@ export function canTransitionContent(
   }
 
   if (isCopyEditorRole(user.role)) {
+    if (action === 'start_review' && workflowStatus === 'submitted') {
+      return !resolveAssignedToId(content);
+    }
+
     return (
       (
         action === 'start_review' ||

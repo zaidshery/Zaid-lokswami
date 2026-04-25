@@ -14,6 +14,11 @@ import {
   type ReporterMeta,
 } from '@/lib/content/newsroomMetadata';
 import {
+  countStoryMediaAssets,
+  normalizeStoryMediaAssets,
+  type StoryMediaAsset,
+} from '@/lib/content/storyMedia';
+import {
   isAssignedContent,
   isOwnContent,
   type PermissionUser,
@@ -54,6 +59,11 @@ type StorySource = {
   isPublished?: boolean;
   reporterMeta?: unknown;
   copyEditorMeta?: unknown;
+  thumbnail?: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video';
+  mediaAssets?: StoryMediaAsset[] | unknown;
+  storageProvider?: string;
 };
 
 type VideoSource = {
@@ -90,12 +100,21 @@ type DeskItem = {
   author: string;
   updatedAt: string;
   status: DeskStatus;
+  assignedToId: string;
+  assignedToEmail: string;
   assignedToName: string;
   createdByName: string;
   editHref: string;
   deskHref: string;
   reporterSummary: ReporterMeta | null;
   copyEditorSummary: CopyEditorMeta | null;
+  assetSummary?: {
+    images: number;
+    videos: number;
+    hasThumbnail: boolean;
+    hasVideo: boolean;
+    storageProvider: string;
+  } | null;
 };
 
 export type WorkflowArticleCard = DeskItem;
@@ -217,6 +236,8 @@ function buildArticleItem(source: ArticleSource): DeskItem | null {
     author: String(source.author || 'Desk').trim() || 'Desk',
     updatedAt: toIsoDate(source.updatedAt || source.publishedAt),
     status: workflow.status,
+    assignedToId: workflow.assignedTo?.id || '',
+    assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
     createdByName: workflow.createdBy?.name || '',
     editHref: `/admin/articles/${encodeURIComponent(id)}/edit`,
@@ -237,6 +258,14 @@ function buildStoryItem(source: StorySource): DeskItem | null {
     publishedAt: source.publishedAt,
     updatedAt: source.updatedAt,
   });
+  const mediaAssets = normalizeStoryMediaAssets(source.mediaAssets);
+  const mediaCounts = countStoryMediaAssets(mediaAssets);
+  const hasThumbnail =
+    Boolean(String(source.thumbnail || '').trim()) || mediaCounts.images > 0;
+  const hasVideo =
+    source.mediaType === 'video' ||
+    Boolean(String(source.mediaUrl || '').trim()) ||
+    mediaCounts.videos > 0;
 
   return {
     contentType: 'story',
@@ -246,12 +275,21 @@ function buildStoryItem(source: StorySource): DeskItem | null {
     author: workflow.createdBy?.name || String(source.author || 'Desk').trim() || 'Desk',
     updatedAt: toIsoDate(source.updatedAt || source.publishedAt),
     status: workflow.status,
+    assignedToId: workflow.assignedTo?.id || '',
+    assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
     createdByName: workflow.createdBy?.name || '',
     editHref: `/admin/stories/${encodeURIComponent(id)}/edit`,
     deskHref: '/admin/stories',
     reporterSummary: normalizeReporterMeta(source.reporterMeta),
     copyEditorSummary: normalizeCopyEditorMeta(source.copyEditorMeta),
+    assetSummary: {
+      images: mediaCounts.images || (hasThumbnail ? 1 : 0),
+      videos: mediaCounts.videos || (hasVideo ? 1 : 0),
+      hasThumbnail,
+      hasVideo,
+      storageProvider: String(source.storageProvider || '').trim(),
+    },
   };
 }
 
@@ -275,6 +313,8 @@ function buildVideoItem(source: VideoSource): DeskItem | null {
     author: workflow.createdBy?.name || 'Desk',
     updatedAt: toIsoDate(source.updatedAt || source.publishedAt),
     status: workflow.status,
+    assignedToId: workflow.assignedTo?.id || '',
+    assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
     createdByName: workflow.createdBy?.name || '',
     editHref: `/admin/videos/${encodeURIComponent(id)}/edit`,
@@ -308,6 +348,8 @@ function buildEpaperItem(source: EPaperSource): DeskItem | null {
     author: sourceLabel,
     updatedAt: toIsoDate(source.updatedAt || source.publishDate || source.createdAt),
     status: production.productionStatus,
+    assignedToId: production.productionAssignee?.id || '',
+    assignedToEmail: production.productionAssignee?.email || '',
     assignedToName: production.productionAssignee?.name || '',
     createdByName: '',
     editHref: `/admin/epapers/${encodeURIComponent(id)}`,
@@ -398,7 +440,7 @@ async function loadStories(): Promise<StorySource[]> {
     await connectDB();
     return (await Story.find({})
       .select(
-        '_id title category author updatedAt publishedAt workflow isPublished reporterMeta copyEditorMeta'
+        '_id title category author updatedAt publishedAt workflow isPublished reporterMeta copyEditorMeta thumbnail mediaUrl mediaType mediaAssets storageProvider'
       )
       .sort({ updatedAt: -1, publishedAt: -1, _id: -1 })
       .lean()) as StorySource[];

@@ -130,48 +130,51 @@ export default function AdminEPaperListPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6">
+      <div className="admin-shell-surface-strong rounded-[28px] p-5 sm:rounded-[36px] sm:p-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">E-Papers</h1>
-          <p className="text-sm text-gray-600">Manage uploads, page images, and hotspot articles.</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-600">Edition Workflow</p>
+          <h1 className="mt-3 text-3xl font-black text-[color:var(--admin-shell-text)] sm:text-5xl">E-Paper Desk</h1>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+            Review pages, hotspot readiness, OCR status, and editions moving toward admin release.
+          </p>
         </div>
 
         <Link
           href="/admin/epapers/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
+          className="admin-shell-toolbar-btn mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold"
         >
           <Plus className="h-4 w-4" />
           New Upload
         </Link>
       </div>
 
-      <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Total editions</p>
-          <p className="mt-2 text-2xl font-bold text-gray-900">{summary.total}</p>
-          <p className="mt-1 text-xs text-gray-600">All draft and published e-paper records.</p>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="admin-shell-surface rounded-[22px] p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Total editions</p>
+          <p className="mt-2 text-2xl font-bold text-[color:var(--admin-shell-text)]">{summary.total}</p>
+          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">All draft and published e-paper records.</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ready to publish</p>
+        <div className="admin-shell-surface rounded-[22px] p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Ready</p>
           <p className="mt-2 text-2xl font-bold text-blue-700">{summary.readyToPublish}</p>
-          <p className="mt-1 text-xs text-gray-600">Editions that cleared the production desk.</p>
+          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">Editions that cleared the production desk.</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">QA review</p>
+        <div className="admin-shell-surface rounded-[22px] p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">QA review</p>
           <p className="mt-2 text-2xl font-bold text-amber-700">{summary.qaReview}</p>
-          <p className="mt-1 text-xs text-gray-600">Editions waiting on final desk checks.</p>
+          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">Editions waiting on final desk checks.</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Blocked editions</p>
+        <div className="admin-shell-surface rounded-[22px] p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Blocked</p>
           <p className="mt-2 text-2xl font-bold text-red-700">{summary.blocked}</p>
-          <p className="mt-1 text-xs text-gray-600">Readiness blockers still need work.</p>
+          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">Readiness blockers still need work.</p>
         </div>
       </div>
 
-      <div className="mb-5 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-white p-4 md:grid-cols-5">
+      <div className="admin-shell-surface-strong grid grid-cols-1 gap-3 rounded-[24px] p-4 md:grid-cols-5">
         <label className="md:col-span-2">
-          <span className="mb-1 block text-xs font-semibold text-gray-600">Search</span>
+          <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">Search</span>
           <span className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
@@ -179,13 +182,13 @@ export default function AdminEPaperListPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search by title or city"
-              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-primary-600"
+              className="w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] py-2 pl-9 pr-3 text-sm text-[color:var(--admin-shell-text)] outline-none focus:border-red-500"
             />
           </span>
         </label>
 
         <label>
-          <span className="mb-1 block text-xs font-semibold text-gray-600">City</span>
+          <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">City</span>
           <select
             value={cityFilter}
             onChange={(event) => setCityFilter(event.target.value)}
@@ -201,11 +204,11 @@ export default function AdminEPaperListPage() {
         </label>
 
         <label>
-          <span className="mb-1 block text-xs font-semibold text-gray-600">Status</span>
+          <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">Status</span>
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+            className="w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-3 py-2 text-sm text-[color:var(--admin-shell-text)] outline-none focus:border-red-500"
           >
             <option value="all">All</option>
             <option value="draft">Draft</option>
@@ -214,11 +217,11 @@ export default function AdminEPaperListPage() {
         </label>
 
         <label>
-          <span className="mb-1 block text-xs font-semibold text-gray-600">Production</span>
+          <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">Production</span>
           <select
             value={productionFilter}
             onChange={(event) => setProductionFilter(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+            className="w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-3 py-2 text-sm text-[color:var(--admin-shell-text)] outline-none focus:border-red-500"
           >
             <option value="all">All stages</option>
             <option value="draft_upload">Draft upload</option>
@@ -233,11 +236,11 @@ export default function AdminEPaperListPage() {
         </label>
 
         <label>
-          <span className="mb-1 block text-xs font-semibold text-gray-600">Date</span>
+          <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">Date</span>
           <DateInputField
             value={dateFilter}
             onChange={setDateFilter}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+            className="w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-3 py-2 text-sm text-[color:var(--admin-shell-text)] outline-none focus:border-red-500"
           />
         </label>
       </div>
@@ -253,7 +256,7 @@ export default function AdminEPaperListPage() {
           <Loader2 className="h-7 w-7 animate-spin text-primary-600" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white px-5 py-12 text-center text-gray-600">
+        <div className="admin-shell-surface-strong rounded-[24px] px-5 py-12 text-center text-[color:var(--admin-shell-text-muted)]">
           No e-papers found.
         </div>
       ) : (
@@ -273,15 +276,15 @@ export default function AdminEPaperListPage() {
             return (
               <div
                 key={epaper._id}
-                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                className="admin-shell-surface-strong rounded-[24px] p-4 shadow-sm"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-lg font-semibold text-gray-900">{epaper.title}</h2>
-                    <p className="mt-1 text-xs text-gray-600">
+                    <h2 className="truncate text-lg font-semibold text-[color:var(--admin-shell-text)]">{epaper.title}</h2>
+                    <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
                       {epaper.cityName} ({epaper.citySlug}) | {formatUiDate(epaper.publishDate, epaper.publishDate)}
                     </p>
-                    <p className="mt-1 text-xs text-gray-600">
+                    <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
                       {epaper.pageCount} pages | {pagesWithImage} with image | {missingPages} missing
                     </p>
                     {readiness ? (
@@ -297,16 +300,16 @@ export default function AdminEPaperListPage() {
                         >
                           {readinessLabel}
                         </span>
-                        <span className="text-[11px] text-gray-500">
+                        <span className="text-[11px] text-[color:var(--admin-shell-text-muted)]">
                           Hotspots {readiness.hotspotCoveragePercent}% | Text {readiness.textCoveragePercent}%
                         </span>
                         {epaper.automation?.sourceLabel ? (
-                          <span className="text-[11px] text-gray-500">
+                          <span className="text-[11px] text-[color:var(--admin-shell-text-muted)]">
                             Source: {epaper.automation.sourceLabel}
                           </span>
                         ) : null}
                         {epaper.productionAssignee ? (
-                          <span className="text-[11px] text-gray-500">
+                          <span className="text-[11px] text-[color:var(--admin-shell-text-muted)]">
                             Desk owner: {epaper.productionAssignee.name}
                           </span>
                         ) : null}

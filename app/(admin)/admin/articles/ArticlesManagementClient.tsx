@@ -132,7 +132,6 @@ const ROLE_SCOPE_OPTIONS: Record<
   ],
   copy_editor: [
     { value: 'all', label: 'All Articles' },
-    { value: 'review', label: 'Review Queue' },
     { value: 'assigned', label: 'Assigned To Me' },
     { value: 'mine', label: 'My Articles' },
   ],
@@ -796,7 +795,7 @@ export default function ArticlesManagement() {
                   My Work
                 </Link>
               ) : null}
-              {adminRole === 'super_admin' || adminRole === 'admin' || adminRole === 'copy_editor' ? (
+              {adminRole === 'super_admin' || adminRole === 'admin' ? (
                 <Link href="/admin/review-queue" className={SECONDARY_BUTTON_CLASS}>
                   Review Queue
                 </Link>
