@@ -28,12 +28,14 @@ interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  editorClassName?: string;
 }
 
 export default function RichTextEditor({
   value,
   onChange,
   placeholder = 'Write your article content here...',
+  editorClassName = 'min-h-64',
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const inlineImageInputRef = useRef<HTMLInputElement>(null);
@@ -53,9 +55,13 @@ export default function RichTextEditor({
   }, [value]);
 
   const applyFormat = (command: string, commandValue?: string) => {
-    document.execCommand(command, false, commandValue);
     editorRef.current?.focus();
+    document.execCommand(command, false, commandValue);
     onChange(editorRef.current?.innerHTML || '');
+  };
+
+  const keepEditorSelection = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
   };
 
   const insertHtml = (html: string) => {
@@ -138,6 +144,27 @@ export default function RichTextEditor({
     }
 
     const shortcode = `[youtube:https://www.youtube.com/watch?v=${videoId}]`;
+    document.execCommand('insertText', false, shortcode);
+    handleInput();
+    editorRef.current?.focus();
+  };
+
+  const insertSocialEmbed = (platform: 'facebook' | 'x' | 'instagram' | 'link') => {
+    if (typeof window === 'undefined') return;
+
+    const label =
+      platform === 'facebook'
+        ? 'Facebook'
+        : platform === 'x'
+          ? 'X / Twitter'
+          : platform === 'instagram'
+            ? 'Instagram'
+            : 'social media';
+    const input = window.prompt(`Paste ${label} post URL`);
+    if (!input?.trim()) return;
+
+    const url = normalizeArticleEditorLinkUrl(input);
+    const shortcode = `[social:${platform}:${url}]`;
     document.execCommand('insertText', false, shortcode);
     handleInput();
     editorRef.current?.focus();
@@ -259,129 +286,143 @@ export default function RichTextEditor({
   };
 
   return (
-    <div className="w-full border border-gray-300 rounded-lg overflow-hidden focus-within:border-spanish-red transition-colors">
-      <div className="bg-gray-50 border-b border-gray-200 p-3 flex flex-wrap gap-1">
+    <div className="w-full overflow-hidden rounded-lg border border-gray-300 transition-colors focus-within:border-spanish-red dark:border-white/30">
+      <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 p-3 dark:border-white/15 dark:bg-white/[0.04]">
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('bold')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Bold (Ctrl+B)"
         >
           <Bold className="w-4 h-4" />
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('italic')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Italic (Ctrl+I)"
         >
           <Italic className="w-4 h-4" />
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('underline')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Underline (Ctrl+U)"
         >
           <Underline className="w-4 h-4" />
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={insertLink}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Insert Link (Ctrl+K)"
         >
           <Link2 className="w-4 h-4" />
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('unlink')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors text-xs font-semibold"
+          className="rounded p-2 text-xs font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Remove Link"
         >
           Unlink
         </button>
 
-        <div className="w-px bg-gray-300 mx-1" />
+        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
 
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('insertUnorderedList')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Bullet List"
         >
           <List className="w-4 h-4" />
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('insertOrderedList')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Numbered List"
         >
           <ListOrdered className="w-4 h-4" />
         </button>
 
-        <div className="w-px bg-gray-300 mx-1" />
+        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
 
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('formatBlock', '<h2>')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors text-sm font-semibold"
+          className="rounded p-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Heading"
         >
           H2
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('formatBlock', '<h3>')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors text-sm font-semibold"
+          className="rounded p-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Subheading"
         >
           H3
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={insertQuote}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Insert Quote"
         >
           <MessageSquareQuote className="w-4 h-4" />
         </button>
 
-        <div className="w-px bg-gray-300 mx-1" />
+        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
 
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={triggerInlineImageUpload}
           disabled={isUploadingInlineImage}
-          className="p-2 hover:bg-gray-200 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded p-2 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:text-gray-100 dark:hover:bg-white/10"
           title="Upload Inline Image"
         >
           <ImagePlus className="w-4 h-4" />
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={insertResourceCard}
-          className="px-2.5 py-2 hover:bg-gray-200 rounded transition-colors text-sm font-semibold"
+          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Insert Resource Callout"
         >
           Resource
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={insertTable}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Insert Table"
         >
           <Table2 className="w-4 h-4" />
         </button>
 
-        <div className="w-px bg-gray-300 mx-1" />
+        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
 
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('insertHorizontalRule')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors text-sm"
+          className="rounded p-2 text-sm transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Divider"
         >
           ---
@@ -389,38 +430,78 @@ export default function RichTextEditor({
 
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('removeFormat')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors text-sm"
+          className="rounded p-2 text-sm transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Clear Formatting"
         >
           Clear
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('undo')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Undo"
         >
           <Undo2 className="w-4 h-4" />
         </button>
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('redo')}
-          className="p-2 hover:bg-gray-200 rounded transition-colors"
+          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
           title="Redo"
         >
           <Redo2 className="w-4 h-4" />
         </button>
 
-        <div className="w-px bg-gray-300 mx-1" />
+        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
 
         <button
           type="button"
+          onMouseDown={keepEditorSelection}
           onClick={insertYouTubeEmbed}
-          className="px-2.5 py-2 hover:bg-gray-200 rounded transition-colors text-sm font-semibold text-red-700"
+          className="rounded px-2.5 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-gray-200 dark:text-red-400 dark:hover:bg-white/10"
           title="Insert YouTube Embed"
         >
           YouTube
+        </button>
+        <button
+          type="button"
+          onMouseDown={keepEditorSelection}
+          onClick={() => insertSocialEmbed('facebook')}
+          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          title="Insert Facebook Post"
+        >
+          Facebook
+        </button>
+        <button
+          type="button"
+          onMouseDown={keepEditorSelection}
+          onClick={() => insertSocialEmbed('x')}
+          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          title="Insert X / Twitter Post"
+        >
+          X
+        </button>
+        <button
+          type="button"
+          onMouseDown={keepEditorSelection}
+          onClick={() => insertSocialEmbed('instagram')}
+          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          title="Insert Instagram Post"
+        >
+          Instagram
+        </button>
+        <button
+          type="button"
+          onMouseDown={keepEditorSelection}
+          onClick={() => insertSocialEmbed('link')}
+          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          title="Insert Other Social Link"
+        >
+          Social
         </button>
       </div>
 
@@ -441,22 +522,22 @@ export default function RichTextEditor({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           suppressContentEditableWarning
-          className="min-h-64 p-4 focus:outline-none prose prose-sm max-w-none"
+          className={`${editorClassName} prose prose-sm max-w-none p-4 text-gray-900 focus:outline-none [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-gray-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-gray-700 dark:prose-invert dark:text-gray-100 dark:[&_ol]:marker:text-gray-100 dark:[&_ul]:marker:text-gray-100`}
           style={{
             wordWrap: 'break-word',
             whiteSpace: 'pre-wrap',
           }}
         />
         {!value && !isFocused && (
-          <span className="pointer-events-none absolute left-4 top-4 text-gray-400">{placeholder}</span>
+          <span className="pointer-events-none absolute left-4 top-4 text-gray-400 dark:text-gray-500">{placeholder}</span>
         )}
       </div>
 
-      <div className="bg-gray-50 border-t border-gray-200 px-4 py-2 text-xs text-gray-500">
+      <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-500 dark:border-white/15 dark:bg-white/[0.04] dark:text-gray-400">
         <span>{value.length} characters</span>
         <span className="mx-2">|</span>
         <span>
-          Use H2/H3, Quote, Image, Resource, Table, Link, and YouTube tools for richer stories
+          Use H2/H3, Quote, Image, Resource, Table, Link, YouTube, and social tools for richer stories
         </span>
         {isUploadingInlineImage ? (
           <>

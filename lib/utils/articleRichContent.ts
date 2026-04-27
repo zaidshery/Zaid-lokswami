@@ -6,6 +6,8 @@ import {
 
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i;
 const YOUTUBE_SHORTCODE_PATTERN = /\[youtube:([^\]\s]+)\]/gi;
+const SOCIAL_SHORTCODE_PATTERN =
+  /\[social:(facebook|x|twitter|instagram|linkedin|whatsapp|telegram|link):([^\]\s]+)\]/gi;
 const YOUTUBE_BLOCK_URL_PATTERN =
   /<(p|div)>\s*((?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/[^<\s]+)\s*<\/\1>/gi;
 const YOUTUBE_LINK_PATTERN =
@@ -72,6 +74,57 @@ function buildYouTubeEmbedMarkup(input: string) {
 </figure>`.trim();
 }
 
+function normalizeSocialUrl(input: string) {
+  const value = input.trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://${value}`;
+}
+
+function getSocialPlatformLabel(platform: string) {
+  switch (platform.toLowerCase()) {
+    case 'facebook':
+      return 'Facebook';
+    case 'x':
+    case 'twitter':
+      return 'X / Twitter';
+    case 'instagram':
+      return 'Instagram';
+    case 'linkedin':
+      return 'LinkedIn';
+    case 'whatsapp':
+      return 'WhatsApp';
+    case 'telegram':
+      return 'Telegram';
+    case 'link':
+    default:
+      return 'Social link';
+  }
+}
+
+function buildSocialEmbedMarkup(platform: string, input: string) {
+  const url = normalizeSocialUrl(input);
+  if (!/^https?:\/\//i.test(url)) return null;
+
+  let host = '';
+  try {
+    host = new URL(url).hostname.replace(/^www\./i, '');
+  } catch {
+    return null;
+  }
+
+  const label = getSocialPlatformLabel(platform);
+  const safeUrl = escapeHtml(url);
+  const safeHost = escapeHtml(host);
+
+  return `
+<aside class="article-social-embed" style="display:block;margin:1.25rem 0;padding:1rem;border:1px solid rgba(148,163,184,0.35);border-radius:0.75rem;background:rgba(148,163,184,0.08);">
+  <p class="article-social-embed-label" style="margin:0 0 0.35rem;font-size:0.75rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#e72129;">${label}</p>
+  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="font-weight:700;text-decoration:none;">View post on ${label}</a>
+  <p style="margin:0.35rem 0 0;font-size:0.875rem;color:#64748b;">${safeHost}</p>
+</aside>`.trim();
+}
+
 export function renderArticleRichContent(rawContent: string) {
   const source = rawContent.trim();
   if (!source) return '';
@@ -97,6 +150,13 @@ export function renderArticleRichContent(rawContent: string) {
   html = html.replace(YOUTUBE_SHORTCODE_PATTERN, (match, urlValue: string) => {
     return buildYouTubeEmbedMarkup(urlValue) || match;
   });
+
+  html = html.replace(
+    SOCIAL_SHORTCODE_PATTERN,
+    (match, platform: string, urlValue: string) => {
+      return buildSocialEmbedMarkup(platform, urlValue) || match;
+    }
+  );
 
   return html.trim();
 }

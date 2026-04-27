@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Image from 'next/image';
 import {
   CheckCircle2,
   Eye,
@@ -22,6 +23,10 @@ type ArticleEditorStudioProps = {
   mode: ArticleEditorStudioMode;
   focusMode?: boolean;
   showSidebar?: boolean;
+  previewVariant?: 'compact' | 'article';
+  author?: string;
+  image?: string;
+  editorClassName?: string;
   onModeChange: (mode: ArticleEditorStudioMode) => void;
   onFocusModeChange?: (focusMode: boolean) => void;
   onContentChange: (content: string) => void;
@@ -36,20 +41,73 @@ function PreviewPanel({
   title,
   summary,
   html,
+  variant = 'compact',
+  author,
+  image,
 }: {
   title: string;
   summary: string;
   html: string;
+  variant?: 'compact' | 'article';
+  author?: string;
+  image?: string;
 }) {
+  const trimmedTitle = title.trim();
+  const trimmedSummary = summary.trim();
+  const trimmedAuthor = author?.trim();
+  const trimmedImage = image?.trim();
+
+  if (variant === 'article') {
+    return (
+      <article className="min-h-[420px] rounded-lg border border-gray-300 bg-white dark:border-white/30 dark:bg-[#111317]">
+        {trimmedImage ? (
+          <div className="overflow-hidden rounded-t-lg border-b border-gray-200 bg-gray-100 dark:border-white/15 dark:bg-white/[0.04]">
+            <Image
+              src={trimmedImage}
+              alt={trimmedTitle || 'Article image preview'}
+              width={960}
+              height={540}
+              sizes="(min-width: 1280px) 42vw, 90vw"
+              className="h-56 w-full object-cover"
+            />
+          </div>
+        ) : null}
+        <div className="mx-auto max-w-3xl px-6 py-6">
+          <header>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-spanish-red">
+              Article Preview
+            </p>
+            <h3 className="mt-3 text-3xl font-bold leading-tight text-gray-950 dark:text-white">
+              {trimmedTitle || 'Untitled article'}
+            </h3>
+            <p className="mt-3 text-lg leading-7 text-gray-600 dark:text-gray-200">
+              {trimmedSummary || 'Summary preview will appear here.'}
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-2 border-y border-gray-200 py-3 text-sm text-gray-500 dark:border-white/15 dark:text-gray-300">
+              <span className="font-semibold text-gray-800 dark:text-gray-100">
+                {trimmedAuthor || 'News Desk'}
+              </span>
+              <span>Draft article</span>
+            </div>
+          </header>
+          <div
+            className="article-rich-content mt-6 text-[16px] leading-8 text-gray-800 [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-gray-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-gray-700 dark:text-gray-100 dark:[&_ol]:marker:text-gray-100 dark:[&_ul]:marker:text-gray-100"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        </div>
+      </article>
+    );
+  }
+
   return (
     <div className="min-h-[260px] rounded-lg border border-gray-300 bg-white p-4">
-      <h3 className="text-lg font-bold text-gray-900">{title.trim() || 'Untitled article'}</h3>
+      <h3 className="text-lg font-bold text-gray-900">{trimmedTitle || 'Untitled article'}</h3>
       <p className="mt-1 text-sm text-gray-600">
-        {summary.trim() || 'Summary preview will appear here.'}
+        {trimmedSummary || 'Summary preview will appear here.'}
       </p>
       <div className="my-4 h-px bg-gray-200" />
       <div
-        className="article-rich-content text-gray-800"
+        className="article-rich-content text-gray-800 [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-gray-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-gray-700 dark:text-gray-100 dark:[&_ol]:marker:text-gray-100 dark:[&_ul]:marker:text-gray-100"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>
@@ -188,6 +246,10 @@ export default function ArticleEditorStudio({
   mode,
   focusMode = false,
   showSidebar = true,
+  previewVariant = 'compact',
+  author,
+  image,
+  editorClassName,
   onModeChange,
   onFocusModeChange,
   onContentChange,
@@ -294,21 +356,46 @@ export default function ArticleEditorStudio({
             value={content}
             onChange={onContentChange}
             placeholder={placeholder}
+            editorClassName={editorClassName}
           />
         ) : null}
 
         {mode === 'preview' ? (
-          <PreviewPanel title={title} summary={summary} html={previewContentHtml} />
+          <PreviewPanel
+            title={title}
+            summary={summary}
+            html={previewContentHtml}
+            variant={previewVariant}
+            author={author}
+            image={image}
+          />
         ) : null}
 
         {mode === 'split' ? (
-          <div className={cx('grid gap-4', focusMode ? 'xl:grid-cols-2' : '2xl:grid-cols-2')}>
+          <div
+            className={cx(
+              'grid gap-4',
+              focusMode
+                ? 'xl:grid-cols-2'
+                : previewVariant === 'article'
+                  ? '2xl:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]'
+                  : '2xl:grid-cols-2'
+            )}
+          >
             <RichTextEditor
               value={content}
               onChange={onContentChange}
               placeholder={placeholder}
+              editorClassName={editorClassName}
             />
-            <PreviewPanel title={title} summary={summary} html={previewContentHtml} />
+            <PreviewPanel
+              title={title}
+              summary={summary}
+              html={previewContentHtml}
+              variant={previewVariant}
+              author={author}
+              image={image}
+            />
           </div>
         ) : null}
       </div>

@@ -40,7 +40,6 @@ import {
   countStoryMediaAssets,
   createStoryMediaAsset,
   derivePrimaryStoryMedia,
-  getTotalStoryVideoBytes,
   normalizeStoryMediaAssets,
   validateStoryMediaAssets,
   STORY_MAX_IMAGE_COUNT,
@@ -55,10 +54,6 @@ import {
   uploadFileToSignedUrl,
   validateStoryVideoFile,
 } from '@/lib/utils/storyVideoUploadClient';
-import {
-  buildWorkflowFeedbackSummary,
-  type WorkflowFeedbackTone,
-} from '@/lib/workflow/feedback';
 import { getAllowedWorkflowTransitions } from '@/lib/workflow/transitions';
 import type { WorkflowPriority, WorkflowStatus } from '@/lib/workflow/types';
 import {
@@ -528,22 +523,6 @@ function getWorkflowToneClass(status: WorkflowStatus) {
   }
 }
 
-function getWorkflowFeedbackToneClass(tone: WorkflowFeedbackTone) {
-  switch (tone) {
-    case 'danger':
-      return 'border-red-200 bg-red-50 text-red-900';
-    case 'warning':
-      return 'border-amber-200 bg-amber-50 text-amber-900';
-    case 'info':
-      return 'border-blue-200 bg-blue-50 text-blue-900';
-    case 'success':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-900';
-    case 'neutral':
-    default:
-      return 'border-gray-200 bg-white text-gray-900';
-  }
-}
-
 function WorkflowPill({ status }: { status: WorkflowStatus }) {
   return (
     <span
@@ -671,6 +650,7 @@ export default function EditStoryPage() {
   const [articleBuilderIntent, setArticleBuilderIntent] = useState<'' | 'draft' | 'submit'>('');
   const [articleBuilderMode, setArticleBuilderMode] =
     useState<ArticleEditorStudioMode>('split');
+  const [articleBuilderFocusMode, setArticleBuilderFocusMode] = useState(false);
 
   const mediaCounts = useMemo(() => countStoryMediaAssets(mediaAssets), [mediaAssets]);
   const imageAssets = useMemo(
@@ -814,31 +794,6 @@ export default function EditStoryPage() {
         .slice(-5)
         .reverse(),
     [workflow.comments]
-  );
-
-  const workflowFeedback = useMemo(
-    () =>
-      buildWorkflowFeedbackSummary({
-        contentLabel: 'Story',
-        status: workflow.status,
-        assignedToName: workflow.assignedTo?.name || workflow.assignedTo?.email || '',
-        reviewedByName: workflow.reviewedBy?.name || workflow.reviewedBy?.email || '',
-        rejectionReason: workflow.rejectionReason,
-        returnForChangesReason: formData.returnForChangesReason,
-        copyEditorNotes: formData.copyEditorNotes,
-        workflowComments: workflow.comments,
-      }),
-    [
-      formData.copyEditorNotes,
-      formData.returnForChangesReason,
-      workflow.assignedTo?.email,
-      workflow.assignedTo?.name,
-      workflow.comments,
-      workflow.rejectionReason,
-      workflow.reviewedBy?.email,
-      workflow.reviewedBy?.name,
-      workflow.status,
-    ]
   );
 
   const fetchStory = useCallback(async () => {
@@ -1908,7 +1863,7 @@ export default function EditStoryPage() {
           ) : null}
 
           <form onSubmit={handleSubmit}>
-            <CmsEditorColumns>
+            <CmsEditorColumns sidebarWidth="quarter" stacked={articleBuilderFocusMode}>
             <CmsEditorMain className="space-y-4">
 
             <div className={showStoryEditFields ? 'space-y-4' : 'hidden'}>
@@ -2386,8 +2341,192 @@ export default function EditStoryPage() {
             </div>
 
             {!isReporterView ? (
-              <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 lg:grid-cols-2">
-                <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+                <section className="space-y-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Article Draft
+                      </p>
+                      <h2 className="mt-1 text-lg font-bold text-gray-900">
+                        Write article from this story
+                      </h2>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Shape the story into a desk-ready article, then save or submit for admin review.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold capitalize text-gray-700">
+                      {linkedArticleId ? linkedArticleStatus : 'Not created'}
+                    </span>
+                  </div>
+
+                  {linkedArticleId ? (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                      <p className="font-semibold">A linked article already exists for this story.</p>
+                      <Link
+                        href={`/admin/articles/${linkedArticleId}/edit`}
+                        className="mt-3 inline-flex items-center rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-800"
+                      >
+                        Open Linked Article
+                      </Link>
+                    </div>
+                  ) : (
+                    <>
+                      {!canBuildLinkedArticle ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                          {isCopyEditorSharedSubmittedStory
+                            ? 'Claim this submitted story first. After claiming, this article builder becomes editable.'
+                            : 'Article creation is available after the story is in a desk-editable stage.'}
+                        </div>
+                      ) : null}
+
+                      <div className="grid grid-cols-1 gap-4 rounded-lg border border-gray-200 bg-white p-4">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-900">
+                            Headline
+                          </label>
+                          <input
+                            type="text"
+                            name="title"
+                            value={articleBuilderForm.title}
+                            onChange={handleArticleBuilderChange}
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                            disabled={!canBuildLinkedArticle}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-900">
+                            Summary
+                          </label>
+                          <textarea
+                            name="summary"
+                            value={articleBuilderForm.summary}
+                            onChange={handleArticleBuilderChange}
+                            rows={3}
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                            disabled={!canBuildLinkedArticle}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-900">
+                          Article Body
+                        </label>
+                        <div className={!canBuildLinkedArticle ? 'pointer-events-none opacity-60' : undefined}>
+                          <ArticleEditorStudio
+                            title={articleBuilderForm.title}
+                            summary={articleBuilderForm.summary}
+                            content={articleBuilderForm.content}
+                            mode={articleBuilderMode}
+                            focusMode={articleBuilderFocusMode}
+                            showSidebar={false}
+                            previewVariant="article"
+                            author={articleBuilderForm.author}
+                            image={articleBuilderForm.image}
+                            editorClassName="min-h-[520px]"
+                            onModeChange={setArticleBuilderMode}
+                            onFocusModeChange={setArticleBuilderFocusMode}
+                            onContentChange={(content) =>
+                              setArticleBuilderForm((current) => ({ ...current, content }))
+                            }
+                            placeholder="Write the full article from the reporter package. Use the toolbar for formatting."
+                          />
+                        </div>
+                      </div>
+
+                      <details className="rounded-lg border border-gray-200 bg-white p-4">
+                        <summary className="cursor-pointer text-sm font-semibold text-gray-900">
+                          Publishing Details
+                        </summary>
+                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-gray-900">
+                              Category
+                            </label>
+                            <select
+                              name="category"
+                              value={articleBuilderForm.category}
+                              onChange={handleArticleBuilderChange}
+                              className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                              disabled={!canBuildLinkedArticle}
+                            >
+                              {categories.map((category) => (
+                                <option key={category} value={category}>
+                                  {category}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-gray-900">
+                              Author
+                            </label>
+                            <input
+                              type="text"
+                              name="author"
+                              value={articleBuilderForm.author}
+                              onChange={handleArticleBuilderChange}
+                              className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                              disabled={!canBuildLinkedArticle}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-4">
+                          <label className="mb-2 block text-sm font-medium text-gray-900">
+                            Lead Image URL
+                          </label>
+                          <input
+                            type="url"
+                            name="image"
+                            value={articleBuilderForm.image}
+                            onChange={handleArticleBuilderChange}
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                            disabled={!canBuildLinkedArticle}
+                          />
+                        </div>
+                      </details>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleCreateLinkedArticle('draft')}
+                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={!canBuildLinkedArticle || Boolean(articleBuilderIntent)}
+                        >
+                          {articleBuilderIntent === 'draft' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          Save Article Draft
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleCreateLinkedArticle('submit')}
+                          className="inline-flex items-center gap-2 rounded-md bg-spanish-red px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-spanish-red/90 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={!canBuildLinkedArticle || Boolean(articleBuilderIntent)}
+                        >
+                          {articleBuilderIntent === 'submit' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4" />
+                          )}
+                          Submit To Admin
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </section>
+            ) : null}
+
+            </CmsEditorMain>
+
+            {!articleBuilderFocusMode ? (
+            <CmsEditorSidebar>
+              {!isReporterView ? (
+                <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                       Reporter Package
@@ -2401,19 +2540,19 @@ export default function EditStoryPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                         Images
                       </p>
                       <p className="mt-1 font-bold text-gray-900">{mediaCounts.images}</p>
                     </div>
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                         Videos
                       </p>
                       <p className="mt-1 font-bold text-gray-900">{mediaCounts.videos}</p>
                     </div>
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                         Location
                       </p>
@@ -2421,7 +2560,7 @@ export default function EditStoryPage() {
                         {formData.locationTag.trim() || 'Not provided'}
                       </p>
                     </div>
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                         Source
                       </p>
@@ -2435,17 +2574,17 @@ export default function EditStoryPage() {
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                       Reporter Script
                     </p>
-                    <div className="min-h-[120px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
+                    <div className="min-h-[120px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800">
                       {formData.caption.trim() || 'No reporter script was provided.'}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3">
                     <div>
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                         Reporter Notes
                       </p>
-                      <div className="min-h-[88px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
+                      <div className="min-h-[88px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800">
                         {formData.reporterNotes.trim() || 'No reporter notes.'}
                       </div>
                     </div>
@@ -2453,7 +2592,7 @@ export default function EditStoryPage() {
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                         Source Info
                       </p>
-                      <div className="min-h-[88px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
+                      <div className="min-h-[88px] whitespace-pre-wrap rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800">
                         {formData.sourceInfo.trim() || 'No source information.'}
                       </div>
                     </div>
@@ -2494,188 +2633,8 @@ export default function EditStoryPage() {
                     </div>
                   ) : null}
                 </section>
+              ) : null}
 
-                <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                        Article Builder
-                      </p>
-                      <h2 className="mt-1 text-lg font-bold text-gray-900">
-                        Write article from this story
-                      </h2>
-                      <p className="mt-1 text-sm text-gray-600">
-                        Save a draft or submit to admin. Only admins can final publish.
-                      </p>
-                    </div>
-                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold capitalize text-gray-700">
-                      {linkedArticleId ? linkedArticleStatus : 'Not created'}
-                    </span>
-                  </div>
-
-                  {linkedArticleId ? (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                      <p className="font-semibold">A linked article already exists for this story.</p>
-                      <Link
-                        href={`/admin/articles/${linkedArticleId}/edit`}
-                        className="mt-3 inline-flex items-center rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-800"
-                      >
-                        Open Linked Article
-                      </Link>
-                    </div>
-                  ) : (
-                    <>
-                      {!canBuildLinkedArticle ? (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                          {isCopyEditorSharedSubmittedStory
-                            ? 'Claim this submitted story first. After claiming, this article builder becomes editable.'
-                            : 'Article creation is available after the story is in a desk-editable stage.'}
-                        </div>
-                      ) : null}
-
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-gray-900">
-                          Article Headline
-                        </label>
-                        <input
-                          type="text"
-                          name="title"
-                          value={articleBuilderForm.title}
-                          onChange={handleArticleBuilderChange}
-                          className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                          disabled={!canBuildLinkedArticle}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-gray-900">
-                          Summary
-                        </label>
-                        <textarea
-                          name="summary"
-                          value={articleBuilderForm.summary}
-                          onChange={handleArticleBuilderChange}
-                          rows={3}
-                          className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                          disabled={!canBuildLinkedArticle}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-gray-900">
-                          Article Body
-                        </label>
-                        <div className="mb-3 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900 sm:grid-cols-2">
-                          <div>
-                            <p className="font-semibold">Use full article tools</p>
-                            <p className="mt-1">Add headings, links, quotes, resources, tables, images, and YouTube embeds.</p>
-                          </div>
-                          <div>
-                            <p className="font-semibold">Admin final publish</p>
-                            <p className="mt-1">Copy editor submits the article to admin. Publish controls stay admin-only.</p>
-                          </div>
-                        </div>
-                        <div className={!canBuildLinkedArticle ? 'pointer-events-none opacity-60' : undefined}>
-                          <ArticleEditorStudio
-                            title={articleBuilderForm.title}
-                            summary={articleBuilderForm.summary}
-                            content={articleBuilderForm.content}
-                            mode={articleBuilderMode}
-                            showSidebar={false}
-                            onModeChange={setArticleBuilderMode}
-                            onContentChange={(content) =>
-                              setArticleBuilderForm((current) => ({ ...current, content }))
-                            }
-                            placeholder="Write the full article from the reporter package. Use the toolbar for formatting."
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-gray-900">
-                            Category
-                          </label>
-                          <select
-                            name="category"
-                            value={articleBuilderForm.category}
-                            onChange={handleArticleBuilderChange}
-                            className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                            disabled={!canBuildLinkedArticle}
-                          >
-                            {categories.map((category) => (
-                              <option key={category} value={category}>
-                                {category}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-gray-900">
-                            Author
-                          </label>
-                          <input
-                            type="text"
-                            name="author"
-                            value={articleBuilderForm.author}
-                            onChange={handleArticleBuilderChange}
-                            className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                            disabled={!canBuildLinkedArticle}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-gray-900">
-                          Article Image URL
-                        </label>
-                        <input
-                          type="url"
-                          name="image"
-                          value={articleBuilderForm.image}
-                          onChange={handleArticleBuilderChange}
-                          className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                          disabled={!canBuildLinkedArticle}
-                        />
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void handleCreateLinkedArticle('draft')}
-                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={!canBuildLinkedArticle || Boolean(articleBuilderIntent)}
-                        >
-                          {articleBuilderIntent === 'draft' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Save className="h-4 w-4" />
-                          )}
-                          Save Article Draft
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleCreateLinkedArticle('submit')}
-                          className="inline-flex items-center gap-2 rounded-md bg-spanish-red px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-spanish-red/90 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={!canBuildLinkedArticle || Boolean(articleBuilderIntent)}
-                        >
-                          {articleBuilderIntent === 'submit' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <CheckCircle className="h-4 w-4" />
-                          )}
-                          Submit To Admin
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </section>
-              </div>
-            ) : null}
-
-            </CmsEditorMain>
-
-            <CmsEditorSidebar>
               <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -2698,40 +2657,6 @@ export default function EditStoryPage() {
                       </p>
                     </div>
                   ))}
-                </div>
-
-                <div className={`rounded-lg border p-4 ${getWorkflowFeedbackToneClass(workflowFeedback.tone)}`}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold">{workflowFeedback.badge}</p>
-                      <p className="mt-1 text-sm leading-6">{workflowFeedback.summary}</p>
-                    </div>
-                    {workflowFeedback.readyToResubmit ? (
-                      <span className="inline-flex items-center rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700">
-                        Ready to resubmit
-                      </span>
-                    ) : workflowFeedback.waitingOnDesk ? (
-                      <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700">
-                        With desk
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-3 text-sm leading-6">
-                    <span className="font-semibold">Next action:</span> {workflowFeedback.nextAction}
-                  </p>
-                  {workflowFeedback.highlightedNote ? (
-                    <div className="mt-3 rounded-lg border border-white/70 bg-white/80 p-3 text-sm text-gray-700">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                        {workflowFeedback.highlightedNoteLabel || 'Desk feedback'}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap">{workflowFeedback.highlightedNote}</p>
-                      {workflowFeedback.highlightedBy ? (
-                        <p className="mt-2 text-xs text-gray-500">
-                          From {workflowFeedback.highlightedBy}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
 
                 {canUseWorkflowDesk ? (
@@ -2790,15 +2715,6 @@ export default function EditStoryPage() {
                         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-spanish-red focus:outline-none"
                       />
                     </div>
-                  </div>
-                ) : null}
-
-                {isCopyEditorView ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                    <p className="font-semibold">Admin-only final approval</p>
-                    <p className="mt-1 leading-6">
-                      Copy editors can claim, review, copy edit, request changes, and mark ready for approval. Approve, schedule, and publish stay with the admin desk.
-                    </p>
                   </div>
                 ) : null}
 
@@ -3179,6 +3095,7 @@ export default function EditStoryPage() {
               </div>
             )}
             </CmsEditorSidebar>
+            ) : null}
             </CmsEditorColumns>
           </form>
         </div>
