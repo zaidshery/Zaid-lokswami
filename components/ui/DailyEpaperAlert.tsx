@@ -122,7 +122,7 @@ export default function DailyEpaperAlert() {
           : "Today's E-paper has arrived!",
         {
           body,
-          icon: '/logo-icon-final.png',
+          icon: '/logo-app-192.png',
           tag: `epaper-${today}`,
         }
       );
@@ -192,7 +192,7 @@ export default function DailyEpaperAlert() {
               : 'Alerts enabled',
             {
               body,
-              icon: '/logo-icon-final.png',
+              icon: '/logo-app-192.png',
             }
           );
         }

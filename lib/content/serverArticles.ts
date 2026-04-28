@@ -53,17 +53,31 @@ function normalizeSeo(input: unknown): ArticleSeo {
   };
 }
 
+function stringifyId(value: unknown) {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object' && 'toString' in value) {
+    return String(value).trim();
+  }
+  return '';
+}
+
+function stringifyField(value: unknown) {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
 function normalizeFromUnknown(input: unknown): ServerArticle | null {
   const source = typeof input === 'object' && input ? (input as Record<string, unknown>) : null;
   if (!source) return null;
 
-  const title = typeof source.title === 'string' ? source.title.trim() : '';
-  const summary = typeof source.summary === 'string' ? source.summary.trim() : '';
+  const title = stringifyField(source.title);
+  const summary = stringifyField(source.summary);
   const image = normalizeMediaUrl(
     typeof source.image === 'string' ? source.image : ''
   );
-  const category = typeof source.category === 'string' ? source.category.trim() : '';
-  const author = typeof source.author === 'string' ? source.author.trim() : '';
+  const category = stringifyField(source.category);
+  const author = stringifyField(source.author);
   if (!title || !summary || !image || !category || !author) return null;
 
   const publishedAtSource = source.publishedAt;
@@ -86,12 +100,7 @@ function normalizeFromUnknown(input: unknown): ServerArticle | null {
     : updatedAtValue.toISOString();
 
   return {
-    id:
-      typeof source._id === 'string'
-        ? source._id
-        : typeof source.id === 'string'
-          ? source.id
-          : '',
+    id: stringifyId(source._id) || stringifyId(source.id),
     title,
     summary,
     image,

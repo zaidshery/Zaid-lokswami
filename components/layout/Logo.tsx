@@ -13,12 +13,12 @@ export default function Logo({ size = 'md', href }: LogoProps) {
   const reduceMotion = useReducedMotion();
 
   const sizes = {
-    sm: { icon: 30, wordmarkW: 126, wordmarkH: 27, gap: 7, iconY: 0, wordmarkY: 0 },
-    md: { icon: 34, wordmarkW: 158, wordmarkH: 34, gap: 8, iconY: 0, wordmarkY: 0 },
-    lg: { icon: 44, wordmarkW: 200, wordmarkH: 43, gap: 10, iconY: 0, wordmarkY: 0 },
-    headerCompact: { icon: 28, wordmarkW: 112, wordmarkH: 24, gap: 6, iconY: 0, wordmarkY: 0 },
-    headerMobile: { icon: 36, wordmarkW: 148, wordmarkH: 31, gap: 8, iconY: 0, wordmarkY: 0 },
-    headerDesktop: { icon: 46, wordmarkW: 192, wordmarkH: 40, gap: 10, iconY: 0, wordmarkY: 0 },
+    sm: { icon: 36, wordmarkW: 122, wordmarkH: 24, gap: 3, iconX: 0, iconY: 0, wordmarkY: 0 },
+    md: { icon: 34, wordmarkW: 158, wordmarkH: 34, gap: 8, iconX: 0, iconY: 0, wordmarkY: 0 },
+    lg: { icon: 44, wordmarkW: 200, wordmarkH: 43, gap: 8, iconX: 0, iconY: 0, wordmarkY: 0 },
+    headerCompact: { icon: 36, wordmarkW: 112, wordmarkH: 24, gap: 3, iconX: 2, iconY: 2, wordmarkY: 0 },
+    headerMobile: { icon: 44, wordmarkW: 148, wordmarkH: 31, gap: 8, iconX: 3, iconY: 2, wordmarkY: 0 },
+    headerDesktop: { icon: 54, wordmarkW: 192, wordmarkH: 40, gap: 10, iconX: 4, iconY: 3, wordmarkY: 0 },
   };
 
   const sizeConfig = sizes[size];
@@ -41,15 +41,15 @@ export default function Logo({ size = 'md', href }: LogoProps) {
         }
       >
         <motion.span
-          className="relative inline-flex"
-          style={{ transform: `translateY(${sizeConfig.iconY}px)` }}
+          className="relative inline-flex overflow-hidden rounded-md"
+          style={{ transform: `translate(${sizeConfig.iconX}px, ${sizeConfig.iconY}px)` }}
           initial={reduceMotion ? false : { opacity: 0, scale: 0.9, y: 2 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: reduceMotion ? 0.01 : 0.32, ease: [0.22, 1, 0.36, 1] }}
         >
           <motion.span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 rounded-full bg-red-400/20 blur-[6px] dark:bg-red-500/20"
+            className="pointer-events-none absolute inset-0 rounded-full bg-transparent"
             animate={reduceMotion ? { opacity: 0.24, scale: 1 } : { opacity: [0.2, 0.34, 0.2], scale: [0.95, 1.05, 0.95] }}
             transition={
               reduceMotion
@@ -58,13 +58,13 @@ export default function Logo({ size = 'md', href }: LogoProps) {
             }
           />
           <Image
-            src="/logo-icon-final.png"
-            alt="Lokswami Icon"
+            src="/logo-header-cutout.png"
+            alt="Lokswami Logo"
             width={sizeConfig.icon}
             height={sizeConfig.icon}
-            className="relative z-[1] block rounded-full object-contain drop-shadow-[0_2px_6px_rgba(220,38,38,0.35)] transition-transform duration-300 motion-safe:group-hover/logo:rotate-[2deg] motion-safe:group-hover/logo:scale-[1.02]"
+            className="relative z-[1] block object-contain transition-transform duration-300 motion-safe:group-hover/logo:rotate-[2deg] motion-safe:group-hover/logo:scale-[1.06]"
             priority={size === 'headerCompact' || size === 'headerMobile' || size === 'headerDesktop'}
-            sizes="(max-width: 639px) 28px, (max-width: 1023px) 36px, 46px"
+            sizes="(max-width: 639px) 36px, (max-width: 1023px) 44px, 54px"
           />
         </motion.span>
 

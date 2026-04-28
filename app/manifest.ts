@@ -17,13 +17,25 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ['news', 'magazines', 'education'],
     icons: [
       {
-        src: '/logo-icon-final.png',
+        src: '/logo-app-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/logo-app-192.png',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'maskable',
       },
       {
-        src: '/logo-icon-final.png',
+        src: '/logo-app-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/logo-app-512.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
@@ -35,21 +47,21 @@ export default function manifest(): MetadataRoute.Manifest {
         short_name: 'Latest',
         description: 'Open the latest news feed',
         url: '/main/latest',
-        icons: [{ src: '/logo-icon-final.png', sizes: '192x192', type: 'image/png' }],
+        icons: [{ src: '/logo-app-192.png', sizes: '192x192', type: 'image/png' }],
       },
       {
         name: 'E-Paper',
         short_name: 'E-Paper',
         description: "Open today's e-paper",
         url: '/main/epaper',
-        icons: [{ src: '/logo-icon-final.png', sizes: '192x192', type: 'image/png' }],
+        icons: [{ src: '/logo-app-192.png', sizes: '192x192', type: 'image/png' }],
       },
       {
         name: 'Videos',
         short_name: 'Videos',
         description: 'Open the video feed',
         url: '/main/videos',
-        icons: [{ src: '/logo-icon-final.png', sizes: '192x192', type: 'image/png' }],
+        icons: [{ src: '/logo-app-192.png', sizes: '192x192', type: 'image/png' }],
       },
     ],
   };

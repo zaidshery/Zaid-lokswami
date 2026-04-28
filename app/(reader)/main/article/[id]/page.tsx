@@ -16,7 +16,6 @@ import {
 } from '@/lib/utils/articleShare';
 import {
   buildArticleImageVariantUrl,
-  resolveArticleOgImageUrl,
 } from '@/lib/utils/articleMedia';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
@@ -402,7 +401,7 @@ export default function ArticleDetailPage() {
         name: 'Lokswami',
         logo: {
           '@type': 'ImageObject',
-          url: toAbsoluteShareUrl('/logo-icon-final.png', siteOrigin),
+          url: toAbsoluteShareUrl('/logo-app-512.png', siteOrigin),
         },
       },
       mainEntityOfPage: {
@@ -575,14 +574,9 @@ export default function ArticleDetailPage() {
 
     const articlePath = `/main/article/${encodeURIComponent(article.id)}`;
     const articleUrl = toAbsoluteShareUrl(articlePath, window.location.origin);
-    const imageUrl = article.image
-      ? toAbsoluteShareUrl(resolveArticleOgImageUrl({ image: article.image }), window.location.origin)
-      : '';
-
     const shareUrl = buildArticleWhatsAppShareUrl({
       title: article.title,
       articleUrl,
-      imageUrl,
     });
 
     window.open(shareUrl, '_blank', 'noopener,noreferrer');

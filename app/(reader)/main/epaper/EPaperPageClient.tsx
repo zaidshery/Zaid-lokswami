@@ -1515,13 +1515,9 @@ export default function EPaperPageClient({
     if (!activePaper || !activeArticle) return;
 
     const shareUrl = buildActiveArticleShareUrl();
-    const imageUrl = activeArticle.coverImagePath
-      ? toAbsoluteShareUrl(activeArticle.coverImagePath, window.location.origin)
-      : '';
     const whatsappUrl = buildArticleWhatsAppShareUrl({
       title: activeArticle.title || activePaper.title,
       articleUrl: shareUrl,
-      imageUrl,
     });
 
     const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');

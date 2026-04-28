@@ -1,10 +1,14 @@
-const CACHE_NAME = 'lokswami-app-shell-v5';
+const CACHE_NAME = 'lokswami-app-shell-v6';
 const RUNTIME_CACHE_NAME = 'lokswami-runtime-v2';
 const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v2';
 const APP_SHELL_URLS = [
   '/main/epaper',
   '/manifest.webmanifest',
-  '/logo-icon-final.png',
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/logo-app-192.png',
+  '/logo-app-512.png',
+  '/apple-touch-icon.png',
 ];
 
 function isRuntimeCacheable(url) {

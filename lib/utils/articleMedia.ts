@@ -19,7 +19,7 @@ const VARIANT_TRANSFORMS: Record<ArticleImageVariant, string> = {
   featured: 'c_fill,g_auto,w_1200,h_900,f_auto,q_auto,dpr_auto',
   detail: 'c_fill,g_auto,w_1920,h_1080,f_auto,q_auto,dpr_auto',
   story: 'c_fill,g_auto,w_1200,h_1200,f_auto,q_auto,dpr_auto',
-  og: 'c_fill,g_auto,w_1200,h_630,f_auto,q_auto',
+  og: 'c_fill,g_auto,w_1200,h_630,f_jpg,q_auto',
 };
 
 function parseCloudinaryImageUrl(value: string) {

@@ -7,6 +7,8 @@ import AuthSync from '@/components/providers/AuthSync';
 import AuthSessionProvider from '@/components/providers/SessionProvider';
 import InstallAppPrompt from '@/components/ui/InstallAppPrompt';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://lokswami.com';
+
 /*
  Human overview:
  This file is the shared shell for the entire Lokswami app. Every page uses it.
@@ -202,6 +204,7 @@ const ASSET_RECOVERY_SCRIPT = `
 const googleTagManagerId = process.env.NEXT_PUBLIC_GTM_ID?.trim() || '';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: 'Lokswami - \u092d\u093e\u0930\u0924 \u0915\u093e \u0938\u092c\u0938\u0947 \u0935\u093f\u0936\u094d\u0935\u0938\u0928\u0940\u092f \u0938\u092e\u093e\u091a\u093e\u0930 \u092a\u094d\u0932\u0947\u091f\u092b\u0949\u0930\u094d\u092e',
   applicationName: 'Lokswami',
   description:
@@ -211,8 +214,14 @@ export const metadata: Metadata = {
   authors: [{ name: 'Lokswami' }],
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/logo-icon-final.png',
-    apple: '/logo-icon-final.png',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/logo-app-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/logo-app-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
   },
   appleWebApp: {
     capable: true,
@@ -225,6 +234,21 @@ export const metadata: Metadata = {
       '\u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930\u0947\u0902, \u0935\u0940\u0921\u093f\u092f\u094b, \u0908-\u092a\u0947\u092a\u0930 \u0914\u0930 \u092c\u0939\u0941\u0924 \u0915\u0941\u091b\u0964',
     type: 'website',
     locale: 'hi_IN',
+    images: [
+      {
+        url: '/lokswami-share-preview.png',
+        width: 1200,
+        height: 630,
+        alt: 'Lokswami - \u092d\u093e\u0930\u0924 \u0915\u093e \u0938\u092c\u0938\u0947 \u0935\u093f\u0936\u094d\u0935\u0938\u0928\u0940\u092f \u0938\u092e\u093e\u091a\u093e\u0930 \u092a\u094d\u0932\u0947\u091f\u092b\u0949\u0930\u094d\u092e',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Lokswami - \u092d\u093e\u0930\u0924 \u0915\u093e \u0938\u092c\u0938\u0947 \u0935\u093f\u0936\u094d\u0935\u0938\u0928\u0940\u092f \u0938\u092e\u093e\u091a\u093e\u0930 \u092a\u094d\u0932\u0947\u091f\u092b\u0949\u0930\u094d\u092e',
+    description:
+      '\u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930\u0947\u0902, \u0935\u0940\u0921\u093f\u092f\u094b, \u0908-\u092a\u0947\u092a\u0930 \u0914\u0930 \u092c\u0939\u0941\u0924 \u0915\u0941\u091b\u0964',
+    images: ['/lokswami-share-preview.png'],
   },
 };
 

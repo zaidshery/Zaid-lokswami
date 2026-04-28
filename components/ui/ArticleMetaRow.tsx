@@ -9,7 +9,6 @@ import {
   buildArticleWhatsAppShareUrl,
   toAbsoluteShareUrl,
 } from '@/lib/utils/articleShare';
-import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 
 interface ArticleMetaRowProps {
   article: Pick<Article, 'id' | 'title' | 'views'> & { image?: string };
@@ -54,13 +53,9 @@ export default function ArticleMetaRow({
     const resolvedPath =
       sharePath ?? `/main/article/${encodeURIComponent(article.id)}`;
     const articleUrl = toAbsoluteShareUrl(resolvedPath, window.location.origin);
-    const imageUrl = article.image
-      ? toAbsoluteShareUrl(resolveArticleOgImageUrl({ image: article.image }), window.location.origin)
-      : '';
     const shareUrl = buildArticleWhatsAppShareUrl({
       title: article.title,
       articleUrl,
-      imageUrl,
     });
     window.open(shareUrl, '_blank', 'noopener,noreferrer');
   };

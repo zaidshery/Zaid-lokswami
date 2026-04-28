@@ -33,7 +33,6 @@ import {
 } from '@/lib/utils/articleShare';
 import {
   buildArticleImageVariantUrl,
-  resolveArticleOgImageUrl,
 } from '@/lib/utils/articleMedia';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 
@@ -157,14 +156,10 @@ export default function HomePage() {
       ? `/main/article/${encodeURIComponent(article.id)}`
       : fallbackPath;
     const articleUrl = toAbsoluteShareUrl(articlePath, origin);
-    const imageUrl = article?.image
-      ? toAbsoluteShareUrl(resolveArticleOgImageUrl({ image: article.image }), origin)
-      : '';
     const title = article?.title?.trim() || (language === 'hi' ? '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0916\u092c\u0930' : 'Lokswami story');
     const shareUrl = buildArticleWhatsAppShareUrl({
       title,
       articleUrl,
-      imageUrl,
     });
 
     window.open(shareUrl, '_blank', 'noopener,noreferrer');

@@ -1,9 +1,6 @@
-import { COMPANY_INFO } from '@/lib/constants/company';
-
 type BuildArticleWhatsAppShareInput = {
   title: string;
   articleUrl: string;
-  imageUrl?: string;
 };
 
 function cleanUrl(value: string) {
@@ -57,22 +54,9 @@ export function buildArticleWhatsAppShareText({
     lines.push('');
   }
 
-  if (cleanTitle) {
-    lines.push(cleanTitle);
-  }
-
-  // Keep the readable URL in the message body as well.
-  if (cleanArticleUrl) {
-    lines.push(cleanArticleUrl);
-  }
-
+  if (cleanTitle) lines.push(cleanTitle);
   lines.push('');
-  lines.push('Follow Lokswami:');
-  lines.push(`Facebook: ${COMPANY_INFO.social.facebook}`);
-  lines.push(`Instagram: ${COMPANY_INFO.social.instagram}`);
-  lines.push(`YouTube: ${COMPANY_INFO.social.youtube}`);
-  lines.push(`X: ${COMPANY_INFO.social.twitter}`);
-  lines.push(`WhatsApp Channel: ${COMPANY_INFO.social.whatsapp}`);
+  lines.push('Lokswami');
 
   return lines.join('\n').trim();
 }
