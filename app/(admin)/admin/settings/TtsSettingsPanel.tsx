@@ -33,6 +33,8 @@ type SettingsPayload = {
     voices: Array<{ id: string; label: string }>;
     env: {
       geminiApiKeyConfigured: boolean;
+      digitalOceanSpacesConfigured: boolean;
+      storageMode: string;
       forceStorageEnv: boolean;
       storageUploadsBaseDir: string;
     };
@@ -42,6 +44,14 @@ type SettingsPayload = {
 type SettingsResponse = {
   success?: boolean;
   data?: SettingsPayload;
+  error?: string;
+};
+
+type PrewarmResponse = {
+  success?: boolean;
+  data?: {
+    result?: Record<string, { processed: number; ready: number; failed: number }>;
+  };
   error?: string;
 };
 
@@ -69,8 +79,10 @@ export default function TtsSettingsPanel() {
   const [payload, setPayload] = useState<SettingsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [prewarming, setPrewarming] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [prewarmSummary, setPrewarmSummary] = useState('');
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -163,6 +175,36 @@ export default function TtsSettingsPanel() {
     }
   }, [payload]);
 
+  const handlePrewarm = useCallback(async (scope: 'all' | 'breaking' | 'article' | 'epaper') => {
+    setPrewarming(true);
+    setError('');
+    setSuccess('');
+    setPrewarmSummary('');
+
+    try {
+      const response = await fetch('/api/admin/tts/prewarm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope, forceRegenerate: false }),
+      });
+      const data = (await response.json().catch(() => ({}))) as PrewarmResponse;
+      if (!response.ok || !data.success || !data.data?.result) {
+        throw new Error(data.error || 'Failed to prewarm TTS assets.');
+      }
+
+      const summary = Object.entries(data.data.result)
+        .map(([key, value]) => `${key}: ${value.ready}/${value.processed} ready, ${value.failed} failed`)
+        .join(' | ');
+      setPrewarmSummary(summary);
+      setSuccess('TTS prewarm completed.');
+      void loadSettings();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, 'Failed to prewarm TTS assets.'));
+    } finally {
+      setPrewarming(false);
+    }
+  }, [loadSettings]);
+
   if (loading && !payload) {
     return (
       <div className={PANEL_CLASS}>
@@ -212,10 +254,12 @@ export default function TtsSettingsPanel() {
               Storage
             </p>
             <p className="mt-2 text-lg font-bold text-zinc-900 dark:text-zinc-100">
-              {payload.config.forceStorage ? 'Durable storage' : 'Public allowed'}
+              {payload.runtime.env.storageMode}
             </p>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              {payload.runtime.env.storageUploadsBaseDir}
+              {payload.runtime.env.digitalOceanSpacesConfigured
+                ? 'DigitalOcean Spaces configured'
+                : payload.runtime.env.storageUploadsBaseDir}
             </p>
           </div>
 
@@ -241,6 +285,12 @@ export default function TtsSettingsPanel() {
         {success ? (
           <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
             {success}
+          </p>
+        ) : null}
+
+        {prewarmSummary ? (
+          <p className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
+            {prewarmSummary}
           </p>
         ) : null}
       </div>
@@ -364,6 +414,30 @@ export default function TtsSettingsPanel() {
               Force durable storage for generated audio.
             </span>
           </label>
+        </div>
+      </div>
+
+      <div className={PANEL_CLASS}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-zinc-900 dark:text-zinc-100">Prewarm Audio</h2>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Generate missing reusable audio for the latest breaking headlines, articles, and e-paper stories before readers tap Listen.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(['article', 'breaking', 'epaper', 'all'] as const).map((scope) => (
+              <button
+                key={scope}
+                type="button"
+                onClick={() => void handlePrewarm(scope)}
+                disabled={prewarming || !payload.runtime.configured}
+                className="rounded-2xl border border-zinc-200/80 bg-white/85 px-4 py-2.5 text-sm font-semibold capitalize text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10"
+              >
+                {prewarming ? 'Running...' : `Prewarm ${scope}`}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

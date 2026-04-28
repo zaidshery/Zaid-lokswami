@@ -211,6 +211,16 @@
   background: rgba(255, 255, 255, 0.16);
 }
 
+.toggleButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.toggleButton:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .toggleButton:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.92);
   outline-offset: 3px;

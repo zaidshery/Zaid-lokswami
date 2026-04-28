@@ -99,7 +99,7 @@ function createDefaultTtsConfig(): TtsConfigShape {
       },
       article: {
         enabled: true,
-        autoGenerate: false,
+        autoGenerate: true,
         defaultLanguageCode: 'hi-IN',
         defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
       },
@@ -134,14 +134,7 @@ function mergeSurfaceConfig(
       source.defaultLanguageCode.trim()
         ? source.defaultLanguageCode.trim()
         : defaults.defaultLanguageCode,
-    defaultVoice:
-      sourceDefaultVoice
-        ? migrateLegacyDefaultVoice &&
-          sourceDefaultVoice.toLowerCase() ===
-            LEGACY_GEMINI_TTS_DEFAULT_VOICE.toLowerCase()
-          ? defaults.defaultVoice
-          : sourceDefaultVoice
-        : defaults.defaultVoice,
+    defaultVoice: defaults.defaultVoice,
   };
 }
 
@@ -200,11 +193,15 @@ function normalizeTtsConfig(
         surfaces?.breaking,
         migrateLegacyDefaultVoice
       ),
-      article: mergeSurfaceConfig(
-        defaults.surfaces.article,
-        surfaces?.article,
-        migrateLegacyDefaultVoice
-      ),
+      article: {
+        ...mergeSurfaceConfig(
+          defaults.surfaces.article,
+          surfaces?.article,
+          migrateLegacyDefaultVoice
+        ),
+        autoGenerate: true,
+        defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
+      },
       epaper: mergeSurfaceConfig(
         defaults.surfaces.epaper,
         surfaces?.epaper,
@@ -327,10 +324,7 @@ function normalizeLanguageCode(
 }
 
 function normalizeVoice(requestedVoice: string | undefined, surface: TtsSurfaceConfig) {
-  const candidate = String(requestedVoice || '').trim();
-  if (candidate && isSupportedGeminiTtsVoice(candidate)) {
-    return candidate;
-  }
+  void requestedVoice;
 
   const surfaceDefault = surface.defaultVoice.trim();
   if (surfaceDefault && isSupportedGeminiTtsVoice(surfaceDefault)) {

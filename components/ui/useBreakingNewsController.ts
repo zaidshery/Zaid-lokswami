@@ -582,8 +582,19 @@ export function useBreakingNewsController({
   );
 
   const toggleSound = useCallback(() => {
+    if (ttsAvailableRef.current === false) {
+      setSoundEnabled(false);
+      return;
+    }
+
     setSoundEnabled((previous) => !previous);
   }, []);
+
+  useEffect(() => {
+    if (ttsAvailable === false && soundEnabledRef.current) {
+      setSoundEnabled(false);
+    }
+  }, [ttsAvailable]);
 
   useEffect(() => {
     const preparedAudioCache = preparedAudioCacheRef.current;
@@ -691,6 +702,22 @@ export function useBreakingNewsController({
 
     void runSilentCycle(token);
   }, [invalidatePlayback, queue.length, runSilentCycle, runSpokenCycle, soundEnabled, ttsAvailable]);
+
+  useEffect(() => {
+    if (ttsAvailable !== true || !queue.length) return;
+
+    const token = cancelTokenRef.current;
+    const activeItem = queue[currentIndex] || queue[0];
+    const nextItem = queue.length > 1 ? queue[(currentIndex + 1) % queue.length] : null;
+
+    if (activeItem) {
+      void prepareHeadlineAudio(activeItem, token);
+    }
+
+    if (nextItem && nextItem.id !== activeItem?.id) {
+      void prepareHeadlineAudio(nextItem, token);
+    }
+  }, [currentIndex, prepareHeadlineAudio, queue, ttsAvailable]);
 
   const visibleItem = queue[currentIndex] || null;
 

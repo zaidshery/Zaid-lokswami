@@ -162,6 +162,22 @@ const REPORTER_ITEMS: SidebarItem[] = [
   { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
 ];
 
+const ADMIN_MOBILE_DOCK_HREFS = [
+  '/admin',
+  '/admin/review-queue',
+  '/admin/assignments',
+  '/admin/content-queue',
+  '/admin/team',
+] as const;
+
+const COPY_EDITOR_MOBILE_DOCK_HREFS = [
+  '/admin',
+  '/admin/copy-desk',
+  '/admin/my-work',
+  '/admin/articles',
+  '/admin/media',
+] as const;
+
 function getSidebarItems(role: UserRole | undefined): SidebarItem[] {
   if (isSuperAdminRole(role)) {
     return SUPER_ADMIN_ITEMS;
@@ -176,6 +192,40 @@ function getSidebarItems(role: UserRole | undefined): SidebarItem[] {
       return REPORTER_ITEMS;
     default:
       return REPORTER_ITEMS;
+  }
+}
+
+function getMobileDockItems(
+  role: UserRole | undefined,
+  sidebarItems: SidebarItem[]
+): SidebarItem[] {
+  if (isReporterDeskRole(role)) {
+    return sidebarItems;
+  }
+
+  if (isCopyEditorRole(role)) {
+    return COPY_EDITOR_MOBILE_DOCK_HREFS
+      .map((href) => sidebarItems.find((item) => item.href === href))
+      .filter((item): item is SidebarItem => Boolean(item));
+  }
+
+  if (role === 'admin') {
+    return ADMIN_MOBILE_DOCK_HREFS
+      .map((href) => sidebarItems.find((item) => item.href === href))
+      .filter((item): item is SidebarItem => Boolean(item));
+  }
+
+  return [];
+}
+
+function getMobileDockGridClass(itemCount: number) {
+  switch (itemCount) {
+    case 4:
+      return 'grid-cols-4';
+    case 5:
+      return 'grid-cols-5';
+    default:
+      return 'grid-cols-4';
   }
 }
 
@@ -329,6 +379,10 @@ export default function AdminShell({
   const isHindi = isHydrated ? language === 'hi' : true;
   const effectiveTheme = isHydrated ? theme : 'dark';
   const sidebarItems = useMemo(() => getSidebarItems(resolvedUser.role), [resolvedUser.role]);
+  const mobileDockItems = useMemo(
+    () => getMobileDockItems(resolvedUser.role, sidebarItems),
+    [resolvedUser.role, sidebarItems]
+  );
   const adminName =
     resolvedUser.name?.trim() ||
     resolvedUser.email?.split('@')[0]?.trim() ||
@@ -348,6 +402,7 @@ export default function AdminShell({
   const headerSubtitle = isReporterView || isCopyEditorView
     ? adminName
     : adminRoleLabel;
+  const hasMobileDock = mobileDockItems.length > 0;
   const mobileHeaderLabel = isCopyEditorView
     ? isHindi
       ? HI.dashboard
@@ -589,17 +644,17 @@ export default function AdminShell({
         <div
           className={cx(
             'relative p-4 pt-24 sm:p-6 sm:pt-28 lg:p-8 lg:pt-28',
-            isReporterView && 'pb-28 lg:pb-8'
+            hasMobileDock && 'pb-28 lg:pb-8'
           )}
         >
           {children}
         </div>
       </main>
 
-      {isReporterView ? (
+      {hasMobileDock ? (
         <nav className="admin-shell-surface-strong fixed inset-x-4 bottom-4 z-20 rounded-[26px] px-2 py-2 shadow-[var(--admin-shell-shadow-strong)] lg:hidden">
-          <div className="grid grid-cols-4 gap-1">
-            {sidebarItems.map((item) => {
+          <div className={cx('grid gap-1', getMobileDockGridClass(mobileDockItems.length))}>
+            {mobileDockItems.map((item) => {
               const isActive = isActiveNavItem(pathname, item.href);
 
               return (

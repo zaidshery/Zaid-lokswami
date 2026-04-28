@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import HomePageClient from './HomePageClient';
 
-export const dynamic = 'force-dynamic';
-
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const canonical = `${siteUrl}/main`;
 

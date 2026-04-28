@@ -2,18 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession } from '@/lib/auth/admin';
 import { canManageSettings } from '@/lib/auth/permissions';
 import {
+  GEMINI_TTS_DEFAULT_VOICE,
   GEMINI_TTS_LANGUAGE_OPTIONS,
   GEMINI_TTS_MAX_TOTAL_CHARS,
   GEMINI_TTS_PROVIDER,
   GEMINI_TTS_VOICE_OPTIONS,
   isSupportedGeminiTtsLanguage,
-  isSupportedGeminiTtsVoice,
 } from '@/lib/constants/tts';
 import connectDB from '@/lib/db/mongoose';
 import TtsAuditEvent from '@/lib/models/TtsAuditEvent';
 import TtsConfig from '@/lib/models/TtsConfig';
 import { getGeminiTtsRuntimeConfig, isGeminiTtsConfigured } from '@/lib/ai/geminiTts';
 import { getTtsConfig } from '@/lib/server/ttsAssets';
+import { getTtsStorageConfig } from '@/lib/utils/ttsStorage';
 import type { TtsConfigShape, TtsSurfaceKey } from '@/lib/types/tts';
 
 type TtsConfigUpdateInput = Partial<{
@@ -55,8 +56,6 @@ function normalizeSurfaceUpdate(
   const source = typeof input === 'object' && input ? (input as Record<string, unknown>) : {};
 
   const languageCandidate = String(source.defaultLanguageCode || '').trim();
-  const voiceCandidate = String(source.defaultVoice || '').trim();
-
   return {
     enabled: source.enabled === undefined ? fallback.enabled : Boolean(source.enabled),
     autoGenerate:
@@ -65,10 +64,7 @@ function normalizeSurfaceUpdate(
       languageCandidate && isSupportedGeminiTtsLanguage(languageCandidate)
         ? languageCandidate
         : fallback.defaultLanguageCode,
-    defaultVoice:
-      voiceCandidate && isSupportedGeminiTtsVoice(voiceCandidate)
-        ? voiceCandidate
-        : fallback.defaultVoice,
+    defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
   };
 }
 
@@ -102,6 +98,7 @@ async function requireAdmin() {
 async function buildSettingsPayload() {
   const config = await getTtsConfig();
   const runtime = getGeminiTtsRuntimeConfig();
+  const storage = await getTtsStorageConfig().catch(() => null);
 
   return {
     config,
@@ -115,6 +112,13 @@ async function buildSettingsPayload() {
       voices: GEMINI_TTS_VOICE_OPTIONS,
       env: {
         geminiApiKeyConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+        digitalOceanSpacesConfigured: Boolean(
+          process.env.DIGITALOCEAN_SPACES_ACCESS_KEY?.trim() &&
+            process.env.DIGITALOCEAN_SPACES_SECRET_KEY?.trim() &&
+            process.env.DIGITALOCEAN_SPACES_BUCKET?.trim() &&
+            process.env.DIGITALOCEAN_SPACES_REGION?.trim()
+        ),
+        storageMode: storage?.mode || 'unavailable',
         forceStorageEnv: process.env.EPAPER_FORCE_STORAGE === '1',
         storageUploadsBaseDir: String(
           process.env.EPAPER_STORAGE_UPLOADS_BASE_DIR || 'storage/uploads'
@@ -192,9 +196,20 @@ export async function PUT(req: NextRequest) {
         ),
       },
       surfaces: {
-        breaking: normalizeSurfaceUpdate(body.surfaces?.breaking, current.surfaces.breaking),
-        article: normalizeSurfaceUpdate(body.surfaces?.article, current.surfaces.article),
-        epaper: normalizeSurfaceUpdate(body.surfaces?.epaper, current.surfaces.epaper),
+        breaking: {
+          ...normalizeSurfaceUpdate(body.surfaces?.breaking, current.surfaces.breaking),
+          autoGenerate: true,
+          defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
+        },
+        article: {
+          ...normalizeSurfaceUpdate(body.surfaces?.article, current.surfaces.article),
+          autoGenerate: true,
+          defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
+        },
+        epaper: {
+          ...normalizeSurfaceUpdate(body.surfaces?.epaper, current.surfaces.epaper),
+          defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
+        },
       },
     };
 

@@ -156,6 +156,7 @@ type ManagedTtsAsset = {
   model?: string;
   languageCode?: string;
   mimeType?: string;
+  storageMode?: string;
   generatedAt?: string;
   updatedAt?: string;
   lastVerifiedAt?: string;
@@ -2332,6 +2333,19 @@ export default function EditArticle() {
                   <div className="flex items-center gap-2">
                     <Volume2 className="h-4 w-4 text-spanish-red" />
                     <p className="text-sm font-semibold text-gray-900">Article Listen Audio</p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                        articleTtsStatus === 'ready'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : articleTtsStatus === 'failed'
+                            ? 'bg-red-100 text-red-700'
+                            : articleTtsStatus === 'stale'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      {articleTtsStatus}
+                    </span>
                   </div>
                   <p className="mt-1 text-sm text-gray-700">
                     {articleTtsNeedsSave
@@ -2353,7 +2367,14 @@ export default function EditArticle() {
                   ) : null}
                   {articleTtsInfo?.voice || articleTtsInfo?.model ? (
                     <p className="mt-1 text-xs text-gray-500">
-                      {[articleTtsInfo.voice, articleTtsInfo.model].filter(Boolean).join(' | ')}
+                      {[articleTtsInfo.voice, articleTtsInfo.model, articleTtsInfo.storageMode]
+                        .filter(Boolean)
+                        .join(' | ')}
+                    </p>
+                  ) : null}
+                  {articleTtsInfo?.charCount ? (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {articleTtsInfo.charCount.toLocaleString()} characters | {articleTtsInfo.chunkCount || 1} chunk(s)
                     </p>
                   ) : null}
                   {articleTtsInfo?.lastError ? (
@@ -2380,8 +2401,9 @@ export default function EditArticle() {
                 </button>
               </div>
               {articleTtsInfo?.audioUrl ? (
-                <div className="rounded-md border border-gray-200 bg-white px-3 py-2">
+                <div className="space-y-2 rounded-md border border-gray-200 bg-white px-3 py-2">
                   <p className="text-xs font-medium text-gray-700">Saved audio</p>
+                  <audio controls preload="metadata" src={articleTtsInfo.audioUrl} className="w-full" />
                   <a
                     href={articleTtsInfo.audioUrl}
                     target="_blank"

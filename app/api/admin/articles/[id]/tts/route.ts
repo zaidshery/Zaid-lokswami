@@ -23,6 +23,7 @@ type SerializableTtsAsset = {
   model: string;
   languageCode: string;
   mimeType: string;
+  storageMode: string;
   generatedAt: string;
   updatedAt: string;
   lastVerifiedAt: string;
@@ -43,6 +44,7 @@ function serializeTtsAsset(asset: unknown): SerializableTtsAsset | null {
     model: String(source.model || ''),
     languageCode: String(source.languageCode || ''),
     mimeType: String(source.mimeType || ''),
+    storageMode: String(source.storageMode || ''),
     generatedAt: source.generatedAt instanceof Date
       ? source.generatedAt.toISOString()
       : String(source.generatedAt || ''),

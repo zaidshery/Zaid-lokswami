@@ -1,14 +1,21 @@
+import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import {
+  getGeminiTtsRuntimeConfig,
   isGeminiTtsConfigured,
   synthesizeGeminiSpeech,
 } from '@/lib/ai/geminiTts';
 import { GEMINI_TTS_MAX_TOTAL_CHARS } from '@/lib/constants/tts';
 import connectDB from '@/lib/db/mongoose';
 import Article from '@/lib/models/Article';
-import { buildArticleFullTtsText, ensureTtsAsset } from '@/lib/server/ttsAssets';
+import { buildArticleFullTtsText } from '@/lib/server/ttsAssets';
 import { getStoredArticleById } from '@/lib/storage/articlesFile';
+import {
+  buildStoredTtsAudioUrl,
+  hasStoredTtsAudioAtRelativePath,
+  saveTtsAudioBuffer,
+} from '@/lib/utils/ttsStorage';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -28,6 +35,35 @@ function clampTtsText(value: string, maxChars: number) {
   }
 
   return trimmed.slice(0, maxChars).trim();
+}
+
+function hashValue(value: string) {
+  return crypto.createHash('sha1').update(value).digest('hex');
+}
+
+function buildArticleTtsRelativePath(input: {
+  articleId: string;
+  text: string;
+  languageCode: string;
+  model: string;
+  voice: string;
+}) {
+  const safeArticleId =
+    input.articleId
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || hashValue(input.articleId);
+  const versionHash = hashValue(
+    JSON.stringify({
+      variant: 'article_full',
+      text: input.text,
+      languageCode: input.languageCode,
+      model: input.model,
+      voice: input.voice,
+      provider: 'gemini',
+    })
+  );
+
+  return `article/${safeArticleId}/article_full/${versionHash}.wav`;
 }
 
 async function shouldUseFileStore() {
@@ -104,6 +140,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const languageCode =
       typeof body.languageCode === 'string' ? body.languageCode.trim() : '';
     const voice = typeof body.voice === 'string' ? body.voice.trim() : '';
+    const runtime = getGeminiTtsRuntimeConfig();
 
     if (!articleId) {
       return NextResponse.json(
@@ -145,57 +182,59 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    if (!useFileStore) {
-      try {
-        const result = await ensureTtsAsset({
-          sourceType: 'article',
-          sourceId: article.id,
-          variant: 'article_full',
-          title: article.title,
-          text: sourceText,
-          ...(languageCode ? { languageCode } : {}),
-          ...(voice ? { voice } : {}),
-          metadata: {
-            maxCharacters: GEMINI_TTS_MAX_TOTAL_CHARS,
-            source: 'article-reader',
-            summaryLength: article.summary.length,
-            contentLength: article.content.length,
+    const resolvedLanguageCode = languageCode || 'hi-IN';
+    const relativePath = buildArticleTtsRelativePath({
+      articleId: article.id,
+      text: sourceText,
+      languageCode: resolvedLanguageCode,
+      model: runtime.model,
+      voice: runtime.defaultVoice,
+    });
+
+    try {
+      if (await hasStoredTtsAudioAtRelativePath(relativePath)) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            provider: 'gemini',
+            model: runtime.model,
+            voice: runtime.defaultVoice,
+            mimeType: 'audio/wav',
+            chunkCount: 1,
+            audioUrl: await buildStoredTtsAudioUrl(relativePath),
           },
         });
-
-        if (result.asset?.status === 'ready' && result.asset.audioUrl) {
-          return NextResponse.json({
-            success: true,
-            data: {
-              provider: 'gemini',
-              model: result.asset.model,
-              voice: result.asset.voice,
-              mimeType: result.asset.mimeType,
-              chunkCount: result.asset.chunkCount,
-              audioUrl: result.asset.audioUrl,
-            },
-          });
-        }
-
-        if (result.error) {
-          console.error(
-            'Shared article TTS asset unavailable, falling back to direct synthesis:',
-            result.error
-          );
-        }
-      } catch (error) {
-        console.error(
-          'Shared article TTS asset generation failed, falling back to direct synthesis:',
-          error
-        );
       }
+    } catch (error) {
+      console.error('Stored article TTS lookup failed, generating fresh audio:', error);
     }
 
     const synthesized = await synthesizeArticleListenAudio({
       text: sourceText,
-      ...(languageCode ? { languageCode } : {}),
+      languageCode: resolvedLanguageCode,
       ...(voice ? { voice } : {}),
     });
+
+    if (synthesized.mode === 'gemini' && synthesized.audioBase64) {
+      try {
+        const saved = await saveTtsAudioBuffer({
+          buffer: Buffer.from(synthesized.audioBase64, 'base64'),
+          targetDir: relativePath.split('/').slice(0, -1).join('/'),
+          targetName: relativePath.split('/').pop() || 'article.wav',
+        });
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            ...synthesized,
+            audioBase64: undefined,
+            audioUrl: saved.audioUrl,
+          },
+        });
+      } catch (error) {
+        console.error('Failed to store article TTS audio, returning inline audio:', error);
+      }
+    }
 
     return NextResponse.json({
       success: true,

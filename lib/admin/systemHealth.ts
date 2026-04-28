@@ -111,7 +111,7 @@ export async function getSystemHealthSummary(
   const dataSourceStatus = mapDataSourceStatus(options.dataSource);
 
   let writableStorage = false;
-  let storageMode: 'public' | 'proxy' | null = null;
+  let storageMode: 'public' | 'proxy' | 'spaces' | null = null;
   let storageError = '';
 
   try {

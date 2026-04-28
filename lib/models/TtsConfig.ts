@@ -67,7 +67,7 @@ const TtsConfigSchema = new mongoose.Schema<ITtsConfig>(
         type: TtsSurfaceConfigSchema,
         default: () => ({
           enabled: true,
-          autoGenerate: false,
+          autoGenerate: true,
           defaultLanguageCode: 'hi-IN',
           defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
         }),

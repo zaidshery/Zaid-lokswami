@@ -2,13 +2,20 @@ import fsSync from 'fs';
 import fs from 'fs/promises';
 import path from 'path';
 import { type TtsStorageMode } from '@/lib/types/tts';
+import {
+  buildDigitalOceanSpacesRawAssetUrl,
+  deleteDigitalOceanSpacesAssetByUrl,
+  hasDigitalOceanSpacesAssetByPublicId,
+  parseDigitalOceanSpacesAssetFromUrl,
+  uploadBufferToDigitalOceanSpaces,
+} from '@/lib/utils/digitalOceanSpaces';
 
 export type TtsPublicPathPrefix = '/uploads/tts' | '/api/public/uploads/tts';
 
 type TtsStorageConfig = {
   mode: TtsStorageMode;
-  fsBaseDir: string;
-  publicPathPrefix: TtsPublicPathPrefix;
+  fsBaseDir?: string;
+  publicPathPrefix?: TtsPublicPathPrefix;
 };
 
 type ResolvedTtsAssetPath = {
@@ -33,6 +40,15 @@ const SAFE_SEGMENT_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const SAFE_FILE_NAME_PATTERN = /^[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+$/;
 
 let storageConfigPromise: Promise<TtsStorageConfig> | null = null;
+
+function isDigitalOceanSpacesConfigured() {
+  return Boolean(
+    process.env.DIGITALOCEAN_SPACES_ACCESS_KEY?.trim() &&
+      process.env.DIGITALOCEAN_SPACES_SECRET_KEY?.trim() &&
+      process.env.DIGITALOCEAN_SPACES_BUCKET?.trim() &&
+      process.env.DIGITALOCEAN_SPACES_REGION?.trim()
+  );
+}
 
 function sanitizePathSegment(segment: string) {
   const cleaned = segment.trim();
@@ -102,6 +118,12 @@ async function canWriteToPublicUploads() {
 export async function getTtsStorageConfig(): Promise<TtsStorageConfig> {
   if (!storageConfigPromise) {
     storageConfigPromise = (async () => {
+      if (isDigitalOceanSpacesConfigured()) {
+        return {
+          mode: 'spaces',
+        };
+      }
+
       if (await canWriteToPublicUploads()) {
         return {
           mode: 'public',
@@ -135,6 +157,47 @@ export function buildTtsAssetPath(
   return `${publicPathPrefix}/${normalized}`.replace(/\\/g, '/');
 }
 
+export async function buildStoredTtsAudioUrl(relativePath: string) {
+  const storage = await getTtsStorageConfig();
+  const safeDir = normalizeTargetDirectory(path.posix.dirname(relativePath));
+  const safeName = normalizeTargetName(path.posix.basename(relativePath));
+  const safeRelativePath = safeDir ? `${safeDir}/${safeName}` : safeName;
+
+  if (storage.mode === 'spaces') {
+    return buildDigitalOceanSpacesRawAssetUrl({
+      publicId: `lokswami/tts/${safeRelativePath}`,
+    });
+  }
+
+  if (!storage.publicPathPrefix) {
+    throw new Error('Shared TTS storage is not configured.');
+  }
+
+  return buildTtsAssetPath(storage.publicPathPrefix, safeRelativePath);
+}
+
+export async function hasStoredTtsAudioAtRelativePath(relativePath: string) {
+  const storage = await getTtsStorageConfig();
+  const safeDir = normalizeTargetDirectory(path.posix.dirname(relativePath));
+  const safeName = normalizeTargetName(path.posix.basename(relativePath));
+  const safeRelativePath = safeDir ? `${safeDir}/${safeName}` : safeName;
+
+  if (storage.mode === 'spaces') {
+    return hasDigitalOceanSpacesAssetByPublicId(`lokswami/tts/${safeRelativePath}`);
+  }
+
+  if (!storage.fsBaseDir) {
+    return false;
+  }
+
+  const absolutePath = path.resolve(storage.fsBaseDir, ...safeRelativePath.split('/'));
+  if (!isInsideBaseDir(storage.fsBaseDir, absolutePath)) {
+    return false;
+  }
+
+  return fsSync.existsSync(absolutePath);
+}
+
 export async function saveTtsAudioBuffer(params: {
   buffer: Buffer;
   targetDir: string;
@@ -144,6 +207,28 @@ export async function saveTtsAudioBuffer(params: {
   const safeDir = normalizeTargetDirectory(params.targetDir);
   const safeName = normalizeTargetName(params.targetName);
   const relativePath = safeDir ? `${safeDir}/${safeName}` : safeName;
+
+  if (storage.mode === 'spaces') {
+    const publicId = `lokswami/tts/${relativePath}`;
+    const uploaded = await uploadBufferToDigitalOceanSpaces(params.buffer, {
+      publicId,
+      resourceType: 'raw',
+      overwrite: true,
+      originalFilename: safeName,
+    });
+
+    return {
+      audioUrl: uploaded.secureUrl,
+      storageMode: storage.mode,
+      absolutePath: uploaded.publicId,
+      relativePath,
+    };
+  }
+
+  if (!storage.fsBaseDir || !storage.publicPathPrefix) {
+    throw new Error('Shared TTS filesystem storage is not configured.');
+  }
+
   const absolutePath = path.resolve(storage.fsBaseDir, ...relativePath.split('/'));
 
   if (!isInsideBaseDir(storage.fsBaseDir, absolutePath)) {
@@ -212,11 +297,20 @@ export function resolveTtsAssetPath(assetPath: string): ResolvedTtsAssetPath | n
 }
 
 export function hasStoredTtsAsset(assetPath: string) {
+  if (parseDigitalOceanSpacesAssetFromUrl(assetPath)) {
+    return true;
+  }
+
   const resolved = resolveTtsAssetPath(assetPath);
   return resolved ? fsSync.existsSync(resolved.absolutePath) : false;
 }
 
 export async function deleteStoredTtsAsset(assetPath: string) {
+  if (parseDigitalOceanSpacesAssetFromUrl(assetPath)) {
+    await deleteDigitalOceanSpacesAssetByUrl(assetPath).catch(() => undefined);
+    return;
+  }
+
   const resolved = resolveTtsAssetPath(assetPath);
   if (!resolved) return;
 

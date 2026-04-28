@@ -172,6 +172,7 @@ export default function BreakingNews({
           <button
             type="button"
             onClick={toggleSound}
+            disabled={ttsAvailable === false}
             className={`${styles.toggleButton} ${soundEnabled ? styles.toggleButtonActive : ''} ${isPreparingAudio ? styles.toggleButtonLoading : ''}`}
             aria-label={buttonTitle}
             aria-pressed={soundEnabled}

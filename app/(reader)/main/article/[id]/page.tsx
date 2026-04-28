@@ -27,6 +27,7 @@ import {
   buildTtsAudioSource,
   fetchTtsStatus,
   requestArticleTtsAudio,
+  type TtsAudioData,
 } from '@/lib/ai/ttsClient';
 
 type ApiArticle = {
@@ -54,6 +55,14 @@ const DEVANAGARI_REGEX = /[\u0900-\u097F]/;
 const RELATED_STORIES_INITIAL_COUNT = 4;
 const RELATED_STORIES_LOAD_STEP = 4;
 const RELATED_STORIES_MAX_COUNT = 20;
+
+type PreparedArticleAudio = {
+  sourceId: string;
+  languageCode: string;
+  voice: string;
+  src: string;
+  payload: TtsAudioData;
+};
 
 function normalizeArticleImage(input: string) {
   const image = input.trim();
@@ -174,8 +183,13 @@ export default function ArticleDetailPage() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isSavingBookmark, setIsSavingBookmark] = useState(false);
   const [listenError, setListenError] = useState('');
-  const [isTtsConfigured, setIsTtsConfigured] = useState(false);
+  const [isTtsConfigured, setIsTtsConfigured] = useState<boolean | null>(null);
+  const [preparedListenAudio, setPreparedListenAudio] = useState<PreparedArticleAudio | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const preloadedListenAudioRef = useRef<HTMLAudioElement | null>(null);
+  const listenRequestIdRef = useRef(0);
+  const listenPrefetchRequestIdRef = useRef(0);
+  const listenPrefetchPromiseRef = useRef<Promise<PreparedArticleAudio | null> | null>(null);
   const hasTrackedReadRef = useRef(false);
   const readingProgressRef = useRef(0);
   const isSignedIn = status === 'authenticated';
@@ -186,6 +200,28 @@ export default function ArticleDetailPage() {
   );
   const visibleRelatedArticles = relatedArticles.slice(0, visibleRelatedCount);
   const hasMoreRelatedStories = visibleRelatedCount < relatedArticles.length;
+  const canPrepareListen = isTtsConfigured === true;
+  const currentListenSourceId = article?.id || '';
+  const currentListenVoice = listenVoiceId || '';
+  const canUsePreparedListenAudio = Boolean(
+    preparedListenAudio &&
+      preparedListenAudio.sourceId === currentListenSourceId &&
+      preparedListenAudio.languageCode === listenLanguageCode &&
+      preparedListenAudio.voice === currentListenVoice
+  );
+  const listenButtonTitle = (() => {
+    if (isTtsConfigured === null) {
+      return language === 'hi' ? 'Audio service check ho raha hai' : 'Audio service is checking';
+    }
+
+    if (isTtsConfigured === false) {
+      return language === 'hi'
+        ? 'Gemini audio configured nahi hai'
+        : 'Gemini audio is not configured';
+    }
+
+    return language === 'hi' ? 'Lekh sunein' : 'Listen to article';
+  })();
 
   useEffect(() => {
     let active = true;
@@ -442,16 +478,92 @@ export default function ArticleDetailPage() {
     }
   }, [listenVoiceId, listenVoiceOptions]);
 
-  const stopListening = (suppressState = false) => {
+  const stopListening = (suppressState = false, cancelPending = true) => {
+    if (cancelPending) {
+      listenRequestIdRef.current += 1;
+    }
+
     if (audioRef.current) {
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current = null;
     }
     if (!suppressState) {
       setIsPlayingAudio(false);
+      setIsPreparingListen(false);
     }
   };
+
+  const prepareArticleListenAudio = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!article || isTtsConfigured !== true) {
+        return null;
+      }
+
+      const sourceId = article.id;
+      const languageCode = listenLanguageCode;
+      const voice = listenVoiceId || '';
+
+      if (
+        !options?.force &&
+        preparedListenAudio &&
+        preparedListenAudio.sourceId === sourceId &&
+        preparedListenAudio.languageCode === languageCode &&
+        preparedListenAudio.voice === voice
+      ) {
+        return preparedListenAudio;
+      }
+
+      if (!options?.force && listenPrefetchPromiseRef.current) {
+        return await listenPrefetchPromiseRef.current;
+      }
+
+      const requestId = listenPrefetchRequestIdRef.current + 1;
+      listenPrefetchRequestIdRef.current = requestId;
+
+      const promise = requestArticleTtsAudio(sourceId, {
+        languageCode,
+        voice: voice || undefined,
+      })
+        .then((payload) => {
+          if (requestId !== listenPrefetchRequestIdRef.current) {
+            return null;
+          }
+
+          const src = buildTtsAudioSource(payload);
+          if (!src) {
+            return null;
+          }
+
+          const prepared = {
+            sourceId,
+            languageCode,
+            voice,
+            src,
+            payload,
+          } satisfies PreparedArticleAudio;
+
+          const preloaded = new Audio(src);
+          preloaded.preload = 'auto';
+          preloaded.load();
+          preloadedListenAudioRef.current = preloaded;
+          setPreparedListenAudio(prepared);
+          return prepared;
+        })
+        .catch(() => null)
+        .finally(() => {
+          if (requestId === listenPrefetchRequestIdRef.current) {
+            listenPrefetchPromiseRef.current = null;
+          }
+        });
+
+      listenPrefetchPromiseRef.current = promise;
+      return await promise;
+    },
+    [article, isTtsConfigured, listenLanguageCode, listenVoiceId, preparedListenAudio]
+  );
 
   const handleGenerateSummary = async () => {
     if (!article) return;
@@ -500,9 +612,11 @@ export default function ArticleDetailPage() {
 
   const handleListen = async () => {
     if (!article) return;
+    const requestId = listenRequestIdRef.current + 1;
+    listenRequestIdRef.current = requestId;
     setListenError('');
     setIsPreparingListen(true);
-    stopListening();
+    stopListening(false, false);
 
     const articleListenSourceId = article.id;
     if (!articleListenSourceId) {
@@ -516,6 +630,15 @@ export default function ArticleDetailPage() {
     }
 
     try {
+      if (isTtsConfigured === null) {
+        setListenError(
+          language === 'hi'
+            ? 'Audio service check ho raha hai. Ek pal baad phir try karein.'
+            : 'Audio service is still checking. Please try again in a moment.'
+        );
+        return;
+      }
+
       if (!isTtsConfigured) {
         setListenError(
           language === 'hi'
@@ -525,21 +648,36 @@ export default function ArticleDetailPage() {
         return;
       }
 
-      const payload = await requestArticleTtsAudio(articleListenSourceId, {
-        languageCode: listenLanguageCode,
-        voice: listenVoiceId || undefined,
-      });
-      const src = buildTtsAudioSource(payload);
+      const preparedAudio = await prepareArticleListenAudio();
+      if (requestId !== listenRequestIdRef.current) return;
+
+      const payload =
+        preparedAudio?.payload ||
+        (await requestArticleTtsAudio(articleListenSourceId, {
+          languageCode: listenLanguageCode,
+          voice: listenVoiceId || undefined,
+        }));
+      if (requestId !== listenRequestIdRef.current) return;
+
+      const src = preparedAudio?.src || buildTtsAudioSource(payload);
       if (!src) {
         throw new Error('Gemini TTS returned no audio payload.');
       }
 
-      const audio = new Audio(src);
+      const preloadedAudio = preloadedListenAudioRef.current;
+      const audio =
+        preloadedAudio && preloadedAudio.src === new URL(src, window.location.href).href
+          ? preloadedAudio
+          : new Audio(src);
       audioRef.current = audio;
       audio.onended = () => {
+        if (requestId !== listenRequestIdRef.current) return;
+        audioRef.current = null;
         setIsPlayingAudio(false);
       };
       audio.onerror = () => {
+        if (requestId !== listenRequestIdRef.current) return;
+        audioRef.current = null;
         setIsPlayingAudio(false);
         setListenError(
           language === 'hi'
@@ -549,8 +687,13 @@ export default function ArticleDetailPage() {
       };
 
       await audio.play();
+      if (requestId !== listenRequestIdRef.current) {
+        audio.pause();
+        return;
+      }
       setIsPlayingAudio(true);
     } catch (error) {
+      if (requestId !== listenRequestIdRef.current) return;
       setListenError(
         error instanceof Error && error.message.trim()
           ? error.message
@@ -559,7 +702,9 @@ export default function ArticleDetailPage() {
             : 'Unable to generate Gemini audio right now.'
       );
     } finally {
-      setIsPreparingListen(false);
+      if (requestId === listenRequestIdRef.current) {
+        setIsPreparingListen(false);
+      }
     }
   };
 
@@ -568,6 +713,19 @@ export default function ArticleDetailPage() {
       stopListening(true);
     };
   }, []);
+
+  useEffect(() => {
+    listenPrefetchRequestIdRef.current += 1;
+    listenPrefetchPromiseRef.current = null;
+    preloadedListenAudioRef.current = null;
+    setPreparedListenAudio(null);
+    stopListening(true);
+  }, [article?.id, listenLanguageCode, listenVoiceId]);
+
+  useEffect(() => {
+    if (!article || isTtsConfigured !== true) return;
+    void prepareArticleListenAudio();
+  }, [article, isTtsConfigured, prepareArticleListenAudio]);
 
   const handleWhatsAppShare = () => {
     if (typeof window === 'undefined' || !article) return;
@@ -833,8 +991,13 @@ export default function ArticleDetailPage() {
                 <button
                   type="button"
                   onClick={() => void handleListen()}
-                  disabled={isPreparingListen}
-                  className="inline-flex h-7 items-center justify-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 text-[10px] font-bold leading-none text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs"
+                  disabled={isPreparingListen || !canPrepareListen}
+                  title={listenButtonTitle}
+                  className={`inline-flex h-7 items-center justify-center gap-1 rounded-full border px-2 text-[10px] font-bold leading-none transition disabled:opacity-60 sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs ${
+                    canUsePreparedListenAudio
+                      ? 'border-emerald-300 bg-emerald-100 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-200 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                      : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
+                  }`}
                 >
                   {isPreparingListen ? <Loader2 className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5" /> : <Volume2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
                   {language === 'hi' ? '\u0938\u0941\u0928\u0947\u0902' : 'Listen'}

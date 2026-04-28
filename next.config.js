@@ -80,12 +80,30 @@ const nextConfig = {
         headers: [
           {
             key: 'Cache-Control',
+            value: 'public, max-age=0, s-maxage=60, stale-while-revalidate=300',
+          },
+        ],
+      },
+      {
+        source: '/main/account',
+        headers: [
+          {
+            key: 'Cache-Control',
             value: 'private, no-store, no-cache, max-age=0, must-revalidate',
           },
         ],
       },
       {
-        source: '/main/:path*',
+        source: '/main/saved',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, no-store, no-cache, max-age=0, must-revalidate',
+          },
+        ],
+      },
+      {
+        source: '/main/preferences',
         headers: [
           {
             key: 'Cache-Control',

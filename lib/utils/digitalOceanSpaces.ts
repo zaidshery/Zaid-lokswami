@@ -55,6 +55,9 @@ const CONTENT_TYPES: Record<string, string> = {
   '.webm': 'video/webm',
   '.mov': 'video/quicktime',
   '.txt': 'text/plain; charset=utf-8',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
 };
 
 function readEnv(name: string) {
@@ -370,6 +373,28 @@ export async function deleteDigitalOceanSpacesAssetByPublicId(
   if (!response.ok && response.status !== 404) {
     throw new Error(`DigitalOcean Spaces delete failed (${response.status}).`);
   }
+}
+
+export async function hasDigitalOceanSpacesAssetByPublicId(publicId: string) {
+  const key = normalizePublicId(publicId);
+  if (!key) return false;
+
+  const config = getSpacesConfig();
+  const request = createSignedObjectRequest(config, 'HEAD', key);
+  const response = await fetch(request.url, {
+    method: 'HEAD',
+    headers: request.headers,
+  });
+
+  if (response.status === 404) {
+    return false;
+  }
+
+  if (!response.ok) {
+    throw new Error(`DigitalOcean Spaces HEAD failed (${response.status}).`);
+  }
+
+  return true;
 }
 
 function inferResourceTypeFromKey(key: string): ParsedDigitalOceanSpacesAsset['resourceType'] {

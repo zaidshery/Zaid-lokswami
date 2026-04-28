@@ -6,7 +6,6 @@ import {
   GEMINI_TTS_OUTPUT_SAMPLE_RATE,
   GEMINI_TTS_PROVIDER,
   getGeminiTtsLanguageLabel,
-  isSupportedGeminiTtsVoice,
 } from '@/lib/constants/tts';
 
 export type GeminiTtsSuccess = {
@@ -57,16 +56,7 @@ function getGeminiTtsModel() {
 }
 
 function getGeminiTtsVoice(requestedVoice?: string) {
-  const candidate = (requestedVoice || '').trim();
-  if (candidate && isSupportedGeminiTtsVoice(candidate)) {
-    return candidate;
-  }
-
-  const envVoice = process.env.GEMINI_TTS_VOICE?.trim();
-  if (envVoice && isSupportedGeminiTtsVoice(envVoice)) {
-    return envVoice;
-  }
-
+  void requestedVoice;
   return GEMINI_TTS_DEFAULT_VOICE;
 }
 
