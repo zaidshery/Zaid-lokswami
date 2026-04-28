@@ -39,6 +39,12 @@ import {
   recordArticleActivity,
 } from '@/lib/server/articleActivity';
 import {
+  buildEpaperActivityMessage,
+  recordEpaperActivity,
+} from '@/lib/server/epaperActivity';
+import { ensureEpaperStoryAudio } from '@/lib/server/epaperStoryAudioAutomation';
+import { applyEpaperWorkflowAutomation } from '@/lib/server/epaperWorkflowAutomation';
+import {
   clearStoryLinkedArticle,
   syncStoryLinkedArticle,
 } from '@/lib/server/newsroomStoryLinks';
@@ -500,7 +506,8 @@ async function findEpaperArticle(id: string) {
 async function updateEpaperArticleById(
   id: string,
   body: unknown,
-  isPut: boolean
+  isPut: boolean,
+  actor?: Awaited<ReturnType<typeof getAdminSession>>
 ) {
   if (!Types.ObjectId.isValid(id)) {
     return {
@@ -582,6 +589,45 @@ async function updateEpaperArticleById(
       status: 404,
       payload: { success: false, error: 'Article not found' },
     };
+  }
+
+  if (actor) {
+    const epaper = await EPaper.findById(updated.epaperId)
+      .select('_id title cityName publishDate')
+      .lean();
+
+    if (epaper) {
+      const audio = await ensureEpaperStoryAudio({
+        paper: epaper,
+        story: updated,
+        actor,
+        source: 'admin-epaper-story-update',
+      }).catch((error) => ({
+        attempted: true,
+        ready: false,
+        error: error instanceof Error ? error.message : 'Story audio automation failed.',
+      }));
+
+      if (audio.attempted && audio.ready) {
+        await recordEpaperActivity({
+          epaperId: String(updated.epaperId || ''),
+          actor,
+          action: 'story_audio_generated',
+          message: buildEpaperActivityMessage({ action: 'story_audio_generated' }),
+          metadata: {
+            articleId: String(updated._id || ''),
+            pageNumber: Number(updated.pageNumber || 1),
+            reused: Boolean('reused' in audio && audio.reused),
+          },
+        });
+      }
+
+      await applyEpaperWorkflowAutomation({
+        epaperId: String(updated.epaperId || ''),
+        actor,
+        reason: 'A mapped e-paper story was updated.',
+      });
+    }
   }
 
   return {
@@ -732,7 +778,7 @@ export async function PATCH(
           { status: 403 }
         );
       }
-      const result = await updateEpaperArticleById(id, body, false);
+      const result = await updateEpaperArticleById(id, body, false, user);
       return NextResponse.json(result.payload, { status: result.status });
     }
 
@@ -880,7 +926,7 @@ export async function PATCH(
             { status: 403 }
           );
         }
-        const fallback = await updateEpaperArticleById(id, body, false);
+        const fallback = await updateEpaperArticleById(id, body, false, user);
         return NextResponse.json(fallback.payload, { status: fallback.status });
       }
 
@@ -1076,7 +1122,7 @@ export async function PATCH(
           { status: 403 }
         );
       }
-      const fallback = await updateEpaperArticleById(id, body, false);
+      const fallback = await updateEpaperArticleById(id, body, false, user);
       return NextResponse.json(fallback.payload, { status: fallback.status });
     }
     if (!canEditContent(user, buildArticlePermissionRecord(current))) {
@@ -1176,7 +1222,7 @@ export async function PUT(
           { status: 403 }
         );
       }
-      const result = await updateEpaperArticleById(id, body, true);
+      const result = await updateEpaperArticleById(id, body, true, user);
       return NextResponse.json(result.payload, { status: result.status });
     }
 
@@ -1278,7 +1324,7 @@ export async function PUT(
           { status: 403 }
         );
       }
-      const fallback = await updateEpaperArticleById(id, body, true);
+      const fallback = await updateEpaperArticleById(id, body, true, user);
       return NextResponse.json(fallback.payload, { status: fallback.status });
     }
     if (!canEditContent(user, buildArticlePermissionRecord(current))) {

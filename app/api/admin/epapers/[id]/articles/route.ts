@@ -8,6 +8,8 @@ import {
   buildEpaperActivityMessage,
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
+import { ensureEpaperStoryAudio } from '@/lib/server/epaperStoryAudioAutomation';
+import { applyEpaperWorkflowAutomation } from '@/lib/server/epaperWorkflowAutomation';
 import {
   normalizeHotspot,
   resolveUniqueSlug,
@@ -195,7 +197,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    const epaper = await EPaper.findById(id).select('_id pageCount').lean();
+    const epaper = await EPaper.findById(id)
+      .select('_id pageCount title cityName publishDate')
+      .lean();
     if (!epaper) {
       return NextResponse.json(
         { success: false, error: 'E-paper not found' },
@@ -296,6 +300,37 @@ export async function POST(req: NextRequest, context: RouteContext) {
         pageNumber,
         title,
       },
+    });
+
+    const audio = await ensureEpaperStoryAudio({
+      paper: epaper,
+      story: created.toObject(),
+      actor: admin,
+      source: 'admin-epaper-story-create',
+    }).catch((error) => ({
+      attempted: true,
+      ready: false,
+      error: error instanceof Error ? error.message : 'Story audio automation failed.',
+    }));
+
+    if (audio.attempted && audio.ready) {
+      await recordEpaperActivity({
+        epaperId: id,
+        actor: admin,
+        action: 'story_audio_generated',
+        message: buildEpaperActivityMessage({ action: 'story_audio_generated' }),
+        metadata: {
+          articleId: String(created._id || ''),
+          pageNumber,
+          reused: Boolean('reused' in audio && audio.reused),
+        },
+      });
+    }
+
+    await applyEpaperWorkflowAutomation({
+      epaperId: id,
+      actor: admin,
+      reason: 'A mapped e-paper story was created.',
     });
 
     return NextResponse.json(

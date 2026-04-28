@@ -84,6 +84,12 @@ export function buildEpaperActivityMessage(input: ActivityMessageInput) {
       return 'Page image uploaded.';
     case 'page_images_generated':
       return 'Page images generated from PDF.';
+    case 'cover_thumbnail_updated':
+      return 'Cover preview updated from page 1.';
+    case 'ocr_auto_detected':
+      return 'OCR detected story boxes for edition pages.';
+    case 'story_audio_generated':
+      return 'Story listen audio generated automatically.';
     case 'story_created':
       return 'A mapped e-paper story was created.';
     case 'page_review_updated':

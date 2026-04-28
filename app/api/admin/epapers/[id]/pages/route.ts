@@ -8,6 +8,7 @@ import {
   buildEpaperActivityMessage,
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
+import { buildEpaperImageAutomationUpdates } from '@/lib/server/epaperImageAutomation';
 import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
 import {
   EPAPER_IMAGE_MAX_BYTES,
@@ -238,12 +239,20 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       let pages = mapPages(Array.isArray(epaper.pages) ? epaper.pages : [], nextPageCount);
       const previous = pages.find((item) => item.pageNumber === pageNumber)?.imagePath || '';
       pages = updateSinglePage(pages, pageNumber, { imagePath, width, height });
+      const automationUpdates = buildEpaperImageAutomationUpdates({
+        pageCount: nextPageCount,
+        pages,
+        currentThumbnailPath: epaper.thumbnailPath,
+        currentProductionStatus: epaper.productionStatus,
+        currentStatus: epaper.status,
+      });
 
       const updated = await EPaper.findByIdAndUpdate(
         id,
         {
           pageCount: nextPageCount,
           pages,
+          ...automationUpdates,
         },
         { new: true, runValidators: true }
       ).lean();
@@ -263,9 +272,43 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         },
       });
 
+      if (automationUpdates.thumbnailPath) {
+        await recordEpaperActivity({
+          epaperId: id,
+          actor: admin,
+          action: 'cover_thumbnail_updated',
+          message: buildEpaperActivityMessage({ action: 'cover_thumbnail_updated' }),
+          metadata: {
+            thumbnailPath: automationUpdates.thumbnailPath,
+            sourcePage: 1,
+          },
+        });
+      }
+
+      if (automationUpdates.productionStatus === 'pages_ready') {
+        await recordEpaperActivity({
+          epaperId: id,
+          actor: admin,
+          action: 'pages_ready',
+          fromStatus: 'draft_upload',
+          toStatus: 'pages_ready',
+          message: buildEpaperActivityMessage({
+            action: 'pages_ready',
+            toStatus: 'pages_ready',
+          }),
+          metadata: {
+            automated: true,
+            reason: 'All edition pages have images.',
+          },
+        });
+      }
+
       return NextResponse.json({
         success: true,
-        message: 'Page image updated',
+        message:
+          automationUpdates.productionStatus === 'pages_ready'
+            ? 'Page image updated and edition moved to Pages Ready'
+            : 'Page image updated',
         data: updated,
       });
     }
@@ -377,11 +420,20 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       }
     }
 
+    const automationUpdates = buildEpaperImageAutomationUpdates({
+      pageCount: nextPageCount,
+      pages,
+      currentThumbnailPath: epaper.thumbnailPath,
+      currentProductionStatus: epaper.productionStatus,
+      currentStatus: epaper.status,
+    });
+
     const updated = await EPaper.findByIdAndUpdate(
       id,
       {
         pageCount: nextPageCount,
         pages,
+        ...automationUpdates,
       },
       { new: true, runValidators: true }
     ).lean();
@@ -394,6 +446,37 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         message: buildEpaperActivityMessage({ action: 'page_image_uploaded' }),
         metadata: {
           updatedPages: imageUpdatedPages,
+        },
+      });
+    }
+
+    if (automationUpdates.thumbnailPath) {
+      await recordEpaperActivity({
+        epaperId: id,
+        actor: admin,
+        action: 'cover_thumbnail_updated',
+        message: buildEpaperActivityMessage({ action: 'cover_thumbnail_updated' }),
+        metadata: {
+          thumbnailPath: automationUpdates.thumbnailPath,
+          sourcePage: 1,
+        },
+      });
+    }
+
+    if (automationUpdates.productionStatus === 'pages_ready') {
+      await recordEpaperActivity({
+        epaperId: id,
+        actor: admin,
+        action: 'pages_ready',
+        fromStatus: 'draft_upload',
+        toStatus: 'pages_ready',
+        message: buildEpaperActivityMessage({
+          action: 'pages_ready',
+          toStatus: 'pages_ready',
+        }),
+        metadata: {
+          automated: true,
+          reason: 'All edition pages have images.',
         },
       });
     }
@@ -415,11 +498,13 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     return NextResponse.json({
       success: true,
       message:
-        imageUpdatedPages.length > 0 && reviewUpdatedPages.length > 0
-          ? 'Page images and review details updated'
-          : reviewUpdatedPages.length > 0
-            ? 'Page review updated'
-            : 'Page images updated',
+        automationUpdates.productionStatus === 'pages_ready'
+          ? 'Pages updated and edition moved to Pages Ready'
+          : imageUpdatedPages.length > 0 && reviewUpdatedPages.length > 0
+            ? 'Page images and review details updated'
+            : reviewUpdatedPages.length > 0
+              ? 'Page review updated'
+              : 'Page images updated',
       data: updated,
     });
   } catch (error: unknown) {

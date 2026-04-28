@@ -8,6 +8,7 @@ import {
   buildEpaperActivityMessage,
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
+import { buildEpaperImageAutomationUpdates } from '@/lib/server/epaperImageAutomation';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const epaper = await EPaper.findById(id)
-      .select('_id pdfPath pageCount pages')
+      .select('_id pdfPath thumbnailPath pageCount pages status productionStatus')
       .lean();
     if (!epaper) {
       return NextResponse.json(
@@ -87,7 +88,16 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
       const pageMap = new Map<
         number,
-        { pageNumber: number; imagePath?: string; width?: number; height?: number }
+        {
+          pageNumber: number;
+          imagePath?: string;
+          width?: number;
+          height?: number;
+          reviewStatus?: string;
+          reviewNote?: string;
+          reviewedAt?: Date | string | null;
+          reviewedBy?: unknown;
+        }
       >();
 
       const currentPages = Array.isArray(epaper.pages) ? epaper.pages : [];
@@ -99,11 +109,19 @@ export async function POST(req: NextRequest, context: RouteContext) {
           imagePath: String(page?.imagePath || ''),
           width: Number.isFinite(Number(page?.width)) ? Number(page?.width) : undefined,
           height: Number.isFinite(Number(page?.height)) ? Number(page?.height) : undefined,
+          reviewStatus: typeof page?.reviewStatus === 'string' ? page.reviewStatus : undefined,
+          reviewNote: typeof page?.reviewNote === 'string' ? page.reviewNote : '',
+          reviewedAt: page?.reviewedAt || null,
+          reviewedBy: page?.reviewedBy || null,
         });
       }
 
       for (const generatedPage of generated.generatedPages) {
-        pageMap.set(generatedPage.pageNumber, generatedPage);
+        const existing = pageMap.get(generatedPage.pageNumber);
+        pageMap.set(generatedPage.pageNumber, {
+          ...existing,
+          ...generatedPage,
+        });
       }
 
       const nextPageCount = Math.max(
@@ -120,7 +138,19 @@ export async function POST(req: NextRequest, context: RouteContext) {
           imagePath: existing?.imagePath || '',
           width: existing?.width,
           height: existing?.height,
+          reviewStatus: existing?.reviewStatus || 'pending',
+          reviewNote: existing?.reviewNote || '',
+          reviewedAt: existing?.reviewedAt || null,
+          reviewedBy: existing?.reviewedBy || null,
         };
+      });
+
+      const automationUpdates = buildEpaperImageAutomationUpdates({
+        pageCount: nextPageCount,
+        pages,
+        currentThumbnailPath: epaper.thumbnailPath,
+        currentProductionStatus: epaper.productionStatus,
+        currentStatus: epaper.status,
       });
 
       const updated = await EPaper.findByIdAndUpdate(
@@ -128,6 +158,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         {
           pageCount: nextPageCount,
           pages,
+          ...automationUpdates,
         },
         { new: true, runValidators: true }
       ).lean();
@@ -144,9 +175,43 @@ export async function POST(req: NextRequest, context: RouteContext) {
         },
       });
 
+      if (automationUpdates.thumbnailPath) {
+        await recordEpaperActivity({
+          epaperId: id,
+          actor: admin,
+          action: 'cover_thumbnail_updated',
+          message: buildEpaperActivityMessage({ action: 'cover_thumbnail_updated' }),
+          metadata: {
+            thumbnailPath: automationUpdates.thumbnailPath,
+            sourcePage: 1,
+          },
+        });
+      }
+
+      if (automationUpdates.productionStatus === 'pages_ready') {
+        await recordEpaperActivity({
+          epaperId: id,
+          actor: admin,
+          action: 'pages_ready',
+          fromStatus: 'draft_upload',
+          toStatus: 'pages_ready',
+          message: buildEpaperActivityMessage({
+            action: 'pages_ready',
+            toStatus: 'pages_ready',
+          }),
+          metadata: {
+            automated: true,
+            reason: 'All edition pages have images.',
+          },
+        });
+      }
+
       return NextResponse.json({
         success: true,
-        message: 'Page images generated successfully',
+        message:
+          automationUpdates.productionStatus === 'pages_ready'
+            ? 'Page images generated and edition moved to Pages Ready'
+            : 'Page images generated successfully',
         data: updated,
         generated: {
           converter: generated.converter,

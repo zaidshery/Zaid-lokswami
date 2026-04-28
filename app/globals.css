@@ -1240,3 +1240,48 @@
     overflow: hidden;
   }
 }
+
+.dark .epaper-production-desk {
+  background: #09090b;
+  color: #f4f4f5;
+}
+
+.dark .epaper-production-desk .bg-white {
+  background-color: #18181b;
+}
+
+.dark .epaper-production-desk .bg-gray-50,
+.dark .epaper-production-desk .bg-gray-100 {
+  background-color: #27272a;
+}
+
+.dark .epaper-production-desk .border-gray-200,
+.dark .epaper-production-desk .border-gray-300 {
+  border-color: #3f3f46;
+}
+
+.dark .epaper-production-desk .text-gray-900 {
+  color: #fafafa;
+}
+
+.dark .epaper-production-desk .text-gray-700,
+.dark .epaper-production-desk .text-gray-600 {
+  color: #d4d4d8;
+}
+
+.dark .epaper-production-desk .text-gray-500 {
+  color: #a1a1aa;
+}
+
+.dark .epaper-production-desk input,
+.dark .epaper-production-desk select,
+.dark .epaper-production-desk textarea {
+  background-color: #18181b;
+  border-color: #52525b;
+  color: #fafafa;
+}
+
+.dark .epaper-production-desk input::placeholder,
+.dark .epaper-production-desk textarea::placeholder {
+  color: #71717a;
+}

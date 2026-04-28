@@ -4,7 +4,7 @@ import { EPAPER_CITY_OPTIONS } from '@/lib/constants/epaperCities';
 import { resolveNewsCategory } from '@/lib/constants/newsCategories';
 
 const FALLBACK_SITE_URL = 'http://localhost:3000';
-const DEFAULT_OG_IMAGE = '/logo-wordmark-final.png';
+const DEFAULT_OG_IMAGE = '/lokswami-share-preview.png';
 
 type MetadataInput = {
   title: string;

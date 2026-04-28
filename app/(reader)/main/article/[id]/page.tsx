@@ -803,15 +803,30 @@ export default function ArticleDetailPage() {
                   : ''
               }`}
             >
-              <div className="relative h-7 w-[104px] shrink-0 sm:h-8 sm:w-44">
-                <Image
-                  src="/logo-wordmark-final.png"
-                  alt="Lokswami"
-                  fill
-                  sizes="176px"
-                  className="object-contain object-left"
-                  priority={false}
-                />
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="relative h-[50px] w-[50px] shrink-0 overflow-hidden rounded-xl sm:h-[65px] sm:w-[65px]">
+                  <Image
+                    src="/ai-logo-shery-lokswami-cutout.png"
+                    alt="Lokswami AI"
+                    fill
+                    sizes="(max-width: 639px) 50px, 65px"
+                    className="object-contain object-center drop-shadow-[0_2px_8px_rgba(0,0,0,0.25)]"
+                    priority={false}
+                  />
+                </div>
+                <div className="hidden min-w-0 sm:flex sm:flex-col sm:gap-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-bold tracking-wide text-zinc-900 dark:text-zinc-100">
+                      Lokswami
+                    </span>
+                    <span className="inline-flex h-5 items-center rounded-full border border-red-200 bg-red-50 px-2 text-[10px] font-black uppercase tracking-[0.12em] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                      AI
+                    </span>
+                  </div>
+                  <p className="truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    Audio tools for this article
+                  </p>
+                </div>
               </div>
 
               <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-1 sm:gap-2">
