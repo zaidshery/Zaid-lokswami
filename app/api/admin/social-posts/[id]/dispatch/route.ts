@@ -18,19 +18,6 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-type SocialPostDispatchSource = {
-  _id?: unknown;
-  sourceStoryId?: unknown;
-  sourceArticleId?: unknown;
-  platform?: unknown;
-  status?: unknown;
-  caption?: unknown;
-  hashtags?: unknown;
-  thumbnailUrl?: unknown;
-  videoUrl?: unknown;
-  scheduledAt?: unknown;
-};
-
 function canManageSocialPosts(role: string | null | undefined) {
   return role === 'admin' || isSuperAdminRole(role);
 }

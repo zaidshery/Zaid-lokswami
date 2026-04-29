@@ -6,9 +6,11 @@ import {
   listGlobalContentActivity,
   type ContentActivityItem,
 } from '@/lib/server/contentActivity';
+import { getAuditLogs } from '@/lib/security/auditLogger';
+import type { IAuditLog } from '@/lib/models/AuditLog';
 import type { WorkflowContentType, WorkflowStatus } from '@/lib/workflow/types';
 
-export type AdminAuditScope = 'all' | 'workflow' | 'reporting' | 'alerts';
+export type AdminAuditScope = 'all' | 'workflow' | 'reporting' | 'alerts' | 'security';
 export type AdminAuditContentFilter = 'all' | WorkflowContentType;
 
 export type AdminAuditEntry = {
@@ -31,6 +33,9 @@ export type AdminAuditCenterData = {
   contentFilter: AdminAuditContentFilter;
   workflowAuditAvailable: boolean;
   summary: {
+    securityEvents: number;
+    adminMutations: number;
+    authEvents: number;
     workflowEvents: number;
     publishingEvents: number;
     reportRuns: number;
@@ -226,6 +231,77 @@ function mapAlertNotificationEntry(
   };
 }
 
+function getSecurityTone(entry: IAuditLog): AdminAuditEntry['tone'] {
+  if (entry.responseStatus === 'rejected' || entry.statusCode >= 400) return 'critical';
+  if (entry.action === 'delete' || entry.action === 'reject') return 'warning';
+  if (entry.action === 'login' || entry.action === 'publish' || entry.action === 'approve') {
+    return 'good';
+  }
+  return 'neutral';
+}
+
+function buildSecurityAuditHref(entry: IAuditLog) {
+  const id = String(entry.resourceId || '').trim();
+  const encodedId = encodeURIComponent(id);
+
+  if (!id) return '/admin/audit-log?scope=security';
+
+  switch (entry.resourceType) {
+    case 'article':
+      return `/admin/articles/${encodedId}/edit`;
+    case 'story':
+      return `/admin/stories/${encodedId}/edit`;
+    case 'video':
+      return `/admin/videos/${encodedId}/edit`;
+    case 'epaper':
+      return `/admin/epapers/${encodedId}`;
+    case 'user':
+      return '/admin/team';
+    case 'settings':
+      return '/admin/settings';
+    default:
+      return '/admin/audit-log?scope=security';
+  }
+}
+
+function mapSecurityAuditEntry(entry: IAuditLog): AdminAuditEntry {
+  const resourceLabel = formatTitleCase(String(entry.resourceType || 'other'));
+  const actionLabel = formatTitleCase(String(entry.action || 'activity'));
+  const actorLabel = String(entry.userEmail || entry.userId || 'Unknown user');
+  const endpoint = String(entry.endpoint || '').trim();
+
+  return {
+    id: `security-${String(entry._id || `${entry.action}-${entry.timestamp}`)}`,
+    type: 'workflow',
+    title: `${resourceLabel} ${actionLabel}`,
+    detail:
+      String(entry.errorMessage || '').trim() ||
+      `${entry.method} ${endpoint || 'admin action'} recorded with status ${entry.statusCode}.`,
+    statusLabel:
+      entry.responseStatus === 'rejected'
+        ? 'Rejected'
+        : entry.statusCode >= 400
+          ? 'Error'
+          : 'Recorded',
+    tone: getSecurityTone(entry),
+    actorLabel,
+    actorMeta: `${formatTitleCase(String(entry.userRole || 'unknown'))} / ${entry.ipAddress || 'unknown IP'}`,
+    createdAt:
+      entry.timestamp instanceof Date
+        ? entry.timestamp.toISOString()
+        : String(entry.timestamp || new Date(0).toISOString()),
+    href: buildSecurityAuditHref(entry),
+    contentType:
+      entry.resourceType === 'article' ||
+      entry.resourceType === 'story' ||
+      entry.resourceType === 'video' ||
+      entry.resourceType === 'epaper'
+        ? entry.resourceType
+        : null,
+    contextLabel: 'Security audit',
+  };
+}
+
 export async function getAdminAuditCenterData(args: {
   scope: AdminAuditScope;
   contentFilter: AdminAuditContentFilter;
@@ -236,20 +312,23 @@ export async function getAdminAuditCenterData(args: {
   const contentType =
     args.contentFilter === 'all' ? undefined : args.contentFilter;
 
-  const [workflowActivities, reportRuns, alertNotifications] = await Promise.all([
+  const [workflowActivities, reportRuns, alertNotifications, securityAuditLogs] = await Promise.all([
     listGlobalContentActivity({ contentType, limit: 120 }),
     listLeadershipReportRunHistory(80),
     listLeadershipReportAlertNotificationHistory(80),
+    getAuditLogs({ limit: 120 }),
   ]);
 
   const workflowEntries = workflowActivities.map(mapWorkflowEntry);
   const reportEntries = reportRuns.map(mapReportRunEntry);
   const alertEntries = alertNotifications.map(mapAlertNotificationEntry);
+  const securityEntries = securityAuditLogs.map(mapSecurityAuditEntry);
 
   const entries = [
     ...(args.scope === 'all' || args.scope === 'workflow' ? workflowEntries : []),
     ...(args.scope === 'all' || args.scope === 'reporting' ? reportEntries : []),
     ...(args.scope === 'all' || args.scope === 'alerts' ? alertEntries : []),
+    ...(args.scope === 'all' || args.scope === 'security' ? securityEntries : []),
   ]
     .sort(
       (left, right) =>
@@ -262,6 +341,13 @@ export async function getAdminAuditCenterData(args: {
     contentFilter: args.contentFilter,
     workflowAuditAvailable,
     summary: {
+      securityEvents: securityEntries.length,
+      adminMutations: securityAuditLogs.filter((item) =>
+        ['create', 'update', 'delete', 'publish', 'archive', 'assign', 'approve', 'reject'].includes(
+          item.action
+        )
+      ).length,
+      authEvents: securityAuditLogs.filter((item) => item.resourceType === 'auth_session').length,
       workflowEvents: workflowEntries.length,
       publishingEvents: workflowActivities.filter((item) => item.action === 'publish').length,
       reportRuns: reportEntries.length,

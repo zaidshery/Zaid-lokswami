@@ -263,63 +263,6 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '';
 }
 
-function getCurrentStoryMediaAssets(story: {
-  mediaAssets?: unknown;
-  thumbnail?: unknown;
-  mediaType?: unknown;
-  mediaUrl?: unknown;
-  mediaKey?: unknown;
-  mediaSizeBytes?: unknown;
-  mediaMimeType?: unknown;
-  storageProvider?: unknown;
-}) {
-  const normalized = normalizeStoryMediaAssets(story.mediaAssets);
-  if (normalized.length > 0) {
-    return normalized;
-  }
-
-  const fallbackThumbnail = typeof story.thumbnail === 'string' ? story.thumbnail.trim() : '';
-  const fallbackMediaUrl = typeof story.mediaUrl === 'string' ? story.mediaUrl.trim() : '';
-  const fallbackMediaType = story.mediaType === 'video' ? 'video' : 'image';
-  const assets = [];
-
-  if (fallbackThumbnail) {
-    assets.push({
-      id: 'legacy-image',
-      kind: 'image' as const,
-      url: fallbackThumbnail,
-      key: '',
-      mimeType: '',
-      sizeBytes: 0,
-      storageProvider: '',
-      originalFileName: '',
-      order: 0,
-      createdAt: new Date(0).toISOString(),
-    });
-  }
-
-  if (fallbackMediaUrl && fallbackMediaType === 'video') {
-    assets.push({
-      id: 'legacy-video',
-      kind: 'video' as const,
-      url: fallbackMediaUrl,
-      key: typeof story.mediaKey === 'string' ? story.mediaKey.trim() : '',
-      mimeType:
-        typeof story.mediaMimeType === 'string' ? story.mediaMimeType.trim().toLowerCase() : '',
-      sizeBytes: Number.isFinite(Number(story.mediaSizeBytes))
-        ? Math.max(0, Number(story.mediaSizeBytes))
-        : 0,
-      storageProvider:
-        typeof story.storageProvider === 'string' ? story.storageProvider.trim() : '',
-      originalFileName: '',
-      order: assets.length,
-      createdAt: new Date(0).toISOString(),
-    });
-  }
-
-  return assets;
-}
-
 function applyDerivedStoryMediaUpdates(
   updates: Record<string, unknown>,
   currentStory: {

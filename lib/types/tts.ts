@@ -4,7 +4,7 @@ export const TTS_VARIANTS = [
   'article_full',
   'epaper_story',
 ] as const;
-export const TTS_ASSET_STATUSES = ['pending', 'ready', 'failed', 'stale'] as const;
+export const TTS_ASSET_STATUSES = ['pending', 'processing', 'ready', 'failed', 'stale'] as const;
 export const TTS_STORAGE_MODES = ['public', 'proxy', 'spaces'] as const;
 export const TTS_AUDIT_ACTIONS = [
   'generate',

@@ -1,5 +1,13 @@
 /** @type {import('next').NextConfig} */
 const isDevelopment = process.env.NODE_ENV !== 'production';
+const scriptSrc = [
+  "script-src 'self' 'unsafe-inline'",
+  isDevelopment ? "'unsafe-eval'" : '',
+  'https://cdn.tailwindcss.com',
+  'https://cdn.jsdelivr.net',
+  'https://www.googletagmanager.com',
+  'https://www.google-analytics.com',
+].filter(Boolean);
 const defaultImageHosts = [
   'images.unsplash.com',
   'via.placeholder.com',
@@ -126,6 +134,42 @@ const nextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
+          },
+          {
+            // Strict Transport Security: enforce HTTPS for 1 year
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          },
+          {
+            // Content Security Policy: restrict resource loading
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              scriptSrc.join(' '),
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
+              "font-src 'self' https://fonts.gstatic.com data:",
+              "img-src 'self' data: https: blob:",
+              "media-src 'self' https: blob:",
+              "connect-src 'self' https: wss:",
+              "frame-ancestors 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              'report-uri /api/security/csp-report',
+            ].join('; '),
+          },
+          {
+            // Permissions Policy: restrict browser features
+            key: 'Permissions-Policy',
+            value: [
+              'geolocation=()',
+              'microphone=()',
+              'camera=()',
+              'payment=()',
+              'usb=()',
+              'magnetometer=()',
+              'gyroscope=()',
+              'accelerometer=()',
+            ].join(', '),
           },
         ],
       },

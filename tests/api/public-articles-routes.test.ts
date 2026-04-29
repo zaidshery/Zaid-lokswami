@@ -70,6 +70,7 @@ describe('public article routes', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toContain('s-maxage=60');
     expect(payload.items).toHaveLength(1);
     expect(payload.items[0]).toEqual(
       expect.objectContaining({

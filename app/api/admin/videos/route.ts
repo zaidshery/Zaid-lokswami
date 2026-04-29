@@ -7,7 +7,6 @@ import {
   canReadContent,
 } from '@/lib/auth/permissions';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
-import type { CreateVideoInput } from '@/lib/storage/videosFile';
 import {
   createStoredVideo,
   listStoredVideos,

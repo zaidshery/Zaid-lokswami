@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { getOperationalDiagnosticsSnapshot } from '@/lib/admin/operationalDiagnostics';
 import { getAdminSession } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
+import { getRequestLogSummary } from '@/lib/security/requestLogReader';
 import { formatUserRoleLabel } from '@/lib/auth/roles';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
@@ -92,7 +93,10 @@ export default async function OperationsDiagnosticsPage() {
     redirect('/admin');
   }
 
-  const diagnostics = await getOperationalDiagnosticsSnapshot();
+  const [diagnostics, requestLogs] = await Promise.all([
+    getOperationalDiagnosticsSnapshot(),
+    getRequestLogSummary({ limit: 1000, slowMs: 1000 }),
+  ]);
 
   const statCards: StatCard[] = [
     {
@@ -123,6 +127,12 @@ export default async function OperationsDiagnosticsPage() {
       icon: Newspaper,
       tone: 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200',
     },
+  ];
+  const observabilityStats: Array<[string, number]> = [
+    ['Failed auth', requestLogs.failedAuth],
+    ['Rate limited', requestLogs.rateLimited],
+    ['Validation', requestLogs.validationFailures],
+    ['Slow', requestLogs.slowRequests],
   ];
 
   return (
@@ -156,6 +166,55 @@ export default async function OperationsDiagnosticsPage() {
         {statCards.map((stat) => (
           <StatCardView key={stat.label} stat={stat} />
         ))}
+      </section>
+
+      <section className={PANEL_CLASS}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-[color:var(--admin-shell-text)]">
+              API Observability
+            </h2>
+            <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
+              Recent request logs, slow routes, failed auth, rate-limit hits, and validation failures.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {observabilityStats.map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-[color:var(--admin-shell-border)] px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+                  {label}
+                </p>
+                <p className="mt-1 text-2xl font-black text-[color:var(--admin-shell-text)]">
+                  {formatNumber(Number(value))}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {requestLogs.slowestRoutes.length ? (
+            requestLogs.slowestRoutes.slice(0, 6).map((route) => (
+              <div key={route.path} className={SOFT_CARD_CLASS}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-xs font-semibold text-[color:var(--admin-shell-text)]">
+                      {route.path}
+                    </p>
+                    <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
+                      {formatNumber(route.count)} request{route.count === 1 ? '' : 's'} / {formatNumber(route.failures)} failures
+                    </p>
+                  </div>
+                  <span className={META_CHIP_CLASS}>{formatNumber(route.maxDuration)}ms max</span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[22px] border border-dashed border-[color:var(--admin-shell-border-strong)] bg-[color:var(--admin-shell-surface-muted)] p-4 text-sm text-[color:var(--admin-shell-text-muted)]">
+              No request logs have been collected yet.
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr,1fr]">

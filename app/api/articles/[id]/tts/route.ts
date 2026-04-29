@@ -9,7 +9,7 @@ import {
 import { GEMINI_TTS_MAX_TOTAL_CHARS } from '@/lib/constants/tts';
 import connectDB from '@/lib/db/mongoose';
 import Article from '@/lib/models/Article';
-import { buildArticleFullTtsText } from '@/lib/server/ttsAssets';
+import { buildArticleFullTtsText, queueTtsAsset } from '@/lib/server/ttsAssets';
 import { getStoredArticleById } from '@/lib/storage/articlesFile';
 import {
   buildStoredTtsAudioUrl,
@@ -196,6 +196,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         return NextResponse.json({
           success: true,
           data: {
+            status: 'ready',
             provider: 'gemini',
             model: runtime.model,
             voice: runtime.defaultVoice,
@@ -207,6 +208,53 @@ export async function POST(req: NextRequest, context: RouteContext) {
       }
     } catch (error) {
       console.error('Stored article TTS lookup failed, generating fresh audio:', error);
+    }
+
+    if (process.env.TTS_ASYNC_QUEUE_ENABLED !== '0' && !useFileStore) {
+      const queued = await queueTtsAsset({
+        sourceType: 'article',
+        sourceId: article.id,
+        variant: 'article_full',
+        title: article.title,
+        text: sourceText,
+        languageCode: resolvedLanguageCode,
+        ...(voice ? { voice } : {}),
+        metadata: {
+          requestPath: `/api/articles/${article.id}/tts`,
+        },
+      });
+
+      if (queued.asset?.status === 'ready' && queued.asset.audioUrl) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            status: 'ready',
+            provider: 'gemini',
+            model: queued.asset.model,
+            voice: queued.asset.voice,
+            mimeType: queued.asset.mimeType,
+            chunkCount: queued.asset.chunkCount,
+            audioUrl: queued.asset.audioUrl,
+          },
+        });
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: {
+            status: queued.status,
+            provider: 'gemini',
+            model: queued.asset?.model || runtime.model,
+            voice: queued.asset?.voice || runtime.defaultVoice,
+            mimeType: 'audio/wav',
+            jobId: queued.asset?._id?.toString(),
+            retryAfterSeconds: queued.status === 'failed' ? 60 : 10,
+            ...(queued.error ? { error: queued.error } : {}),
+          },
+        },
+        { status: queued.status === 'failed' ? 200 : 202 }
+      );
     }
 
     const synthesized = await synthesizeArticleListenAudio({
@@ -226,6 +274,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         return NextResponse.json({
           success: true,
           data: {
+            status: 'ready',
             ...synthesized,
             audioBase64: undefined,
             audioUrl: saved.audioUrl,
@@ -238,7 +287,10 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
     return NextResponse.json({
       success: true,
-      data: synthesized,
+      data: {
+        status: synthesized.mode === 'gemini' ? 'ready' : 'failed',
+        ...synthesized,
+      },
     });
   } catch (error) {
     console.error('Article TTS route failed:', error);

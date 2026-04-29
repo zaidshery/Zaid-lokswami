@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { apiError, apiSuccess, withAdminApi } from '@/lib/api/adminRoute';
 import connectDB from '@/lib/db/mongoose';
 import { getAdminSession } from '@/lib/auth/admin';
 import {
@@ -116,37 +117,23 @@ export async function GET() {
   }
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const admin = await getAdminSession();
-    if (!admin || !canManageTeam(admin.role)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
-
+export const POST = withAdminApi(
+  async (req: NextRequest, _context: Record<string, never>, { admin }) => {
     const body = await req.json();
     const email = normalizeEmail(typeof body.email === 'string' ? body.email : '');
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     const role = typeof body.role === 'string' ? body.role : '';
 
     if (!email || !isValidEmail(email)) {
-      return NextResponse.json(
-        { success: false, error: 'Valid email is required' },
-        { status: 400 }
-      );
+      return apiError('Valid email is required', 400, 'VALIDATION_ERROR');
     }
 
     if (!isAdminRole(role)) {
-      return NextResponse.json(
-        { success: false, error: 'Valid admin role is required' },
-        { status: 400 }
-      );
+      return apiError('Valid admin role is required', 400, 'VALIDATION_ERROR');
     }
 
     if (!canManageTargetAdminRole(admin.role, role)) {
-      return NextResponse.json(
-        { success: false, error: 'You cannot assign that role' },
-        { status: 403 }
-      );
+      return apiError('You cannot assign that role', 403, 'FORBIDDEN');
     }
 
     await connectDB();
@@ -177,12 +164,9 @@ export async function POST(req: NextRequest) {
         ? await issueStaffSetupToken({ userId, origin: getRequestOrigin(req) })
         : null;
 
-      return NextResponse.json({
-        success: true,
-        data: {
+      return apiSuccess({
           ...toTeamMember(updatedUser),
           setupLink: setup?.setupLink || '',
-        },
       });
     }
 
@@ -207,21 +191,16 @@ export async function POST(req: NextRequest) {
       ? await issueStaffSetupToken({ userId, origin: getRequestOrigin(req) })
       : null;
 
-    return NextResponse.json(
+    return apiSuccess(
       {
-        success: true,
-        data: {
           ...toTeamMember(createdObject),
           setupLink: setup?.setupLink || '',
-        },
       },
       { status: 201 }
     );
-  } catch (error) {
-    console.error('Team POST failed:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to invite team member' },
-      { status: 500 }
-    );
+  },
+  {
+    authorize: (role) => canManageTeam(role),
+    mutation: true,
   }
-}
+);

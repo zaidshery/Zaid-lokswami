@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { apiError, apiSuccess, withAdminApi } from '@/lib/api/adminRoute';
 import connectDB from '@/lib/db/mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
 import { canManageTargetAdminRole, canManageTeam } from '@/lib/auth/permissions';
 import { getStaffCredentialStatus } from '@/lib/auth/staffCredentials';
 import { isAdminRole, normalizeAdminRole } from '@/lib/auth/roles';
@@ -63,23 +63,15 @@ async function ensureSuperAdminRemovalIsSafe(id: string) {
   return remainingSuperAdmins > 0;
 }
 
-export async function PATCH(req: NextRequest, context: RouteContext) {
-  try {
-    const admin = await getAdminSession();
-    if (!admin || !canManageTeam(admin.role)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
-
+export const PATCH = withAdminApi<RouteContext>(
+  async (req: NextRequest, context: RouteContext, { admin }) => {
     const { id } = await context.params;
     const body = await req.json();
     const updates: Record<string, unknown> = {};
 
     if (typeof body.role === 'string') {
       if (!isAdminRole(body.role)) {
-        return NextResponse.json(
-          { success: false, error: 'Valid admin role is required' },
-          { status: 400 }
-        );
+        return apiError('Valid admin role is required', 400, 'VALIDATION_ERROR');
       }
 
       updates.role = body.role;
@@ -94,10 +86,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No valid updates provided' },
-        { status: 400 }
-      );
+      return apiError('No valid updates provided', 400, 'VALIDATION_ERROR');
     }
 
     await connectDB();
@@ -107,27 +96,21 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     } | null>();
 
     if (!existingUser) {
-      return NextResponse.json({ success: false, error: 'Member not found' }, { status: 404 });
+      return apiError('Member not found', 404, 'NOT_FOUND');
     }
 
     const currentRole = normalizeAdminRole(existingUser.role);
     if (!currentRole) {
-      return NextResponse.json(
-        { success: false, error: 'Only admin-side members can be managed here' },
-        { status: 400 }
-      );
+      return apiError('Only admin-side members can be managed here', 400, 'BAD_REQUEST');
     }
 
     if (!canManageTargetAdminRole(admin.role, currentRole)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return apiError('Forbidden', 403, 'FORBIDDEN');
     }
 
     const nextRole = typeof updates.role === 'string' ? normalizeAdminRole(updates.role) : currentRole;
     if (!nextRole || !canManageTargetAdminRole(admin.role, nextRole)) {
-      return NextResponse.json(
-        { success: false, error: 'You cannot assign that role' },
-        { status: 403 }
-      );
+      return apiError('You cannot assign that role', 403, 'FORBIDDEN');
     }
 
     const deactivatingLastSuperAdmin =
@@ -135,10 +118,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       ((updates.role && nextRole !== 'super_admin') || updates.isActive === false);
 
     if (deactivatingLastSuperAdmin && !(await ensureSuperAdminRemovalIsSafe(id))) {
-      return NextResponse.json(
-        { success: false, error: 'At least one active super admin must remain' },
-        { status: 400 }
-      );
+      return apiError('At least one active super admin must remain', 400, 'BAD_REQUEST');
     }
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -148,37 +128,24 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     ).lean<TeamMemberRecord | null>();
 
     if (!updatedUser) {
-      return NextResponse.json({ success: false, error: 'Member not found' }, { status: 404 });
+      return apiError('Member not found', 404, 'NOT_FOUND');
     }
 
     const teamMember = toTeamMember(updatedUser);
     if (!teamMember) {
-      return NextResponse.json(
-        { success: false, error: 'Managed user no longer has an admin role' },
-        { status: 400 }
-      );
+      return apiError('Managed user no longer has an admin role', 400, 'BAD_REQUEST');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: teamMember,
-    });
-  } catch (error) {
-    console.error('Team PATCH failed:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update team member' },
-      { status: 500 }
-    );
+    return apiSuccess(teamMember);
+  },
+  {
+    authorize: (role) => canManageTeam(role),
+    mutation: true,
   }
-}
+);
 
-export async function DELETE(_req: NextRequest, context: RouteContext) {
-  try {
-    const admin = await getAdminSession();
-    if (!admin || !canManageTeam(admin.role)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
-
+export const DELETE = withAdminApi<RouteContext>(
+  async (_req: NextRequest, context: RouteContext, { admin }) => {
     const { id } = await context.params;
     await connectDB();
 
@@ -188,29 +155,23 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
     } | null>();
 
     if (!existingUser) {
-      return NextResponse.json({ success: false, error: 'Member not found' }, { status: 404 });
+      return apiError('Member not found', 404, 'NOT_FOUND');
     }
 
     const currentRole = normalizeAdminRole(existingUser.role);
     if (!currentRole) {
-      return NextResponse.json(
-        { success: false, error: 'Only admin-side members can be removed here' },
-        { status: 400 }
-      );
+      return apiError('Only admin-side members can be removed here', 400, 'BAD_REQUEST');
     }
 
     if (!canManageTargetAdminRole(admin.role, currentRole)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return apiError('Forbidden', 403, 'FORBIDDEN');
     }
 
     if (currentRole === 'super_admin' && !(await ensureSuperAdminRemovalIsSafe(id))) {
-      return NextResponse.json(
-        { success: false, error: 'At least one super admin must remain' },
-        { status: 400 }
-      );
+      return apiError('At least one super admin must remain', 400, 'BAD_REQUEST');
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
+    await User.findByIdAndUpdate(
       id,
       {
         $set: {
@@ -221,15 +182,10 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       { new: true }
     ).lean<TeamMemberRecord | null>();
 
-    return NextResponse.json({
-      success: true,
-      data: null,
-    });
-  } catch (error) {
-    console.error('Team DELETE failed:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to remove team member' },
-      { status: 500 }
-    );
+    return apiSuccess(null);
+  },
+  {
+    authorize: (role) => canManageTeam(role),
+    mutation: true,
   }
-}
+);

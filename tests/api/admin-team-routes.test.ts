@@ -68,9 +68,10 @@ describe('/api/admin/team role guardrails', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(403);
-    expect(payload).toEqual({
+    expect(payload).toMatchObject({
       success: false,
       error: 'You cannot assign that role',
+      code: 'FORBIDDEN',
     });
     expect(createMock).not.toHaveBeenCalled();
   });
@@ -103,9 +104,10 @@ describe('/api/admin/team role guardrails', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(403);
-    expect(payload).toEqual({
+    expect(payload).toMatchObject({
       success: false,
       error: 'Forbidden',
+      code: 'FORBIDDEN',
     });
     expect(findByIdAndUpdateMock).not.toHaveBeenCalled();
   });

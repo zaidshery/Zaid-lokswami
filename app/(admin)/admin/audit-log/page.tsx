@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Activity, AlertTriangle, CheckCircle2, ClipboardList, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   type AdminAuditContentFilter,
@@ -40,8 +40,9 @@ const ACTION_LINK_CLASS =
   'admin-shell-toolbar-btn inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text)] transition-colors hover:text-[color:var(--admin-shell-accent)]';
 
 const SCOPE_OPTIONS: Array<{ id: AdminAuditScope; label: string; description: string }> = [
-  { id: 'all', label: 'All Activity', description: 'Workflow, reporting, and alert operations together.' },
+  { id: 'all', label: 'All Activity', description: 'Workflow, security, reporting, and alert operations together.' },
   { id: 'workflow', label: 'Workflow', description: 'Content workflow actions across the newsroom desk.' },
+  { id: 'security', label: 'Security', description: 'Admin mutations, permission changes, and authentication events.' },
   { id: 'reporting', label: 'Reporting', description: 'Leadership briefing runs and delivery operations.' },
   { id: 'alerts', label: 'Alerts', description: 'Critical alert notifications and their resolution state.' },
 ];
@@ -202,23 +203,23 @@ export default async function AuditLogPage({
 
   const statCards: AuditStatCard[] = [
     {
-      label: 'Workflow Events',
-      value: audit.summary.workflowEvents,
-      detail: 'Recent editorial workflow actions captured in the shared audit log.',
+      label: 'Security Events',
+      value: audit.summary.securityEvents,
+      detail: 'Admin mutations and authentication events captured by Phase 3 audit logging.',
       icon: Activity,
       tone: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300',
     },
     {
-      label: 'Publishing Actions',
-      value: audit.summary.publishingEvents,
-      detail: 'Publish transitions seen in the current audit history window.',
+      label: 'Admin Mutations',
+      value: audit.summary.adminMutations,
+      detail: 'POST, PUT, PATCH, DELETE, and publish-style admin API actions logged.',
       icon: CheckCircle2,
       tone: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300',
     },
     {
-      label: 'Failed Report Runs',
-      value: audit.summary.failedReportRuns,
-      detail: 'Leadership briefing executions that ended in failure.',
+      label: 'Auth Events',
+      value: audit.summary.authEvents,
+      detail: 'Credential and OAuth sign-in attempts recorded for security review.',
       icon: AlertTriangle,
       tone: 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300',
     },
@@ -238,14 +239,15 @@ export default async function AuditLogPage({
         <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-red-500/10 blur-3xl dark:bg-red-500/14" />
         <div className="relative">
           <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-            Phase 5 Governance
+            Phase 3 Security Audit
           </div>
           <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
             Admin Activity Audit
           </h1>
           <p className="mt-4 max-w-4xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
-            Central oversight for workflow actions, reporting operations, and critical alert
-            notifications. This surface is designed for fast leadership review, not raw log noise.
+            Central oversight for admin mutations, sign-ins, workflow actions, reporting operations,
+            and critical alert notifications. This surface is designed for fast leadership review,
+            not raw log noise.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <span className={META_CHIP_CLASS}>{formatUserRoleLabel(admin.role)}</span>
@@ -318,8 +320,8 @@ export default async function AuditLogPage({
           </div>
           <div className={cx('mt-4 text-sm text-[color:var(--admin-shell-text-muted)]', SOFT_CARD_CLASS)}>
             {audit.workflowAuditAvailable
-              ? 'Workflow audit history is using the shared MongoDB audit store.'
-              : 'Workflow audit history needs MongoDB to be available. Reporting and alert histories still load from their persisted stores.'}
+              ? 'Security and workflow audit history are using the shared MongoDB audit store.'
+              : 'Security and workflow audit history need MongoDB to be available. Reporting and alert histories still load from their persisted stores.'}
           </div>
         </section>
       </section>
@@ -350,24 +352,20 @@ export default async function AuditLogPage({
         <section className={PANEL_CLASS}>
           <h2 className="text-xl font-bold text-[color:var(--admin-shell-text)]">Governance Signals</h2>
           <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
-            A simple read on what matters most before Phase 5 expands into deeper permission reviews.
+            A simple read on what matters most from the Phase 3 audit trail.
           </p>
 
           <div className="mt-6 space-y-3">
             <div className={SOFT_CARD_CLASS}>
-              <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">Reporting Stability</p>
+              <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">Admin Mutation Trail</p>
               <p className="mt-2 text-sm text-[color:var(--admin-shell-text-muted)]">
-                {audit.summary.failedReportRuns
-                  ? `${formatNumber(audit.summary.failedReportRuns)} failed report run(s) need review in the analytics delivery center.`
-                  : 'No recent report-run failures are showing in the current audit window.'}
+                {formatNumber(audit.summary.adminMutations)} admin write action(s) are visible in the security audit log.
               </p>
             </div>
             <div className={SOFT_CARD_CLASS}>
-              <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">Alert Resolution</p>
+              <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">Authentication Trail</p>
               <p className="mt-2 text-sm text-[color:var(--admin-shell-text-muted)]">
-                {audit.summary.openAlertNotifications
-                  ? `${formatNumber(audit.summary.openAlertNotifications)} alert notification(s) are still open.`
-                  : 'All tracked critical alert notifications are currently resolved.'}
+                {formatNumber(audit.summary.authEvents)} sign-in or session event(s) are available for security review.
               </p>
             </div>
             <div className={SOFT_CARD_CLASS}>
@@ -382,7 +380,7 @@ export default async function AuditLogPage({
         <section className={PANEL_CLASS}>
           <h2 className="text-xl font-bold text-[color:var(--admin-shell-text)]">Next Governance Surfaces</h2>
           <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
-            This audit center is the Phase 5 foundation. The next hardening passes can now build on it.
+            Phase 3 gives security reviewers a reliable admin action trail. The next hardening passes can build on it.
           </p>
 
           <div className="mt-6 space-y-3 text-sm text-[color:var(--admin-shell-text-muted)]">

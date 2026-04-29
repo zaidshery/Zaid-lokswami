@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicJsonCacheHeaders } from '@/lib/api/cache';
 import connectDB from '@/lib/db/mongoose';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 import Article from '@/lib/models/Article';
@@ -209,11 +210,15 @@ export async function GET(req: NextRequest) {
 
     if (await shouldUseFileStore()) {
       const payload = await listFromFileStore(limit, cursor);
-      return NextResponse.json(payload);
+      return NextResponse.json(payload, {
+        headers: publicJsonCacheHeaders({ sMaxAge: 60, staleWhileRevalidate: 300 }),
+      });
     }
 
     const payload = await listFromMongo(limit, cursor);
-    return NextResponse.json(payload);
+    return NextResponse.json(payload, {
+      headers: publicJsonCacheHeaders({ sMaxAge: 60, staleWhileRevalidate: 300 }),
+    });
   } catch (error) {
     console.error('Failed to load public latest feed:', error);
     return NextResponse.json(

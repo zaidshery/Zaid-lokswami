@@ -57,6 +57,13 @@ type EnsureTtsAssetResult = {
   error?: string;
 };
 
+type QueueTtsAssetResult = {
+  asset: TtsAssetDocument | null;
+  status: 'ready' | 'queued' | 'processing' | 'failed';
+  config: TtsConfigShape;
+  error?: string;
+};
+
 type FindCurrentTtsAssetResult = {
   asset: TtsAssetDocument | null;
   config: TtsConfigShape;
@@ -125,6 +132,10 @@ function mergeSurfaceConfig(
 ): TtsSurfaceConfig {
   const sourceDefaultVoice =
     typeof source?.defaultVoice === 'string' ? source.defaultVoice.trim() : '';
+  const defaultVoice =
+    !migrateLegacyDefaultVoice && sourceDefaultVoice && isSupportedGeminiTtsVoice(sourceDefaultVoice)
+      ? sourceDefaultVoice
+      : defaults.defaultVoice;
 
   return {
     enabled: source?.enabled ?? defaults.enabled,
@@ -134,7 +145,7 @@ function mergeSurfaceConfig(
       source.defaultLanguageCode.trim()
         ? source.defaultLanguageCode.trim()
         : defaults.defaultLanguageCode,
-    defaultVoice: defaults.defaultVoice,
+    defaultVoice,
   };
 }
 
@@ -870,5 +881,210 @@ export async function ensureTtsAsset(input: EnsureTtsAssetInput): Promise<Ensure
     asset: ready,
     reused: false,
     config,
+  };
+}
+
+export async function queueTtsAsset(input: EnsureTtsAssetInput): Promise<QueueTtsAssetResult> {
+  await connectDB();
+  const config = await getTtsConfig();
+  const sourceId = normalizeSourceId(input.sourceId);
+  const normalizedText = sanitizeText(input.text || '');
+  const title = String(input.title || '').trim();
+  const sourceParentId = String(input.sourceParentId || '').trim();
+
+  if (!sourceId || !normalizedText) {
+    return {
+      asset: null,
+      status: 'failed',
+      config,
+      error: 'Source id and text are required to queue a shared TTS asset.',
+    };
+  }
+
+  const surfaceKey = variantToSurfaceKey(input.variant);
+  const surface = config.surfaces[surfaceKey];
+  if (!surface.enabled) {
+    return {
+      asset: null,
+      status: 'failed',
+      config,
+      error: `TTS is disabled for the ${surfaceKey} surface.`,
+    };
+  }
+
+  const runtime = getGeminiTtsRuntimeConfig();
+  const languageCode = normalizeLanguageCode(input.languageCode, surface, normalizedText);
+  const voice = normalizeVoice(input.voice, surface);
+  const model = String(input.model || runtime.model || '').trim() || runtime.model;
+  const textHash = hashValue(normalizedText);
+  const contentVersionHash = hashValue(
+    JSON.stringify({
+      variant: input.variant,
+      text: normalizedText,
+      languageCode,
+      voice,
+      model,
+      provider: GEMINI_TTS_PROVIDER,
+    })
+  );
+  const metadata = {
+    ...buildMetadataWithDefaults(input.metadata),
+    queuedText: normalizedText,
+    queuedAt: new Date().toISOString(),
+  };
+  const query = buildAssetQuery({
+    sourceType: input.sourceType,
+    sourceId,
+    variant: input.variant,
+    provider: GEMINI_TTS_PROVIDER,
+    model,
+    voice,
+    languageCode,
+    contentVersionHash,
+  });
+
+  const existing = await TtsAsset.findOne(query);
+  if (existing?.status === 'ready' && existing.audioUrl) {
+    return { asset: existing, status: 'ready', config };
+  }
+
+  if (existing?.status === 'processing') {
+    return { asset: existing, status: 'processing', config };
+  }
+
+  if (existing?.status === 'failed') {
+    return {
+      asset: existing,
+      status: 'failed',
+      config,
+      error: existing.lastError || 'TTS generation previously failed.',
+    };
+  }
+
+  const queued = await TtsAsset.findOneAndUpdate(
+    query,
+    {
+      $set: {
+        sourceType: input.sourceType,
+        sourceId,
+        sourceParentId,
+        variant: input.variant,
+        title,
+        textHash,
+        contentVersionHash,
+        languageCode,
+        voice,
+        provider: GEMINI_TTS_PROVIDER,
+        model,
+        mimeType: GEMINI_TTS_OUTPUT_MIME_TYPE,
+        storageMode: process.env.EPAPER_FORCE_STORAGE === '1' ? 'proxy' : 'public',
+        status: 'pending',
+        charCount: normalizedText.length,
+        metadata,
+      },
+      $setOnInsert: {
+        audioUrl: '',
+        chunkCount: 0,
+        generatedAt: null,
+        lastVerifiedAt: null,
+        lastAccessedAt: null,
+        failureCount: 0,
+        lastError: '',
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  return { asset: queued, status: 'queued', config };
+}
+
+export async function processQueuedTtsAssets(input: { limit?: number; staleProcessingMinutes?: number } = {}) {
+  await connectDB();
+
+  if (!isGeminiTtsConfigured()) {
+    return {
+      processed: 0,
+      ready: 0,
+      failed: 0,
+      skipped: 0,
+      error: 'Gemini TTS is not configured.',
+    };
+  }
+
+  const limit = Math.max(1, Math.min(input.limit || 5, 25));
+  const staleProcessingMinutes = Math.max(1, input.staleProcessingMinutes || 15);
+  const staleProcessingCutoff = new Date(Date.now() - staleProcessingMinutes * 60 * 1000);
+  const jobs = await TtsAsset.find({
+    $or: [
+      { status: 'pending' },
+      { status: 'processing', updatedAt: { $lte: staleProcessingCutoff } },
+    ],
+  })
+    .sort({ updatedAt: 1 })
+    .limit(limit);
+
+  let ready = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const job of jobs) {
+    try {
+      const metadata = buildMetadataWithDefaults(job.metadata);
+      const queuedText = typeof metadata.queuedText === 'string' ? metadata.queuedText.trim() : '';
+
+      if (!queuedText) {
+        job.status = 'failed';
+        job.lastError = 'Queued TTS text is missing.';
+        job.failureCount += 1;
+        await job.save();
+        failed += 1;
+        continue;
+      }
+
+      job.status = 'processing';
+      await job.save();
+
+      const cleanMetadata = { ...metadata };
+      delete cleanMetadata.queuedText;
+      delete cleanMetadata.queuedAt;
+
+      const result = await ensureTtsAsset({
+        sourceType: job.sourceType,
+        sourceId: job.sourceId,
+        sourceParentId: job.sourceParentId,
+        variant: job.variant,
+        title: job.title,
+        text: queuedText,
+        languageCode: job.languageCode,
+        voice: job.voice,
+        model: job.model,
+        forceRegenerate: true,
+        metadata: cleanMetadata,
+      });
+
+      if (result.asset?.status === 'ready') {
+        ready += 1;
+      } else if (result.asset?.status === 'failed' || result.error) {
+        failed += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch (error) {
+      job.status = 'failed';
+      job.lastError =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Queued TTS processing failed.';
+      job.failureCount += 1;
+      await job.save().catch(() => undefined);
+      failed += 1;
+    }
+  }
+
+  return {
+    processed: jobs.length,
+    ready,
+    failed,
+    skipped,
   };
 }

@@ -13,6 +13,7 @@ import {
 import { getJwtSecretOrNull } from '@/lib/auth/jwtSecret';
 import connectDB from '@/lib/db/mongoose';
 import User from '@/lib/models/User';
+import { logAuthAuditEvent } from '@/lib/security/auditLogger';
 
 type SyncableUser = {
   id?: string;
@@ -216,7 +217,21 @@ function buildProviders(): NonNullable<NextAuthConfig['providers']> {
           return envAdmin;
         }
 
-        return authorizeStaffCredentials({ loginId, password });
+        const staffUser = await authorizeStaffCredentials({ loginId, password });
+        if (staffUser) {
+          return staffUser;
+        }
+
+        if (loginId.trim()) {
+          void logAuthAuditEvent({
+            action: 'login',
+            userEmail: loginId.trim().toLowerCase(),
+            success: false,
+            reason: 'Invalid credentials',
+          });
+        }
+
+        return null;
       },
     }),
   ];
@@ -404,11 +419,20 @@ function buildAuthOptions(): NextAuthConfig {
     callbacks: {
       async signIn({ user, account }) {
         if (account?.provider === 'credentials') {
-          return Boolean(
+          const allowed = Boolean(
             user.email &&
               isAdminRole(user.role) &&
               user.isActive !== false
           );
+          void logAuthAuditEvent({
+            action: 'login',
+            userId: user.userId || user.id || user.email || 'unknown',
+            userEmail: user.email || 'unknown',
+            userRole: typeof user.role === 'string' ? user.role : 'unknown',
+            success: allowed,
+            reason: allowed ? undefined : 'Credentials user is inactive or not an admin role',
+          });
+          return allowed;
         }
 
         if (account?.provider !== 'google') {
@@ -431,6 +455,13 @@ function buildAuthOptions(): NextAuthConfig {
                 buildFallbackProfile(user, 'super_admin');
 
               assignProfileToUser(user, bootstrapProfile);
+              void logAuthAuditEvent({
+                action: 'login',
+                userId: user.userId || user.id || normalizedEmail,
+                userEmail: normalizedEmail,
+                userRole: 'super_admin',
+                success: true,
+              });
               return true;
             }
 
@@ -440,6 +471,13 @@ function buildAuthOptions(): NextAuthConfig {
               buildFallbackProfile(user, 'reader');
 
             assignProfileToUser(user, createdProfile);
+            void logAuthAuditEvent({
+              action: 'login',
+              userId: user.userId || user.id || normalizedEmail,
+              userEmail: normalizedEmail,
+              userRole: 'reader',
+              success: true,
+            });
             return true;
           }
 
@@ -449,6 +487,17 @@ function buildAuthOptions(): NextAuthConfig {
           }
 
           if (isAdminRole(existingRole) && !adminGoogleLoginEnabled) {
+            void logAuthAuditEvent({
+              action: 'login',
+              userId:
+                typeof existingUser._id?.toString === 'function'
+                  ? existingUser._id.toString()
+                  : normalizedEmail,
+              userEmail: normalizedEmail,
+              userRole: existingRole,
+              success: false,
+              reason: 'Admin Google login disabled',
+            });
             return getAuthErrorRedirect('no_admin_access');
           }
 
@@ -459,10 +508,28 @@ function buildAuthOptions(): NextAuthConfig {
               buildFallbackProfile(user, 'super_admin');
 
             assignProfileToUser(user, bootstrapProfile);
+            void logAuthAuditEvent({
+              action: 'login',
+              userId: user.userId || user.id || normalizedEmail,
+              userEmail: normalizedEmail,
+              userRole: 'super_admin',
+              success: true,
+            });
             return true;
           }
 
           if (isAdminRole(existingRole) && existingUser.isActive === false) {
+            void logAuthAuditEvent({
+              action: 'login',
+              userId:
+                typeof existingUser._id?.toString === 'function'
+                  ? existingUser._id.toString()
+                  : normalizedEmail,
+              userEmail: normalizedEmail,
+              userRole: existingRole,
+              success: false,
+              reason: 'Inactive account',
+            });
             return getAuthErrorRedirect('inactive');
           }
 
@@ -472,6 +539,13 @@ function buildAuthOptions(): NextAuthConfig {
             buildFallbackProfile(user, existingRole);
 
           assignProfileToUser(user, profile);
+          void logAuthAuditEvent({
+            action: 'login',
+            userId: profile.userId || normalizedEmail,
+            userEmail: normalizedEmail,
+            userRole: profile.role,
+            success: true,
+          });
           return true;
         } catch (error) {
           if (isRecoverableMongoAuthError(error)) {
@@ -489,6 +563,14 @@ function buildAuthOptions(): NextAuthConfig {
             );
 
             assignProfileToUser(user, buildFallbackProfile(user, fallbackRole));
+            void logAuthAuditEvent({
+              action: 'login',
+              userId: user.userId || user.id || normalizedEmail,
+              userEmail: normalizedEmail,
+              userRole: fallbackRole,
+              success: true,
+              reason: 'MongoDB fallback sign-in',
+            });
             return true;
           }
 
