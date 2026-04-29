@@ -287,7 +287,7 @@ export default function RichTextEditor({
 
   return (
     <div className="w-full overflow-hidden rounded-lg border border-gray-300 transition-colors focus-within:border-spanish-red dark:border-white/30">
-      <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 p-3 dark:border-white/15 dark:bg-white/[0.04]">
+      <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 p-2 dark:border-white/15 dark:bg-white/[0.04] sm:p-3">
         <button
           type="button"
           onMouseDown={keepEditorSelection}
@@ -328,13 +328,13 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('unlink')}
-          className="rounded p-2 text-xs font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded p-2 text-xs font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Remove Link"
         >
           Unlink
         </button>
 
-        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
+        <div className="mx-1 hidden w-px bg-gray-300 dark:bg-white/20 sm:block" />
 
         <button
           type="button"
@@ -349,7 +349,7 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('insertOrderedList')}
-          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Numbered List"
         >
           <ListOrdered className="w-4 h-4" />
@@ -370,7 +370,7 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('formatBlock', '<h3>')}
-          className="rounded p-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded p-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Subheading"
         >
           H3
@@ -379,13 +379,13 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={insertQuote}
-          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Insert Quote"
         >
           <MessageSquareQuote className="w-4 h-4" />
         </button>
 
-        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
+        <div className="mx-1 hidden w-px bg-gray-300 dark:bg-white/20 sm:block" />
 
         <button
           type="button"
@@ -401,7 +401,7 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={insertResourceCard}
-          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Insert Resource Callout"
         >
           Resource
@@ -410,19 +410,19 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={insertTable}
-          className="rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded p-2 transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Insert Table"
         >
           <Table2 className="w-4 h-4" />
         </button>
 
-        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
+        <div className="mx-1 hidden w-px bg-gray-300 dark:bg-white/20 sm:block" />
 
         <button
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('insertHorizontalRule')}
-          className="rounded p-2 text-sm transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded p-2 text-sm transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Divider"
         >
           ---
@@ -432,7 +432,7 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => applyFormat('removeFormat')}
-          className="rounded p-2 text-sm transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded p-2 text-sm transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Clear Formatting"
         >
           Clear
@@ -456,13 +456,13 @@ export default function RichTextEditor({
           <Redo2 className="w-4 h-4" />
         </button>
 
-        <div className="mx-1 w-px bg-gray-300 dark:bg-white/20" />
+        <div className="mx-1 hidden w-px bg-gray-300 dark:bg-white/20 sm:block" />
 
         <button
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={insertYouTubeEmbed}
-          className="rounded px-2.5 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-gray-200 dark:text-red-400 dark:hover:bg-white/10"
+          className="hidden rounded px-2.5 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-gray-200 dark:text-red-400 dark:hover:bg-white/10 sm:inline-flex"
           title="Insert YouTube Embed"
         >
           YouTube
@@ -471,7 +471,7 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => insertSocialEmbed('facebook')}
-          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Insert Facebook Post"
         >
           Facebook
@@ -480,7 +480,7 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => insertSocialEmbed('x')}
-          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Insert X / Twitter Post"
         >
           X
@@ -489,7 +489,7 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => insertSocialEmbed('instagram')}
-          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Insert Instagram Post"
         >
           Instagram
@@ -498,12 +498,44 @@ export default function RichTextEditor({
           type="button"
           onMouseDown={keepEditorSelection}
           onClick={() => insertSocialEmbed('link')}
-          className="rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10"
+          className="hidden rounded px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10 sm:inline-flex"
           title="Insert Other Social Link"
         >
           Social
         </button>
       </div>
+
+      <details className="border-b border-gray-200 bg-gray-50 text-sm dark:border-white/15 dark:bg-white/[0.04] sm:hidden">
+        <summary className="cursor-pointer px-3 py-2 font-semibold text-gray-800 dark:text-gray-100">
+          More tools
+        </summary>
+        <div className="flex flex-wrap gap-1 px-2 pb-2">
+          <button type="button" onMouseDown={keepEditorSelection} onClick={() => applyFormat('formatBlock', '<h3>')} className="rounded px-2.5 py-2 font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10" title="Subheading">
+            H3
+          </button>
+          <button type="button" onMouseDown={keepEditorSelection} onClick={insertQuote} className="rounded px-2.5 py-2 font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10" title="Insert Quote">
+            Quote
+          </button>
+          <button type="button" onMouseDown={keepEditorSelection} onClick={insertResourceCard} className="rounded px-2.5 py-2 font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10" title="Insert Resource Callout">
+            Resource
+          </button>
+          <button type="button" onMouseDown={keepEditorSelection} onClick={insertTable} className="rounded px-2.5 py-2 font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10" title="Insert Table">
+            Table
+          </button>
+          <button type="button" onMouseDown={keepEditorSelection} onClick={insertYouTubeEmbed} className="rounded px-2.5 py-2 font-semibold text-red-700 transition-colors hover:bg-gray-200 dark:text-red-400 dark:hover:bg-white/10" title="Insert YouTube Embed">
+            YouTube
+          </button>
+          <button type="button" onMouseDown={keepEditorSelection} onClick={() => insertSocialEmbed('facebook')} className="rounded px-2.5 py-2 font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10" title="Insert Facebook Post">
+            Facebook
+          </button>
+          <button type="button" onMouseDown={keepEditorSelection} onClick={() => insertSocialEmbed('instagram')} className="rounded px-2.5 py-2 font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10" title="Insert Instagram Post">
+            Instagram
+          </button>
+          <button type="button" onMouseDown={keepEditorSelection} onClick={() => applyFormat('removeFormat')} className="rounded px-2.5 py-2 font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10" title="Clear Formatting">
+            Clear
+          </button>
+        </div>
+      </details>
 
       <div className="relative">
         <input
@@ -522,21 +554,21 @@ export default function RichTextEditor({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           suppressContentEditableWarning
-          className={`${editorClassName} prose prose-sm max-w-none p-4 text-gray-900 focus:outline-none [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-gray-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-gray-700 dark:prose-invert dark:text-gray-100 dark:[&_ol]:marker:text-gray-100 dark:[&_ul]:marker:text-gray-100`}
+          className={`${editorClassName} prose prose-sm max-w-none p-3 text-gray-900 focus:outline-none [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-gray-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-gray-700 dark:prose-invert dark:text-gray-100 dark:[&_ol]:marker:text-gray-100 dark:[&_ul]:marker:text-gray-100 sm:p-4`}
           style={{
             wordWrap: 'break-word',
             whiteSpace: 'pre-wrap',
           }}
         />
         {!value && !isFocused && (
-          <span className="pointer-events-none absolute left-4 top-4 text-gray-400 dark:text-gray-500">{placeholder}</span>
+          <span className="pointer-events-none absolute left-3 top-3 text-gray-400 dark:text-gray-500 sm:left-4 sm:top-4">{placeholder}</span>
         )}
       </div>
 
-      <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-500 dark:border-white/15 dark:bg-white/[0.04] dark:text-gray-400">
+      <div className="border-t border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:border-white/15 dark:bg-white/[0.04] dark:text-gray-400 sm:px-4">
         <span>{value.length} characters</span>
-        <span className="mx-2">|</span>
-        <span>
+        <span className="mx-2 hidden sm:inline">|</span>
+        <span className="hidden sm:inline">
           Use H2/H3, Quote, Image, Resource, Table, Link, YouTube, and social tools for richer stories
         </span>
         {isUploadingInlineImage ? (

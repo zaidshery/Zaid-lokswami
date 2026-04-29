@@ -20,6 +20,10 @@ function formatStatusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
 function hasReporterSummary(item: Awaited<ReturnType<typeof getNewsroomControlCenterData>>['contentQueue'][number]) {
   return Boolean(
     item.reporterSummary &&
@@ -62,24 +66,24 @@ export default async function ContentQueuePage() {
       />
 
       <section className={PANEL_CLASS}>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Live Queue</h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
               Mixed workflow and edition work that currently needs newsroom follow-through.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <Link href="/admin/assignments" className={META_CHIP_CLASS}>
               Open Assignments
             </Link>
-            <Link href="/admin/review-queue" className={META_CHIP_CLASS}>
+            <Link href="/admin/review-queue" className={cx(META_CHIP_CLASS, 'hidden sm:inline-flex')}>
               Review Queue
             </Link>
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3">
+        <div className="mt-4 grid gap-3 sm:mt-6">
           {queue.length ? (
             queue.map((item) => (
               <div
@@ -192,7 +196,7 @@ export default async function ContentQueuePage() {
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">How the live queue is divided right now.</p>
             </div>
           </div>
-          <div className="mt-6 grid gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-6 md:grid-cols-1">
             <div className={SOFT_CARD_CLASS}>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">Assigned</p>
               <p className="mt-2 text-3xl font-black text-zinc-950 dark:text-zinc-50">{formatNumber(control.stats.assignedItems)}</p>
@@ -213,14 +217,14 @@ export default async function ContentQueuePage() {
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Items closest to approval or release action.</p>
             </div>
           </div>
-          <p className="mt-6 text-4xl font-black text-zinc-950 dark:text-zinc-50">{formatNumber(control.stats.readyForAdmin)}</p>
+          <p className="mt-4 text-3xl font-black text-zinc-950 dark:text-zinc-50 sm:mt-6 sm:text-4xl">{formatNumber(control.stats.readyForAdmin)}</p>
         </div>
         <div className={PANEL_CLASS}>
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">What To Do First</h2>
-          <div className="mt-4 space-y-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-            <p className={SOFT_CARD_CLASS}>Claim unassigned submissions first so stories do not stall at intake.</p>
-            <p className={SOFT_CARD_CLASS}>Move copy-desk returns into approval or back to the reporter quickly.</p>
-            <p className={SOFT_CARD_CLASS}>Watch blocked editions alongside the normal queue before release windows.</p>
+          <div className="mt-4 space-y-2 text-sm leading-6 text-zinc-600 sm:space-y-3 dark:text-zinc-300">
+            <p className={SOFT_CARD_CLASS}>Claim unassigned submissions first.</p>
+            <p className={SOFT_CARD_CLASS}>Move copy-desk returns quickly.</p>
+            <p className={SOFT_CARD_CLASS}>Watch blocked editions before release windows.</p>
           </div>
         </div>
       </section>

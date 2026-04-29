@@ -51,6 +51,8 @@ export default async function AdminReviewQueuePage() {
   const dashboard = await getAdminDashboardData();
   const reviewQueue = await getReviewQueueOverview();
   const epaperInsights = await getEpaperInsights();
+  const visibleLowQualityPages = epaperInsights.lowQualityPages.slice(0, 5);
+  const visibleBlockedEditions = epaperInsights.blockedEditions.slice(0, 6);
 
   const queueCards: QueueCard[] = [
     {
@@ -126,33 +128,30 @@ export default async function AdminReviewQueuePage() {
         }
       />
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         {queueCards.map((card) => {
           const Icon = card.icon;
           return (
             <Link
               key={card.href}
               href={card.href}
-              className="admin-shell-surface-strong rounded-[28px] p-6 transition-all hover:-translate-y-0.5"
+              className="admin-shell-surface-strong rounded-[18px] p-3 transition-all hover:-translate-y-0.5 sm:rounded-[28px] sm:p-5"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className={`inline-flex rounded-2xl p-3 ${card.tone}`}>
-                    <Icon className="h-5 w-5" />
+              <div className="flex h-full flex-col justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className={`inline-flex rounded-2xl p-2.5 sm:p-3 ${card.tone}`}>
+                    <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
-                  <h2 className="mt-4 text-xl font-bold text-[color:var(--admin-shell-text)]">
-                    {card.title}
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-                    {card.description}
+                  <p className="text-2xl font-black text-[color:var(--admin-shell-text)] sm:text-3xl">
+                    {formatNumber(card.count)}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">
-                    Current Volume
-                  </p>
-                  <p className="mt-2 text-3xl font-black text-[color:var(--admin-shell-text)]">
-                    {formatNumber(card.count)}
+                <div>
+                  <h2 className="text-sm font-bold leading-5 text-[color:var(--admin-shell-text)] sm:text-base">
+                    {card.title}
+                  </h2>
+                  <p className="mt-2 hidden text-sm leading-6 text-[color:var(--admin-shell-text-muted)] sm:block">
+                    {card.description}
                   </p>
                 </div>
               </div>
@@ -265,7 +264,7 @@ export default async function AdminReviewQueuePage() {
 
           <div className="mt-6 space-y-3">
             {epaperInsights.lowQualityPages.length ? (
-              epaperInsights.lowQualityPages.map((page) => (
+              visibleLowQualityPages.map((page) => (
                 <Link
                   key={`${page.epaperId}-${page.pageNumber}`}
                   href={page.editHref}
@@ -299,6 +298,14 @@ export default async function AdminReviewQueuePage() {
                 No low-quality e-paper pages are active right now.
               </div>
             )}
+            {epaperInsights.lowQualityPages.length > visibleLowQualityPages.length ? (
+              <Link
+                href="/admin/epapers"
+                className="block rounded-2xl border border-dashed border-[color:var(--admin-shell-border)] px-4 py-3 text-sm font-semibold text-[color:var(--admin-shell-text-muted)] hover:text-[color:var(--admin-shell-text)]"
+              >
+                +{formatNumber(epaperInsights.lowQualityPages.length - visibleLowQualityPages.length)} more page issues in E-Paper Desk
+              </Link>
+            ) : null}
           </div>
         </div>
 
@@ -315,7 +322,7 @@ export default async function AdminReviewQueuePage() {
 
           <div className="mt-5 space-y-3">
             {epaperInsights.blockedEditions.length ? (
-              epaperInsights.blockedEditions.map((edition) => (
+              visibleBlockedEditions.map((edition) => (
                 <Link
                   key={edition.epaperId}
                   href={edition.editHref}
@@ -349,6 +356,14 @@ export default async function AdminReviewQueuePage() {
                 No editions are blocked right now.
               </div>
             )}
+            {epaperInsights.blockedEditions.length > visibleBlockedEditions.length ? (
+              <Link
+                href="/admin/epapers"
+                className="block rounded-2xl border border-dashed border-[color:var(--admin-shell-border)] px-4 py-3 text-sm font-semibold text-[color:var(--admin-shell-text-muted)] hover:text-[color:var(--admin-shell-text)]"
+              >
+                +{formatNumber(epaperInsights.blockedEditions.length - visibleBlockedEditions.length)} more blocked editions
+              </Link>
+            ) : null}
           </div>
         </div>
       </section>

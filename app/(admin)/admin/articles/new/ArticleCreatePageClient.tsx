@@ -560,11 +560,11 @@ export default function UploadArticle() {
         animate={{ opacity: 1, y: 0 }}
       >
         <CmsEditorCanvas>
-        <div className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm xl:p-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <div className="rounded-[20px] border border-gray-200 bg-white p-3 shadow-sm sm:rounded-[28px] sm:p-6 xl:p-8">
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 sm:text-3xl">
             {sourceStoryId ? 'Create Article From Story' : 'Create Direct Desk Article'}
           </h1>
-          <p className="text-gray-600 mb-8">
+          <p className="mb-5 text-sm leading-6 text-gray-600 sm:mb-8">
             {sourceStoryId
               ? 'Turn the approved story package into a polished website article.'
               : 'Write a professional desk article and send it through approval.'}
@@ -600,7 +600,7 @@ export default function UploadArticle() {
 
           <form
             onSubmit={handleSubmit}
-            className="space-y-8"
+            className="space-y-4 sm:space-y-8"
           >
             <CmsEditorColumns stacked={isFocusMode} sidebarWidth="narrow">
             <CmsEditorMain>
@@ -638,27 +638,29 @@ export default function UploadArticle() {
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Article Content <span className="text-red-500">*</span>
               </label>
-              <div className="mb-3 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900 sm:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <p className="font-semibold">Headings</p>
-                  <p className="mt-1">Use H2 and H3 buttons to break long copy into clean sections.</p>
+              <details className="mb-3 rounded-lg border border-amber-100 bg-amber-50 text-xs text-amber-900">
+                <summary className="cursor-pointer px-3 py-2 font-semibold">
+                  Writing tools and embed tips
+                </summary>
+                <div className="grid gap-3 border-t border-amber-100 p-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div>
+                    <p className="font-semibold">Headings</p>
+                    <p className="mt-1">Use H2 and H3 buttons to break long copy into clean sections.</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Inline Images</p>
+                    <p className="mt-1">Upload article images with caption and source credit.</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Resources & Tables</p>
+                    <p className="mt-1">Add source cards, comparison tables, quotes, and links.</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Video</p>
+                    <p className="mt-1">Paste a YouTube link on its own line or use the toolbar button.</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold">Inline Images</p>
-                  <p className="mt-1">Use the image button to upload an article image with caption and source credit.</p>
-                </div>
-                <div>
-                  <p className="font-semibold">Resources & Tables</p>
-                  <p className="mt-1">Add source cards, comparison tables, quotes, and hyperlinks directly in the editor.</p>
-                </div>
-                <div>
-                  <p className="font-semibold">Permalink</p>
-                  <p className="mt-1">Canonical URL in SEO Settings controls the preferred permalink when you need one.</p>
-                </div>
-              </div>
-              <p className="mb-2 text-xs text-gray-500">
-                Tip: Paste a YouTube link on its own line or use the YouTube button in the editor toolbar.
-              </p>
+              </details>
               <ArticleEditorStudio
                 title={formData.title}
                 summary={formData.summary}
@@ -671,6 +673,7 @@ export default function UploadArticle() {
                 onContentChange={(content) =>
                   setFormData((current) => ({ ...current, content }))
                 }
+                editorClassName="min-h-[260px] sm:min-h-64"
                 placeholder="Write your article here. Use the toolbar above for formatting."
               />
               </div>
@@ -794,7 +797,11 @@ export default function UploadArticle() {
                 </div>
               </div>
 
-              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <details className="rounded-lg border border-gray-200 bg-gray-50">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
+                  Reporter submission details
+                </summary>
+                <div className="space-y-4 border-t border-gray-200 p-4">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Reporter Submission</p>
                   <p className="mt-1 text-xs text-gray-500">
@@ -854,7 +861,8 @@ export default function UploadArticle() {
                     Source is confidential and should stay internal to the desk
                   </span>
                 </label>
-              </div>
+                </div>
+              </details>
             </CmsEditorMain>
 
             {!isFocusMode ? (
@@ -907,8 +915,9 @@ export default function UploadArticle() {
                 </div>
               ) : null}
 
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
-                <p className="font-medium">Draft & Local Restore</p>
+              <details className="rounded-xl border border-blue-100 bg-blue-50 text-sm text-blue-900">
+                <summary className="cursor-pointer px-4 py-3 font-medium">Draft & Local Restore</summary>
+                <div className="border-t border-blue-100 p-4 pt-3">
                 <p className="mt-1 text-blue-800">
                   Draft autosaves every {AUTOSAVE_INTERVAL_MS / 1000} seconds.
                   {draftSavedAt
@@ -936,10 +945,14 @@ export default function UploadArticle() {
                     Discard Local Draft
                   </button>
                 </div>
-              </div>
+                </div>
+              </details>
 
-              <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-900">SEO Settings</p>
+              <details className="rounded-xl border border-gray-200 bg-gray-50">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
+                  SEO Settings
+                </summary>
+                <div className="space-y-4 border-t border-gray-200 p-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Meta Title
@@ -1007,17 +1020,18 @@ export default function UploadArticle() {
                     override it here for migrated or syndicated stories.
                   </p>
                 </div>
-              </div>
+                </div>
+              </details>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-4">
-                <label className="block text-sm font-medium text-gray-900 mb-3">
+              <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+                <label className="block text-sm font-medium text-gray-900 mb-2 sm:mb-3">
                   Featured Image <span className="text-red-500">*</span>
                 </label>
-                <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-spanish-red hover:bg-gray-50 transition-colors">
+                <label className="flex w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-3 py-4 transition-colors hover:border-spanish-red hover:bg-gray-50 sm:px-4 sm:py-6">
                   <div className="flex flex-col items-center gap-2">
-                    <ImageIcon className="w-6 h-6 text-gray-400" />
+                    <ImageIcon className="h-5 w-5 text-gray-400 sm:h-6 sm:w-6" />
                     <span className="text-sm font-medium text-gray-700">Click to upload image</span>
-                    <span className="text-xs text-gray-500">PNG, JPG, WebP up to 5MB</span>
+                    <span className="text-xs text-gray-500">PNG, JPG, WebP</span>
                   </div>
                   <input
                     type="file"
@@ -1027,7 +1041,7 @@ export default function UploadArticle() {
                     required={!imagePreview}
                   />
                 </label>
-                <p className="mt-2 text-xs text-gray-500">{ARTICLE_IMAGE_UPLOAD_GUIDE}</p>
+                <p className="mt-2 hidden text-xs text-gray-500 sm:block">{ARTICLE_IMAGE_UPLOAD_GUIDE}</p>
                 {imageQualityNote ? (
                   <p className="mt-1 text-xs font-medium text-amber-700">{imageQualityNote}</p>
                 ) : null}
@@ -1036,9 +1050,9 @@ export default function UploadArticle() {
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="mt-4 rounded-lg overflow-hidden border border-gray-200"
+                    className="mt-3 overflow-hidden rounded-lg border border-gray-200 sm:mt-4"
                   >
-                    <img src={imagePreview} alt="Preview" className="w-full h-52 object-cover" />
+                    <img src={imagePreview} alt="Preview" className="h-40 w-full object-cover sm:h-52" />
                     <button
                       type="button"
                       onClick={() => {
@@ -1054,8 +1068,11 @@ export default function UploadArticle() {
                 )}
               </div>
 
-              <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-medium text-gray-900">Article Status</p>
+              <details className="rounded-xl border border-gray-200 bg-gray-50">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
+                  Article flags
+                </summary>
+                <div className="space-y-3 border-t border-gray-200 p-4">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1081,7 +1098,8 @@ export default function UploadArticle() {
                   />
                   <span className="text-sm text-gray-700">Mark as Trending</span>
                 </label>
-              </div>
+                </div>
+              </details>
 
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm font-semibold text-gray-900">Ready to send</p>
@@ -1121,12 +1139,19 @@ export default function UploadArticle() {
                 </div>
               </div>
 
-              <ArticleEditorSidebar
-                title={formData.title}
-                summary={formData.summary}
-                content={formData.content}
-                className="space-y-3"
-              />
+              <details className="rounded-xl border border-gray-200 bg-gray-50">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
+                  Article analysis
+                </summary>
+                <div className="border-t border-gray-200 p-4">
+                  <ArticleEditorSidebar
+                    title={formData.title}
+                    summary={formData.summary}
+                    content={formData.content}
+                    className="space-y-3"
+                  />
+                </div>
+              </details>
             </CmsEditorSidebar>
             ) : (
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">

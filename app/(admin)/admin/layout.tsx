@@ -14,6 +14,7 @@ export default async function AdminLayout({
       initialUser={{
         name: user?.name ?? null,
         email: user?.email ?? null,
+        image: user?.image ?? null,
         role: user?.role,
       }}
     >

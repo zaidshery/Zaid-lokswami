@@ -95,6 +95,7 @@ export default function DeskWorkflowActions({
 }: DeskWorkflowActionsProps) {
   const router = useRouter();
   const [assignPanelOpen, setAssignPanelOpen] = useState(false);
+  const [reasonPanelOpen, setReasonPanelOpen] = useState(false);
   const [teamOptions, setTeamOptions] = useState<AssignableTeamMember[]>([]);
   const [teamOptionsLoaded, setTeamOptionsLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -204,6 +205,7 @@ export default function DeskWorkflowActions({
       }
       if (action === 'request_changes' || action === 'reject') {
         setReason('');
+        setReasonPanelOpen(false);
       }
       if (action === 'schedule') {
         setScheduledFor('');
@@ -273,11 +275,11 @@ export default function DeskWorkflowActions({
   }
 
   return (
-    <div className="space-y-3 border-t border-zinc-200/80 pt-4 dark:border-white/10">
+    <div className="mt-3 space-y-3 border-t border-zinc-200/80 pt-3 dark:border-white/10">
       <div className="flex flex-wrap items-center gap-2">
         <Link href={editHref} className={cx(ACTION_BUTTON_CLASS, SECONDARY_ACTION_CLASS)}>
           <ArrowUpRight className="h-4 w-4" />
-          Open Detail
+          Open
         </Link>
 
         {!isWorkflowContent ? (
@@ -295,6 +297,18 @@ export default function DeskWorkflowActions({
           >
             <UserRoundCheck className="h-4 w-4" />
             {assignedToName ? 'Reassign' : 'Assign'}
+          </button>
+        ) : null}
+
+        {(canRequestChanges || canReject) && isWorkflowContent ? (
+          <button
+            type="button"
+            onClick={() => setReasonPanelOpen((current) => !current)}
+            className={cx(ACTION_BUTTON_CLASS, SECONDARY_ACTION_CLASS)}
+            aria-expanded={reasonPanelOpen}
+          >
+            <CornerUpLeft className="h-4 w-4" />
+            Desk Action
           </button>
         ) : null}
 
@@ -412,15 +426,15 @@ export default function DeskWorkflowActions({
         </div>
       ) : null}
 
-      {(canRequestChanges || canReject) && isWorkflowContent ? (
-        <div className="rounded-[22px] border border-zinc-200/80 bg-zinc-50/78 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
+      {reasonPanelOpen && (canRequestChanges || canReject) && isWorkflowContent ? (
+        <div className="rounded-[18px] border border-zinc-200/80 bg-zinc-50/78 p-3 shadow-sm sm:rounded-[22px] sm:p-4 dark:border-white/10 dark:bg-white/[0.03]">
           <label className="space-y-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
             Desk Reason
             <textarea
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               placeholder="Write the reason for changes or rejection."
-              className="min-h-[96px] w-full rounded-2xl border border-zinc-200/80 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition-colors focus:border-zinc-300 dark:border-white/10 dark:bg-zinc-950/70 dark:text-zinc-100"
+              className="min-h-[80px] w-full rounded-2xl border border-zinc-200/80 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition-colors focus:border-zinc-300 dark:border-white/10 dark:bg-zinc-950/70 dark:text-zinc-100 sm:min-h-[96px]"
             />
           </label>
           <div className="mt-3 flex flex-wrap gap-2">

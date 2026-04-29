@@ -22,12 +22,7 @@ import {
   type WorkflowArticleCard,
 } from '@/lib/admin/articleWorkflowOverview';
 import { getAdminDashboardData } from '@/lib/admin/dashboard';
-import {
-  getSuperAdminDashboardData,
-  type SuperAdminAlert,
-  type SuperAdminActionGroup,
-  type SuperAdminGrowthHighlight,
-} from '@/lib/admin/superAdminDashboard';
+import { getSuperAdminDashboardData, type SuperAdminAlert } from '@/lib/admin/superAdminDashboard';
 import {
   getNewsroomPipelineAnalytics,
   normalizeNewsroomPipelineFilters,
@@ -66,13 +61,13 @@ const SECTION_LINK_CLASS =
   'admin-shell-toolbar-btn inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] sm:text-xs sm:tracking-[0.14em]';
 
 const PANEL_CLASS =
-  'admin-shell-surface-strong rounded-[28px] p-4 sm:rounded-[32px] sm:p-6';
+  'admin-shell-surface-strong rounded-[20px] p-3 sm:rounded-[32px] sm:p-6';
 
 const SOFT_CARD_CLASS =
-  'admin-shell-surface-muted rounded-[24px] p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.12)] dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.4)]';
+  'admin-shell-surface-muted rounded-[18px] p-3 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.12)] sm:rounded-[24px] sm:p-4 dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.4)]';
 
 const METRIC_CARD_CLASS =
-  'admin-shell-surface rounded-[20px] p-4 shadow-sm sm:rounded-[22px]';
+  'admin-shell-surface rounded-[16px] p-3 shadow-sm sm:rounded-[22px] sm:p-4';
 
 const COMPACT_METRIC_CARD_CLASS =
   'admin-shell-surface rounded-[18px] p-3 shadow-sm sm:rounded-[22px] sm:p-4';
@@ -137,30 +132,6 @@ function WorkflowPill({ status }: { status: string }) {
       {formatStatusLabel(status)}
     </span>
   );
-}
-
-function formatSeverityLabel(severity: SuperAdminAlert['severity']) {
-  switch (severity) {
-    case 'critical':
-      return 'Critical';
-    case 'warning':
-      return 'Warning';
-    case 'info':
-    default:
-      return 'Info';
-  }
-}
-
-function getSeverityToneClass(severity: SuperAdminAlert['severity']) {
-  switch (severity) {
-    case 'critical':
-      return 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300';
-    case 'warning':
-      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300';
-    case 'info':
-    default:
-      return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300';
-  }
 }
 
 function QuickActionCard({
@@ -232,545 +203,8 @@ function StatCard({
   );
 }
 
-function formatRate(count: number, total: number) {
-  if (total <= 0) return '0%';
-  return `${Math.round((count / total) * 100)}%`;
-}
-
 function resolveSingleSearchParam(value: string | string[] | undefined) {
   return typeof value === 'string' ? value : Array.isArray(value) ? value[0] : undefined;
-}
-
-function getPipelineRangeLabel(range: NewsroomPipelineAnalytics['filters']['applied']['range']) {
-  switch (range) {
-    case '7d':
-      return 'Last 7 days';
-    case '30d':
-      return 'Last 30 days';
-    case '90d':
-      return 'Last 90 days';
-    case '365d':
-      return 'Last 365 days';
-    case 'all':
-    default:
-      return 'All time';
-  }
-}
-
-function PipelineMetricCard({
-  label,
-  count,
-  total,
-  note,
-  icon: Icon,
-}: {
-  label: string;
-  count: number;
-  total: number;
-  note: string;
-  icon: LucideIcon;
-}) {
-  return (
-    <div className={METRIC_CARD_CLASS}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
-            {label}
-          </p>
-          <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
-            {formatNumber(count)}
-          </p>
-          <p className="mt-1 text-xs font-medium text-[color:var(--admin-shell-text-muted)]">
-            {formatRate(count, total)}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-red-500/10 p-3 text-red-600 dark:bg-red-500/15 dark:text-red-300">
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-      <p className="mt-4 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">{note}</p>
-    </div>
-  );
-}
-
-function NewsroomPipelineFiltersBar({
-  analytics,
-}: {
-  analytics: NewsroomPipelineAnalytics;
-}) {
-  const activeFilters = [
-    getPipelineRangeLabel(analytics.filters.applied.range),
-    analytics.filters.applied.category
-      ? `Category: ${analytics.filters.applied.category}`
-      : null,
-    analytics.filters.applied.reporter
-      ? `Reporter: ${analytics.filters.applied.reporter}`
-      : null,
-  ].filter(Boolean) as string[];
-
-  return (
-    <div className={SOFT_CARD_CLASS}>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
-            Filters
-          </p>
-          <h3 className="mt-2 text-lg font-bold text-[color:var(--admin-shell-text)]">
-            Inspect pipeline health by period, category, and reporter
-          </h3>
-          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
-            Narrow the pipeline to one desk lane so bottlenecks are easier to spot and act on quickly.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {activeFilters.map((filter) => (
-            <span
-              key={filter}
-              className="rounded-full border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]"
-            >
-              {filter}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <form
-        action="/admin"
-        method="get"
-        className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-[1fr,1fr,1fr,auto,auto] lg:items-end"
-      >
-        <label className="space-y-2 text-sm font-medium text-[color:var(--admin-shell-text)]">
-          <span>Time Window</span>
-          <select
-            name="pipelineRange"
-            defaultValue={analytics.filters.applied.range}
-            className="admin-shell-input w-full rounded-2xl px-4 py-3 text-sm"
-          >
-            <option value="all">All time</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-            <option value="365d">Last 365 days</option>
-          </select>
-        </label>
-
-        <label className="space-y-2 text-sm font-medium text-[color:var(--admin-shell-text)]">
-          <span>Category</span>
-          <select
-            name="pipelineCategory"
-            defaultValue={analytics.filters.applied.category}
-            className="admin-shell-input w-full rounded-2xl px-4 py-3 text-sm"
-          >
-            <option value="">All categories</option>
-            {analytics.filters.options.categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-2 text-sm font-medium text-[color:var(--admin-shell-text)]">
-          <span>Reporter / Desk Owner</span>
-          <select
-            name="pipelineReporter"
-            defaultValue={analytics.filters.applied.reporter}
-            className="admin-shell-input w-full rounded-2xl px-4 py-3 text-sm"
-          >
-            <option value="">All reporters</option>
-            {analytics.filters.options.reporters.map((reporter) => (
-              <option key={reporter} value={reporter}>
-                {reporter}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button
-          type="submit"
-          className="admin-shell-toolbar-btn inline-flex min-h-[52px] items-center justify-center rounded-2xl px-5 text-sm font-semibold"
-        >
-          Apply Filters
-        </button>
-
-        <Link
-          href="/admin"
-          className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-[color:var(--admin-shell-border)] px-5 text-sm font-semibold text-[color:var(--admin-shell-text-muted)] transition-colors hover:text-[color:var(--admin-shell-text)]"
-        >
-          Reset
-        </Link>
-      </form>
-    </div>
-  );
-}
-
-function NewsroomPipelineFunnel({
-  analytics,
-}: {
-  analytics: NewsroomPipelineAnalytics;
-}) {
-  return (
-    <div className={SOFT_CARD_CLASS}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-            Conversion Funnel
-          </p>
-          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
-            How many approved stories make it through each downstream output stage.
-          </p>
-        </div>
-        <span className="rounded-full border border-[color:var(--admin-shell-border)] px-3 py-1.5 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
-          Base: {formatNumber(analytics.pipeline.approvedStories)} approved
-        </span>
-      </div>
-
-      <div className="mt-5 grid gap-3 xl:grid-cols-7">
-        {analytics.conversions.map((step) => (
-          <div
-            key={step.key}
-            className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
-              {step.label}
-            </p>
-            <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
-              {formatNumber(step.count)}
-            </p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
-              <div
-                className="h-full rounded-full bg-red-500"
-                style={{ width: `${Math.max(step.rateFromApproved, 4)}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
-              {step.rateFromApproved}% of approved stories
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function NewsroomBreakdownChart({
-  title,
-  description,
-  items,
-}: {
-  title: string;
-  description: string;
-  items: NewsroomPipelineAnalytics['breakdowns']['categories'];
-}) {
-  const maxApproved = Math.max(1, ...items.map((item) => item.approvedStories));
-
-  return (
-    <div className={SOFT_CARD_CLASS}>
-      <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">{title}</p>
-      <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">{description}</p>
-
-      {items.length ? (
-        <div className="mt-4 space-y-4">
-          {items.map((item) => (
-            <div key={item.label} className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                    {item.label}
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
-                    {item.completionRate}% fully distributed from approved stories
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
-                  <span>{formatNumber(item.approvedStories)} approved</span>
-                  <span>{formatNumber(item.linkedArticles)} linked</span>
-                  <span>{formatNumber(item.videoReady)} video ready</span>
-                  <span>{formatNumber(item.socialPublished)} social published</span>
-                </div>
-              </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
-                <div
-                  className="h-full rounded-full bg-red-500"
-                  style={{ width: `${Math.max((item.approvedStories / maxApproved) * 100, 6)}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-4 rounded-2xl border border-dashed border-[color:var(--admin-shell-border)] px-4 py-5 text-sm text-[color:var(--admin-shell-text-muted)]">
-          No matching records for this breakdown yet.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NewsroomTimelineChart({
-  analytics,
-}: {
-  analytics: NewsroomPipelineAnalytics;
-}) {
-  const maxValue = Math.max(
-    1,
-    ...analytics.timeline.flatMap((point) => [
-      point.submittedStories,
-      point.approvedStories,
-      point.linkedArticles,
-      point.videoReady,
-      point.socialPublished,
-    ])
-  );
-
-  return (
-    <div className={SOFT_CARD_CLASS}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-            Timeline View
-          </p>
-          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
-            Cohort-style trend of story pipeline completion across the selected time range.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
-          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-zinc-400" />Submitted</span>
-          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" />Approved</span>
-          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-red-500" />Linked</span>
-          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />Video Ready</span>
-          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Social Published</span>
-        </div>
-      </div>
-
-      <div className="mt-5 overflow-x-auto">
-        <div className="grid min-w-[900px] grid-cols-1 gap-3">
-          {analytics.timeline.map((point) => (
-            <div
-              key={point.label}
-              className="grid grid-cols-[90px,1fr] items-center gap-4 rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-4 py-3"
-            >
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
-                {point.label}
-              </div>
-              <div className="space-y-2">
-                {[
-                  { label: 'Submitted', value: point.submittedStories, color: 'bg-zinc-400' },
-                  { label: 'Approved', value: point.approvedStories, color: 'bg-blue-500' },
-                  { label: 'Linked', value: point.linkedArticles, color: 'bg-red-500' },
-                  { label: 'Video', value: point.videoReady, color: 'bg-amber-500' },
-                  { label: 'Social', value: point.socialPublished, color: 'bg-emerald-500' },
-                ].map((series) => (
-                  <div key={`${point.label}-${series.label}`} className="grid grid-cols-[74px,1fr,42px] items-center gap-3 text-xs font-medium text-[color:var(--admin-shell-text-muted)]">
-                    <span>{series.label}</span>
-                    <div className="h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
-                      <div
-                        className={`h-full rounded-full ${series.color}`}
-                        style={{ width: `${Math.max((series.value / maxValue) * 100, series.value > 0 ? 4 : 0)}%` }}
-                      />
-                    </div>
-                    <span className="text-right">{formatNumber(series.value)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NewsroomPipelineSection({
-  analytics,
-}: {
-  analytics: NewsroomPipelineAnalytics;
-}) {
-  const approvedBase = analytics.pipeline.approvedStories;
-  const statusCards = [
-    {
-      label: 'Approved Stories',
-      count: analytics.pipeline.approvedStories,
-      note: 'Story packages cleared by the newsroom and ready to become outputs.',
-      icon: CheckCircle2,
-    },
-    {
-      label: 'Linked Articles',
-      count: analytics.pipeline.linkedArticleCreated,
-      note: 'Approved stories that already have a primary linked website article.',
-      icon: FileText,
-    },
-    {
-      label: 'Published Articles',
-      count: analytics.pipeline.linkedArticlePublished,
-      note: 'Linked stories whose primary article is already live to readers.',
-      icon: ArrowUpRight,
-    },
-    {
-      label: 'Video Ready',
-      count: analytics.pipeline.videoReady,
-      note: 'Stories with final edited exports ready for distribution and social drafting.',
-      icon: Video,
-    },
-    {
-      label: 'Social Published',
-      count: analytics.pipeline.socialPublished,
-      note: 'Stories that already have at least one published social-media distribution record.',
-      icon: BarChart3,
-    },
-  ];
-
-  const bottlenecks = [
-    {
-      label: 'Awaiting Article',
-      value: analytics.bottlenecks.awaitingArticle,
-      note: 'Approved stories without a linked article yet.',
-    },
-    {
-      label: 'Awaiting Video',
-      value: analytics.bottlenecks.awaitingVideo,
-      note: 'Linked stories that still need video production to start.',
-    },
-    {
-      label: 'Awaiting Social Drafts',
-      value: analytics.bottlenecks.awaitingSocialDrafts,
-      note: 'Video-ready stories that have not generated outbox drafts yet.',
-    },
-    {
-      label: 'Awaiting Social Publish',
-      value: analytics.bottlenecks.awaitingSocialPublish,
-      note: 'Stories with drafts in the outbox but no published platform post yet.',
-    },
-  ];
-
-  return (
-    <section className={PANEL_CLASS}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-600">
-            Newsroom Pipeline
-          </p>
-          <h2 className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
-            Story To Article To Video To Social
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-            One place to see how approved reporter stories are being converted into website
-            articles, edited video outputs, and social distribution.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
-          <span className="rounded-full border border-[color:var(--admin-shell-border)] px-3 py-2">
-            Source: {analytics.source}
-          </span>
-          <span className="rounded-full border border-[color:var(--admin-shell-border)] px-3 py-2">
-            Submitted Stories: {formatNumber(analytics.pipeline.storiesSubmitted)}
-          </span>
-          <span className="rounded-full border border-[color:var(--admin-shell-border)] px-3 py-2">
-            Fully Distributed: {formatNumber(analytics.pipeline.fullyDistributed)}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <NewsroomPipelineFiltersBar analytics={analytics} />
-      </div>
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-5">
-        {statusCards.map((card) => (
-          <PipelineMetricCard
-            key={card.label}
-            label={card.label}
-            count={card.count}
-            total={approvedBase}
-            note={card.note}
-            icon={card.icon}
-          />
-        ))}
-      </div>
-
-      <div className="mt-6">
-        <NewsroomPipelineFunnel analytics={analytics} />
-      </div>
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr,0.8fr]">
-        <div className={SOFT_CARD_CLASS}>
-          <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-            Pipeline Bottlenecks
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {bottlenecks.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
-                  {item.label}
-                </p>
-                <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
-                  {formatNumber(item.value)}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-                  {item.note}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className={SOFT_CARD_CLASS}>
-          <p className="text-sm font-semibold text-[color:var(--admin-shell-text)]">
-            Social Outbox Status
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {Object.entries(analytics.socialStatuses).map(([status, value]) => (
-              <div
-                key={status}
-                className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
-                  {formatStatusLabel(status)}
-                </p>
-                <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
-                  {formatNumber(value)}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-[color:var(--admin-shell-text-muted)]">
-            <div className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em]">Linked Articles</p>
-              <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
-                {formatNumber(analytics.totals.linkedArticles)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em]">Direct Articles</p>
-              <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
-                {formatNumber(analytics.totals.directArticles)}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-2">
-        <NewsroomBreakdownChart
-          title="Category Performance"
-          description="Which categories are converting approved stories into full downstream outputs."
-          items={analytics.breakdowns.categories}
-        />
-        <NewsroomBreakdownChart
-          title="Reporter / Desk Performance"
-          description="Which reporters or desk owners are seeing the healthiest downstream completion."
-          items={analytics.breakdowns.reporters}
-        />
-      </div>
-
-      <div className="mt-6">
-        <NewsroomTimelineChart analytics={analytics} />
-      </div>
-    </section>
-  );
 }
 
 function LeadershipActionCard({ action }: { action: QuickAction }) {
@@ -779,18 +213,18 @@ function LeadershipActionCard({ action }: { action: QuickAction }) {
   return (
     <Link
       href={action.href}
-      className="group admin-shell-surface relative overflow-hidden rounded-[28px] p-5 transition-all hover:-translate-y-1 hover:border-red-400/30 hover:shadow-[0_34px_90px_-40px_rgba(220,38,38,0.18)] dark:hover:shadow-[0_34px_90px_-40px_rgba(220,38,38,0.28)]"
+      className="group admin-shell-surface relative overflow-hidden rounded-[20px] p-3 transition-all hover:-translate-y-1 hover:border-red-400/30 hover:shadow-[0_34px_90px_-40px_rgba(220,38,38,0.18)] sm:rounded-[28px] sm:p-5 dark:hover:shadow-[0_34px_90px_-40px_rgba(220,38,38,0.28)]"
     >
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/15" />
       <div className="flex items-start justify-between gap-4">
-        <div className={cx('inline-flex rounded-2xl p-3 ring-1 ring-black/5 dark:ring-white/10', action.tone)}>
-          <Icon className="h-5 w-5" />
+        <div className={cx('inline-flex rounded-2xl p-2.5 ring-1 ring-black/5 sm:p-3 dark:ring-white/10', action.tone)}>
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </div>
         <ArrowUpRight className="h-4 w-4 text-zinc-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-red-500 dark:text-zinc-500" />
       </div>
-      <div className="mt-5">
-        <p className="text-base font-bold text-[color:var(--admin-shell-text)]">{action.label}</p>
-        <p className="mt-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+      <div className="mt-3 sm:mt-5">
+        <p className="text-sm font-bold leading-5 text-[color:var(--admin-shell-text)] sm:text-base">{action.label}</p>
+        <p className="mt-2 hidden text-sm leading-6 text-[color:var(--admin-shell-text-muted)] sm:block">
           {action.description}
         </p>
       </div>
@@ -800,23 +234,23 @@ function LeadershipActionCard({ action }: { action: QuickAction }) {
 
 function LeadershipStatCard({ stat }: { stat: StatCardConfig }) {
   return (
-    <div className="group admin-shell-surface relative overflow-hidden rounded-[28px] p-5 transition-all hover:-translate-y-0.5 hover:shadow-[var(--admin-shell-shadow-strong)]">
+    <div className="group admin-shell-surface relative overflow-hidden rounded-[18px] p-3 transition-all hover:-translate-y-0.5 hover:shadow-[var(--admin-shell-shadow-strong)] sm:rounded-[28px] sm:p-5">
       <div className={cx('pointer-events-none absolute -right-5 -top-5 h-24 w-24 rounded-full opacity-20 blur-2xl', stat.tone)} />
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/20" />
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3 sm:gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
+          <p className="text-[10px] font-semibold uppercase leading-4 tracking-[0.1em] text-[color:var(--admin-shell-text-muted)] sm:text-[11px] sm:tracking-[0.18em]">
             {stat.label}
           </p>
-          <p className="mt-4 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)]">
+          <p className="mt-2 text-2xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:mt-4 sm:text-4xl">
             {formatNumber(stat.value)}
           </p>
         </div>
-        <div className={cx('rounded-2xl p-3 ring-1 ring-black/5 dark:ring-white/10', stat.tone)}>
-          <stat.icon className="h-5 w-5" />
+        <div className={cx('rounded-2xl p-2 ring-1 ring-black/5 sm:p-3 dark:ring-white/10', stat.tone)}>
+          <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </div>
       </div>
-      <p className="mt-4 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">{stat.note}</p>
+      <p className="mt-4 hidden text-sm leading-6 text-[color:var(--admin-shell-text-muted)] sm:block">{stat.note}</p>
     </div>
   );
 }
@@ -856,33 +290,33 @@ function LeadershipHeroSection({
   ];
 
   return (
-    <section className="relative overflow-hidden rounded-[36px] border border-[color:var(--admin-shell-border-strong)] bg-[linear-gradient(135deg,rgba(255,252,247,0.96),rgba(248,241,232,0.95)_48%,rgba(243,238,230,0.98)_100%)] p-8 shadow-[var(--admin-shell-shadow-strong)] dark:bg-[linear-gradient(135deg,rgba(18,18,22,0.98),rgba(32,22,18,0.96)_42%,rgba(15,19,33,0.98)_100%)] lg:p-10">
+    <section className="relative overflow-hidden rounded-[24px] border border-[color:var(--admin-shell-border-strong)] bg-[linear-gradient(135deg,rgba(255,252,247,0.96),rgba(248,241,232,0.95)_48%,rgba(243,238,230,0.98)_100%)] p-4 shadow-[var(--admin-shell-shadow-strong)] sm:rounded-[36px] sm:p-8 dark:bg-[linear-gradient(135deg,rgba(18,18,22,0.98),rgba(32,22,18,0.96)_42%,rgba(15,19,33,0.98)_100%)] lg:p-10">
       <div className="pointer-events-none absolute -right-10 top-0 h-48 w-48 rounded-full bg-red-500/12 blur-3xl dark:bg-red-500/16" />
       <div className="pointer-events-none absolute bottom-0 left-0 h-48 w-48 rounded-full bg-amber-400/12 blur-3xl dark:bg-amber-400/10" />
 
-      <div className="relative grid gap-8 xl:grid-cols-[1.45fr,0.8fr]">
+      <div className="relative grid gap-4 sm:gap-8 xl:grid-cols-[1.45fr,0.8fr]">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
+          <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-red-600 sm:px-4 sm:text-[11px] sm:tracking-[0.28em] dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
             Super Admin
           </div>
-          <h1 className="mt-5 text-4xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-5xl">
+          <h1 className="mt-3 text-2xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:mt-5 sm:text-5xl">
             Leadership Dashboard
           </h1>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--admin-shell-text-muted)] sm:text-[15px]">
+          <p className="mt-2 max-w-3xl text-xs leading-5 text-[color:var(--admin-shell-text-muted)] sm:mt-4 sm:text-[15px] sm:leading-7">
             Track release readiness, blocked operations, reporting health, team coverage, and
             growth across the newsroom.
           </p>
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:flex sm:flex-wrap sm:gap-3">
             {statusChips.map((chip) => (
               <div
                 key={chip.label}
-                className="admin-shell-surface rounded-2xl px-4 py-3 shadow-sm"
+                className="admin-shell-surface rounded-2xl px-3 py-2 shadow-sm sm:px-4 sm:py-3"
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--admin-shell-text-muted)]">
+                <p className="text-[10px] font-semibold uppercase leading-4 tracking-[0.08em] text-[color:var(--admin-shell-text-muted)] sm:text-[11px] sm:tracking-[0.16em]">
                   {chip.label}
                 </p>
-                <p className="mt-1 text-lg font-black text-[color:var(--admin-shell-text)]">
+                <p className="mt-1 text-base font-black text-[color:var(--admin-shell-text)] sm:text-lg">
                   {formatNumber(chip.value)}
                 </p>
               </div>
@@ -890,7 +324,7 @@ function LeadershipHeroSection({
           </div>
         </div>
 
-        <div className="grid gap-4">
+        <div className="hidden gap-4 sm:grid">
           <div className="admin-shell-surface rounded-[28px] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
               Priority Alerts
@@ -909,7 +343,7 @@ function LeadershipHeroSection({
         </div>
       </div>
 
-      <div className="relative mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="relative mt-4 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
         {quickActions.map((action) => (
           <LeadershipActionCard key={action.href} action={action} />
         ))}
@@ -927,6 +361,7 @@ function WorkflowListSection({
   emptyMessage,
   className,
   compactOnMobile = false,
+  desktopTable = false,
 }: {
   title: string;
   description: string;
@@ -936,6 +371,7 @@ function WorkflowListSection({
   emptyMessage: string;
   className?: string;
   compactOnMobile?: boolean;
+  desktopTable?: boolean;
 }) {
   const visibleItems = items.slice(0, 4);
 
@@ -960,7 +396,38 @@ function WorkflowListSection({
         </Link>
       </div>
 
-      <div className="mt-6 space-y-3">
+      {desktopTable && visibleItems.length ? (
+        <div className="mt-5 hidden overflow-hidden rounded-[22px] border border-[color:var(--admin-shell-border)] lg:block">
+          <div className="grid grid-cols-[minmax(0,1.4fr)_0.55fr_0.8fr_0.65fr_0.55fr] gap-4 border-b border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface-muted)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--admin-shell-text-muted)]">
+            <span>Title</span>
+            <span>Type</span>
+            <span>Owner</span>
+            <span>Updated</span>
+            <span className="text-right">Status</span>
+          </div>
+          <div className="divide-y divide-[color:var(--admin-shell-border)]">
+            {visibleItems.map((item) => (
+              <Link
+                key={`${item.contentType}-${item.id}-table`}
+                href={item.editHref}
+                className="grid grid-cols-[minmax(0,1.4fr)_0.55fr_0.8fr_0.65fr_0.55fr] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-[color:var(--admin-shell-surface-muted)]"
+              >
+                <span className="truncate font-semibold text-[color:var(--admin-shell-text)]">{item.title}</span>
+                <span className="text-xs text-[color:var(--admin-shell-text-muted)]">{formatContentTypeLabel(item.contentType)}</span>
+                <span className="truncate text-xs text-[color:var(--admin-shell-text-muted)]">
+                  {item.assignedToName || item.createdByName || item.author}
+                </span>
+                <span className="text-xs text-[color:var(--admin-shell-text-muted)]">
+                  {formatUiDate(item.updatedAt, item.updatedAt)}
+                </span>
+                <span className="justify-self-end"><WorkflowPill status={item.status} /></span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className={cx('mt-6 space-y-3', desktopTable && visibleItems.length > 0 && 'lg:hidden')}>
         {visibleItems.length ? (
           visibleItems.map((item, index) => (
             <Link
@@ -1012,116 +479,6 @@ function WorkflowListSection({
   );
 }
 
-function ArticleListSection({
-  title,
-  description,
-  href,
-  linkLabel,
-  items,
-  emptyMessage,
-}: {
-  title: string;
-  description: string;
-  href: string;
-  linkLabel: string;
-  items: Array<{ id: string; title: string; category: string; author: string; publishedAt: string; views: number }>;
-  emptyMessage: string;
-}) {
-  return (
-    <section className={PANEL_CLASS}>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-[color:var(--admin-shell-text)]">{title}</h2>
-          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">{description}</p>
-        </div>
-        <Link href={href} className={SECTION_LINK_CLASS}>
-          {linkLabel}
-        </Link>
-      </div>
-
-      <div className="mt-6 space-y-3">
-        {items.length ? (
-          items.map((article) => (
-            <Link
-              key={article.id}
-              href={`/admin/articles/${encodeURIComponent(article.id)}/edit`}
-              className={cx(SOFT_CARD_CLASS, 'flex items-center justify-between gap-3 transition-colors hover:-translate-y-0.5')}
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                  {article.title}
-                </p>
-                <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
-                  {article.category} / {article.author}
-                </p>
-              </div>
-              <div className="text-right text-xs text-[color:var(--admin-shell-text-muted)]">
-                <p>{formatUiDate(article.publishedAt, article.publishedAt)}</p>
-                <p className="mt-1">{formatNumber(article.views)} views</p>
-              </div>
-            </Link>
-          ))
-        ) : (
-          <div className={EMPTY_STATE_CLASS}>
-            {emptyMessage}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function VideoListSection({
-  items,
-}: {
-  items: Array<{ id: string; title: string; category: string; publishedAt: string; views: number }>;
-}) {
-  return (
-    <section className={PANEL_CLASS}>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-[color:var(--admin-shell-text)]">Recent Videos</h2>
-          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
-            Published video output currently live on the site.
-          </p>
-        </div>
-        <Link href="/admin/videos" className={SECTION_LINK_CLASS}>
-          Open Videos
-        </Link>
-      </div>
-
-      <div className="mt-6 space-y-3">
-        {items.length ? (
-          items.map((video) => (
-            <Link
-              key={video.id}
-              href="/admin/videos"
-              className={cx(SOFT_CARD_CLASS, 'flex items-center justify-between gap-3 transition-colors hover:-translate-y-0.5')}
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                  {video.title}
-                </p>
-                <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
-                  {video.category}
-                </p>
-              </div>
-              <div className="text-right text-xs text-[color:var(--admin-shell-text-muted)]">
-                <p>{formatUiDate(video.publishedAt, video.publishedAt)}</p>
-                <p className="mt-1">{formatNumber(video.views)} views</p>
-              </div>
-            </Link>
-          ))
-        ) : (
-          <div className={EMPTY_STATE_CLASS}>
-            No recent videos yet.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 function InboxSnapshot({
   counts,
   className,
@@ -1129,6 +486,7 @@ function InboxSnapshot({
   counts: { all: number; new: number; inProgress: number; resolved: number };
   className?: string;
 }) {
+  const isEmpty = counts.all === 0 && counts.new === 0 && counts.inProgress === 0 && counts.resolved === 0;
   const stats = [
     { label: 'All Messages', value: counts.all },
     { label: 'New', value: counts.new },
@@ -1150,6 +508,12 @@ function InboxSnapshot({
         </Link>
       </div>
 
+      {isEmpty ? (
+        <div className="mt-5 rounded-[22px] border border-emerald-500/20 bg-emerald-500/10 px-4 py-5 text-emerald-700 dark:text-emerald-300">
+          <p className="text-base font-bold">Inbox clear</p>
+          <p className="mt-1 text-sm opacity-90">No reader messages need action.</p>
+        </div>
+      ) : (
       <div className="mt-6 grid grid-cols-2 gap-4">
         {stats.map((stat) => (
           <div key={stat.label} className={METRIC_CARD_CLASS}>
@@ -1157,6 +521,55 @@ function InboxSnapshot({
               {stat.label}
             </p>
             <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+              {formatNumber(stat.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+      )}
+    </section>
+  );
+}
+
+function PipelineSummarySection({
+  analytics,
+}: {
+  analytics: NewsroomPipelineAnalytics;
+}) {
+  const stats = [
+    { label: 'Submitted', value: analytics.pipeline.storiesSubmitted },
+    { label: 'Approved', value: analytics.pipeline.approvedStories },
+    { label: 'Distributed', value: analytics.pipeline.fullyDistributed },
+  ];
+
+  return (
+    <section className="admin-shell-surface-strong rounded-[24px] p-4 sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">
+            Newsroom Pipeline
+          </p>
+          <h2 className="mt-1 text-lg font-bold text-[color:var(--admin-shell-text)]">
+            Story to article to video to social
+          </h2>
+          <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">
+            Compact conversion health for the current desk window.
+          </p>
+        </div>
+        <Link href="/admin/operations" className={SECTION_LINK_CLASS}>
+          Open Operations Center
+        </Link>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-[18px] border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
+              {stat.label}
+            </p>
+            <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
               {formatNumber(stat.value)}
             </p>
           </div>
@@ -1273,508 +686,6 @@ function TeamHealthSection({
             Team health data is not available yet.
           </div>
         )}
-      </div>
-    </section>
-  );
-}
-
-function DecisionCenterSection({
-  readyDecisionItems,
-  blockedEditionItems,
-  alerts,
-}: {
-  readyDecisionItems: WorkflowArticleCard[];
-  blockedEditionItems: Array<{
-    epaperId: string;
-    title: string;
-    cityName: string;
-    productionStatus: string;
-    blockerCount: number;
-    blockers: string[];
-    editHref: string;
-  }>;
-  alerts: SuperAdminAlert[];
-}) {
-  const visibleReadyDecisionItems = readyDecisionItems.slice(0, 4);
-  const visibleBlockedEditionItems = blockedEditionItems.slice(0, 4);
-  const visibleAlerts = alerts.slice(0, 5);
-
-  return (
-    <section className={PANEL_CLASS}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Decision Center</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            Leadership-ready publishing decisions, edition blockers, and urgent escalations from across the newsroom.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/admin/review-queue" className={SECTION_LINK_CLASS}>
-            Open Review Queue
-          </Link>
-          <Link href="/admin/epapers" className={SECTION_LINK_CLASS}>
-            Open E-Papers
-          </Link>
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-            Ready Decisions
-          </p>
-          <p className="mt-2 text-2xl font-black text-zinc-950 dark:text-zinc-50">
-            {formatNumber(readyDecisionItems.length)}
-          </p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-            Edition Blockers
-          </p>
-          <p className="mt-2 text-2xl font-black text-zinc-950 dark:text-zinc-50">
-            {formatNumber(blockedEditionItems.length)}
-          </p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-            Urgent Signals
-          </p>
-          <p className="mt-2 text-2xl font-black text-zinc-950 dark:text-zinc-50">
-            {formatNumber(alerts.length)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr,1.05fr,0.95fr]">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Ready Decisions
-            </h3>
-            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-              {formatNumber(readyDecisionItems.length)}
-            </span>
-          </div>
-          {visibleReadyDecisionItems.length ? (
-            visibleReadyDecisionItems.map((item) => (
-              <Link
-                key={`${item.contentType}-${item.id}`}
-                href={item.editHref}
-                className={cx(
-                  SOFT_CARD_CLASS,
-                  'block transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/10'
-                )}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      {item.title}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      {item.category} / {formatContentTypeLabel(item.contentType)}
-                    </p>
-                  </div>
-                  <WorkflowPill status={item.status} />
-                </div>
-                <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                  Updated {formatUiDate(item.updatedAt, item.updatedAt)}
-                </p>
-              </Link>
-            ))
-          ) : (
-            <div className={EMPTY_STATE_CLASS}>
-              No content is waiting for leadership release decisions right now.
-            </div>
-          )}
-          {readyDecisionItems.length > visibleReadyDecisionItems.length ? (
-            <p className="px-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              +{formatNumber(readyDecisionItems.length - visibleReadyDecisionItems.length)} more items are waiting in the release queue.
-            </p>
-          ) : null}
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Blocked Editions
-            </h3>
-            <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">
-              {formatNumber(blockedEditionItems.length)}
-            </span>
-          </div>
-          {visibleBlockedEditionItems.length ? (
-            visibleBlockedEditionItems.map((edition) => (
-              <Link
-                key={edition.epaperId}
-                href={edition.editHref}
-                className={cx(
-                  SOFT_CARD_CLASS,
-                  'block transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/10'
-                )}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      {edition.title}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      {edition.cityName} / {edition.blockerCount} blocker{edition.blockerCount === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                  <WorkflowPill status={edition.productionStatus} />
-                </div>
-                <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                  {edition.blockers[0] || 'Edition needs QA or hotspot cleanup before release.'}
-                </p>
-              </Link>
-            ))
-          ) : (
-            <div className={EMPTY_STATE_CLASS}>
-              No blocked editions are waiting on leadership review right now.
-            </div>
-          )}
-          {blockedEditionItems.length > visibleBlockedEditionItems.length ? (
-            <p className="px-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              +{formatNumber(blockedEditionItems.length - visibleBlockedEditionItems.length)} more blocked editions need review.
-            </p>
-          ) : null}
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Urgent Alerts
-            </h3>
-            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-300">
-              {formatNumber(alerts.length)}
-            </span>
-          </div>
-          {visibleAlerts.length ? (
-            visibleAlerts.map((alert) => (
-              <Link
-                key={alert.id}
-                href={alert.href}
-                className={cx(
-                  SOFT_CARD_CLASS,
-                  'block transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/10'
-                )}
-              >
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  {alert.message}
-                </p>
-              </Link>
-            ))
-          ) : (
-            <div className={EMPTY_STATE_CLASS}>
-              No urgent leadership alerts need action right now.
-            </div>
-          )}
-          {alerts.length > visibleAlerts.length ? (
-            <p className="px-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              +{formatNumber(alerts.length - visibleAlerts.length)} more alerts are available in the watchlist.
-            </p>
-          ) : null}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function OperationalWatchlistSection({
-  metrics,
-  alerts,
-  actionGroups,
-  }: {
-    metrics: {
-      blockedEditions: number;
-      qualityAlerts: number;
-      inboxEscalations: number;
-      queueBacklog: number;
-      reportingAlerts: number;
-    };
-    alerts: SuperAdminAlert[];
-    actionGroups: SuperAdminActionGroup[];
-  }) {
-  const groupedAlerts = {
-    critical: alerts.filter((alert) => alert.severity === 'critical'),
-    warning: alerts.filter((alert) => alert.severity === 'warning'),
-    info: alerts.filter((alert) => alert.severity === 'info'),
-  };
-
-  const severityCards: Array<{
-    key: SuperAdminAlert['severity'];
-    value: number;
-  }> = [
-    { key: 'critical', value: groupedAlerts.critical.length },
-    { key: 'warning', value: groupedAlerts.warning.length },
-    { key: 'info', value: groupedAlerts.info.length },
-  ];
-
-  return (
-    <section className={PANEL_CLASS}>
-      <div className="flex items-center gap-2">
-        <AlertTriangle className="h-5 w-5 text-orange-600" />
-        <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-          Operational Watchlist
-        </h2>
-      </div>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-        Leadership-facing risks grouped by urgency, with direct action paths for the desk.
-      </p>
-
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Blocked Editions
-          </p>
-          <p className="mt-2 text-2xl font-black text-zinc-900 dark:text-zinc-100">
-            {formatNumber(metrics.blockedEditions)}
-          </p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Quality Alerts
-          </p>
-          <p className="mt-2 text-2xl font-black text-zinc-900 dark:text-zinc-100">
-            {formatNumber(metrics.qualityAlerts)}
-          </p>
-        </div>
-        <div className={METRIC_CARD_CLASS}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Inbox Escalations
-          </p>
-          <p className="mt-2 text-2xl font-black text-zinc-900 dark:text-zinc-100">
-            {formatNumber(metrics.inboxEscalations)}
-          </p>
-        </div>
-          <div className={METRIC_CARD_CLASS}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Queue Backlog
-            </p>
-            <p className="mt-2 text-2xl font-black text-zinc-900 dark:text-zinc-100">
-              {formatNumber(metrics.queueBacklog)}
-            </p>
-          </div>
-          <div className={METRIC_CARD_CLASS}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Reporting Alerts
-            </p>
-            <p className="mt-2 text-2xl font-black text-zinc-900 dark:text-zinc-100">
-              {formatNumber(metrics.reportingAlerts)}
-            </p>
-          </div>
-        </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {severityCards.map((card) => (
-          <div
-            key={card.key}
-            className={`rounded-[22px] border p-4 ${getSeverityToneClass(card.key)}`}
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide">
-              {formatSeverityLabel(card.key)} Alerts
-            </p>
-            <p className="mt-2 text-2xl font-black">{formatNumber(card.value)}</p>
-          </div>
-        ))}
-      </div>
-
-      {actionGroups.length ? (
-        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
-          {actionGroups.map((group) => (
-            <Link
-              key={group.id}
-              href={group.href}
-              className={cx(
-                SOFT_CARD_CLASS,
-                'transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/10'
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    {group.title}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    {group.description}
-                  </p>
-                </div>
-                <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
-                  {formatNumber(group.count)}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="mt-6 space-y-4">
-        {severityCards.map((card) =>
-          card.value > 0 ? (
-            <div key={`group-${card.key}`}>
-              <div className="mb-3 flex items-center gap-2">
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${getSeverityToneClass(card.key)}`}
-                >
-                  {formatSeverityLabel(card.key)}
-                </span>
-              </div>
-              <div className="space-y-3">
-                {groupedAlerts[card.key].slice(0, 3).map((alert) => (
-                  <Link
-                    key={alert.id}
-                    href={alert.href}
-                  className={cx(
-                    SOFT_CARD_CLASS,
-                    'block transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/10'
-                  )}
-                  >
-                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      {alert.message}
-                    </p>
-                  </Link>
-                ))}
-              </div>
-              {groupedAlerts[card.key].length > 3 ? (
-                <p className="mt-2 px-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  +{formatNumber(groupedAlerts[card.key].length - 3)} more {formatSeverityLabel(card.key).toLowerCase()} alerts are hidden here.
-                </p>
-              ) : null}
-            </div>
-          ) : null
-        )}
-
-        {!alerts.length ? (
-          <div className={EMPTY_STATE_CLASS}>
-            No leadership alerts need action right now.
-          </div>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function getGrowthToneClass(tone: SuperAdminGrowthHighlight['tone']) {
-  switch (tone) {
-    case 'critical':
-      return 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300';
-    case 'watch':
-      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300';
-    case 'good':
-    default:
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300';
-  }
-}
-
-function GrowthHighlightsSection({ items }: { items: SuperAdminGrowthHighlight[] }) {
-  return (
-    <section className={PANEL_CLASS}>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-emerald-600" />
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-              Growth Highlights
-            </h2>
-          </div>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-            The strongest section, channel, and audience-path movement from the last 30 days.
-          </p>
-        </div>
-        <Link href="/admin/analytics?tab=growth&focus=all&content=all&range=30d&compare=previous" className={SECTION_LINK_CLASS}>
-          Open Growth Watch
-        </Link>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {items.length ? (
-          items.map((item) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={`rounded-[24px] border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:opacity-95 ${getGrowthToneClass(item.tone)}`}
-            >
-              <p className="text-sm font-semibold">{item.title}</p>
-              <p className="mt-2 text-sm leading-6 opacity-90">{item.detail}</p>
-            </Link>
-          ))
-        ) : (
-          <div className={cx(EMPTY_STATE_CLASS, 'xl:col-span-2')}>
-            Growth highlights will appear once audience and compare-period data has enough history.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function QualityWatchlistSection({
-  items,
-  className,
-}: {
-  items: Array<{
-    epaperId: string;
-    pageNumber: number;
-    epaperTitle: string;
-    cityName: string;
-    issueSummary: string;
-    qualityLabel: string;
-    editHref: string;
-  }>;
-  className?: string;
-}) {
-  const visibleItems = items.slice(0, 4);
-
-  return (
-    <section className={cx(PANEL_CLASS, className)}>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Quality Watchlist</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            Pages that still need hotspot, OCR, or QA cleanup before the edition feels release-ready.
-          </p>
-        </div>
-        <Link href="/admin/review-queue" className={SECTION_LINK_CLASS}>
-          Open Overview
-        </Link>
-      </div>
-
-      <div className="mt-6 space-y-3">
-        {visibleItems.length > 0 ? (
-          visibleItems.map((page) => (
-            <Link
-              key={`${page.epaperId}-${page.pageNumber}`}
-              href={page.editHref}
-              className={cx(
-                SOFT_CARD_CLASS,
-                'block transition-all hover:-translate-y-0.5 hover:bg-zinc-100 dark:hover:bg-white/10'
-              )}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    {page.epaperTitle} / Page {page.pageNumber}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    {page.cityName} / {page.issueSummary}
-                  </p>
-                </div>
-                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-300">
-                  {page.qualityLabel}
-                </span>
-              </div>
-            </Link>
-          ))
-        ) : (
-          <div className={EMPTY_STATE_CLASS}>
-            No active page-quality alerts right now.
-          </div>
-        )}
-        {items.length > visibleItems.length ? (
-          <p className="px-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-            +{formatNumber(items.length - visibleItems.length)} more quality issues are available in the review queue.
-          </p>
-        ) : null}
       </div>
     </section>
   );
@@ -1969,12 +880,6 @@ export default async function AdminDashboardPage({
   const myItems = myWork?.items || [];
   const reviewItems = reviewQueue?.items || [];
   const superAdminMetrics = superAdminDashboard?.metrics || null;
-  const decisionCenterItems = superAdminDashboard?.readyDecisionItems || [];
-  const superAdminOverviewItems = superAdminDashboard?.newsroomOverviewItems || reviewItems.slice(0, 8);
-  const qualityWatchlist = superAdminDashboard?.qualityWatchlist || epaperInsights?.lowQualityPages || [];
-  const blockedEditionItems = superAdminDashboard?.blockedEditionItems || [];
-  const actionGroups = superAdminDashboard?.actionGroups || [];
-  const growthHighlights = superAdminDashboard?.growthHighlights || [];
   const deskAssignedCount =
     Number(myWork?.counts.assigned || 0) +
     Number(myWork?.counts.in_review || 0) +
@@ -2195,7 +1100,7 @@ export default async function AdminDashboardPage({
               ];
 
   return (
-    <div className={cx('space-y-6', admin.role === 'super_admin' && 'mx-auto max-w-[1580px] space-y-8')}>
+    <div className={cx('space-y-4 sm:space-y-6', admin.role === 'super_admin' && 'mx-auto max-w-[1580px] sm:space-y-8')}>
       {admin.role === 'super_admin' ? (
         <LeadershipHeroSection
           metrics={{
@@ -2235,11 +1140,11 @@ export default async function AdminDashboardPage({
             </div>
           </section>
 
-          {admin.role !== 'copy_editor' ? (
+          {isReporterDashboard ? (
             <section
               className={cx(
                 'grid gap-4 xl:grid-cols-4',
-                isReporterDashboard ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'
+                isReporterDashboard ? 'grid-cols-2' : 'hidden grid-cols-1 md:grid md:grid-cols-2'
               )}
             >
               {quickActions.map((action) => (
@@ -2254,7 +1159,7 @@ export default async function AdminDashboardPage({
         className={cx(
           'grid gap-4',
           admin.role === 'super_admin'
-            ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-6'
+            ? 'grid-cols-2 md:grid-cols-2 xl:grid-cols-6'
             : isReporterDashboard
               ? 'grid-cols-2 xl:grid-cols-4'
               : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
@@ -2274,7 +1179,7 @@ export default async function AdminDashboardPage({
       </section>
 
       {newsroomPipeline && (admin.role === 'admin' || admin.role === 'super_admin') ? (
-        <NewsroomPipelineSection analytics={newsroomPipeline} />
+        <PipelineSummarySection analytics={newsroomPipeline} />
       ) : null}
 
       {isReporterDashboard ? (
@@ -2368,7 +1273,7 @@ export default async function AdminDashboardPage({
 
       {admin.role === 'admin' ? (
         <>
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr,1fr]">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[1.15fr,1fr]">
             <div className="space-y-6">
               <WorkflowListSection
                 title="Ready To Publish"
@@ -2377,6 +1282,7 @@ export default async function AdminDashboardPage({
                 linkLabel="Open Content Queue"
                 items={readyToPublishItems}
                 emptyMessage="No content or editions are waiting for publish decisions right now."
+                compactOnMobile
               />
               <WorkflowListSection
                 title="Live Review Queue"
@@ -2385,56 +1291,35 @@ export default async function AdminDashboardPage({
                 linkLabel="Open Assignments"
                 items={activeReviewItems}
                 emptyMessage="The live review queue is clear right now."
+                compactOnMobile
+                desktopTable
               />
             </div>
             <InboxSnapshot counts={dashboard.inbox} />
           </div>
 
-          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[1.18fr,0.95fr,0.9fr]">
-            <div className="space-y-6">
-              <DecisionCenterSection
-                readyDecisionItems={decisionCenterItems}
-                blockedEditionItems={blockedEditionItems}
-                alerts={leadershipAlerts}
-              />
-              <WorkflowListSection
-                title="Newsroom Overview"
-                description="High-level queue pressure across content workflow and edition production."
-                href="/admin/review-queue"
-                linkLabel="Open Newsroom Overview"
-                items={superAdminOverviewItems}
-                emptyMessage="No live workflow items are waiting in the newsroom right now."
-              />
+          <section className="admin-shell-surface-strong rounded-[24px] p-4 sm:p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">
+                  Operations Center
+                </p>
+                <h2 className="mt-1 text-lg font-bold text-[color:var(--admin-shell-text)]">
+                  Decisions, risks, quality, and growth live in one focused workspace.
+                </h2>
+              </div>
+              <Link href="/admin/operations" className={SECTION_LINK_CLASS}>
+                Open Operations Center
+              </Link>
             </div>
-
-            <div className="space-y-6">
-              <OperationalWatchlistSection
-                metrics={{
-                  blockedEditions: superAdminMetrics?.blockedEditions || 0,
-                  qualityAlerts: superAdminMetrics?.qualityAlerts || 0,
-                  inboxEscalations: superAdminMetrics?.inboxEscalations || dashboard.inbox.new,
-                  queueBacklog:
-                    superAdminMetrics?.queueBacklog ||
-                    dashboard.workflow.needsReview + activeEditionCount,
-                  reportingAlerts: superAdminMetrics?.reportingAlerts || 0,
-                }}
-                alerts={leadershipAlerts}
-                actionGroups={actionGroups}
-              />
-              <GrowthHighlightsSection items={growthHighlights} />
-            </div>
-
-            <div className="space-y-6">
-              <QualityWatchlistSection items={qualityWatchlist} />
-            </div>
-          </div>
+          </section>
         </>
       ) : null}
 
       {admin.role === 'super_admin' ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr,1fr]">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[1fr,1fr]">
           <TeamHealthSection summary={teamHealth} />
-          <InboxSnapshot counts={dashboard.inbox} />
+          <InboxSnapshot counts={dashboard.inbox} className="hidden sm:block" />
         </div>
       ) : null}
 

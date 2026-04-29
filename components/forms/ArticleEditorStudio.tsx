@@ -100,7 +100,7 @@ function PreviewPanel({
   }
 
   return (
-    <div className="min-h-[260px] rounded-lg border border-gray-300 bg-white p-4">
+    <div className="min-h-[180px] rounded-lg border border-gray-300 bg-white p-3 sm:min-h-[260px] sm:p-4">
       <h3 className="text-lg font-bold text-gray-900">{trimmedTitle || 'Untitled article'}</h3>
       <p className="mt-1 text-sm text-gray-600">
         {trimmedSummary || 'Summary preview will appear here.'}
@@ -283,13 +283,13 @@ export default function ArticleEditorStudio({
       )}
     >
       <div>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-gray-300 bg-white sm:inline-flex">
             <button
               type="button"
               onClick={() => onModeChange('write')}
               className={cx(
-                'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
+                'inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-colors sm:px-4',
                 mode === 'write'
                   ? 'bg-spanish-red text-white'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -302,7 +302,7 @@ export default function ArticleEditorStudio({
               type="button"
               onClick={() => onModeChange('split')}
               className={cx(
-                'inline-flex items-center gap-2 border-x border-gray-300 px-4 py-2 text-sm font-medium transition-colors',
+                'hidden items-center gap-2 border-x border-gray-300 px-4 py-2 text-sm font-medium transition-colors sm:inline-flex',
                 mode === 'split'
                   ? 'bg-spanish-red text-white'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -315,7 +315,7 @@ export default function ArticleEditorStudio({
               type="button"
               onClick={() => onModeChange('preview')}
               className={cx(
-                'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
+                'inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-colors sm:px-4',
                 mode === 'preview'
                   ? 'bg-spanish-red text-white'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -332,14 +332,15 @@ export default function ArticleEditorStudio({
               onClick={() => onFocusModeChange(!focusMode)}
               aria-pressed={focusMode}
               className={cx(
-                'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
+                'inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors sm:w-auto sm:px-4',
                 focusMode
                   ? 'border-spanish-red bg-red-50 text-spanish-red hover:bg-red-100'
                   : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
               )}
             >
               {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              {focusMode ? 'Exit Focus' : 'Focus Writing'}
+              <span className="sm:hidden">{focusMode ? 'Exit' : 'Focus'}</span>
+              <span className="hidden sm:inline">{focusMode ? 'Exit Focus' : 'Focus Writing'}</span>
             </button>
           ) : null}
         </div>
@@ -388,14 +389,16 @@ export default function ArticleEditorStudio({
               placeholder={placeholder}
               editorClassName={editorClassName}
             />
-            <PreviewPanel
-              title={title}
-              summary={summary}
-              html={previewContentHtml}
-              variant={previewVariant}
-              author={author}
-              image={image}
-            />
+            <div className="hidden xl:block">
+              <PreviewPanel
+                title={title}
+                summary={summary}
+                html={previewContentHtml}
+                variant={previewVariant}
+                author={author}
+                image={image}
+              />
+            </div>
           </div>
         ) : null}
       </div>

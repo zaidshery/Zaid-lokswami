@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, KeyRound, Loader2, Mail, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
+import { ChevronDown, Copy, Loader2, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatUserRoleLabel, type AdminRole } from '@/lib/auth/roles';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
@@ -76,6 +76,7 @@ export default function TeamManagementClient({
   const [isInviting, setIsInviting] = useState(false);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [linkActionMemberId, setLinkActionMemberId] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [error, setError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const [linkFallback, setLinkFallback] = useState<{ href: string; actionLabel: string } | null>(null);
@@ -301,44 +302,59 @@ export default function TeamManagementClient({
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
-      <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mx-auto w-full max-w-5xl space-y-3 sm:space-y-5">
+      <div className="rounded-[18px] border border-zinc-200 bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5 dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-red-600 dark:text-red-400">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-600 dark:text-red-400">
               Team Access
             </p>
-            <h1 className="mt-2 text-3xl font-black text-zinc-900 dark:text-zinc-100">
-              Invite Team Member
+            <h1 className="mt-1 text-xl font-black text-zinc-900 sm:text-2xl dark:text-zinc-100">
+              Team Members
             </h1>
-            <p className="mt-3 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-              Create or promote team accounts, manage access levels, and deactivate members when needed.
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+              Invite staff, review access, and manage active newsroom roles.
             </p>
           </div>
 
-          <div className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-            <ShieldCheck className="mr-2 h-4 w-4" />
-            <span>{viewerRole === 'super_admin' ? 'Leadership Access' : 'Admin Control'}</span>
+          <div className="flex flex-wrap gap-2">
+            <div className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              <span>{viewerRole === 'super_admin' ? 'Leadership Access' : 'Admin Control'}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setInviteOpen((current) => !current)}
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-100 sm:text-sm"
+              aria-expanded={inviteOpen}
+            >
+              <UserPlus className="h-4 w-4" />
+              {inviteOpen ? 'Close' : 'New Member'}
+            </button>
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-[1fr_1fr_220px_auto]">
+        <div
+          className={`mt-5 gap-3 md:grid-cols-[1fr_1fr_220px_auto] ${
+            inviteOpen ? 'grid' : 'hidden sm:grid'
+          }`}
+        >
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Name (optional)"
-            className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-red-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-red-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
           <input
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="email@example.com"
-            className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-red-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-red-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
           <select
             value={role}
             onChange={(event) => setRole(event.target.value as AdminRole)}
-            className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-red-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-red-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           >
             {adminRoleOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -350,7 +366,7 @@ export default function TeamManagementClient({
             type="button"
             onClick={() => void handleInvite()}
             disabled={isInviting}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isInviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
             <span>{isInviting ? 'Adding...' : 'Invite Team Member'}</span>
@@ -384,7 +400,7 @@ export default function TeamManagementClient({
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="mt-6 hidden gap-4 sm:grid lg:grid-cols-2">
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
               Role Boundary
@@ -410,7 +426,7 @@ export default function TeamManagementClient({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2">
         {isLoading ? (
           <div className="col-span-full flex items-center justify-center rounded-3xl border border-zinc-200 bg-white p-10 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
             <Loader2 className="h-6 w-6 animate-spin text-red-500" />
@@ -430,16 +446,16 @@ export default function TeamManagementClient({
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04 }}
-                className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+                className="rounded-[18px] border border-zinc-200 bg-white p-4 shadow-sm sm:rounded-2xl dark:border-zinc-800 dark:bg-zinc-950"
               >
-                <div className="flex items-start gap-4">
-                  <div className="relative inline-flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-full bg-red-100 text-sm font-bold text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                <div className="flex items-start gap-3">
+                  <div className="relative inline-flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/15 dark:text-red-300">
                     {member.image ? (
                       <Image
                         src={member.image}
                         alt={member.name || member.email}
                         fill
-                        sizes="48px"
+                        sizes="44px"
                         unoptimized
                         className="object-cover"
                       />
@@ -449,19 +465,19 @@ export default function TeamManagementClient({
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                    <p className="truncate text-base font-bold text-zinc-900 dark:text-zinc-100">
                       {member.name || member.email.split('@')[0]}
                     </p>
-                    <p className="truncate text-sm text-zinc-600 dark:text-zinc-400">
+                    <p className="truncate text-xs text-zinc-600 sm:text-sm dark:text-zinc-400">
                       {member.email}
                     </p>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="inline-flex rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="inline-flex rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">
                         {formatUserRoleLabel(member.role)}
                       </span>
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                           member.isActive
                             ? 'border border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
                             : 'border border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'
@@ -470,7 +486,7 @@ export default function TeamManagementClient({
                         {member.isActive ? 'Active' : 'Inactive'}
                       </span>
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${credentialTone(member.credentialStatus)}`}
+                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${credentialTone(member.credentialStatus)}`}
                       >
                         {credentialLabel(member.credentialStatus)}
                       </span>
@@ -478,83 +494,80 @@ export default function TeamManagementClient({
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
+                <div className="mt-3 grid gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
                   <div className="flex items-center gap-2">
-                    <KeyRound className="h-4 w-4 text-zinc-400" />
-                    <span>Login ID: {member.loginId || 'Not generated'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-zinc-400" />
-                    <span>Login URL: /signin?redirect=/admin</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-zinc-400" />
+                    <ShieldCheck className="h-3.5 w-3.5 text-zinc-400" />
                     <span>Last login: {formatDateTime(member.lastLoginAt)}</span>
                   </div>
-                  <div>Joined: {formatDateTime(member.createdAt)}</div>
                   {member.setupExpiresAt ? (
                     <div>Setup link expires: {formatDateTime(member.setupExpiresAt)}</div>
                   ) : null}
                 </div>
 
-                <div className="mt-5 space-y-3">
-                  <select
-                    value={member.role}
-                    onChange={(event) =>
-                      void updateMember(member.id, { role: event.target.value as AdminRole })
-                    }
-                    disabled={isBusy}
-                    className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-red-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-                  >
-                    {adminRoleOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    <button
-                      type="button"
-                      onClick={() => void generateSetupLink(member)}
-                      disabled={isGeneratingLink}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                    >
-                      {isGeneratingLink ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                      <span>{member.credentialStatus === 'password_ready' ? 'Reset Link' : 'Setup Link'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => void updateMember(member.id, { isActive: !member.isActive })}
+                <details className="group mt-3 rounded-xl border border-zinc-300/80 dark:border-zinc-700">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-zinc-900 [&::-webkit-details-marker]:hidden dark:text-zinc-100">
+                    <span>Manage access</span>
+                    <ChevronDown className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="space-y-3 border-t border-zinc-200/80 p-3 dark:border-zinc-800">
+                    <select
+                      value={member.role}
+                      onChange={(event) =>
+                        void updateMember(member.id, { role: event.target.value as AdminRole })
+                      }
                       disabled={isBusy}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-red-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                     >
-                      {isBusy ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : member.isActive ? (
-                        <ShieldOff className="h-4 w-4" />
-                      ) : (
-                        <ShieldCheck className="h-4 w-4" />
-                      )}
-                      <span>{member.isActive ? 'Deactivate' : 'Reactivate'}</span>
-                    </button>
+                      {adminRoleOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
 
-                    <button
-                      type="button"
-                      onClick={() => void demoteMember(member.id)}
-                      disabled={isBusy}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10"
-                    >
-                      {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      <span>Remove</span>
-                    </button>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void generateSetupLink(member)}
+                        disabled={isGeneratingLink}
+                        className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-zinc-300 px-2 py-2.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        {isGeneratingLink ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                        <span>{member.credentialStatus === 'password_ready' ? 'Reset' : 'Setup'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void updateMember(member.id, { isActive: !member.isActive })}
+                        disabled={isBusy}
+                        className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-zinc-300 px-2 py-2.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        {isBusy ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : member.isActive ? (
+                          <ShieldOff className="h-4 w-4" />
+                        ) : (
+                          <ShieldCheck className="h-4 w-4" />
+                        )}
+                        <span>{member.isActive ? 'Off' : 'On'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void demoteMember(member.id)}
+                        disabled={isBusy}
+                        className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-red-200 px-2 py-2.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10"
+                      >
+                        {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        <span>Remove</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </details>
               </motion.article>
             );
           })

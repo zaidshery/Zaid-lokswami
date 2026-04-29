@@ -13,6 +13,10 @@ function formatStatusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
 function hasReporterSummary(item: Awaited<ReturnType<typeof getNewsroomControlCenterData>>['assignments'][number]) {
   return Boolean(
     item.reporterSummary &&
@@ -26,10 +30,10 @@ function hasReporterSummary(item: Awaited<ReturnType<typeof getNewsroomControlCe
 }
 
 const PANEL_CLASS =
-  'rounded-[32px] border border-zinc-200/80 bg-white/92 p-6 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.38)] dark:border-white/10 dark:bg-zinc-950/60';
+  'rounded-[20px] border border-zinc-200/80 bg-white/92 p-3 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.38)] sm:rounded-[32px] sm:p-6 dark:border-white/10 dark:bg-zinc-950/60';
 
 const SOFT_CARD_CLASS =
-  'rounded-[24px] border border-zinc-200/80 bg-zinc-50/78 p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.3)] dark:border-white/10 dark:bg-white/[0.03]';
+  'rounded-[18px] border border-zinc-200/80 bg-zinc-50/78 p-3 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.3)] sm:rounded-[24px] sm:p-4 dark:border-white/10 dark:bg-white/[0.03]';
 
 const META_CHIP_CLASS =
   'inline-flex items-center gap-2 rounded-full border border-zinc-200/80 bg-white/85 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-300';
@@ -47,7 +51,7 @@ export default async function AssignmentsPage() {
   const control = await getNewsroomControlCenterData();
 
   return (
-    <div className="mx-auto max-w-[1640px] space-y-8">
+    <div className="mx-auto max-w-[1640px] space-y-4 sm:space-y-8">
       <section className="relative overflow-hidden rounded-[36px] border border-zinc-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(245,247,251,0.95)_48%,rgba(239,246,244,0.97)_100%)] p-8 shadow-[0_30px_90px_-52px_rgba(15,23,42,0.42)] dark:border-white/10 dark:bg-[linear-gradient(135deg,rgba(18,18,22,0.98),rgba(15,19,33,0.98)_48%,rgba(16,29,24,0.96)_100%)] lg:p-10">
         <div className="relative">
           <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
@@ -71,14 +75,14 @@ export default async function AssignmentsPage() {
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr,0.85fr]">
         <section className={PANEL_CLASS}>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Live Assignments</h2>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                 Current content and edition work already owned by someone on the desk.
               </p>
             </div>
-            <Link href="/admin/content-queue" className={META_CHIP_CLASS}>
+            <Link href="/admin/content-queue" className={cx(META_CHIP_CLASS, 'w-fit')}>
               Open Content Queue
             </Link>
           </div>
@@ -91,10 +95,10 @@ export default async function AssignmentsPage() {
                   className={`${SOFT_CARD_CLASS} transition-colors hover:border-zinc-300/80 dark:hover:border-white/20`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <Link
                         href={item.editHref}
-                        className="text-sm font-semibold text-zinc-900 transition-colors hover:text-red-600 dark:text-zinc-100 dark:hover:text-red-300"
+                        className="block truncate text-sm font-semibold text-zinc-900 transition-colors hover:text-red-600 dark:text-zinc-100 dark:hover:text-red-300"
                       >
                         {item.title}
                       </Link>
@@ -169,7 +173,7 @@ export default async function AssignmentsPage() {
                 </p>
               </div>
             </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-6">
               <div className={SOFT_CARD_CLASS}>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">Ready For Admin</p>
                 <p className="mt-2 text-3xl font-black text-zinc-950 dark:text-zinc-50">{formatNumber(control.stats.readyForAdmin)}</p>
@@ -198,7 +202,7 @@ export default async function AssignmentsPage() {
                 .filter((item) => !item.assignedToName)
                 .slice(0, 6)
                 .map((item) => (
-                  <Link key={`${item.contentType}-${item.id}`} href={item.editHref} className={SOFT_CARD_CLASS}>
+                  <Link key={`${item.contentType}-${item.id}`} href={item.editHref} className={cx(SOFT_CARD_CLASS, 'block')}>
                     <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{item.title}</p>
                     <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
                       {item.category} / {formatStatusLabel(item.status)}

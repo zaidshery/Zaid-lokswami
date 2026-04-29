@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
@@ -45,9 +46,16 @@ type SidebarItem = {
   icon: typeof LayoutDashboard;
 };
 
+type SidebarSection = {
+  labelEn: string;
+  labelHi: string;
+  items: SidebarItem[];
+};
+
 type AdminShellUser = {
   name?: string | null;
   email?: string | null;
+  image?: string | null;
   role?: UserRole;
 };
 
@@ -87,6 +95,7 @@ const HI = {
   auditLog: '\u0911\u0921\u093f\u091f \u0932\u0949\u0917',
   permissionReview: '\u092a\u0930\u092e\u093f\u0936\u0928 \u0930\u093f\u0935\u094d\u092f\u0942',
   operationsDiagnostics: '\u0911\u092a\u0930\u0947\u0936\u0928 \u0921\u093e\u092f\u0917\u094d\u0928\u094b\u0938\u094d\u091f\u093f\u0915\u094d\u0938',
+  operationsCenter: '\u0911\u092a\u0930\u0947\u0936\u0928 \u0938\u0947\u0902\u091f\u0930',
   team: '\u091f\u0940\u092e',
   settings: '\u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938',
   newsroomSettings: '\u0928\u094d\u092f\u0942\u091c\u0930\u0942\u092e \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938',
@@ -106,6 +115,12 @@ const SUPER_ADMIN_ITEMS: SidebarItem[] = [
   { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls' },
   { icon: BarChart3, labelEn: 'Revenue', labelHi: HI.revenue, href: '/admin/revenue' },
   { icon: ClipboardList, labelEn: 'Audit Log', labelHi: HI.auditLog, href: '/admin/audit-log' },
+  {
+    icon: Activity,
+    labelEn: 'Operations Center',
+    labelHi: HI.operationsCenter,
+    href: '/admin/operations',
+  },
   {
     icon: ShieldCheck,
     labelEn: 'Permission Review',
@@ -129,6 +144,7 @@ const ADMIN_ITEMS: SidebarItem[] = [
   { icon: FolderOpen, labelEn: 'Content Queue', labelHi: HI.contentQueue, href: '/admin/content-queue' },
   { icon: BellRing, labelEn: 'Push Alerts', labelHi: HI.pushAlerts, href: '/admin/push-alerts' },
   { icon: UserCog, labelEn: 'Team', labelHi: HI.team, href: '/admin/team' },
+  { icon: Activity, labelEn: 'Operations Center', labelHi: HI.operationsCenter, href: '/admin/operations' },
   { icon: FileText, labelEn: 'Articles', labelHi: HI.articles, href: '/admin/articles' },
   { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls' },
   { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
@@ -193,6 +209,96 @@ function getSidebarItems(role: UserRole | undefined): SidebarItem[] {
     default:
       return REPORTER_ITEMS;
   }
+}
+
+function getSidebarSections(
+  role: UserRole | undefined,
+  sidebarItems: SidebarItem[]
+): SidebarSection[] {
+  const pick = (hrefs: string[]) =>
+    hrefs
+      .map((href) => sidebarItems.find((item) => item.href === href))
+      .filter((item): item is SidebarItem => Boolean(item));
+
+  if (isSuperAdminRole(role)) {
+    return [
+      {
+        labelEn: 'Overview',
+        labelHi: '\u0913\u0935\u0930\u0935\u094d\u092f\u0942',
+        items: pick(['/admin', '/admin/analytics', '/admin/revenue']),
+      },
+      {
+        labelEn: 'Governance',
+        labelHi: '\u0917\u0935\u0930\u094d\u0928\u0947\u0902\u0938',
+        items: pick([
+          '/admin/polls',
+          '/admin/audit-log',
+          '/admin/operations',
+          '/admin/permission-review',
+          '/admin/operations-diagnostics',
+          '/admin/settings',
+        ]),
+      },
+    ].filter((section) => section.items.length > 0);
+  }
+
+  if (role === 'admin') {
+    return [
+      {
+        labelEn: 'Desk Workflow',
+        labelHi: '\u0921\u0947\u0938\u094d\u0915 \u0935\u0930\u094d\u0915\u092b\u094d\u0932\u094b',
+        items: pick([
+          '/admin',
+          '/admin/review-queue',
+          '/admin/assignments',
+          '/admin/content-queue',
+          '/admin/push-alerts',
+          '/admin/team',
+        ]),
+      },
+      {
+        labelEn: 'Content',
+        labelHi: '\u0915\u0902\u091f\u0947\u0902\u091f',
+        items: pick([
+          '/admin/articles',
+          '/admin/polls',
+          '/admin/stories',
+          '/admin/videos',
+          '/admin/social-posts',
+          '/admin/epapers',
+          '/admin/media',
+        ]),
+      },
+      {
+        labelEn: 'Insights & Settings',
+        labelHi: '\u0907\u0928\u0938\u093e\u0907\u091f\u094d\u0938 \u0914\u0930 \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938',
+        items: pick(['/admin/operations', '/admin/analytics', '/admin/settings/newsroom']),
+      },
+    ].filter((section) => section.items.length > 0);
+  }
+
+  if (isCopyEditorRole(role)) {
+    return [
+      {
+        labelEn: 'Desk Workflow',
+        labelHi: '\u0921\u0947\u0938\u094d\u0915 \u0935\u0930\u094d\u0915\u092b\u094d\u0932\u094b',
+        items: pick(['/admin', '/admin/copy-desk', '/admin/my-work']),
+      },
+      {
+        labelEn: 'Content',
+        labelHi: '\u0915\u0902\u091f\u0947\u0902\u091f',
+        items: pick(['/admin/articles', '/admin/stories', '/admin/videos', '/admin/social-posts', '/admin/media']),
+      },
+    ].filter((section) => section.items.length > 0);
+  }
+
+  return [
+    {
+      labelEn: 'Reporter Desk',
+      labelHi: HI.reporterDesk,
+      items: sidebarItems,
+    },
+  ];
 }
 
 function getMobileDockItems(
@@ -374,11 +480,16 @@ export default function AdminShell({
   const resolvedUser = {
     name: initialUser.name ?? null,
     email: initialUser.email ?? null,
+    image: initialUser.image ?? null,
     role: initialUser.role as UserRole | undefined,
   };
   const isHindi = isHydrated ? language === 'hi' : true;
   const effectiveTheme = isHydrated ? theme : 'dark';
   const sidebarItems = useMemo(() => getSidebarItems(resolvedUser.role), [resolvedUser.role]);
+  const sidebarSections = useMemo(
+    () => getSidebarSections(resolvedUser.role, sidebarItems),
+    [resolvedUser.role, sidebarItems]
+  );
   const mobileDockItems = useMemo(
     () => getMobileDockItems(resolvedUser.role, sidebarItems),
     [resolvedUser.role, sidebarItems]
@@ -388,10 +499,16 @@ export default function AdminShell({
     resolvedUser.email?.split('@')[0]?.trim() ||
     'Admin';
   const adminEmail = resolvedUser.email?.trim() || '';
+  const adminImage = resolvedUser.image?.trim() || '';
   const adminRoleLabel = formatUserRoleLabel(resolvedUser.role);
   const adminInitial = (adminName.charAt(0) || 'A').toUpperCase();
   const consoleLabel = getConsoleLabel(resolvedUser.role, isHindi);
-  const headerLabel = getHeaderLabel(resolvedUser.role, isHindi);
+  const activeSidebarItem = sidebarItems.find((item) => isActiveNavItem(pathname, item.href));
+  const headerLabel = activeSidebarItem
+    ? isHindi
+      ? activeSidebarItem.labelHi
+      : activeSidebarItem.labelEn
+    : getHeaderLabel(resolvedUser.role, isHindi);
   const isReporterView = isReporterDeskRole(resolvedUser.role);
   const isCopyEditorView = isCopyEditorRole(resolvedUser.role);
   const sidebarLabel = isReporterView
@@ -403,11 +520,7 @@ export default function AdminShell({
     ? adminName
     : adminRoleLabel;
   const hasMobileDock = mobileDockItems.length > 0;
-  const mobileHeaderLabel = isCopyEditorView
-    ? isHindi
-      ? HI.dashboard
-      : 'Dashboard'
-    : headerLabel;
+  const mobileHeaderLabel = headerLabel;
 
   const handleLogout = async () => {
     try {
@@ -446,31 +559,44 @@ export default function AdminShell({
         </button>
       </div>
 
-      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4 pb-24">
-        {sidebarItems.map((item) => (
-          <Link
-            key={`${item.href}-${item.labelEn}`}
-            href={item.href}
-            onClick={() => setMobileNavOpen(false)}
-            className={`group flex items-center gap-3 rounded-2xl px-3 py-3 transition-all ${
-              isActiveNavItem(pathname, item.href)
-                ? 'bg-[color:var(--admin-shell-active)] text-[color:var(--admin-shell-active-text)] shadow-[var(--admin-shell-shadow)]'
-                : 'text-[color:var(--admin-shell-text-muted)] hover:bg-[color:var(--admin-shell-surface-muted)] hover:text-[color:var(--admin-shell-text)]'
-            }`}
-          >
-            <div
-              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
-                isActiveNavItem(pathname, item.href)
-                  ? 'bg-white/10 dark:bg-black/10'
-                  : 'bg-white/80 text-[color:var(--admin-shell-text-muted)] group-hover:bg-[color:var(--admin-shell-surface-strong)] group-hover:text-[color:var(--admin-shell-text)] dark:bg-white/5'
-              }`}
-              >
-                <item.icon className="h-4 w-4 flex-shrink-0" />
-              </div>
-            <span className="text-sm font-medium">
-              {isHindi ? item.labelHi : item.labelEn}
-            </span>
-          </Link>
+      <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 pb-24">
+        {sidebarSections.map((section) => (
+          <div key={section.labelEn} className="space-y-2">
+            <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
+              {isHindi ? section.labelHi : section.labelEn}
+            </p>
+            <div className="space-y-1">
+              {section.items.map((item) => {
+                const isActive = isActiveNavItem(pathname, item.href);
+
+                return (
+                  <Link
+                    key={`${item.href}-${item.labelEn}`}
+                    href={item.href}
+                    onClick={() => setMobileNavOpen(false)}
+                    className={`group flex items-center gap-3 rounded-2xl px-3 py-3 transition-all ${
+                      isActive
+                        ? 'bg-[color:var(--admin-shell-active)] text-[color:var(--admin-shell-active-text)] shadow-[var(--admin-shell-shadow)]'
+                        : 'text-[color:var(--admin-shell-text-muted)] hover:bg-[color:var(--admin-shell-surface-muted)] hover:text-[color:var(--admin-shell-text)]'
+                    }`}
+                  >
+                    <div
+                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+                        isActive
+                          ? 'bg-white/10 dark:bg-black/10'
+                          : 'bg-white/80 text-[color:var(--admin-shell-text-muted)] group-hover:bg-[color:var(--admin-shell-surface-strong)] group-hover:text-[color:var(--admin-shell-text)] dark:bg-white/5'
+                      }`}
+                    >
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
+                    </div>
+                    <span className="text-sm font-medium">
+                      {isHindi ? item.labelHi : item.labelEn}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </nav>
 
@@ -588,8 +714,19 @@ export default function AdminShell({
                 <p className="text-xs text-[color:var(--admin-shell-text-muted)]">{adminEmail}</p>
               ) : null}
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-red-600 shadow-sm">
-              <span className="text-sm font-bold text-white">{adminInitial}</span>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-red-600 shadow-sm ring-1 ring-white/10">
+              {adminImage ? (
+                <Image
+                  src={adminImage}
+                  alt={adminName}
+                  width={36}
+                  height={36}
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="text-sm font-bold text-white">{adminInitial}</span>
+              )}
             </div>
 
             {mobileToolsOpen ? (
@@ -643,7 +780,7 @@ export default function AdminShell({
 
         <div
           className={cx(
-            'relative p-4 pt-24 sm:p-6 sm:pt-28 lg:p-8 lg:pt-28',
+            'relative p-3 pt-20 sm:p-6 sm:pt-28 lg:p-8 lg:pt-28',
             hasMobileDock && 'pb-28 lg:pb-8'
           )}
         >

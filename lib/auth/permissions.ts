@@ -43,6 +43,7 @@ export const ADMIN_PAGE_KEYS = [
   'analytics',
   'audit_log',
   'permission_review',
+  'operations_center',
   'operations_diagnostics',
 ] as const;
 
@@ -111,6 +112,7 @@ export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
   analytics: ['super_admin', 'admin'],
   audit_log: ['super_admin'],
   permission_review: ['super_admin'],
+  operations_center: ['super_admin', 'admin'],
   operations_diagnostics: ['super_admin'],
 };
 
@@ -148,6 +150,7 @@ export const PAGE_LABELS: Record<AdminPageKey, string> = {
   analytics: 'Analytics',
   audit_log: 'Audit Log',
   permission_review: 'Permission Review',
+  operations_center: 'Operations Center',
   operations_diagnostics: 'Operations Diagnostics',
 };
 
@@ -287,6 +290,7 @@ export function canReadContent(
   content: PermissionContentRecord,
   _options: { allowViewerRead?: boolean } = {}
 ): boolean {
+  void _options;
   if (!user) return false;
 
   const workflowStatus = resolveWorkflowStatus(content);

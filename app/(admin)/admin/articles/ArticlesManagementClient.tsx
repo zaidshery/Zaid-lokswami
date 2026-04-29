@@ -1014,81 +1014,36 @@ export default function ArticlesManagement() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.03 }}
-                className="admin-shell-surface-strong rounded-[30px] p-5 transition-shadow hover:shadow-[0_28px_80px_-40px_rgba(15,23,42,0.28)]"
+                className="admin-shell-surface-strong rounded-[18px] p-3 transition-shadow hover:shadow-[0_28px_80px_-40px_rgba(15,23,42,0.28)] sm:rounded-[30px] sm:p-5"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <h3 className="truncate text-xl font-semibold text-[color:var(--admin-shell-text)]">{article.title}</h3>
+                    <div className="mb-2 flex flex-wrap items-center gap-2 sm:mb-3">
+                      <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-[color:var(--admin-shell-text)] sm:text-xl">{article.title}</h3>
                       <WorkflowPill status={workflowStatus} />
-                      <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
+                      <span className="hidden rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 sm:inline-flex dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
                         {article.sourceType === 'story' ? 'From Story' : 'Direct Desk'}
                       </span>
                       {article.isBreaking ? (
-                        <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                        <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-800 sm:px-3 sm:text-xs dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
                           Breaking
                         </span>
                       ) : null}
                       {article.isTrending ? (
-                        <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300">
+                        <span className="hidden rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800 sm:inline-flex dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300">
                           Trending
                         </span>
                       ) : null}
                     </div>
 
-                    <p className="mb-4 line-clamp-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">{article.summary}</p>
+                    <p className="mb-3 line-clamp-2 text-sm leading-6 text-[color:var(--admin-shell-text-muted)] sm:mb-4">{article.summary}</p>
 
-                    <div
-                      className={cx(
-                        'mb-4 rounded-[24px] border p-4 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.28)]',
-                        getWorkflowFeedbackToneClass(workflowFeedback.tone)
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] dark:bg-white/10">
-                          {workflowFeedback.badge}
-                        </span>
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-80">
-                          {(article.sourceType || 'direct') === 'story'
-                            ? 'Story-linked workflow'
-                            : 'Desk-origin workflow'}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm font-semibold leading-6">
-                        {workflowFeedback.summary}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 opacity-90">
-                        <span className="font-semibold">Next:</span> {workflowFeedback.nextAction}
-                      </p>
-                      {workflowFeedback.note ? (
-                        <div className="mt-3 rounded-[18px] border border-current/15 bg-white/65 p-3 dark:bg-white/5">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-80">
-                            {workflowFeedback.note.label}
-                            {workflowFeedback.note.by ? ` - ${workflowFeedback.note.by}` : ''}
-                          </p>
-                          <p className="mt-1 text-sm leading-6 opacity-95">
-                            {workflowFeedback.note.body}
-                          </p>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="flex flex-wrap gap-3 text-xs text-[color:var(--admin-shell-text-muted)]">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[color:var(--admin-shell-text-muted)]">
                       <span>By {article.author}</span>
                       <span>{article.category}</span>
-                      {article.sourceType === 'story' && article.sourceStoryTitle ? (
-                        <span>Source: {article.sourceStoryTitle}</span>
-                      ) : null}
-                      {article.workflow?.assignedTo?.name ? (
-                        <span>Assigned to {article.workflow.assignedTo.name}</span>
-                      ) : null}
-                      {article.workflow?.createdBy?.name ? (
-                        <span>Created by {article.workflow.createdBy.name}</span>
-                      ) : null}
                       {timestamp ? (
                         <span>Updated {formatUiDate(timestamp, timestamp)}</span>
                       ) : null}
-                      <span>{article.views} views</span>
                     </div>
 
                     {article.workflow?.rejectionReason ? (
@@ -1103,83 +1058,7 @@ export default function ArticlesManagement() {
                       </div>
                     ) : null}
 
-                    {article.sourceType === 'story' && article.sourceStoryId ? (
-                      <div className="mt-4 rounded-[20px] border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
-                        Linked to source story.&nbsp;
-                        <Link
-                          href={`/admin/stories/${article.sourceStoryId}/edit`}
-                          className="font-semibold underline"
-                        >
-                          Open source story
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="mt-4 rounded-[20px] border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300">
-                        Direct desk article. This piece was originated in the article desk and still
-                        follows admin approval before publish.
-                      </div>
-                    )}
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <TtsPill
-                        label={`Listen ${listenAsset?.status || 'missing'}`}
-                        tone={listenTone}
-                      />
-                      {article.isBreaking ? (
-                        <TtsPill
-                          label={`Breaking voice ${breakingAsset?.status || 'missing'}`}
-                          tone={breakingTone}
-                        />
-                      ) : (
-                        <TtsPill label="Breaking voice off" tone="neutral" />
-                      )}
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleGenerateTts(article, 'article_full')}
-                        disabled={runningTtsActionKey !== ''}
-                        className={cx(SECONDARY_BUTTON_CLASS, 'px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60')}
-                      >
-                        {runningTtsActionKey === `article_full:${article._id}` ? (
-                          <Loader className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Volume2 className="h-3.5 w-3.5" />
-                        )}
-                        {listenAsset?.audioUrl ? 'Regenerate Listen' : 'Generate Listen'}
-                      </button>
-                      {article.isBreaking ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleGenerateTts(article, 'breaking_headline')}
-                          disabled={runningTtsActionKey !== ''}
-                          className={cx(DANGER_BUTTON_CLASS, 'px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60')}
-                        >
-                          {runningTtsActionKey === `breaking_headline:${article._id}` ? (
-                            <Loader className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          )}
-                          {breakingAsset?.audioUrl ? 'Regenerate Breaking' : 'Generate Breaking'}
-                        </button>
-                      ) : null}
-                      <Link
-                        href={`/admin/ai?ttsSourceType=article&ttsSourceId=${encodeURIComponent(article._id)}`}
-                        className={cx(SECONDARY_BUTTON_CLASS, 'px-3 py-2 text-xs')}
-                      >
-                        TTS Ops
-                      </Link>
-                    </div>
-
-                    {listenAsset?.lastError ? (
-                      <p className="mt-2 text-xs text-red-600 dark:text-red-300">{listenAsset.lastError}</p>
-                    ) : null}
-                    {!listenAsset?.lastError && article.isBreaking && breakingAsset?.lastError ? (
-                      <p className="mt-2 text-xs text-red-600 dark:text-red-300">{breakingAsset.lastError}</p>
-                    ) : null}
-
-                    <div className="mt-5 flex flex-wrap items-center gap-2">
+                    <div className="mt-4 flex flex-wrap items-center gap-2 sm:mt-5">
                       {quickActions.map((action) => {
                         const isRunning = runningWorkflowActionKey === `${action}:${article._id}`;
                         return (
@@ -1202,25 +1081,92 @@ export default function ArticlesManagement() {
                         href={`/admin/articles/${article._id}/edit`}
                         className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
                       >
-                        Open Workflow
+                        Open
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
-                      {article.sourceType === 'story' && article.sourceStoryId ? (
-                        <Link
-                          href={`/admin/stories/${article.sourceStoryId}/edit`}
-                          className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 transition-colors hover:bg-sky-100"
-                        >
-                          <Link2 className="h-3.5 w-3.5" />
-                          Open Source Story
-                        </Link>
-                      ) : null}
-                      {workflowStatus === 'published' ? (
-                        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Live Output
-                        </span>
-                      ) : null}
                     </div>
+
+                    <details className="mt-3 rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface-muted)]">
+                      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">
+                        More details
+                      </summary>
+                      <div className="space-y-3 border-t border-[color:var(--admin-shell-border)] p-3">
+                        <div
+                          className={cx(
+                            'rounded-2xl border p-3 text-sm',
+                            getWorkflowFeedbackToneClass(workflowFeedback.tone)
+                          )}
+                        >
+                          <p className="font-semibold">{workflowFeedback.summary}</p>
+                          <p className="mt-1 opacity-90">
+                            <span className="font-semibold">Next:</span> {workflowFeedback.nextAction}
+                          </p>
+                        </div>
+                        {article.sourceType === 'story' && article.sourceStoryId ? (
+                          <Link
+                            href={`/admin/stories/${article.sourceStoryId}/edit`}
+                            className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 transition-colors hover:bg-sky-100"
+                          >
+                            <Link2 className="h-3.5 w-3.5" />
+                            Source Story
+                          </Link>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          <TtsPill
+                            label={`Listen ${listenAsset?.status || 'missing'}`}
+                            tone={listenTone}
+                          />
+                          {article.isBreaking ? (
+                            <TtsPill
+                              label={`Breaking voice ${breakingAsset?.status || 'missing'}`}
+                              tone={breakingTone}
+                            />
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleGenerateTts(article, 'article_full')}
+                            disabled={runningTtsActionKey !== ''}
+                            className={cx(SECONDARY_BUTTON_CLASS, 'px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60')}
+                          >
+                            {runningTtsActionKey === `article_full:${article._id}` ? (
+                              <Loader className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Volume2 className="h-3.5 w-3.5" />
+                            )}
+                            Listen
+                          </button>
+                          {article.isBreaking ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleGenerateTts(article, 'breaking_headline')}
+                              disabled={runningTtsActionKey !== ''}
+                              className={cx(DANGER_BUTTON_CLASS, 'px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60')}
+                            >
+                              {runningTtsActionKey === `breaking_headline:${article._id}` ? (
+                                <Loader className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-3.5 w-3.5" />
+                              )}
+                              Breaking Voice
+                            </button>
+                          ) : null}
+                          <Link
+                            href={`/admin/ai?ttsSourceType=article&ttsSourceId=${encodeURIComponent(article._id)}`}
+                            className={cx(SECONDARY_BUTTON_CLASS, 'px-3 py-2 text-xs')}
+                          >
+                            TTS Ops
+                          </Link>
+                        </div>
+                        {listenAsset?.lastError ? (
+                          <p className="text-xs text-red-600 dark:text-red-300">{listenAsset.lastError}</p>
+                        ) : null}
+                        {!listenAsset?.lastError && article.isBreaking && breakingAsset?.lastError ? (
+                          <p className="text-xs text-red-600 dark:text-red-300">{breakingAsset.lastError}</p>
+                        ) : null}
+                      </div>
+                    </details>
                   </div>
 
                   <div className="flex items-center gap-2">

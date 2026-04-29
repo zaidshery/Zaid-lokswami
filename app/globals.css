@@ -1028,6 +1028,43 @@
   .dark .admin-shell .hover\:bg-gray-50:hover {
     @apply bg-zinc-800;
   }
+
+  @media (max-width: 640px) {
+    .admin-shell section[class*="rounded-[36px]"],
+    .admin-shell section[class*="rounded-[32px]"],
+    .admin-shell section[class*="rounded-[30px]"],
+    .admin-shell section[class*="rounded-[28px]"],
+    .admin-shell section[class*="rounded-[26px]"],
+    .admin-shell section[class*="rounded-[24px]"],
+    .admin-shell div[class*="admin-shell-surface-strong"][class*="rounded-[32px]"],
+    .admin-shell div[class*="admin-shell-surface-strong"][class*="rounded-[30px]"],
+    .admin-shell div[class*="admin-shell-surface-strong"][class*="rounded-[28px]"],
+    .admin-shell div[class*="admin-shell-surface-strong"][class*="rounded-[26px]"],
+    .admin-shell div[class*="admin-shell-surface-strong"][class*="rounded-[24px]"] {
+      border-radius: 1.25rem !important;
+      padding: 0.75rem !important;
+    }
+
+    .admin-shell section[class*="grid"][class*="gap-6"],
+    .admin-shell div[class*="grid"][class*="gap-6"],
+    .admin-shell section[class*="space-y-6"],
+    .admin-shell div[class*="space-y-6"],
+    .admin-shell section[class*="space-y-8"],
+    .admin-shell div[class*="space-y-8"] {
+      gap: 1rem !important;
+    }
+
+    .admin-shell h1[class*="text-4xl"],
+    .admin-shell h1[class*="text-5xl"] {
+      font-size: 1.5rem !important;
+      line-height: 2rem !important;
+    }
+
+    .admin-shell h2[class*="text-xl"] {
+      font-size: 1.125rem !important;
+      line-height: 1.75rem !important;
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

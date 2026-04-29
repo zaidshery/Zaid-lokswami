@@ -39,7 +39,7 @@ export function CmsEditorColumns({
   return (
     <div
       className={cx(
-        'grid gap-8',
+        'grid gap-4 sm:gap-8',
         !stacked && SIDEBAR_WIDTH_CLASS[sidebarWidth],
         className
       )}
@@ -56,7 +56,7 @@ export function CmsEditorMain({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={cx('space-y-6', className)}>{children}</div>;
+  return <div className={cx('space-y-4 sm:space-y-6', className)}>{children}</div>;
 }
 
 export function CmsEditorSidebar({
@@ -67,7 +67,7 @@ export function CmsEditorSidebar({
   className?: string;
 }) {
   return (
-    <aside className={cx('space-y-4 xl:sticky xl:top-24 xl:self-start', className)}>
+    <aside className={cx('space-y-3 sm:space-y-4 xl:sticky xl:top-24 xl:self-start', className)}>
       {children}
     </aside>
   );
