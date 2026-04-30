@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const scriptSrc = [
   "script-src 'self' 'unsafe-inline'",
@@ -44,6 +46,13 @@ const nextConfig = {
       protocol: 'https',
       hostname,
     })),
+  },
+  webpack(config) {
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@': path.resolve(__dirname),
+    };
+    return config;
   },
   async headers() {
     return [
