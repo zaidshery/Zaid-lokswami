@@ -1,7 +1,12 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import { isGeminiTtsConfigured, getGeminiTtsRuntimeConfig, synthesizeGeminiSpeech } from '@/lib/ai/geminiTts';
+import {
+  getGeminiTtsRuntimeConfig,
+  getGeminiTtsUnavailableStatus,
+  isGeminiTtsConfigured,
+  synthesizeGeminiSpeech,
+} from '@/lib/ai/geminiTts';
 import {
   GEMINI_TTS_DEFAULT_VOICE,
   GEMINI_TTS_OUTPUT_MIME_TYPE,
@@ -1066,6 +1071,9 @@ export async function processQueuedTtsAssets(input: { limit?: number; staleProce
         ready += 1;
       } else if (result.asset?.status === 'failed' || result.error) {
         failed += 1;
+        if (result.error && getGeminiTtsUnavailableStatus(result.error) === 429) {
+          break;
+        }
       } else {
         skipped += 1;
       }

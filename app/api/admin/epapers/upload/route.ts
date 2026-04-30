@@ -15,8 +15,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-
     const formData = await req.formData();
     const pdf = formData.get('pdf');
     const thumbnail = formData.get('thumbnail');
@@ -40,6 +38,8 @@ export async function POST(req: NextRequest) {
       .filter(isFile)
       .filter((file) => file.size > 0)
       .sort((left, right) => collator.compare(left.name || '', right.name || ''));
+
+    await connectDB();
 
     const result = await createAdminEpaperFromFiles({
       citySlug: String(formData.get('citySlug') || ''),

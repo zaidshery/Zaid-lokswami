@@ -4,6 +4,8 @@ type MongooseCache = {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
   lastConnectedDb: string | null;
+  promiseId: number;
+  lastLoggedFailedPromiseId: number | null;
 };
 
 type MongoErrorWithDetails = Error & {
@@ -29,11 +31,19 @@ const cached =
     conn: null,
     promise: null,
     lastConnectedDb: null,
+    promiseId: 0,
+    lastLoggedFailedPromiseId: null,
   };
 
 if (!globalForMongoose.mongooseCache) {
   globalForMongoose.mongooseCache = cached;
 }
+
+cached.promiseId = Number.isFinite(cached.promiseId) ? cached.promiseId : 0;
+cached.lastLoggedFailedPromiseId =
+  Number.isFinite(cached.lastLoggedFailedPromiseId)
+    ? cached.lastLoggedFailedPromiseId
+    : null;
 
 if (!MONGODB_URI) {
   console.warn(
@@ -92,11 +102,14 @@ async function connectDB() {
   }
 
   if (!cached.promise) {
+    cached.promiseId += 1;
     cached.promise = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
       serverSelectionTimeoutMS: 10000,
     });
   }
+
+  const currentPromiseId = cached.promiseId;
 
   try {
     cached.conn = await cached.promise;
@@ -105,7 +118,10 @@ async function connectDB() {
   } catch (error) {
     const errorMessage = getMongoErrorMessage(error);
 
-    console.error(`[MongoDB] Connection failed: ${errorMessage}`, getMongoErrorDetails(error));
+    if (cached.lastLoggedFailedPromiseId !== currentPromiseId) {
+      console.error(`[MongoDB] Connection failed: ${errorMessage}`, getMongoErrorDetails(error));
+      cached.lastLoggedFailedPromiseId = currentPromiseId;
+    }
 
     cached.promise = null;
     cached.conn = null;

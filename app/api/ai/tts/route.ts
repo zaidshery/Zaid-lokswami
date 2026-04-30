@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getGeminiTtsRuntimeConfig,
+  getGeminiTtsUnavailableStatus,
   isGeminiTtsConfigured,
   synthesizeGeminiSpeech,
 } from '@/lib/ai/geminiTts';
@@ -74,9 +75,20 @@ export async function POST(req: NextRequest) {
 
     if (synthesized.mode === 'unavailable') {
       console.error('AI tts unavailable:', synthesized.reason);
+      const status = getGeminiTtsUnavailableStatus(synthesized.reason);
+      const headers =
+        synthesized.retryAfterSeconds && status === 429
+          ? { 'Retry-After': String(synthesized.retryAfterSeconds) }
+          : undefined;
       return NextResponse.json(
-        { success: false, error: synthesized.reason },
-        { status: 501 }
+        {
+          success: false,
+          error: synthesized.reason,
+          ...(synthesized.retryAfterSeconds
+            ? { retryAfterSeconds: synthesized.retryAfterSeconds }
+            : {}),
+        },
+        { status, headers }
       );
     }
 
