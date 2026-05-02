@@ -15,6 +15,9 @@ vi.mock('@/lib/utils/digitalOceanSpaces', () => ({
 function createRequest(formData: FormData) {
   return {
     formData: async () => formData,
+    clone: function () {
+      return this;
+    },
   } as unknown as NextRequest;
 }
 
