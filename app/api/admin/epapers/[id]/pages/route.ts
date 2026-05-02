@@ -177,7 +177,30 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const basePageFolder = `lokswami/epapers/${epaper.citySlug}/${publishDateFolder}/pages`;
 
     if (contentType.includes('multipart/form-data')) {
-      const form = await req.formData();
+      let form;
+      try {
+        form = await req.formData();
+      } catch (bodyError) {
+        // If body is locked/disturbed, try cloning the request
+        const isBodyError = bodyError instanceof Error &&
+          (bodyError.message.includes('disturbed') || bodyError.message.includes('locked'));
+        const isTimeoutError = bodyError && typeof bodyError === 'object' && 'code' in bodyError &&
+          (bodyError as { code?: string }).code === 'ERR_HTTP_REQUEST_TIMEOUT';
+        if (isBodyError || isTimeoutError) {
+          try {
+            const clonedReq = req.clone();
+            form = await clonedReq.formData();
+          } catch (cloneError) {
+            console.error('Failed to read form data after cloning:', cloneError);
+            return NextResponse.json(
+              { success: false, error: 'Failed to process request body' },
+              { status: 400 }
+            );
+          }
+        } else {
+          throw bodyError;
+        }
+      }
       const pageNumber = parsePageNumber(form.get('pageNumber'));
       const imagePathValue = String(form.get('imagePath') || '').trim();
       const imageFile = form.get('image');

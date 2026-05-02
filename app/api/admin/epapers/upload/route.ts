@@ -15,7 +15,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const formData = await req.formData();
+    // Clone request to avoid "body locked" error when accessed by middleware
+    let formData;
+    try {
+      formData = await req.formData();
+    } catch (bodyError) {
+      // If body is locked/disturbed, try cloning the request
+      const isBodyError = bodyError instanceof Error &&
+        (bodyError.message.includes('disturbed') || bodyError.message.includes('locked'));
+      const isTimeoutError = bodyError && typeof bodyError === 'object' && 'code' in bodyError &&
+        (bodyError as { code?: string }).code === 'ERR_HTTP_REQUEST_TIMEOUT';
+      if (isBodyError || isTimeoutError) {
+        try {
+          const clonedReq = req.clone();
+          formData = await clonedReq.formData();
+        } catch (cloneError) {
+          console.error('Failed to read form data after cloning:', cloneError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to process request body' },
+            { status: 400 }
+          );
+        }
+      } else {
+        throw bodyError;
+      }
+    }
     const pdf = formData.get('pdf');
     const thumbnail = formData.get('thumbnail');
 
