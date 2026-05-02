@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getAdminSessionMock = vi.fn();
+const getAdminSessionFromReqMock = vi.fn();
 const connectDBMock = vi.fn();
 
 const findOneMock = vi.fn();
@@ -15,7 +15,7 @@ Object.assign(CategoryMock, {
 });
 
 vi.mock('@/lib/auth/admin', () => ({
-  getAdminSession: getAdminSessionMock,
+  getAdminSessionFromReq: getAdminSessionFromReqMock,
 }));
 
 vi.mock('@/lib/db/mongoose', () => ({
@@ -34,7 +34,7 @@ describe('/api/admin/categories POST', () => {
   });
 
   it('prevents reporters from creating categories', async () => {
-    getAdminSessionMock.mockResolvedValue({
+    getAdminSessionFromReqMock.mockResolvedValue({
       id: 'reporter-1',
       email: 'reporter@example.com',
       name: 'Reporter',
