@@ -139,12 +139,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const reqClone = req.clone();
     const user = await getAdminSession();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     if (!canViewPage(user.role, 'categories')) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
-    const body = await req.json();
+    const body = await reqClone.json();
     const { name, description } = body;
     if (!name) return NextResponse.json({ success: false, error: 'Name required' }, { status: 400 });
 

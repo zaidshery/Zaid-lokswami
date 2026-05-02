@@ -93,6 +93,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const reqClone = req.clone();
     const user = await getAdminSession();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const body = await req.json();
+    const body = await reqClone.json();
     const { filename, url, size, type } = body;
     if (!filename || !url) return NextResponse.json({ success: false, error: 'Missing fields' }, { status: 400 });
 

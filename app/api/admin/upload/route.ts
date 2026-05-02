@@ -121,12 +121,13 @@ function canUseUploadPurpose(role: string | null | undefined, purpose: UploadPur
 
 export async function POST(req: NextRequest) {
   try {
+    const reqClone = req.clone();
     const user = await getAdminSession();
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const formData = await req.formData();
+    const formData = await reqClone.formData();
     const file = formData.get('file');
     const purpose = parseUploadPurpose(formData.get('purpose'));
 

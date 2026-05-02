@@ -151,6 +151,7 @@ function updateSinglePage(
 
 export async function PUT(req: NextRequest, context: RouteContext) {
   try {
+    const reqClone = req.clone();
     const admin = await getAdminSession();
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -177,7 +178,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const basePageFolder = `lokswami/epapers/${epaper.citySlug}/${publishDateFolder}/pages`;
 
     if (contentType.includes('multipart/form-data')) {
-      const form = await req.formData();
+      const form = await reqClone.formData();
       const pageNumber = parsePageNumber(form.get('pageNumber'));
       const imagePathValue = String(form.get('imagePath') || '').trim();
       const imageFile = form.get('image');
@@ -313,7 +314,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       });
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await reqClone.json().catch(() => ({}));
     const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
     const updates = Array.isArray(source.pages) ? source.pages : [];
 

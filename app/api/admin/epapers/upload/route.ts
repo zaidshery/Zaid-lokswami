@@ -10,12 +10,13 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    const reqClone = req.clone();
     const admin = await getAdminSession();
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const formData = await req.formData();
+    const formData = await reqClone.formData();
     const pdf = formData.get('pdf');
     const thumbnail = formData.get('thumbnail');
 
