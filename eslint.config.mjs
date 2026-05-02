@@ -32,7 +32,7 @@ const eslintConfig = [
     },
   },
   {
-    files: ['scripts/**/*.{js,ts}'],
+    files: ['scripts/**/*.{js,ts}', 'next.config.js'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
     },

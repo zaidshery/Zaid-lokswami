@@ -13,6 +13,7 @@ function loadProjectEnvFiles() {
 
   const envFileNames = [
     '.env',
+    '.env.hostinger',
     '.env.production',
     '.env.local',
     '.env.production.local',

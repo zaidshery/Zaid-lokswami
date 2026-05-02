@@ -6,7 +6,7 @@ const path = require('path');
 try {
   const dotenv = require('dotenv');
   const root = path.resolve(__dirname, '..');
-  for (const file of ['.env.local', '.env', '.env.production', '.env.production.local']) {
+  for (const file of ['.env', '.env.hostinger', '.env.production', '.env.local', '.env.production.local']) {
     dotenv.config({ path: path.join(root, file), override: false });
   }
 } catch {

@@ -56,6 +56,7 @@ function loadProjectEnvFiles() {
   const mode = (process.env.NODE_ENV || 'production').trim() || 'production';
   const envFileNames = [
     '.env',
+    '.env.hostinger',
     `.env.${mode}`,
     '.env.local',
     `.env.${mode}.local`,
