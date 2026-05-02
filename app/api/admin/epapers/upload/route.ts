@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   createAdminEpaperFromFiles,
   isFile,
@@ -10,13 +10,12 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    const reqClone = req.clone();
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const formData = await reqClone.formData();
+    const formData = await req.formData();
     const pdf = formData.get('pdf');
     const thumbnail = formData.get('thumbnail');
 

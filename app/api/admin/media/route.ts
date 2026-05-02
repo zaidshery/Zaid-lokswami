@@ -3,8 +3,8 @@ import connectDB from '@/lib/db/mongoose';
 import Media from '@/lib/models/Media';
 import fs from 'fs/promises';
 import path from 'path';
-import {
   getAdminSession,
+  getAdminSessionFromReq,
   type AdminSessionIdentity,
 } from '@/lib/auth/admin';
 import { canDeleteContent, canViewPage } from '@/lib/auth/permissions';
@@ -38,9 +38,9 @@ function sortMediaByCreatedAt(records: MediaRecord[]): MediaRecord[] {
   });
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -93,15 +93,14 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const reqClone = req.clone();
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
     if (!canViewPage(user.role, 'media')) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const body = await reqClone.json();
+    const body = await req.json();
     const { filename, url, size, type } = body;
     if (!filename || !url) return NextResponse.json({ success: false, error: 'Missing fields' }, { status: 400 });
 

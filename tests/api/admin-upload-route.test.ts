@@ -1,11 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getAdminSessionMock = vi.fn();
+const getAdminSessionFromReqMock = vi.fn();
 const uploadBufferToSpacesMock = vi.fn();
 
 vi.mock('@/lib/auth/admin', () => ({
-  getAdminSession: getAdminSessionMock,
+  getAdminSessionFromReq: getAdminSessionFromReqMock,
 }));
 
 vi.mock('@/lib/utils/digitalOceanSpaces', () => ({
@@ -31,7 +31,7 @@ describe('/api/admin/upload POST', () => {
   });
 
   it('returns 401 for guests', async () => {
-    getAdminSessionMock.mockResolvedValue(null);
+    getAdminSessionFromReqMock.mockResolvedValue(null);
 
     const formData = new FormData();
     formData.set('file', createFile('image.jpg', 'image/jpeg'));
@@ -49,7 +49,7 @@ describe('/api/admin/upload POST', () => {
   });
 
   it('rejects unsupported image file types before upload', async () => {
-    getAdminSessionMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
+    getAdminSessionFromReqMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
 
     const formData = new FormData();
     formData.set('file', createFile('notes.txt', 'text/plain'));
@@ -67,7 +67,7 @@ describe('/api/admin/upload POST', () => {
   });
 
   it('allows reporters to upload regular image assets', async () => {
-    getAdminSessionMock.mockResolvedValue({ id: 'reporter-1', role: 'reporter' });
+    getAdminSessionFromReqMock.mockResolvedValue({ id: 'reporter-1', role: 'reporter' });
     uploadBufferToSpacesMock.mockResolvedValue({
       secureUrl: 'https://cdn.example.com/lokswami/images/image.jpg',
       publicId: 'lokswami/images/image.jpg',
@@ -88,7 +88,7 @@ describe('/api/admin/upload POST', () => {
   });
 
   it('blocks reporter uploads for desk-only purposes', async () => {
-    getAdminSessionMock.mockResolvedValue({ id: 'reporter-1', role: 'reporter' });
+    getAdminSessionFromReqMock.mockResolvedValue({ id: 'reporter-1', role: 'reporter' });
 
     const formData = new FormData();
     formData.set('purpose', 'epaper-paper');
@@ -107,7 +107,7 @@ describe('/api/admin/upload POST', () => {
   });
 
   it('rejects oversized e-paper PDFs', async () => {
-    getAdminSessionMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
+    getAdminSessionFromReqMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
 
     const file = createFile('edition.pdf', 'application/pdf');
     Object.defineProperty(file, 'size', {
@@ -132,7 +132,7 @@ describe('/api/admin/upload POST', () => {
   });
 
   it('uploads valid e-paper PDFs with the raw DigitalOcean Spaces pipeline', async () => {
-    getAdminSessionMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
+    getAdminSessionFromReqMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
     uploadBufferToSpacesMock.mockResolvedValue({
       secureUrl: 'https://lokswami-storage-2026.sgp1.cdn.digitaloceanspaces.com/lokswami/epapers/papers/edition.pdf',
       publicId: 'lokswami/epapers/papers/edition.pdf',

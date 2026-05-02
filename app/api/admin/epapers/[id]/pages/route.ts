@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
 import {
   buildEpaperActivityMessage,
@@ -151,8 +151,7 @@ function updateSinglePage(
 
 export async function PUT(req: NextRequest, context: RouteContext) {
   try {
-    const reqClone = req.clone();
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
@@ -178,7 +177,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const basePageFolder = `lokswami/epapers/${epaper.citySlug}/${publishDateFolder}/pages`;
 
     if (contentType.includes('multipart/form-data')) {
-      const form = await reqClone.formData();
+      const form = await req.formData();
       const pageNumber = parsePageNumber(form.get('pageNumber'));
       const imagePathValue = String(form.get('imagePath') || '').trim();
       const imageFile = form.get('image');
@@ -314,7 +313,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       });
     }
 
-    const body = await reqClone.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
     const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
     const updates = Array.isArray(source.pages) ? source.pages : [];
 

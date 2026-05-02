@@ -3,7 +3,7 @@ import connectDB from '@/lib/db/mongoose';
 import Category from '@/lib/models/Category';
 import fs from 'fs/promises';
 import path from 'path';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSession, getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 
@@ -72,9 +72,9 @@ async function shouldUseFileStore() {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -139,13 +139,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const reqClone = req.clone();
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     if (!canViewPage(user.role, 'categories')) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
-    const body = await reqClone.json();
+    const body = await req.json();
     const { name, description } = body;
     if (!name) return NextResponse.json({ success: false, error: 'Name required' }, { status: 400 });
 

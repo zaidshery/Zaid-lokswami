@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { isReporterDeskRole } from '@/lib/auth/roles';
 import { uploadBufferToDigitalOceanSpaces } from '@/lib/utils/digitalOceanSpaces';
 
@@ -121,13 +121,12 @@ function canUseUploadPurpose(role: string | null | undefined, purpose: UploadPur
 
 export async function POST(req: NextRequest) {
   try {
-    const reqClone = req.clone();
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const formData = await reqClone.formData();
+    const formData = await req.formData();
     const file = formData.get('file');
     const purpose = parseUploadPurpose(formData.get('purpose'));
 
