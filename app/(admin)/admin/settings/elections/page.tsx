@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import Image from 'next/image';
 import {
   UploadCloud,
   CheckCircle2,
@@ -125,19 +124,21 @@ export default function ElectionSettingsPage() {
               className="cnp-surface flex flex-col rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm transition-shadow hover:shadow-md"
             >
               {/* Preview */}
-              <div className="relative aspect-video w-full bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="relative aspect-video w-full bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
                 {isDeleted ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600">
+                  <div className="flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600">
                     <ImageOff className="w-8 h-8" />
-                    <span className="text-xs font-medium">No graphic</span>
+                    <span className="text-xs font-medium">No graphic uploaded</span>
                   </div>
                 ) : (
-                  <Image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
                     src={imageUrl}
                     alt={`${state.name} Election Graphic`}
-                    fill
-                    className="object-contain"
-                    unoptimized
+                    className="absolute inset-0 w-full h-full object-contain"
+                    onError={() =>
+                      setDeleted((p) => ({ ...p, [state.id]: true }))
+                    }
                   />
                 )}
 
