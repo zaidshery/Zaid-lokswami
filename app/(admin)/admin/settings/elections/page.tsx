@@ -78,15 +78,19 @@ export default function ElectionSettingsPage() {
     const form = new FormData();
     form.append('file', file); form.append('stateId', stateId);
     try {
-      const res  = await fetch('/api/admin/elections/upload', { method: 'POST', body: form });
-      const data = await res.json();
-      if (data.success) {
+      const res = await fetch('/api/admin/elections/upload', { method: 'POST', body: form });
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* non-JSON response */ }
+      if (res.status === 401) { setMsg(stateId, 'error', 'Not authorised — please re-login'); }
+      else if (res.status === 413) { setMsg(stateId, 'error', 'File too large (max 10 MB)'); }
+      else if (!res.ok) { setMsg(stateId, 'error', String(data.error ?? `Server error ${res.status}`)); }
+      else if (data.success) {
         setMsg(stateId, 'success', 'Graphic updated!');
         setTimestamps((p) => ({ ...p, [stateId]: Date.now() }));
         setDeleted((p) => ({ ...p, [stateId]: false }));
         router.refresh();
-      } else { setMsg(stateId, 'error', data.error || 'Upload failed'); }
-    } catch { setMsg(stateId, 'error', 'Network error'); }
+      } else { setMsg(stateId, 'error', String(data.error ?? 'Upload failed')); }
+    } catch (err) { setMsg(stateId, 'error', `Connection error — is the server running? (${err})`); }
     finally  { setUploading(null); }
   }, [router]);
 
@@ -96,17 +100,20 @@ export default function ElectionSettingsPage() {
     if (!confirm(`Remove the "${stateName}" graphic?`)) return;
     setDeleting(stateId); clearMsg(stateId);
     try {
-      const res  = await fetch('/api/admin/elections/delete', {
+      const res = await fetch('/api/admin/elections/delete', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stateId }),
       });
-      const data = await res.json();
-      if (data.success) {
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* non-JSON response */ }
+      if (res.status === 401) { setMsg(stateId, 'error', 'Not authorised — please re-login'); }
+      else if (!res.ok) { setMsg(stateId, 'error', String(data.error ?? `Server error ${res.status}`)); }
+      else if (data.success) {
         setMsg(stateId, 'success', 'Graphic removed.');
         setDeleted((p) => ({ ...p, [stateId]: true }));
         router.refresh();
-      } else { setMsg(stateId, 'error', data.error || 'Delete failed'); }
-    } catch { setMsg(stateId, 'error', 'Network error'); }
+      } else { setMsg(stateId, 'error', String(data.error ?? 'Delete failed')); }
+    } catch (err) { setMsg(stateId, 'error', `Connection error (${err})`); }
     finally  { setDeleting(null); }
   }, [router]);
 
