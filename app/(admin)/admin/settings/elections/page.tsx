@@ -151,20 +151,22 @@ export default function ElectionSettingsPage() {
               </div>
 
               {/* Body */}
-              <div className="p-4 flex-1 flex flex-col gap-3">
+              <div className="p-4 flex flex-col gap-3 min-h-[120px]">
                 <h3 className="font-semibold text-base text-zinc-900 dark:text-zinc-100">
                   {state.name}
                 </h3>
 
-                {/* Action buttons */}
-                <div className="mt-auto flex flex-col gap-2">
+                {/* Action buttons — always visible */}
+                <div className="flex flex-col gap-2">
 
-                  {/* Upload / Replace */}
+                  {/* Upload / Replace — always shown */}
                   <label
-                    className={`relative flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-sm font-medium transition-all select-none ${
+                    className={`relative flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-sm font-semibold transition-all select-none ${
                       isBusy
-                        ? 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed'
-                        : 'bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 cursor-pointer'
+                        ? 'bg-zinc-200 text-zinc-400 dark:bg-zinc-700 dark:text-zinc-500 cursor-not-allowed'
+                        : isDeleted
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-md shadow-blue-500/20'
+                          : 'bg-zinc-800 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white cursor-pointer'
                     }`}
                   >
                     <input
@@ -187,13 +189,13 @@ export default function ElectionSettingsPage() {
                     )}
                   </label>
 
-                  {/* Delete */}
+                  {/* Delete — only shown when image exists */}
                   {!isDeleted && (
                     <button
                       type="button"
                       disabled={isBusy}
                       onClick={() => handleDelete(state.id)}
-                      className="flex items-center justify-center gap-2 w-full py-2 px-4 rounded-xl text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex items-center justify-center gap-2 w-full py-2 px-4 rounded-xl text-sm font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700/60 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isDel ? (
                         <><Loader2 className="w-4 h-4 animate-spin" /> Removing…</>
