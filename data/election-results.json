@@ -1,0 +1,58 @@
+{
+  "lastUpdated": "2026-05-04T04:18:00.000Z",
+  "states": {
+    "wb": {
+      "name": "West Bengal",
+      "totalSeats": 294,
+      "parties": [
+        { "name": "BJP",  "color": "#FF6B00", "won": 0, "leading": 18 },
+        { "name": "AITC", "color": "#45B5E4", "won": 0, "leading": 4  },
+        { "name": "BGPM", "color": "#8B5CF6", "won": 0, "leading": 2  }
+      ]
+    },
+    "kerala": {
+      "name": "Kerala",
+      "totalSeats": 140,
+      "parties": [
+        { "name": "INC",    "color": "#00A651", "won": 0, "leading": 52 },
+        { "name": "CPI(M)", "color": "#E63946", "won": 0, "leading": 28 },
+        { "name": "IUML",   "color": "#1565C0", "won": 0, "leading": 16 },
+        { "name": "CPI",    "color": "#CC0000", "won": 0, "leading": 9  },
+        { "name": "BJP",    "color": "#FF6B00", "won": 0, "leading": 3  }
+      ]
+    },
+    "tn": {
+      "name": "Tamil Nadu",
+      "totalSeats": 234,
+      "parties": [
+        { "name": "TVK",  "color": "#F59E0B", "won": 0, "leading": 33 },
+        { "name": "ADMK", "color": "#10B981", "won": 0, "leading": 33 },
+        { "name": "DMK",  "color": "#EF4444", "won": 0, "leading": 16 },
+        { "name": "INC",  "color": "#00A651", "won": 0, "leading": 2  },
+        { "name": "BJP",  "color": "#FF6B00", "won": 0, "leading": 1  }
+      ]
+    },
+    "assam": {
+      "name": "Assam",
+      "totalSeats": 126,
+      "parties": [
+        { "name": "BJP",      "color": "#FF6B00", "won": 0, "leading": 39 },
+        { "name": "INC",      "color": "#00A651", "won": 0, "leading": 11 },
+        { "name": "BOPF",     "color": "#8B5CF6", "won": 0, "leading": 6  },
+        { "name": "AGP",      "color": "#06B6D4", "won": 0, "leading": 3  },
+        { "name": "ASMJTYP", "color": "#6B7280", "won": 0, "leading": 3  }
+      ]
+    },
+    "puducherry": {
+      "name": "Puducherry",
+      "totalSeats": 30,
+      "parties": [
+        { "name": "AINRC", "color": "#F59E0B", "won": 0, "leading": 7 },
+        { "name": "Ind",   "color": "#6B7280", "won": 0, "leading": 3 },
+        { "name": "INC",   "color": "#00A651", "won": 0, "leading": 2 },
+        { "name": "ADMK",  "color": "#10B981", "won": 0, "leading": 1 },
+        { "name": "DMK",   "color": "#EF4444", "won": 0, "leading": 1 }
+      ]
+    }
+  }
+}
