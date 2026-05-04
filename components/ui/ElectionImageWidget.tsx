@@ -99,11 +99,14 @@ export default function ElectionImageWidget() {
         >
 
           {/* ── Graphic ── */}
-          <div className="relative w-full sm:w-[45%] bg-zinc-900 border-b sm:border-b-0 sm:border-r border-zinc-800 flex-shrink-0" style={{ aspectRatio: '4/3' }}>
+          <div className="relative w-full sm:w-[45%] bg-zinc-900 border-b sm:border-b-0 sm:border-r border-zinc-800 flex-shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`${slide.src}?v=${SESSION_TS}`} alt={slide.label}
-              className="absolute inset-0 w-full h-full object-contain"
+            <img
+              src={`${slide.src}?v=${SESSION_TS}`}
+              alt={slide.label}
+              className="block w-full h-auto"
             />
+            {/* Prev / Next arrows */}
             <button onClick={handlePrev}
               className="absolute left-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/90 transition-colors z-10">
               <ChevronLeft className="h-4 w-4" />
@@ -112,6 +115,7 @@ export default function ElectionImageWidget() {
               className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/90 transition-colors z-10">
               <ChevronRight className="h-4 w-4" />
             </button>
+            {/* Dots */}
             <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
               {ELECTION_SLIDES.map((_, idx) => (
                 <button key={idx} onClick={() => setCurrentIndex(idx)}
