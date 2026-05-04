@@ -4,6 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Activity } from 'lucide-react';
 
+// Stable per-session cache buster — set once on load, not on every render
+const SESSION_TS = Math.floor(Date.now() / 300_000); // changes every 5 min max
+
 const ELECTION_SLIDES = [
   { id: 'wb',         src: '/elections/wb.jpg',         label: 'West Bengal'  },
   { id: 'kerala',     src: '/elections/kerala.jpg',     label: 'Kerala'       },
@@ -106,7 +109,7 @@ export default function ElectionImageWidget() {
           <div className="relative w-full sm:w-1/2 aspect-[16/9] sm:aspect-auto sm:min-h-[220px] bg-zinc-900 border-b sm:border-b-0 sm:border-r border-zinc-800 flex-shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${slide.src}?t=${Date.now()}`}
+              src={`${slide.src}?v=${SESSION_TS}`}
               alt={slide.label}
               className="absolute inset-0 w-full h-full object-contain"
             />

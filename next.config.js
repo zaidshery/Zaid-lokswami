@@ -97,7 +97,17 @@ const nextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=0, s-maxage=60, stale-while-revalidate=300',
+            value: 'public, max-age=0, s-maxage=120, stale-while-revalidate=600',
+          },
+        ],
+      },
+      {
+        // Cache election images for 5 minutes
+        source: '/elections/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=300, stale-while-revalidate=60',
           },
         ],
       },
@@ -203,7 +213,7 @@ const nextConfig = {
   // Configure size limits for server actions
   experimental: {
     serverActions: {
-      bodySizeLimit: '100mb',
+      bodySizeLimit: '10mb',
     },
   },
 };
