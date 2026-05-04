@@ -12,8 +12,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Read formData once — never clone the request (breaks in Next.js 15)
-    const formData = await req.formData();
+    // Read formData once
+    let formData;
+    try {
+      formData = await req.formData();
+    } catch (err) {
+      console.error('[election-upload] Failed to parse form data:', err);
+      return NextResponse.json({ success: false, error: 'Failed to parse form data' }, { status: 400 });
+    }
+
     const file     = formData.get('file');
     const stateId  = formData.get('stateId') as string;
 
@@ -26,15 +33,33 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert to buffer
-    const buffer = Buffer.from(await file.arrayBuffer());
+    let buffer;
+    try {
+      buffer = Buffer.from(await file.arrayBuffer());
+    } catch (err) {
+      console.error('[election-upload] Failed to read file buffer:', err);
+      return NextResponse.json({ success: false, error: 'Failed to read file' }, { status: 500 });
+    }
 
     // Ensure /public/elections/ exists
     const electionsDir = path.join(process.cwd(), 'public', 'elections');
-    await fs.mkdir(electionsDir, { recursive: true });
+    try {
+      await fs.mkdir(electionsDir, { recursive: true });
+    } catch (err) {
+      console.error('[election-upload] Failed to create directory:', err);
+      return NextResponse.json({ success: false, error: 'Storage error (dir)' }, { status: 500 });
+    }
 
-    // Always save as .jpg (widget references <stateId>.jpg)
+    // Always save as .jpg
     const filePath = path.join(electionsDir, `${stateId}.jpg`);
-    await fs.writeFile(filePath, buffer);
+    try {
+      await fs.writeFile(filePath, buffer);
+    } catch (err) {
+      console.error('[election-upload] Failed to write file:', err);
+      return NextResponse.json({ success: false, error: 'Storage error (write)' }, { status: 500 });
+    }
+
+    console.log(`[election-upload] Successfully updated ${stateId} graphic`);
 
     return NextResponse.json({
       success: true,
@@ -42,8 +67,8 @@ export async function POST(req: NextRequest) {
       url: `/elections/${stateId}.jpg?t=${Date.now()}`,
     });
 
-  } catch (error) {
-    console.error('[election-upload]', error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[election-upload] Unexpected error:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
