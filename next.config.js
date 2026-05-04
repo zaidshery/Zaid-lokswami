@@ -200,6 +200,12 @@ const nextConfig = {
       },
     ];
   },
+  // Configure size limits for server actions
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '100mb',
+    },
+  },
 };
 
 module.exports = nextConfig;

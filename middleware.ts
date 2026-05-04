@@ -7,6 +7,7 @@ import { resolveRouteGuardDecision } from '@/lib/auth/routeGuards';
 import { getLoginLimiter } from '@/lib/security/getRateLimiter';
 import { getIpRateLimitKey } from '@/lib/security/ipUtils';
 import { logApiRequestFromMiddleware } from '@/lib/security/requestLogger';
+import { isAdminRole } from '@/lib/auth/roles';
 
 async function getSessionToken(request: NextRequest) {
   const secret = getJwtSecretOrNull();
@@ -28,6 +29,38 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   try {
     const { pathname } = request.nextUrl;
     const isApiRequest = pathname.startsWith('/api/');
+    
+    // Skip middleware processing for large file upload routes
+    // Bypass body processing to allow large multipart uploads
+    const isLargeUploadRoute = 
+      pathname === '/api/admin/epapers/upload' ||
+      pathname === '/api/admin/upload' ||
+      pathname.includes('/api/admin/epapers/') && pathname.includes('/pages');
+    
+    if (isLargeUploadRoute) {
+      // For upload routes, just check auth without reading the body
+      // Let the route handler deal with formData parsing
+      const secret = getJwtSecretOrNull();
+      if (!secret) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+
+      const token = await getToken({ 
+        req: request, 
+        secret, 
+        cookieName: LOKSWAMI_SESSION_COOKIE 
+      });
+      
+      const hasAdminRole = token?.role && isAdminRole(token.role as string);
+      const isActive = token?.isActive !== false;
+      
+      if (!token || !hasAdminRole || !isActive) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+      
+      return NextResponse.next();
+    }
+    
     let session: Awaited<ReturnType<typeof getSessionToken>> = null;
 
     function scheduleRequestLog(response: NextResponse) {
@@ -101,6 +134,7 @@ export const config = {
   runtime: 'nodejs',
   matcher: [
     '/admin/:path*',
+    '/api/admin/:path*',
     '/api/:path*',
     '/login',
     '/signin',

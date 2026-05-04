@@ -133,6 +133,7 @@ const SUPER_ADMIN_ITEMS: SidebarItem[] = [
     labelHi: HI.operationsDiagnostics,
     href: '/admin/operations-diagnostics',
   },
+  { icon: Activity, labelEn: 'Elections', labelHi: 'चुनाव', href: '/admin/settings/elections' },
   { icon: Settings, labelEn: 'Settings', labelHi: HI.settings, href: '/admin/settings' },
 ];
 
@@ -152,6 +153,7 @@ const ADMIN_ITEMS: SidebarItem[] = [
   { icon: Share2, labelEn: 'Social Posts', labelHi: HI.socialPosts, href: '/admin/social-posts' },
   { icon: Newspaper, labelEn: 'E-Papers', labelHi: HI.epapers, href: '/admin/epapers' },
   { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
+  { icon: Activity, labelEn: 'Elections', labelHi: 'चुनाव', href: '/admin/settings/elections' },
   {
     icon: Settings2,
     labelEn: 'Newsroom Settings',
@@ -236,6 +238,7 @@ function getSidebarSections(
           '/admin/operations',
           '/admin/permission-review',
           '/admin/operations-diagnostics',
+          '/admin/settings/elections',
           '/admin/settings',
         ]),
       },
@@ -272,7 +275,7 @@ function getSidebarSections(
       {
         labelEn: 'Insights & Settings',
         labelHi: '\u0907\u0928\u0938\u093e\u0907\u091f\u094d\u0938 \u0914\u0930 \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938',
-        items: pick(['/admin/operations', '/admin/analytics', '/admin/settings/newsroom']),
+        items: pick(['/admin/operations', '/admin/analytics', '/admin/settings/elections', '/admin/settings/newsroom']),
       },
     ].filter((section) => section.items.length > 0);
   }
