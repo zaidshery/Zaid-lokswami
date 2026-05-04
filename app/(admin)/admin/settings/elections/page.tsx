@@ -79,18 +79,19 @@ export default function ElectionSettingsPage() {
     form.append('file', file); form.append('stateId', stateId);
     try {
       const res = await fetch('/api/admin/elections/upload', { method: 'POST', body: form });
-      let data: Record<string, unknown> = {};
-      try { data = await res.json(); } catch { /* non-JSON response */ }
-      if (res.status === 401) { setMsg(stateId, 'error', 'Not authorised — please re-login'); }
-      else if (res.status === 413) { setMsg(stateId, 'error', 'File too large (max 10 MB)'); }
-      else if (!res.ok) { setMsg(stateId, 'error', String(data.error ?? `Server error ${res.status}`)); }
+      let data: Record<string, any> = {};
+      try { data = await res.json(); } catch { /* ignore */ }
+
+      if (res.status === 401) { setMsg(stateId, 'error', 'Session expired. Please login again.'); }
+      else if (res.status === 413) { setMsg(stateId, 'error', 'File too large (max 10MB)'); }
+      else if (!res.ok) { setMsg(stateId, 'error', data.error || `Server error (${res.status})`); }
       else if (data.success) {
         setMsg(stateId, 'success', 'Graphic updated!');
         setTimestamps((p) => ({ ...p, [stateId]: Date.now() }));
         setDeleted((p) => ({ ...p, [stateId]: false }));
         router.refresh();
-      } else { setMsg(stateId, 'error', String(data.error ?? 'Upload failed')); }
-    } catch (err) { setMsg(stateId, 'error', `Connection error — is the server running? (${err})`); }
+      } else { setMsg(stateId, 'error', data.error || 'Upload failed'); }
+    } catch { setMsg(stateId, 'error', 'Network error — check your connection'); }
     finally  { setUploading(null); }
   }, [router]);
 
@@ -104,16 +105,17 @@ export default function ElectionSettingsPage() {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stateId }),
       });
-      let data: Record<string, unknown> = {};
-      try { data = await res.json(); } catch { /* non-JSON response */ }
-      if (res.status === 401) { setMsg(stateId, 'error', 'Not authorised — please re-login'); }
-      else if (!res.ok) { setMsg(stateId, 'error', String(data.error ?? `Server error ${res.status}`)); }
+      let data: Record<string, any> = {};
+      try { data = await res.json(); } catch { /* ignore */ }
+
+      if (res.status === 401) { setMsg(stateId, 'error', 'Session expired.'); }
+      else if (!res.ok) { setMsg(stateId, 'error', data.error || 'Delete failed'); }
       else if (data.success) {
         setMsg(stateId, 'success', 'Graphic removed.');
         setDeleted((p) => ({ ...p, [stateId]: true }));
         router.refresh();
-      } else { setMsg(stateId, 'error', String(data.error ?? 'Delete failed')); }
-    } catch (err) { setMsg(stateId, 'error', `Connection error (${err})`); }
+      } else { setMsg(stateId, 'error', data.error || 'Delete failed'); }
+    } catch { setMsg(stateId, 'error', 'Network error'); }
     finally  { setDeleting(null); }
   }, [router]);
 
@@ -249,9 +251,9 @@ export default function ElectionSettingsPage() {
                 </div>
 
                 {/* Body */}
-                <div className="p-4 flex flex-col gap-3 min-h-[120px]">
+                <div className="p-4 flex flex-col gap-3 min-h-[150px]">
                   <h3 className="font-semibold text-base text-zinc-900 dark:text-zinc-100">{state.name}</h3>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 mt-auto">
                     <label className={`relative flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-sm font-semibold transition-all select-none ${
                       isBusy ? 'bg-zinc-200 text-zinc-400 dark:bg-zinc-700 dark:text-zinc-500 cursor-not-allowed'
                         : isDeleted ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-md shadow-blue-500/20'
@@ -272,12 +274,16 @@ export default function ElectionSettingsPage() {
                       </button>
                     )}
                   </div>
-                  {msg?.text && (
-                    <div className={`flex items-start gap-1.5 text-xs ${msg.type === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {msg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                      <span>{msg.text}</span>
-                    </div>
-                  )}
+                  
+                  {/* Message Area - Fixed height to prevent card jump */}
+                  <div className="h-5 flex items-center">
+                    {msg?.text && (
+                      <div className={`flex items-start gap-1.5 text-xs ${msg.type === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {msg.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                        <span className="truncate">{msg.text}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );

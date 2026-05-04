@@ -98,14 +98,15 @@ export default function ElectionImageWidget() {
           onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}
         >
 
-          {/* ── Graphic ── */}
-          <div className="relative w-full sm:w-[45%] bg-zinc-900 border-b sm:border-b-0 sm:border-r border-zinc-800 flex-shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`${slide.src}?v=${SESSION_TS}`}
-              alt={slide.label}
-              className="block w-full h-auto"
-            />
+          <div className="relative w-full sm:w-[48%] bg-zinc-900 border-b sm:border-b-0 sm:border-r border-zinc-800 flex-shrink-0">
+            <div className="aspect-[16/10] sm:aspect-video w-full overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`${slide.src}?v=${SESSION_TS}`}
+                alt={slide.label}
+                className="w-full h-full object-cover"
+              />
+            </div>
             {/* Prev / Next arrows */}
             <button onClick={handlePrev}
               className="absolute left-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/90 transition-colors z-10">
