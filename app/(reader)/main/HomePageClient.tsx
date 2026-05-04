@@ -303,8 +303,8 @@ export default function HomePage() {
       <div className="pointer-events-none absolute -top-16 right-0 h-60 w-60 rounded-full bg-orange-200/45 blur-3xl dark:bg-orange-900/20" />
       <div className="pointer-events-none absolute top-[26rem] -left-16 h-64 w-64 rounded-full bg-cyan-200/35 blur-3xl dark:bg-cyan-900/20" />
 
-      {/* Live Election Image Widget — Card 1 (Mobile/Tablet) */}
-      <section className="relative mb-[var(--section-gap)] px-3 sm:px-4 md:px-6 xl:hidden">
+      {/* Live Election Image Widget — Card 1 (Mobile/Tablet/Desktop) */}
+      <section className="relative mb-[var(--section-gap)] px-3 sm:px-4 md:px-6">
         <ElectionImageWidget />
       </section>
 
