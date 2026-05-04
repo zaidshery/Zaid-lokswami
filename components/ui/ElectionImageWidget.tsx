@@ -32,7 +32,14 @@ export default function ElectionImageWidget() {
     } catch { /* silent */ }
   }, []);
 
-  useEffect(() => { fetchResults(); }, [fetchResults]);
+  useEffect(() => { 
+    // Initial fetch
+    fetchResults(); 
+    
+    // Set up polling every 30 seconds for real-time updates
+    const pollInterval = setInterval(fetchResults, 30000);
+    return () => clearInterval(pollInterval);
+  }, [fetchResults]);
 
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);

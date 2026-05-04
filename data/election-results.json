@@ -1,67 +1,130 @@
 {
-  "lastUpdated": "2026-05-04T04:24:00.000Z",
+  "lastUpdated": "2026-05-04T08:00:00.000Z",
   "states": {
     "wb": {
       "name": "West Bengal",
       "totalSeats": 294,
       "parties": [
-        { "name": "BJP",  "color": "#FF6B00", "won": 0, "leading": 21 },
-        { "name": "AITC", "color": "#45B5E4", "won": 0, "leading": 4  },
-        { "name": "BGPM", "color": "#8B5CF6", "won": 0, "leading": 2  }
+        {
+          "name": "TMC",
+          "color": "#45B5E4",
+          "won": 12,
+          "leading": 182
+        },
+        {
+          "name": "BJP",
+          "color": "#FF6B00",
+          "won": 8,
+          "leading": 84
+        },
+        {
+          "name": "INC+",
+          "color": "#00A651",
+          "won": 0,
+          "leading": 5
+        },
+        {
+          "name": "Other",
+          "color": "#6B7280",
+          "won": 0,
+          "leading": 3
+        }
       ]
     },
     "kerala": {
       "name": "Kerala",
       "totalSeats": 140,
       "parties": [
-        { "name": "INC",    "color": "#00A651", "won": 0, "leading": 51 },
-        { "name": "CPI(M)", "color": "#E63946", "won": 0, "leading": 28 },
-        { "name": "IUML",   "color": "#1565C0", "won": 0, "leading": 17 },
-        { "name": "CPI",    "color": "#CC0000", "won": 0, "leading": 10 },
-        { "name": "KEC(M)", "color": "#6B7280", "won": 0, "leading": 4  },
-        { "name": "BJP",    "color": "#FF6B00", "won": 0, "leading": 3  },
-        { "name": "KEC",    "color": "#F59E0B", "won": 0, "leading": 3  },
-        { "name": "RSP",    "color": "#10B981", "won": 0, "leading": 3  },
-        { "name": "RJD",    "color": "#8B5CF6", "won": 0, "leading": 1  }
+        {
+          "name": "LDF",
+          "color": "#E63946",
+          "won": 5,
+          "leading": 80
+        },
+        {
+          "name": "UDF",
+          "color": "#00A651",
+          "won": 2,
+          "leading": 48
+        },
+        {
+          "name": "NDA",
+          "color": "#FF6B00",
+          "won": 0,
+          "leading": 5
+        }
       ]
     },
     "tn": {
       "name": "Tamil Nadu",
       "totalSeats": 234,
       "parties": [
-        { "name": "TVK",      "color": "#F59E0B", "won": 0, "leading": 38 },
-        { "name": "ADMK",     "color": "#10B981", "won": 0, "leading": 36 },
-        { "name": "DMK",      "color": "#EF4444", "won": 0, "leading": 19 },
-        { "name": "PMK",      "color": "#8B5CF6", "won": 0, "leading": 2  },
-        { "name": "INC",      "color": "#00A651", "won": 0, "leading": 2  },
-        { "name": "BJP",      "color": "#FF6B00", "won": 0, "leading": 1  },
-        { "name": "DMDK",     "color": "#06B6D4", "won": 0, "leading": 1  },
-        { "name": "CPI",      "color": "#CC0000", "won": 0, "leading": 1  },
-        { "name": "AMMK",     "color": "#6B7280", "won": 0, "leading": 1  }
+        {
+          "name": "DMK+",
+          "color": "#CC0000",
+          "won": 10,
+          "leading": 145
+        },
+        {
+          "name": "AIADMK+",
+          "color": "#00A651",
+          "won": 2,
+          "leading": 75
+        },
+        {
+          "name": "NTK",
+          "color": "#8B5CF6",
+          "won": 0,
+          "leading": 2
+        }
       ]
     },
     "assam": {
       "name": "Assam",
       "totalSeats": 126,
       "parties": [
-        { "name": "BJP",     "color": "#FF6B00", "won": 0, "leading": 44 },
-        { "name": "INC",     "color": "#00A651", "won": 0, "leading": 13 },
-        { "name": "BOPF",    "color": "#8B5CF6", "won": 0, "leading": 6  },
-        { "name": "AGP",     "color": "#06B6D4", "won": 0, "leading": 5  },
-        { "name": "ASMJTYP","color": "#F59E0B", "won": 0, "leading": 3  },
-        { "name": "AIUDF",   "color": "#10B981", "won": 0, "leading": 1  }
+        {
+          "name": "NDA",
+          "color": "#FF6B00",
+          "won": 15,
+          "leading": 65
+        },
+        {
+          "name": "INDIA",
+          "color": "#00A651",
+          "won": 4,
+          "leading": 40
+        },
+        {
+          "name": "AIUDF",
+          "color": "#1565C0",
+          "won": 0,
+          "leading": 2
+        }
       ]
     },
     "puducherry": {
       "name": "Puducherry",
       "totalSeats": 30,
       "parties": [
-        { "name": "AINRC", "color": "#F59E0B", "won": 0, "leading": 7 },
-        { "name": "IND",   "color": "#6B7280", "won": 0, "leading": 3 },
-        { "name": "INC",   "color": "#00A651", "won": 0, "leading": 2 },
-        { "name": "BJP",   "color": "#FF6B00", "won": 0, "leading": 1 },
-        { "name": "ADMK",  "color": "#10B981", "won": 0, "leading": 1 },
-        { "name": "DMK",   "color": "#EF4444", "won": 0, "leading": 1 }
+        {
+          "name": "NDA",
+          "color": "#FF6B00",
+          "won": 2,
+          "leading": 14
+        },
+        {
+          "name": "INDIA",
+          "color": "#00A651",
+          "won": 1,
+          "leading": 12
+        },
+        {
+          "name": "Other",
+          "color": "#6B7280",
+          "won": 0,
+          "leading": 1
+        }
       ]
     }
   }
