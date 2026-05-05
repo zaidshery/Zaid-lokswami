@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ArrowLeft, Loader2, Plus, RefreshCw, Save, Sparkles, Trash2, Volume2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, RefreshCw, Save, Sparkles, Trash2, UploadCloud, Volume2 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import type {
   EPaperArticleRecord,
@@ -24,6 +24,7 @@ import {
   buildEpaperPageQualitySignal,
   getEpaperPageQualityTone,
 } from '@/lib/utils/epaperQualitySignals';
+import { uploadEpaperAssetDirect } from '@/lib/utils/epaperDirectUploadClient';
 
 type EpaperResponse = {
   success: boolean;
@@ -56,6 +57,7 @@ type DraftArticleInput = {
 type ManagedTtsAsset = {
   id?: string;
   status?: string;
+  provider?: string;
   audioUrl?: string;
   voice?: string;
   model?: string;
@@ -771,6 +773,51 @@ export default function EPaperPageHotspotEditor() {
     }
   };
 
+  const uploadManualStoryAudio = async (article: EPaperArticleRecord, file: File | null) => {
+    if (!file) return;
+
+    setLoadingStoryTtsIds((current) => ({ ...current, [article._id]: true }));
+    setError('');
+    setNotice('');
+
+    try {
+      const uploaded = await uploadEpaperAssetDirect({
+        kind: 'epaper_story_audio',
+        file,
+        authHeaders: getAuthHeader(),
+        epaperId,
+        articleId: article._id,
+      });
+      const ttsAsset = uploaded.ttsAsset && typeof uploaded.ttsAsset === 'object'
+        ? (uploaded.ttsAsset as ManagedTtsAsset)
+        : null;
+
+      setStoryTtsById((current) => ({
+        ...current,
+        [article._id]: {
+          eligible: true,
+          ready: Boolean(ttsAsset?.audioUrl || uploaded.asset.mediaUrl),
+          asset: ttsAsset || {
+            status: 'ready',
+            provider: 'manual',
+            audioUrl: uploaded.asset.mediaUrl,
+            mimeType: uploaded.asset.mediaMimeType,
+          },
+          message: 'Manual story listen audio is ready.',
+        },
+      }));
+      setNotice(`Manual audio uploaded for "${article.title.trim() || 'Untitled story'}".`);
+    } catch (err: unknown) {
+      setError(toErrorMessage(err, 'Failed to upload manual story audio'));
+    } finally {
+      setLoadingStoryTtsIds((current) => {
+        const next = { ...current };
+        delete next[article._id];
+        return next;
+      });
+    }
+  };
+
   const deleteArticle = async (articleId: string) => {
     setDeletingId(articleId);
     setError('');
@@ -1414,19 +1461,42 @@ export default function EPaperPageHotspotEditor() {
                           </a>
                         ) : null}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void regenerateStoryTts(article)}
-                        disabled={isSaving || isDeleting || isLoadingTts || storyTtsNeedsSave || !storyHasReadableText}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {isLoadingTts ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-3.5 w-3.5" />
-                        )}
-                        {storyTts?.asset?.audioUrl ? 'Regenerate Audio' : 'Generate Audio'}
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 ${
+                          isSaving || isDeleting || isLoadingTts ? 'pointer-events-none opacity-70' : ''
+                        }`}>
+                          {isLoadingTts ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <UploadCloud className="h-3.5 w-3.5" />
+                          )}
+                          Upload Audio
+                          <input
+                            type="file"
+                            accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4"
+                            disabled={isSaving || isDeleting || isLoadingTts}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] || null;
+                              event.currentTarget.value = '';
+                              void uploadManualStoryAudio(article, file);
+                            }}
+                            className="sr-only"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => void regenerateStoryTts(article)}
+                          disabled={isSaving || isDeleting || isLoadingTts || storyTtsNeedsSave || !storyHasReadableText}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {isLoadingTts ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          )}
+                          {storyTts?.asset?.audioUrl ? 'Regenerate Audio' : 'Generate Audio'}
+                        </button>
+                      </div>
                     </div>
                   </div>
 

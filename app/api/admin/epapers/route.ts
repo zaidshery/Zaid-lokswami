@@ -9,9 +9,15 @@ import {
   getCityNameFromSlug,
   getCitySlugFromName,
   isEPaperCitySlug,
+  normalizeCitySlug,
 } from '@/lib/constants/epaperCities';
 import { listStoredEPapers } from '@/lib/storage/epapersFile';
 import { parsePublishDate } from '@/lib/utils/epaperStorage';
+import {
+  type EpaperUploadedAsset,
+  verifyEpaperAssetUpload,
+} from '@/lib/storage/epaperAssetUpload';
+import { buildEpaperImageAutomationUpdates } from '@/lib/server/epaperImageAutomation';
 import {
   buildEpaperAutomationInfo,
   buildEpaperReadiness,
@@ -122,6 +128,87 @@ function normalizePages(value: unknown): EpaperPage[] {
     })
     .filter((page): page is EpaperPage => Boolean(page))
     .sort((a, b) => a.pageNumber - b.pageNumber);
+}
+
+function mapCreatedEpaper(epaper: unknown) {
+  const source = asObject(epaper);
+  const publishDate = new Date(String(source.publishDate || ''));
+  return {
+    _id: String(source._id || ''),
+    citySlug: String(source.citySlug || ''),
+    cityName: String(source.cityName || ''),
+    title: String(source.title || ''),
+    publishDate: Number.isNaN(publishDate.getTime()) ? '' : publishDate.toISOString().slice(0, 10),
+    pdfPath: firstNonEmptyString(source.pdfPath, source.pdfUrl),
+    pdfPublicId: firstNonEmptyString(source.pdfPublicId),
+    pdfFormat: firstNonEmptyString(source.pdfFormat),
+    thumbnailPath: firstNonEmptyString(source.thumbnailPath, source.thumbnail),
+    pageCount: toPositiveInt(source.pageCount),
+    pages: normalizePages(source.pages),
+    status: source.status === 'published' ? 'published' : 'draft',
+    sourceType: firstNonEmptyString(source.sourceType),
+    sourceLabel: firstNonEmptyString(source.sourceLabel),
+    sourceUrl: firstNonEmptyString(source.sourceUrl),
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+  };
+}
+
+async function verifyAssetReference(kind: 'epaper_pdf' | 'epaper_thumbnail', value: unknown) {
+  const source = asObject(value);
+  const mediaKey = firstNonEmptyString(source.mediaKey, source.publicId);
+  if (!mediaKey) {
+    throw new Error(kind === 'epaper_pdf' ? 'Verified PDF asset is required' : 'Verified thumbnail asset is required');
+  }
+
+  return verifyEpaperAssetUpload({
+    kind,
+    mediaKey,
+    expectedSize: toPositiveInt(source.mediaSizeBytes),
+    expectedFileType: firstNonEmptyString(source.mediaMimeType),
+    expectedFileName: firstNonEmptyString(source.fileName),
+  });
+}
+
+async function verifyPageImageReferences(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  const verified: Array<{
+    pageNumber: number;
+    asset: EpaperUploadedAsset;
+    width?: number;
+    height?: number;
+  }> = [];
+
+  for (let index = 0; index < value.length; index += 1) {
+    const source = asObject(value[index]);
+    const pageNumber = toPositiveInt(source.pageNumber) || index + 1;
+    if (!pageNumber || pageNumber > 1000) {
+      throw new Error('Each page image needs a valid pageNumber');
+    }
+
+    const mediaKey = firstNonEmptyString(source.mediaKey, source.publicId);
+    if (!mediaKey) {
+      throw new Error(`Verified page image asset is required for page ${pageNumber}`);
+    }
+
+    const asset = await verifyEpaperAssetUpload({
+      kind: 'epaper_page_image',
+      mediaKey,
+      expectedSize: toPositiveInt(source.mediaSizeBytes),
+      expectedFileType: firstNonEmptyString(source.mediaMimeType),
+      expectedFileName: firstNonEmptyString(source.fileName),
+    });
+
+    verified.push({
+      pageNumber,
+      asset,
+      width: toOptionalPositiveInt(source.width),
+      height: toOptionalPositiveInt(source.height),
+    });
+  }
+
+  return verified;
 }
 
 export async function GET(req: NextRequest) {
@@ -413,6 +500,160 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       { success: false, error: 'Failed to list e-papers' },
       { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const admin = await getAdminSession();
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    if (!canViewPage(admin.role, 'epapers')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
+    const citySlug = normalizeCitySlug(String(source.citySlug || ''));
+    const cityName = firstNonEmptyString(source.cityName, getCityNameFromSlug(citySlug));
+    const title = String(source.title || '').trim();
+    const publishDate = parsePublishDate(String(source.publishDate || ''));
+    const statusInput = String(source.status || '').trim().toLowerCase();
+    const requestedPageCount = toPositiveInt(source.pageCount);
+
+    if (!citySlug) {
+      return NextResponse.json({ success: false, error: 'citySlug is required and must be valid' }, { status: 400 });
+    }
+    if (!cityName) {
+      return NextResponse.json({ success: false, error: 'cityName is required' }, { status: 400 });
+    }
+    if (!title) {
+      return NextResponse.json({ success: false, error: 'title is required' }, { status: 400 });
+    }
+    if (!publishDate) {
+      return NextResponse.json({ success: false, error: 'publishDate must be valid (YYYY-MM-DD or DD-MM-YYYY)' }, { status: 400 });
+    }
+    if (requestedPageCount > 1000) {
+      return NextResponse.json({ success: false, error: 'pageCount is too high (max 1000)' }, { status: 400 });
+    }
+    if (statusInput && statusInput !== 'draft' && statusInput !== 'published') {
+      return NextResponse.json({ success: false, error: 'Invalid status' }, { status: 400 });
+    }
+
+    const [pdfAsset, thumbnailAsset, pageImageAssets] = await Promise.all([
+      verifyAssetReference('epaper_pdf', source.pdfAsset),
+      verifyAssetReference('epaper_thumbnail', source.thumbnailAsset),
+      verifyPageImageReferences(source.pageImageAssets),
+    ]);
+
+    const highestPageImageNumber = pageImageAssets.reduce(
+      (max, item) => Math.max(max, item.pageNumber),
+      0
+    );
+    const pageCount = Math.max(requestedPageCount, highestPageImageNumber);
+    if (pageCount < 1) {
+      return NextResponse.json(
+        { success: false, error: 'pageCount is required when page images are not included in the create request' },
+        { status: 400 }
+      );
+    }
+
+    await connectDB();
+    const existing = await EPaper.findOne({ citySlug, publishDate }).select('_id').lean();
+    if (existing) {
+      return NextResponse.json(
+        { success: false, error: `E-paper already exists for ${citySlug} on ${publishDate.toISOString().slice(0, 10)}` },
+        { status: 409 }
+      );
+    }
+
+    const pages = Array.from({ length: pageCount }, (_, index) => ({
+      pageNumber: index + 1,
+      imagePath: '',
+      width: undefined as number | undefined,
+      height: undefined as number | undefined,
+    }));
+
+    for (const pageAsset of pageImageAssets) {
+      pages[pageAsset.pageNumber - 1] = {
+        pageNumber: pageAsset.pageNumber,
+        imagePath: pageAsset.asset.mediaUrl,
+        width: pageAsset.width,
+        height: pageAsset.height,
+      };
+    }
+
+    const status = statusInput === 'published' ? 'published' : 'draft';
+    const automationUpdates = buildEpaperImageAutomationUpdates({
+      pageCount,
+      pages,
+      currentThumbnailPath: thumbnailAsset.mediaUrl,
+      currentProductionStatus: 'draft_upload',
+      currentStatus: status,
+    });
+    const pdfFormat = pdfAsset.mediaKey.split('.').pop()?.toLowerCase() || 'pdf';
+
+    const epaper = await EPaper.create({
+      citySlug,
+      cityName,
+      title,
+      publishDate,
+      pdfPath: pdfAsset.mediaUrl,
+      pdfPublicId: pdfAsset.mediaKey,
+      pdfFormat,
+      thumbnailPath: thumbnailAsset.mediaUrl,
+      pageCount,
+      pages,
+      status,
+      productionStatus: status === 'published'
+        ? 'published'
+        : automationUpdates.productionStatus || 'draft_upload',
+      sourceType: 'manual-upload',
+      sourceLabel: 'Direct Spaces upload',
+      sourceUrl: pdfAsset.mediaUrl,
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'E-paper created successfully',
+        data: mapCreatedEpaper(epaper.toObject()),
+      },
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    const isDuplicateKeyError =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 11000;
+    if (isDuplicateKeyError) {
+      return NextResponse.json(
+        { success: false, error: 'An e-paper for this city/date already exists' },
+        { status: 409 }
+      );
+    }
+
+    const message = error instanceof Error && error.message.trim()
+      ? error.message
+      : 'Failed to create e-paper';
+    const status =
+      /required|valid|must be|too high|max|asset|upload|file|key|size|content type/i.test(message)
+        ? 400
+        : 500;
+
+    console.error('Failed to create direct-upload e-paper:', error);
+    return NextResponse.json(
+      { success: false, error: status === 500 ? 'Failed to create e-paper' : message },
+      { status }
     );
   }
 }

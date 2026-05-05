@@ -11,7 +11,7 @@ export type TtsStatusData = {
 };
 
 export type TtsAudioData = {
-  provider: 'gemini';
+  provider: 'gemini' | 'manual';
   model: string;
   voice: string;
   mimeType: string;

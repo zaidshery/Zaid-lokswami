@@ -32,6 +32,33 @@ type SignedRawUploadUrlOptions = {
   format?: string;
 };
 
+type BrowserUploadTargetOptions = {
+  key: string;
+  contentType: string;
+  expiresSeconds?: number;
+};
+
+type VerifyUploadedObjectOptions = {
+  key: string;
+};
+
+export type DigitalOceanSpacesBrowserUploadTarget = {
+  publicId: string;
+  secureUrl: string;
+  url: string;
+  uploadUrl: string;
+  uploadHeaders: Record<string, string>;
+  expiresAt: string;
+};
+
+export type VerifiedDigitalOceanSpacesObject = {
+  publicId: string;
+  secureUrl: string;
+  url: string;
+  bytes: number;
+  contentType: string;
+};
+
 type SpacesConfig = {
   accessKey: string;
   secretKey: string;
@@ -268,6 +295,49 @@ function createPresignedPutUrl(config: SpacesConfig, key: string) {
   return `https://${config.originHost}${canonicalUri}?${query}&X-Amz-Signature=${signature}`;
 }
 
+function createBrowserPresignedPutUrl(
+  config: SpacesConfig,
+  key: string,
+  expiresSeconds: number
+) {
+  const now = new Date();
+  const { dateStamp, amzDate } = formatAmzDateParts(now);
+  const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`;
+  const canonicalUri = buildCanonicalUri(key);
+  const signedHeaders = 'host';
+  const query = buildCanonicalQuery({
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${config.accessKey}/${credentialScope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(expiresSeconds),
+    'X-Amz-SignedHeaders': signedHeaders,
+  });
+  const canonicalHeaders = `host:${config.originHost}\n`;
+  const canonicalRequest = [
+    'PUT',
+    canonicalUri,
+    query,
+    canonicalHeaders,
+    signedHeaders,
+    'UNSIGNED-PAYLOAD',
+  ].join('\n');
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    createSha256Hex(canonicalRequest),
+  ].join('\n');
+  const signature = crypto
+    .createHmac('sha256', getSignatureKey(config.secretKey, dateStamp, config.region))
+    .update(stringToSign, 'utf8')
+    .digest('hex');
+
+  return {
+    uploadUrl: `https://${config.originHost}${canonicalUri}?${query}&X-Amz-Signature=${signature}`,
+    expiresAt: new Date(now.getTime() + expiresSeconds * 1000).toISOString(),
+  };
+}
+
 function createSignedObjectRequest(
   config: SpacesConfig,
   method: 'DELETE' | 'GET' | 'HEAD',
@@ -309,6 +379,78 @@ function createSignedObjectRequest(
       'x-amz-content-sha256': emptyBodyHash,
       'x-amz-date': amzDate,
     },
+  };
+}
+
+export function createDigitalOceanSpacesBrowserUploadTarget(
+  options: BrowserUploadTargetOptions
+): DigitalOceanSpacesBrowserUploadTarget {
+  const key = normalizePublicId(options.key);
+  if (!key) {
+    throw new Error('Invalid DigitalOcean Spaces object key');
+  }
+
+  const contentType = options.contentType.trim() || 'application/octet-stream';
+  const expiresSeconds = Math.max(60, Math.min(options.expiresSeconds || 600, 3600));
+  const config = getSpacesConfig();
+  const signed = createBrowserPresignedPutUrl(config, key, expiresSeconds);
+  const publicUrl = buildPublicUrl(config, key);
+
+  return {
+    publicId: key,
+    secureUrl: publicUrl,
+    url: publicUrl,
+    uploadUrl: signed.uploadUrl,
+    uploadHeaders: {
+      'Content-Type': contentType,
+    },
+    expiresAt: signed.expiresAt,
+  };
+}
+
+export function buildDigitalOceanSpacesPublicUrl(publicId: string) {
+  const key = normalizePublicId(publicId);
+  if (!key) {
+    throw new Error('Invalid DigitalOcean Spaces object key');
+  }
+
+  return buildPublicUrl(getSpacesConfig(), key);
+}
+
+export async function verifyDigitalOceanSpacesUploadedObject(
+  options: VerifyUploadedObjectOptions
+): Promise<VerifiedDigitalOceanSpacesObject> {
+  const key = normalizePublicId(options.key);
+  if (!key) {
+    throw new Error('Invalid DigitalOcean Spaces object key');
+  }
+
+  const config = getSpacesConfig();
+  const request = createSignedObjectRequest(config, 'HEAD', key);
+  const response = await fetch(request.url, {
+    method: 'HEAD',
+    headers: request.headers,
+    cache: 'no-store',
+  });
+
+  if (response.status === 404) {
+    throw new Error('Uploaded asset was not found in DigitalOcean Spaces.');
+  }
+
+  if (!response.ok) {
+    throw new Error(`DigitalOcean Spaces HEAD failed (${response.status}).`);
+  }
+
+  const publicUrl = buildPublicUrl(config, key);
+  const bytes = Number(response.headers.get('content-length') || 0);
+  const contentType = String(response.headers.get('content-type') || '').trim().toLowerCase();
+
+  return {
+    publicId: key,
+    secureUrl: publicUrl,
+    url: publicUrl,
+    bytes: Number.isFinite(bytes) ? bytes : 0,
+    contentType,
   };
 }
 

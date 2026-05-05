@@ -7,6 +7,10 @@ import { ArrowLeft, Link2, Loader2, UploadCloud } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { EPAPER_CITY_OPTIONS, type EPaperCitySlug } from '@/lib/constants/epaperCities';
+import {
+  getImageDimensionsFromFile,
+  uploadEpaperAssetDirect,
+} from '@/lib/utils/epaperDirectUploadClient';
 
 type UploadResponse = {
   success: boolean;
@@ -70,31 +74,48 @@ export default function NewEPaperPage() {
         if (!pdfFile || !thumbnailFile) {
           throw new Error('PDF and thumbnail are required for upload mode');
         }
+        if (!pageCount.trim() && pageImages.length === 0) {
+          throw new Error('Page count is required when page images are not selected.');
+        }
 
-        const body = new FormData();
-        body.append('citySlug', citySlug);
-        body.append('cityName', cityName);
-        body.append('title', title.trim());
-        body.append('publishDate', publishDate);
-        body.append('status', status);
-        if (pageCount.trim()) body.append('pageCount', pageCount.trim());
-        body.append('pdf', pdfFile);
-        body.append('thumbnail', thumbnailFile);
+        const authHeaders = getAuthHeader();
+        setWarning('Uploading PDF to DigitalOcean...');
+        const pdfUpload = await uploadEpaperAssetDirect({
+          kind: 'epaper_pdf',
+          file: pdfFile,
+          authHeaders,
+          citySlug,
+          publishDate,
+        });
 
-        const response = await fetch('/api/admin/epapers/upload', {
+        setWarning('Uploading thumbnail to DigitalOcean...');
+        const thumbnailUpload = await uploadEpaperAssetDirect({
+          kind: 'epaper_thumbnail',
+          file: thumbnailFile,
+          authHeaders,
+          citySlug,
+          publishDate,
+        });
+
+        const response = await fetch('/api/admin/epapers', {
           method: 'POST',
           headers: {
-            ...getAuthHeader(),
+            'Content-Type': 'application/json',
+            ...authHeaders,
           },
-          body,
+          body: JSON.stringify({
+            citySlug,
+            cityName,
+            title: title.trim(),
+            publishDate,
+            status,
+            pageCount: pageCount.trim() || (pageImages.length > 0 ? String(pageImages.length) : undefined),
+            pdfAsset: pdfUpload.asset,
+            thumbnailAsset: thumbnailUpload.asset,
+          }),
         });
 
         payload = (await response.json().catch(() => ({}))) as UploadResponse;
-        if (response.status === 413) {
-          throw new Error(
-            'Upload request is too large for server limit. Upload only PDF + thumbnail here, then add page images from the e-paper detail page.'
-          );
-        }
         if (!response.ok || !payload.success || !payload.data?._id) {
           throw new Error(payload.error || 'Failed to upload e-paper');
         }
@@ -107,26 +128,41 @@ export default function NewEPaperPage() {
           let failedUploads = 0;
           for (let index = 0; index < pageImages.length; index += 1) {
             const file = pageImages[index];
-            setWarning(`E-paper created. Uploading page images ${index + 1}/${pageImages.length}...`);
-
-            const pageBody = new FormData();
-            pageBody.append('pageNumber', String(index + 1));
-            pageBody.append('image', file);
+            const pageNumber = index + 1;
+            setWarning(`E-paper created. Uploading page images ${pageNumber}/${pageImages.length}...`);
 
             try {
+              const [pageUpload, dimensions] = await Promise.all([
+                uploadEpaperAssetDirect({
+                  kind: 'epaper_page_image',
+                  file,
+                  authHeaders,
+                  citySlug,
+                  publishDate,
+                  pageNumber,
+                }),
+                getImageDimensionsFromFile(file),
+              ]);
+
               const pageResponse = await fetch(`/api/admin/epapers/${payload.data._id}/pages`, {
                 method: 'PUT',
                 headers: {
-                  ...getAuthHeader(),
+                  'Content-Type': 'application/json',
+                  ...authHeaders,
                 },
-                body: pageBody,
+                body: JSON.stringify({
+                  pages: [
+                    {
+                      pageNumber,
+                      imagePath: pageUpload.asset.mediaUrl,
+                      mediaKey: pageUpload.asset.mediaKey,
+                      width: dimensions?.width,
+                      height: dimensions?.height,
+                    },
+                  ],
+                }),
               });
               const pagePayload = (await pageResponse.json().catch(() => ({}))) as BasicResponse;
-
-              if (pageResponse.status === 413) {
-                failedUploads += 1;
-                continue;
-              }
 
               if (!pageResponse.ok || pagePayload.success === false) {
                 failedUploads += 1;
@@ -138,7 +174,7 @@ export default function NewEPaperPage() {
 
           if (failedUploads > 0) {
             warnings.push(
-              `${failedUploads} page image(s) failed due upload limits. Open this e-paper and upload those pages one by one with smaller files.`
+              `${failedUploads} page image(s) failed. Open this e-paper and retry those pages.`
             );
           }
         }
@@ -298,7 +334,7 @@ export default function NewEPaperPage() {
 
             <label>
               <span className="mb-1 block text-xs font-semibold text-gray-600">
-                Manual Page Count (only if PDF auto-count fails)
+                Page Count
               </span>
               <input
                 type="number"
@@ -306,7 +342,7 @@ export default function NewEPaperPage() {
                 value={pageCount}
                 onChange={(event) => setPageCount(event.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                placeholder="Optional"
+                placeholder={pageImages.length > 0 ? 'Optional if every page image is selected' : 'Required'}
               />
             </label>
           </div>

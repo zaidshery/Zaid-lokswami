@@ -3,8 +3,10 @@ import {
   TTS_ASSET_STATUSES,
   TTS_SOURCE_TYPES,
   TTS_STORAGE_MODES,
+  TTS_PROVIDERS,
   TTS_VARIANTS,
   type TtsAssetStatus,
+  type TtsProvider,
   type TtsSourceType,
   type TtsStorageMode,
   type TtsVariant,
@@ -20,7 +22,7 @@ export interface ITtsAsset {
   contentVersionHash: string;
   languageCode: string;
   voice: string;
-  provider: 'gemini';
+  provider: TtsProvider;
   model: string;
   mimeType: string;
   audioUrl: string;
@@ -51,7 +53,7 @@ const TtsAssetSchema = new mongoose.Schema<ITtsAsset>(
     contentVersionHash: { type: String, required: true, trim: true, maxlength: 80 },
     languageCode: { type: String, required: true, trim: true, maxlength: 20 },
     voice: { type: String, required: true, trim: true, maxlength: 80 },
-    provider: { type: String, enum: ['gemini'], default: 'gemini', required: true },
+    provider: { type: String, enum: TTS_PROVIDERS, default: 'gemini', required: true },
     model: { type: String, required: true, trim: true, maxlength: 160 },
     mimeType: { type: String, required: true, trim: true, maxlength: 80 },
     audioUrl: { type: String, trim: true, maxlength: 800, default: '' },

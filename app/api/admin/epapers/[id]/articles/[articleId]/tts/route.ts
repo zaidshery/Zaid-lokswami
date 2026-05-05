@@ -7,6 +7,7 @@ import EPaperArticle from '@/lib/models/EPaperArticle';
 import {
   buildEpaperStoryTtsText,
   ensureTtsAsset,
+  findReadyManualTtsAsset,
   findCurrentTtsAsset,
 } from '@/lib/server/ttsAssets';
 
@@ -17,6 +18,7 @@ type RouteContext = {
 type SerializableTtsAsset = {
   id: string;
   status: string;
+  provider: string;
   audioUrl: string;
   voice: string;
   model: string;
@@ -37,6 +39,7 @@ function serializeTtsAsset(asset: unknown): SerializableTtsAsset | null {
   return {
     id: String(source._id || ''),
     status: String(source.status || ''),
+    provider: String(source.provider || ''),
     audioUrl: String(source.audioUrl || ''),
     voice: String(source.voice || ''),
     model: String(source.model || ''),
@@ -129,6 +132,25 @@ export async function GET(_req: NextRequest, context: RouteContext) {
         { success: false, error: 'Story not found' },
         { status: 404 }
       );
+    }
+
+    const manualAsset = await findReadyManualTtsAsset({
+      sourceType: 'epaperArticle',
+      sourceId: story.storyId,
+      variant: 'epaper_story',
+      actor: admin,
+    });
+    if (manualAsset?.audioUrl) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          variant: 'epaper_story',
+          eligible: true,
+          ready: true,
+          asset: serializeTtsAsset(manualAsset),
+          message: 'Manual story listen audio is ready.',
+        },
+      });
     }
 
     const text = buildEpaperStoryTtsText({

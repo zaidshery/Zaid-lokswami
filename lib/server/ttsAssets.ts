@@ -651,6 +651,146 @@ export async function findCurrentTtsAsset(
   };
 }
 
+export async function findReadyManualTtsAsset(input: {
+  sourceType: TtsSourceType;
+  sourceId: string;
+  variant: TtsVariant;
+  actor?: TtsActorContext;
+}) {
+  await connectDB();
+  const sourceId = normalizeSourceId(input.sourceId);
+  if (!sourceId) return null;
+
+  const asset = await TtsAsset.findOne({
+    sourceType: input.sourceType,
+    sourceId,
+    variant: input.variant,
+    provider: 'manual',
+    status: 'ready',
+    audioUrl: { $ne: '' },
+  }).sort({ updatedAt: -1, _id: -1 });
+
+  if (!asset?.audioUrl) return null;
+
+  if (!isLikelyHttpUrl(asset.audioUrl) && !hasStoredTtsAsset(asset.audioUrl)) {
+    await markAssetStale(asset, 'Stored manual TTS asset file is missing.', input.actor);
+    return null;
+  }
+
+  asset.lastVerifiedAt = new Date();
+  asset.lastAccessedAt = new Date();
+  await asset.save();
+  return asset;
+}
+
+export async function saveManualTtsAsset(input: {
+  sourceType: TtsSourceType;
+  sourceId: string;
+  sourceParentId?: string;
+  variant: TtsVariant;
+  title?: string;
+  text?: string;
+  audioUrl: string;
+  mimeType: string;
+  mediaKey: string;
+  actor?: TtsActorContext;
+  metadata?: Record<string, unknown>;
+}) {
+  await connectDB();
+  const sourceId = normalizeSourceId(input.sourceId);
+  const audioUrl = String(input.audioUrl || '').trim();
+  const mediaKey = String(input.mediaKey || '').trim();
+  if (!sourceId || !audioUrl || !mediaKey) {
+    throw new Error('Source id, audio URL, and media key are required for manual audio.');
+  }
+
+  const normalizedText = sanitizeText(input.text || '');
+  const title = String(input.title || '').trim();
+  const sourceParentId = String(input.sourceParentId || '').trim();
+  const textHash = hashValue(normalizedText || `${sourceId}:${mediaKey}`);
+  const contentVersionHash = hashValue(
+    JSON.stringify({
+      variant: input.variant,
+      mediaKey,
+      audioUrl,
+      provider: 'manual',
+    })
+  );
+  const metadata = {
+    ...buildMetadataWithDefaults(input.metadata),
+    manualUpload: true,
+    mediaKey,
+  };
+  const query = {
+    sourceType: input.sourceType,
+    sourceId,
+    variant: input.variant,
+    provider: 'manual' as const,
+    model: 'manual-upload',
+    voice: 'manual-upload',
+    languageCode: 'manual',
+    contentVersionHash,
+  };
+
+  await TtsAsset.updateMany(
+    {
+      sourceType: input.sourceType,
+      sourceId,
+      variant: input.variant,
+      provider: 'manual',
+      status: 'ready',
+      contentVersionHash: { $ne: contentVersionHash },
+    },
+    {
+      $set: {
+        status: 'stale',
+        lastError: 'Superseded by a newer manually uploaded audio file.',
+        lastVerifiedAt: new Date(),
+      },
+    }
+  );
+
+  const ready = await TtsAsset.findOneAndUpdate(
+    query,
+    {
+      $set: {
+        title,
+        sourceParentId,
+        textHash,
+        mimeType: input.mimeType || 'audio/mpeg',
+        audioUrl,
+        storageMode: 'spaces',
+        status: 'ready',
+        chunkCount: 1,
+        charCount: normalizedText.length,
+        generatedAt: new Date(),
+        lastVerifiedAt: new Date(),
+        lastAccessedAt: new Date(),
+        lastError: '',
+        metadata,
+      },
+      $setOnInsert: {
+        failureCount: 0,
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  await recordTtsAuditEvent({
+    action: 'generate',
+    result: 'success',
+    actor: input.actor,
+    assetId: ready?._id?.toString(),
+    sourceType: input.sourceType,
+    sourceId,
+    variant: input.variant,
+    message: 'Manual story listen audio uploaded successfully.',
+    metadata,
+  });
+
+  return ready;
+}
+
 export async function ensureTtsAsset(input: EnsureTtsAssetInput): Promise<EnsureTtsAssetResult> {
   await connectDB();
   const config = await getTtsConfig();

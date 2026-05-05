@@ -6,6 +6,7 @@ export const TTS_VARIANTS = [
 ] as const;
 export const TTS_ASSET_STATUSES = ['pending', 'processing', 'ready', 'failed', 'stale'] as const;
 export const TTS_STORAGE_MODES = ['public', 'proxy', 'spaces'] as const;
+export const TTS_PROVIDERS = ['gemini', 'manual'] as const;
 export const TTS_AUDIT_ACTIONS = [
   'generate',
   'regenerate',
@@ -21,6 +22,7 @@ export type TtsSourceType = (typeof TTS_SOURCE_TYPES)[number];
 export type TtsVariant = (typeof TTS_VARIANTS)[number];
 export type TtsAssetStatus = (typeof TTS_ASSET_STATUSES)[number];
 export type TtsStorageMode = (typeof TTS_STORAGE_MODES)[number];
+export type TtsProvider = (typeof TTS_PROVIDERS)[number];
 export type TtsAuditAction = (typeof TTS_AUDIT_ACTIONS)[number];
 export type TtsAuditResult = (typeof TTS_AUDIT_RESULTS)[number];
 

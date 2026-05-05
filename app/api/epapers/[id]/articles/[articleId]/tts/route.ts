@@ -8,7 +8,11 @@ import { GEMINI_TTS_MAX_TOTAL_CHARS } from '@/lib/constants/tts';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
-import { buildEpaperStoryTtsText, ensureTtsAsset } from '@/lib/server/ttsAssets';
+import {
+  buildEpaperStoryTtsText,
+  ensureTtsAsset,
+  findReadyManualTtsAsset,
+} from '@/lib/server/ttsAssets';
 import { getStoredEPaperById } from '@/lib/storage/epapersFile';
 
 type RouteContext = {
@@ -161,13 +165,6 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    if (!isGeminiTtsConfigured()) {
-      return NextResponse.json(
-        { success: false, error: 'Gemini TTS is not configured. Set GEMINI_API_KEY.' },
-        { status: 501 }
-      );
-    }
-
     const useFileStore = await shouldUseFileStore();
     const story = await loadEpaperStoryForListen({
       paperId,
@@ -180,6 +177,27 @@ export async function POST(req: NextRequest, context: RouteContext) {
         { success: false, error: 'Story not found' },
         { status: 404 }
       );
+    }
+
+    if (!useFileStore) {
+      const manualAsset = await findReadyManualTtsAsset({
+        sourceType: 'epaperArticle',
+        sourceId: story.storyId,
+        variant: 'epaper_story',
+      });
+      if (manualAsset?.audioUrl) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            provider: 'manual',
+            model: manualAsset.model,
+            voice: manualAsset.voice,
+            mimeType: manualAsset.mimeType,
+            chunkCount: manualAsset.chunkCount,
+            audioUrl: manualAsset.audioUrl,
+          },
+        });
+      }
     }
 
     const sourceText = clampTtsText(
@@ -195,6 +213,13 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json(
         { success: false, error: 'Readable text is not available for this story yet.' },
         { status: 400 }
+      );
+    }
+
+    if (!isGeminiTtsConfigured()) {
+      return NextResponse.json(
+        { success: false, error: 'Gemini TTS is not configured. Set GEMINI_API_KEY.' },
+        { status: 501 }
       );
     }
 

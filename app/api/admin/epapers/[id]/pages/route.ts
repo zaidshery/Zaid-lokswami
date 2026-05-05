@@ -11,24 +11,13 @@ import {
 import { buildEpaperImageAutomationUpdates } from '@/lib/server/epaperImageAutomation';
 import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
 import {
-  EPAPER_IMAGE_MAX_BYTES,
-  formatPublishDateFolder,
-  getImageDimensions,
   isAllowedAssetPath,
-  resolveImageTargetName,
 } from '@/lib/utils/epaperStorage';
-import {
-  deleteDigitalOceanSpacesAssetByUrl,
-  uploadBufferToDigitalOceanSpaces,
-} from '@/lib/utils/digitalOceanSpaces';
+import { verifyEpaperAssetUpload } from '@/lib/storage/epaperAssetUpload';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-function isFile(value: FormDataEntryValue | null): value is File {
-  return Boolean(value && typeof value === 'object' && 'arrayBuffer' in value);
-}
 
 function parsePageNumber(value: unknown) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -40,21 +29,6 @@ function parseOptionalDimension(value: unknown) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return undefined;
   return Math.floor(parsed);
-}
-
-function isImageFile(file: File) {
-  const mime = file.type.trim().toLowerCase();
-  const name = file.name.trim().toLowerCase();
-  return (
-    mime === 'image/jpeg' ||
-    mime === 'image/jpg' ||
-    mime === 'image/png' ||
-    mime === 'image/webp' ||
-    name.endsWith('.jpg') ||
-    name.endsWith('.jpeg') ||
-    name.endsWith('.png') ||
-    name.endsWith('.webp')
-  );
 }
 
 function mapPages(
@@ -172,168 +146,16 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     }
 
     const contentType = req.headers.get('content-type') || '';
-    const publishDate = new Date(epaper.publishDate);
-    const publishDateFolder = formatPublishDateFolder(publishDate);
-    const basePageFolder = `lokswami/epapers/${epaper.citySlug}/${publishDateFolder}/pages`;
 
     if (contentType.includes('multipart/form-data')) {
-      let form;
-      try {
-        form = await req.formData();
-      } catch (bodyError) {
-        // If body is locked/disturbed, try cloning the request
-        const isBodyError = bodyError instanceof Error &&
-          (bodyError.message.includes('disturbed') || bodyError.message.includes('locked'));
-        const isTimeoutError = bodyError && typeof bodyError === 'object' && 'code' in bodyError &&
-          (bodyError as { code?: string }).code === 'ERR_HTTP_REQUEST_TIMEOUT';
-        if (isBodyError || isTimeoutError) {
-          try {
-            const clonedReq = req.clone();
-            form = await clonedReq.formData();
-          } catch (cloneError) {
-            console.error('Failed to read form data after cloning:', cloneError);
-            return NextResponse.json(
-              { success: false, error: 'Failed to process request body' },
-              { status: 400 }
-            );
-          }
-        } else {
-          throw bodyError;
-        }
-      }
-      const pageNumber = parsePageNumber(form.get('pageNumber'));
-      const imagePathValue = String(form.get('imagePath') || '').trim();
-      const imageFile = form.get('image');
-
-      if (!pageNumber) {
-        return NextResponse.json({ success: false, error: 'pageNumber is required' }, { status: 400 });
-      }
-      if (pageNumber > 1000) {
-        return NextResponse.json(
-          { success: false, error: 'pageNumber must be <= 1000' },
-          { status: 400 }
-        );
-      }
-
-      let imagePath = '';
-      let width = parseOptionalDimension(form.get('width'));
-      let height = parseOptionalDimension(form.get('height'));
-
-      if (isFile(imageFile) && imageFile.size > 0) {
-        if (!isImageFile(imageFile)) {
-          return NextResponse.json(
-            { success: false, error: 'Page image must be JPG, PNG, or WEBP' },
-            { status: 400 }
-          );
-        }
-        if (imageFile.size > EPAPER_IMAGE_MAX_BYTES) {
-          return NextResponse.json(
-            { success: false, error: 'Page image must be under 10MB' },
-            { status: 400 }
-          );
-        }
-
-        const uploaded = await uploadBufferToDigitalOceanSpaces(Buffer.from(await imageFile.arrayBuffer()), {
-          folder: basePageFolder,
-          resourceType: 'image',
-          originalFilename: resolveImageTargetName('page', imageFile, pageNumber),
-        });
-        imagePath = uploaded.secureUrl;
-
-        const dimensions = await getImageDimensions(imageFile);
-        if (!width) width = dimensions?.width;
-        if (!height) height = dimensions?.height;
-      } else if (imagePathValue) {
-        if (!isAllowedAssetPath(imagePathValue)) {
-          return NextResponse.json(
-            { success: false, error: 'Invalid imagePath value' },
-            { status: 400 }
-          );
-        }
-        imagePath = imagePathValue;
-      } else {
-        return NextResponse.json(
-          { success: false, error: 'Provide image file or imagePath' },
-          { status: 400 }
-        );
-      }
-
-      const nextPageCount = Math.max(pageNumber, Number(epaper.pageCount || 0), 1);
-      let pages = mapPages(Array.isArray(epaper.pages) ? epaper.pages : [], nextPageCount);
-      const previous = pages.find((item) => item.pageNumber === pageNumber)?.imagePath || '';
-      pages = updateSinglePage(pages, pageNumber, { imagePath, width, height });
-      const automationUpdates = buildEpaperImageAutomationUpdates({
-        pageCount: nextPageCount,
-        pages,
-        currentThumbnailPath: epaper.thumbnailPath,
-        currentProductionStatus: epaper.productionStatus,
-        currentStatus: epaper.status,
-      });
-
-      const updated = await EPaper.findByIdAndUpdate(
-        id,
+      return NextResponse.json(
         {
-          pageCount: nextPageCount,
-          pages,
-          ...automationUpdates,
+          success: false,
+          error:
+            'Direct DigitalOcean upload is required for page images. Please use the updated CMS page image uploader.',
         },
-        { new: true, runValidators: true }
-      ).lean();
-
-      if (previous && previous !== imagePath) {
-        await deleteDigitalOceanSpacesAssetByUrl(previous).catch(() => undefined);
-      }
-
-      await recordEpaperActivity({
-        epaperId: id,
-        actor: admin,
-        action: 'page_image_uploaded',
-        message: buildEpaperActivityMessage({ action: 'page_image_uploaded' }),
-        metadata: {
-          pageNumber,
-          replacedExistingImage: Boolean(previous),
-        },
-      });
-
-      if (automationUpdates.thumbnailPath) {
-        await recordEpaperActivity({
-          epaperId: id,
-          actor: admin,
-          action: 'cover_thumbnail_updated',
-          message: buildEpaperActivityMessage({ action: 'cover_thumbnail_updated' }),
-          metadata: {
-            thumbnailPath: automationUpdates.thumbnailPath,
-            sourcePage: 1,
-          },
-        });
-      }
-
-      if (automationUpdates.productionStatus === 'pages_ready') {
-        await recordEpaperActivity({
-          epaperId: id,
-          actor: admin,
-          action: 'pages_ready',
-          fromStatus: 'draft_upload',
-          toStatus: 'pages_ready',
-          message: buildEpaperActivityMessage({
-            action: 'pages_ready',
-            toStatus: 'pages_ready',
-          }),
-          metadata: {
-            automated: true,
-            reason: 'All edition pages have images.',
-          },
-        });
-      }
-
-      return NextResponse.json({
-        success: true,
-        message:
-          automationUpdates.productionStatus === 'pages_ready'
-            ? 'Page image updated and edition moved to Pages Ready'
-            : 'Page image updated',
-        data: updated,
-      });
+        { status: 400 }
+      );
     }
 
     const body = await req.json().catch(() => ({}));
@@ -353,11 +175,12 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       const entry = typeof item === 'object' && item ? (item as Record<string, unknown>) : {};
       const pageNumber = parsePageNumber(entry.pageNumber);
       const hasImagePathField = Object.prototype.hasOwnProperty.call(entry, 'imagePath');
+      const mediaKey = typeof entry.mediaKey === 'string' ? entry.mediaKey.trim() : '';
       const hasWidthField = Object.prototype.hasOwnProperty.call(entry, 'width');
       const hasHeightField = Object.prototype.hasOwnProperty.call(entry, 'height');
       const hasReviewStatusField = Object.prototype.hasOwnProperty.call(entry, 'reviewStatus');
       const hasReviewNoteField = Object.prototype.hasOwnProperty.call(entry, 'reviewNote');
-      const imagePath =
+      let imagePath =
         hasImagePathField && typeof entry.imagePath === 'string'
           ? entry.imagePath.trim()
           : undefined;
@@ -383,6 +206,19 @@ export async function PUT(req: NextRequest, context: RouteContext) {
           { success: false, error: 'pageNumber must be <= 1000' },
           { status: 400 }
         );
+      }
+      if (mediaKey) {
+        const verified = await verifyEpaperAssetUpload({
+          kind: 'epaper_page_image',
+          mediaKey,
+        });
+        if (imagePath && imagePath !== verified.mediaUrl) {
+          return NextResponse.json(
+            { success: false, error: `imagePath does not match verified upload for page ${pageNumber}` },
+            { status: 400 }
+          );
+        }
+        imagePath = verified.mediaUrl;
       }
       if (imagePath && !isAllowedAssetPath(imagePath)) {
         return NextResponse.json(
@@ -413,11 +249,11 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         nextPageCount = pageNumber;
         pages = mapPages(pages, nextPageCount);
       }
-      const hasImageUpdate = hasImagePathField || hasWidthField || hasHeightField;
+      const hasImageUpdate = hasImagePathField || Boolean(mediaKey) || hasWidthField || hasHeightField;
       const hasReviewUpdate = hasReviewStatusField || hasReviewNoteField;
 
       pages = updateSinglePage(pages, pageNumber, {
-        ...(hasImagePathField ? { imagePath: imagePath || '' } : {}),
+        ...(hasImagePathField || mediaKey ? { imagePath: imagePath || '' } : {}),
         ...(hasWidthField ? { width } : {}),
         ...(hasHeightField ? { height } : {}),
         ...(reviewStatus !== undefined ? { reviewStatus } : {}),

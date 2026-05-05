@@ -18,6 +18,10 @@ import {
 } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import {
+  getImageDimensionsFromFile,
+  uploadEpaperAssetDirect,
+} from '@/lib/utils/epaperDirectUploadClient';
 import type {
   EPaperArticleRecord,
   EPaperPageReviewStatus,
@@ -481,16 +485,36 @@ export default function AdminEPaperDetailPage() {
     setNotice('');
 
     try {
-      const body = new FormData();
-      body.append('pageNumber', String(pageNumber));
-      body.append('image', file);
+      const authHeaders = getAuthHeader();
+      const [uploaded, dimensions] = await Promise.all([
+        uploadEpaperAssetDirect({
+          kind: 'epaper_page_image',
+          file,
+          authHeaders,
+          citySlug: epaper.citySlug,
+          publishDate: epaper.publishDate,
+          pageNumber,
+        }),
+        getImageDimensionsFromFile(file),
+      ]);
 
       const response = await fetch(`/api/admin/epapers/${epaper._id}/pages`, {
         method: 'PUT',
         headers: {
-          ...getAuthHeader(),
+          'Content-Type': 'application/json',
+          ...authHeaders,
         },
-        body,
+        body: JSON.stringify({
+          pages: [
+            {
+              pageNumber,
+              imagePath: uploaded.asset.mediaUrl,
+              mediaKey: uploaded.asset.mediaKey,
+              width: dimensions?.width,
+              height: dimensions?.height,
+            },
+          ],
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
