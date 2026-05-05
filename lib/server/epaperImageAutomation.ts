@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { EPaperProductionStatus } from '@/lib/workflow/types';
+import { isDirectEpaperThumbnailPath } from '@/lib/utils/epaperCover';
 
 type PageLike = {
   pageNumber: number;
@@ -14,6 +15,10 @@ function firstPageImage(pages: PageLike[]) {
 function isPlaceholderThumbnail(value: unknown) {
   const thumbnail = String(value || '').trim();
   return !thumbnail || thumbnail.includes('/placeholders/');
+}
+
+function shouldUsePageImageAsCover(value: unknown) {
+  return isPlaceholderThumbnail(value) || isDirectEpaperThumbnailPath(value);
 }
 
 export function hasCompletePageImages(input: { pageCount: number; pages: PageLike[] }) {
@@ -42,7 +47,11 @@ export function buildEpaperImageAutomationUpdates(input: {
   } = {};
 
   const coverImagePath = firstPageImage(input.pages);
-  if (coverImagePath && isPlaceholderThumbnail(input.currentThumbnailPath)) {
+  if (
+    coverImagePath &&
+    coverImagePath !== String(input.currentThumbnailPath || '').trim() &&
+    shouldUsePageImageAsCover(input.currentThumbnailPath)
+  ) {
     updates.thumbnailPath = coverImagePath;
     updates.thumbnail = coverImagePath;
   }

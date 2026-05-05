@@ -22,6 +22,7 @@ import {
   buildEpaperAutomationInfo,
   buildEpaperReadiness,
 } from '@/lib/utils/epaperAdminReadiness';
+import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
 import { resolveEpaperProduction } from '@/lib/workflow/epaper';
 import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
 
@@ -133,6 +134,7 @@ function normalizePages(value: unknown): EpaperPage[] {
 function mapCreatedEpaper(epaper: unknown) {
   const source = asObject(epaper);
   const publishDate = new Date(String(source.publishDate || ''));
+  const pages = normalizePages(source.pages);
   return {
     _id: String(source._id || ''),
     citySlug: String(source.citySlug || ''),
@@ -142,9 +144,13 @@ function mapCreatedEpaper(epaper: unknown) {
     pdfPath: firstNonEmptyString(source.pdfPath, source.pdfUrl),
     pdfPublicId: firstNonEmptyString(source.pdfPublicId),
     pdfFormat: firstNonEmptyString(source.pdfFormat),
-    thumbnailPath: firstNonEmptyString(source.thumbnailPath, source.thumbnail),
+    thumbnailPath: resolveEpaperCoverImagePath({
+      thumbnailPath: source.thumbnailPath,
+      thumbnail: source.thumbnail,
+      pages,
+    }),
     pageCount: toPositiveInt(source.pageCount),
-    pages: normalizePages(source.pages),
+    pages,
     status: source.status === 'published' ? 'published' : 'draft',
     sourceType: firstNonEmptyString(source.sourceType),
     sourceLabel: firstNonEmptyString(source.sourceLabel),
@@ -351,7 +357,7 @@ export async function GET(req: NextRequest) {
 
     const data = records.map((record) => {
       const item = asObject(record);
-      const pages = normalizePages(item.pages);
+          const pages = normalizePages(item.pages);
       const pageCount = Math.max(toPositiveInt(item.pageCount), pages.length);
       const pagesWithImage = pages.filter((pageItem) =>
         Boolean(String(pageItem.imagePath || '').trim())
@@ -371,7 +377,11 @@ export async function GET(req: NextRequest) {
           title: String(item.title || ''),
         publishDate: toIsoDate(item.publishDate),
         pdfPath: firstNonEmptyString(item.pdfPath, item.pdfUrl),
-        thumbnailPath: firstNonEmptyString(item.thumbnailPath, item.thumbnail),
+        thumbnailPath: resolveEpaperCoverImagePath({
+          thumbnailPath: item.thumbnailPath,
+          thumbnail: item.thumbnail,
+          pages,
+        }),
           pageCount,
           pages,
           status: item.status === 'published' ? 'published' : 'draft',

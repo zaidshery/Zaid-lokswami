@@ -5,6 +5,7 @@ import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import { getCitySlugFromName } from '@/lib/constants/epaperCities';
 import { getStoredEPaperById } from '@/lib/storage/epapersFile';
+import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -231,7 +232,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
         title: String(epaper.title || ''),
         publishDate: toDateLabel(epaper.publishDate),
         pdfPath: firstNonEmptyString(epaperSource.pdfPath, epaperSource.pdfUrl),
-        thumbnailPath: firstNonEmptyString(epaperSource.thumbnailPath, epaperSource.thumbnail),
+        thumbnailPath: resolveEpaperCoverImagePath({
+          thumbnailPath: epaperSource.thumbnailPath,
+          thumbnail: epaperSource.thumbnail,
+          pages,
+        }),
         pageCount: Math.max(toPositiveInt(epaperSource.pageCount), pages.length),
         pages,
         status: 'published',

@@ -10,6 +10,7 @@ import {
   deleteAssetFile,
   parsePublishDate,
 } from '@/lib/utils/epaperStorage';
+import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
 import {
   getCityNameFromSlug,
   normalizeCityName,
@@ -136,7 +137,11 @@ function mapEpaper(epaper: unknown) {
     title: String(source.title || ''),
     publishDate: Number.isNaN(publishDate.getTime()) ? '' : publishDate.toISOString().slice(0, 10),
     pdfPath: firstNonEmptyString(source.pdfPath, source.pdfUrl),
-    thumbnailPath: firstNonEmptyString(source.thumbnailPath, source.thumbnail),
+    thumbnailPath: resolveEpaperCoverImagePath({
+      thumbnailPath: source.thumbnailPath,
+      thumbnail: source.thumbnail,
+      pages,
+    }),
     pageCount: Math.max(toPositiveInt(source.pageCount), pages.length),
     pages,
     status: source.status === 'published' ? 'published' : 'draft',

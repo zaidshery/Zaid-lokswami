@@ -47,6 +47,23 @@ describe('e-paper image automation', () => {
     });
   });
 
+  it('replaces direct uploaded thumbnails with page one after pages are uploaded', () => {
+    expect(
+      buildEpaperImageAutomationUpdates({
+        pageCount: 1,
+        currentThumbnailPath:
+          'https://lokswami-storage-2026.sgp1.cdn.digitaloceanspaces.com/lokswami/epapers/indore/2026-05-05/thumbnail/cover.jpg',
+        currentProductionStatus: 'draft_upload',
+        currentStatus: 'draft',
+        pages: [{ pageNumber: 1, imagePath: 'https://cdn.example.com/page-1.jpg' }],
+      })
+    ).toEqual({
+      thumbnailPath: 'https://cdn.example.com/page-1.jpg',
+      thumbnail: 'https://cdn.example.com/page-1.jpg',
+      productionStatus: 'pages_ready',
+    });
+  });
+
   it('does not overwrite custom cover or skip ahead from later workflow stages', () => {
     expect(
       buildEpaperImageAutomationUpdates({

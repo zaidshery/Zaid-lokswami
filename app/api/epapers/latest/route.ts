@@ -12,6 +12,7 @@ import {
   matchesPublicEpaperMetadata,
   parsePublicEpaperFilters,
 } from '@/lib/utils/publicEpaperFilters';
+import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
 
 type PublicEPaperItem = {
   _id: string;
@@ -97,7 +98,11 @@ function mapMongoItem(raw: Record<string, unknown>): PublicEPaperItem | null {
     cityName: String(raw.cityName || ''),
     title: String(raw.title || ''),
     publishDate,
-    thumbnailPath: firstNonEmptyString(raw.thumbnailPath, raw.thumbnail),
+    thumbnailPath: resolveEpaperCoverImagePath({
+      thumbnailPath: raw.thumbnailPath,
+      thumbnail: raw.thumbnail,
+      pages,
+    }),
     pdfPath: firstNonEmptyString(raw.pdfPath, raw.pdfUrl),
     status: 'published',
     pageCount,

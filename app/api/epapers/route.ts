@@ -11,6 +11,7 @@ import {
   matchesPublicEpaperMetadata,
   parsePublicEpaperFilters,
 } from '@/lib/utils/publicEpaperFilters';
+import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
 
 type EpaperPage = {
   pageNumber: number;
@@ -211,7 +212,11 @@ export async function GET(req: NextRequest) {
         cityName: String(item.cityName || ''),
         title: String(item.title || ''),
         publishDate: toDateLabel(item.publishDate),
-        thumbnailPath: firstNonEmptyString(item.thumbnailPath, item.thumbnail),
+        thumbnailPath: resolveEpaperCoverImagePath({
+          thumbnailPath: item.thumbnailPath,
+          thumbnail: item.thumbnail,
+          pages,
+        }),
         pdfPath: firstNonEmptyString(item.pdfPath, item.pdfUrl),
         status: 'published',
         pageCount,
