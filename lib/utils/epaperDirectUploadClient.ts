@@ -46,7 +46,7 @@ type UploadCompleteResponse = {
 };
 
 const DIRECT_UPLOAD_CORS_HELP =
-  'Direct e-paper upload to DigitalOcean Spaces was blocked. Add this admin site origin to the Spaces CORS rules and allow PUT, GET, and HEAD with the Content-Type header.';
+  'Direct e-paper upload to DigitalOcean Spaces was blocked. Add this admin site origin to the Spaces CORS rules and allow PUT, GET, HEAD, and OPTIONS with the Content-Type and x-amz-acl headers.';
 
 export async function getImageDimensionsFromFile(file: File) {
   if (typeof window === 'undefined') return null;

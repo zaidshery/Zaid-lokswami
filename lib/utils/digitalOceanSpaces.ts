@@ -304,7 +304,7 @@ function createBrowserPresignedPutUrl(
   const { dateStamp, amzDate } = formatAmzDateParts(now);
   const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`;
   const canonicalUri = buildCanonicalUri(key);
-  const signedHeaders = 'host';
+  const signedHeaders = 'host;x-amz-acl';
   const query = buildCanonicalQuery({
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
     'X-Amz-Credential': `${config.accessKey}/${credentialScope}`,
@@ -312,7 +312,7 @@ function createBrowserPresignedPutUrl(
     'X-Amz-Expires': String(expiresSeconds),
     'X-Amz-SignedHeaders': signedHeaders,
   });
-  const canonicalHeaders = `host:${config.originHost}\n`;
+  const canonicalHeaders = `host:${config.originHost}\nx-amz-acl:public-read\n`;
   const canonicalRequest = [
     'PUT',
     canonicalUri,
@@ -403,6 +403,7 @@ export function createDigitalOceanSpacesBrowserUploadTarget(
     uploadUrl: signed.uploadUrl,
     uploadHeaders: {
       'Content-Type': contentType,
+      'x-amz-acl': 'public-read',
     },
     expiresAt: signed.expiresAt,
   };
