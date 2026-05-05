@@ -1,4 +1,9 @@
 {
+  "mode": "final",
+  "homepageEnabled": true,
+  "title": "Election Results 2026",
+  "badgeLabel": "FINAL",
+  "sourceLabel": "ECI",
   "lastUpdated": "2026-05-04T08:00:00.000Z",
   "states": {
     "wb": {
@@ -8,26 +13,26 @@
         {
           "name": "TMC",
           "color": "#45B5E4",
-          "won": 12,
-          "leading": 182
+          "won": 194,
+          "leading": 0
         },
         {
           "name": "BJP",
           "color": "#FF6B00",
-          "won": 8,
-          "leading": 84
+          "won": 92,
+          "leading": 0
         },
         {
           "name": "INC+",
           "color": "#00A651",
-          "won": 0,
-          "leading": 5
+          "won": 5,
+          "leading": 0
         },
         {
           "name": "Other",
           "color": "#6B7280",
-          "won": 0,
-          "leading": 3
+          "won": 3,
+          "leading": 0
         }
       ]
     },
@@ -38,20 +43,20 @@
         {
           "name": "LDF",
           "color": "#E63946",
-          "won": 5,
-          "leading": 80
+          "won": 85,
+          "leading": 0
         },
         {
           "name": "UDF",
           "color": "#00A651",
-          "won": 2,
-          "leading": 48
+          "won": 50,
+          "leading": 0
         },
         {
           "name": "NDA",
           "color": "#FF6B00",
-          "won": 0,
-          "leading": 5
+          "won": 5,
+          "leading": 0
         }
       ]
     },
@@ -62,20 +67,20 @@
         {
           "name": "DMK+",
           "color": "#CC0000",
-          "won": 10,
-          "leading": 145
+          "won": 155,
+          "leading": 0
         },
         {
           "name": "AIADMK+",
           "color": "#00A651",
-          "won": 2,
-          "leading": 75
+          "won": 77,
+          "leading": 0
         },
         {
           "name": "NTK",
           "color": "#8B5CF6",
-          "won": 0,
-          "leading": 2
+          "won": 2,
+          "leading": 0
         }
       ]
     },
@@ -86,20 +91,20 @@
         {
           "name": "NDA",
           "color": "#FF6B00",
-          "won": 15,
-          "leading": 65
+          "won": 80,
+          "leading": 0
         },
         {
           "name": "INDIA",
           "color": "#00A651",
-          "won": 4,
-          "leading": 40
+          "won": 44,
+          "leading": 0
         },
         {
           "name": "AIUDF",
           "color": "#1565C0",
-          "won": 0,
-          "leading": 2
+          "won": 2,
+          "leading": 0
         }
       ]
     },
@@ -110,20 +115,20 @@
         {
           "name": "NDA",
           "color": "#FF6B00",
-          "won": 2,
-          "leading": 14
+          "won": 16,
+          "leading": 0
         },
         {
           "name": "INDIA",
           "color": "#00A651",
-          "won": 1,
-          "leading": 12
+          "won": 13,
+          "leading": 0
         },
         {
           "name": "Other",
           "color": "#6B7280",
-          "won": 0,
-          "leading": 1
+          "won": 1,
+          "leading": 0
         }
       ]
     }
