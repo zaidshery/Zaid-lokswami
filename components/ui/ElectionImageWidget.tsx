@@ -86,15 +86,15 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
   const gridTemplateColumns = isLive ? '1fr 32px 32px 36px' : '1fr 52px';
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl bg-zinc-950 shadow-2xl ring-1 ring-zinc-800">
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2.5">
+    <div className="w-full overflow-hidden rounded-2xl bg-white dark:bg-zinc-950 shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800">
+      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`flex h-6 w-6 items-center justify-center rounded-full ${
             isLive ? 'bg-red-500/20' : 'bg-emerald-500/15'
           }`}>
-            <Activity className={`h-3.5 w-3.5 ${isLive ? 'animate-pulse text-red-500' : 'text-emerald-400'}`} />
+            <Activity className={`h-3.5 w-3.5 ${isLive ? 'animate-pulse text-red-600 dark:text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`} />
           </span>
-          <h2 className="text-[13px] font-bold uppercase tracking-widest text-white">
+          <h2 className="text-[13px] font-bold uppercase tracking-widest text-zinc-900 dark:text-white">
             {title}
           </h2>
         </div>
@@ -102,7 +102,7 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
           {surface === 'home' ? (
             <Link
               href="/main/elections"
-              className="hidden items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-300 hover:border-zinc-500 hover:text-white sm:inline-flex"
+              className="hidden items-center gap-1 rounded border border-zinc-300 dark:border-zinc-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-900 dark:hover:text-white sm:inline-flex"
             >
               <Archive className="h-3 w-3" />
               Archive
@@ -116,7 +116,7 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
         </div>
       </div>
 
-      <div className="flex overflow-x-auto border-b border-zinc-800 bg-zinc-900/70 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex overflow-x-auto border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/70 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {ELECTION_SLIDES.map((state, index) => (
           <button
             key={state.id}
@@ -124,8 +124,8 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
             onClick={() => setCurrentIndex(index)}
             className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-[11px] font-semibold transition-all ${
               index === currentIndex
-                ? 'border-red-500 bg-red-500/10 text-white'
-                : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                ? 'border-red-500 bg-red-500/10 text-zinc-900 dark:text-white'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
             }`}
           >
             {state.label}
@@ -140,12 +140,12 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="flex flex-col sm:flex-row"
+          className="flex flex-col lg:flex-row"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div className="relative w-full flex-shrink-0 border-b border-zinc-800 bg-zinc-900 sm:w-[48%] sm:border-b-0 sm:border-r">
-            <div className="aspect-[16/10] w-full overflow-hidden sm:aspect-video">
+          <div className="relative flex w-full flex-shrink-0 flex-col justify-center border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 lg:w-[50%] xl:w-[48%] lg:border-b-0 lg:border-r">
+            <div className="relative aspect-video w-full overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`${slide.src}?v=${SESSION_TS}`}
@@ -187,19 +187,19 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {hasResults ? (
               <>
-                <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-900/50 px-3 py-2">
+                <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2">
                   <div className="flex items-center gap-3 text-[11px]">
-                    <span className="text-zinc-400">
-                      <span className="font-bold text-white">{stateData?.totalSeats}</span> seats
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      <span className="font-bold text-zinc-900 dark:text-white">{stateData?.totalSeats}</span> seats
                     </span>
-                    <span className="text-zinc-600">|</span>
-                    <span className="text-zinc-400">
-                      Majority: <span className="font-bold text-yellow-400">{majority}</span>
+                    <span className="text-zinc-300 dark:text-zinc-600">|</span>
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Majority: <span className="font-bold text-yellow-600 dark:text-yellow-400">{majority}</span>
                     </span>
-                    <span className="text-zinc-600">|</span>
-                    <span className="text-zinc-400">
+                    <span className="text-zinc-300 dark:text-zinc-600">|</span>
+                    <span className="text-zinc-500 dark:text-zinc-400">
                       {isLive ? 'Counted' : 'Declared'}:{' '}
-                      <span className="font-bold text-green-400">{totalDeclared}</span>
+                      <span className="font-bold text-green-600 dark:text-green-400">{totalDeclared}</span>
                     </span>
                   </div>
                   <div className="hidden items-center gap-2 text-[9px] text-zinc-500 sm:flex">
@@ -217,22 +217,22 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
                 </div>
 
                 <div
-                  className="grid items-center border-b border-zinc-800/40 bg-zinc-900/30 px-3 py-1"
+                  className="grid items-center border-b border-zinc-200 dark:border-zinc-800/40 bg-zinc-50/50 dark:bg-zinc-900/30 px-3 py-1"
                   style={{ gridTemplateColumns }}
                 >
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Party</span>
                   {isLive ? (
                     <>
-                      <span className="text-center text-[10px] font-semibold text-green-500">W</span>
-                      <span className="text-center text-[10px] font-semibold text-amber-400">L</span>
-                      <span className="text-center text-[10px] font-semibold text-white">Tot</span>
+                      <span className="text-center text-[10px] font-semibold text-green-600 dark:text-green-500">W</span>
+                      <span className="text-center text-[10px] font-semibold text-amber-500 dark:text-amber-400">L</span>
+                      <span className="text-center text-[10px] font-semibold text-zinc-900 dark:text-white">Tot</span>
                     </>
                   ) : (
-                    <span className="text-center text-[10px] font-semibold text-white">Seats</span>
+                    <span className="text-center text-[10px] font-semibold text-zinc-900 dark:text-white">Seats</span>
                   )}
                 </div>
 
-                <div className="flex max-h-[280px] flex-col divide-y divide-zinc-800/40 overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex max-h-[280px] flex-col divide-y divide-zinc-100 dark:divide-zinc-800/40 overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {sortedParties.map((party, index) => {
                     const total = party.won + party.leading;
                     const barPct = (total / maxTotal) * 100;
@@ -246,7 +246,7 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
                         initial={{ opacity: 0, x: 10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.04 }}
-                        className={`relative px-3 py-2 ${isLeader ? 'bg-zinc-800/40' : ''}`}
+                        className={`relative px-3 py-2 ${isLeader ? 'bg-zinc-50 dark:bg-zinc-800/40' : ''}`}
                       >
                         <div className="grid items-center gap-1" style={{ gridTemplateColumns }}>
                           <div className="flex min-w-0 items-center gap-1.5">
@@ -254,34 +254,34 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
                               className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                               style={{ background: party.color }}
                             />
-                            <span className={`truncate text-[13px] font-bold ${isLeader ? 'text-white' : 'text-zinc-300'}`}>
+                            <span className={`truncate text-[13px] font-bold ${isLeader ? 'text-zinc-900 dark:text-white' : 'text-zinc-600 dark:text-zinc-300'}`}>
                               {party.name}
                             </span>
                             {isMajority ? (
-                              <span className="shrink-0 text-[8px] font-black text-yellow-400">*</span>
+                              <span className="shrink-0 text-[8px] font-black text-yellow-500 dark:text-yellow-400">*</span>
                             ) : null}
                           </div>
 
                           {isLive ? (
                             <>
-                              <span className="text-center text-[13px] font-bold tabular-nums text-green-400">
+                              <span className="text-center text-[13px] font-bold tabular-nums text-green-600 dark:text-green-400">
                                 {party.won}
                               </span>
-                              <span className="text-center text-[13px] font-bold tabular-nums text-amber-400">
+                              <span className="text-center text-[13px] font-bold tabular-nums text-amber-500 dark:text-amber-400">
                                 {party.leading}
                               </span>
-                              <span className={`pr-1 text-right text-[14px] font-black tabular-nums ${isLeader ? 'text-white' : 'text-zinc-200'}`}>
+                              <span className={`pr-1 text-right text-[14px] font-black tabular-nums ${isLeader ? 'text-zinc-900 dark:text-white' : 'text-zinc-700 dark:text-zinc-200'}`}>
                                 {total}
                               </span>
                             </>
                           ) : (
-                            <span className={`pr-1 text-right text-[14px] font-black tabular-nums ${isLeader ? 'text-white' : 'text-zinc-200'}`}>
+                            <span className={`pr-1 text-right text-[14px] font-black tabular-nums ${isLeader ? 'text-zinc-900 dark:text-white' : 'text-zinc-700 dark:text-zinc-200'}`}>
                               {total}
                             </span>
                           )}
                         </div>
 
-                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                           <div className="flex h-full overflow-hidden rounded-full transition-all duration-700" style={{ width: `${barPct}%` }}>
                             <div className="h-full" style={{ width: `${wonRatio * 100}%`, background: party.color }} />
                             {isLive ? (
@@ -295,8 +295,8 @@ export default function ElectionImageWidget({ surface = 'home' }: ElectionImageW
                 </div>
 
                 {results?.lastUpdated ? (
-                  <div className="mt-auto border-t border-zinc-800/60 bg-zinc-900/30 px-3 py-1.5">
-                    <p className="text-right text-[10px] text-zinc-600">
+                  <div className="mt-auto border-t border-zinc-200 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/30 px-3 py-1.5">
+                    <p className="text-right text-[10px] text-zinc-500 dark:text-zinc-600">
                       Source: {sourceLabel} | {isLive ? 'Updated' : 'Final updated'}{' '}
                       {new Date(results.lastUpdated).toLocaleTimeString('en-IN', {
                         hour: '2-digit',
