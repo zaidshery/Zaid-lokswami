@@ -156,10 +156,10 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
     >
       <Link href={articleHref} className="block h-full md:flex md:flex-col">
         <div
-          className={`relative overflow-hidden bg-zinc-950 ${
+          className={`relative overflow-hidden ${
             variant === 'editorial'
-              ? 'aspect-video w-full shrink-0 rounded-t-2xl rounded-b-none ring-1 ring-zinc-200/70 shadow-lg shadow-zinc-300/25 dark:ring-zinc-800 dark:shadow-black/30'
-              : 'aspect-video w-full shrink-0 rounded-2xl card-hover'
+              ? 'h-[clamp(156px,25vh,210px)] min-[420px]:h-[clamp(172px,27vh,226px)] sm:h-[clamp(210px,30vh,265px)] md:flex-1 md:min-h-0 md:aspect-auto rounded-t-2xl rounded-b-none ring-1 ring-zinc-200/70 shadow-lg shadow-zinc-300/25 dark:ring-zinc-800 dark:shadow-black/30'
+              : 'aspect-[16/9] md:h-[62%] md:aspect-auto rounded-2xl card-hover'
           }`}
         >
           <div
@@ -216,11 +216,10 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleBookmarkClick}
-                className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-lg ${
-                  isBookmarked
+                className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-lg ${isBookmarked
                     ? 'bg-lokswami-red text-white hover:bg-red-700 hover:shadow-lokswami-red/50'
                     : 'bg-black/60 text-white hover:bg-lokswami-red hover:shadow-lokswami-red/50'
-                } ${!canSaveArticle || isSavingBookmark ? 'cursor-not-allowed opacity-60' : ''}`}
+                  } ${!canSaveArticle || isSavingBookmark ? 'cursor-not-allowed opacity-60' : ''}`}
                 disabled={!canSaveArticle || isSavingBookmark}
                 aria-pressed={isBookmarked}
                 aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
@@ -271,7 +270,7 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.08 }}
-            className="relative z-10 -mt-px hidden rounded-b-2xl border border-t-0 border-zinc-200/80 bg-gradient-to-b from-white to-zinc-50 px-4 pb-1 pt-3 shadow-lg shadow-zinc-200/35 dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-900/80 dark:shadow-black/30 md:flex md:flex-col md:flex-1"
+            className="relative z-10 -mt-px hidden rounded-b-2xl border border-t-0 border-zinc-200/80 bg-gradient-to-b from-white to-zinc-50 px-4 pb-1 pt-3 shadow-lg shadow-zinc-200/35 dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-900/80 dark:shadow-black/30 md:flex md:flex-col"
           >
             <div className="mb-2.5 flex items-center justify-between">
               <span className="h-1.5 w-10 rounded-full bg-gradient-to-r from-red-500 to-red-400" />
