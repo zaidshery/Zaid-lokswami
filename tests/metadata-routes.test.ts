@@ -1,15 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const listArticlesForSitemapMock = vi.fn();
+const listNewsArticlesForSitemapMock = vi.fn();
 const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
 vi.mock('@/lib/content/serverArticles', () => ({
   listArticlesForSitemap: listArticlesForSitemapMock,
+  listNewsArticlesForSitemap: listNewsArticlesForSitemapMock,
+  getServerArticlePath: (article: { id: string; slug?: string }) =>
+    `/main/article/${encodeURIComponent(article.slug || article.id)}`,
 }));
 
 describe('metadata routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listArticlesForSitemapMock.mockResolvedValue([]);
+    listNewsArticlesForSitemapMock.mockResolvedValue([]);
     process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com/';
   });
 
@@ -32,7 +38,7 @@ describe('metadata routes', () => {
           allow: '/',
         },
       ],
-      sitemap: 'https://lokswami.com/sitemap.xml',
+      sitemap: ['https://lokswami.com/sitemap.xml', 'https://lokswami.com/news-sitemap.xml'],
       host: 'https://lokswami.com',
     });
   });
@@ -41,6 +47,7 @@ describe('metadata routes', () => {
     listArticlesForSitemapMock.mockResolvedValue([
       {
         id: 'story/one',
+        slug: 'slug-one',
         updatedAt: '2026-03-27T05:00:00.000Z',
       },
     ]);
@@ -62,12 +69,34 @@ describe('metadata routes', () => {
           priority: 1,
         }),
         expect.objectContaining({
-          url: 'https://lokswami.com/main/article/story%2Fone',
+          url: 'https://lokswami.com/main/article/slug-one',
           changeFrequency: 'weekly',
           priority: 0.8,
           lastModified: new Date('2026-03-27T05:00:00.000Z'),
         }),
       ])
     );
+  });
+
+  it('builds a Google News sitemap for recent eligible articles', async () => {
+    listNewsArticlesForSitemapMock.mockResolvedValue([
+      {
+        id: 'article-1',
+        slug: 'indore-metro-update',
+        title: 'Indore Metro update',
+        publishedAt: '2026-05-06T09:00:00.000Z',
+        updatedAt: '2026-05-06T10:00:00.000Z',
+        includeInNewsSitemap: true,
+      },
+    ]);
+
+    const { GET } = await import('@/app/news-sitemap.xml/route');
+    const response = await GET();
+    const xml = await response.text();
+
+    expect(response.headers.get('Content-Type')).toContain('application/xml');
+    expect(xml).toContain('<loc>https://lokswami.com/main/article/indore-metro-update</loc>');
+    expect(xml).toContain('<news:language>hi</news:language>');
+    expect(xml).toContain('<news:title>Indore Metro update</news:title>');
   });
 });

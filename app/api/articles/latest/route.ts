@@ -12,6 +12,7 @@ const MAX_LIMIT = 200;
 type FeedArticle = {
   _id: string;
   id: string;
+  slug: string;
   title: string;
   summary: string;
   content: string;
@@ -79,6 +80,7 @@ function normalizeFeedArticle(source: unknown): FeedArticle | null {
   if (!input) return null;
 
   const id = String(input._id || '').trim() || String(input.id || '').trim();
+  const slug = String(input.slug || '').trim();
   const title = String(input.title || '').trim();
   const summary = String(input.summary || '').trim();
   const content = String(input.content || '').trim();
@@ -96,6 +98,7 @@ function normalizeFeedArticle(source: unknown): FeedArticle | null {
   return {
     _id: id,
     id,
+    slug,
     title,
     summary,
     content,
@@ -168,7 +171,7 @@ async function shouldUseFileStore() {
 async function listFromMongo(limit: number, cursor: Cursor | null) {
   const docs = await Article.find({})
     .select(
-      '_id title summary content image category author publishedAt updatedAt views isBreaking isTrending workflow'
+      '_id slug title summary content image category author publishedAt updatedAt views isBreaking isTrending workflow'
     )
     .sort({ publishedAt: -1, _id: -1 })
     .lean();

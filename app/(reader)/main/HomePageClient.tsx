@@ -34,6 +34,7 @@ import {
 import {
   buildArticleImageVariantUrl,
 } from '@/lib/utils/articleMedia';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 
 function hexToRgba(hex: string, alpha: number) {
@@ -153,7 +154,7 @@ export default function HomePage() {
 
     const origin = window.location.origin;
     const articlePath = article?.id
-      ? `/main/article/${encodeURIComponent(article.id)}`
+      ? buildArticlePublicPath({ id: article.id, slug: article.slug })
       : fallbackPath;
     const articleUrl = toAbsoluteShareUrl(articlePath, origin);
     const title = article?.title?.trim() || (language === 'hi' ? '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0916\u092c\u0930' : 'Lokswami story');
@@ -350,7 +351,7 @@ export default function HomePage() {
                 className="h-full"
               >
                 <Link
-                  href={`/main/article/${encodeURIComponent(article.id)}`}
+                  href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
                   className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 p-3 dark:from-zinc-900 dark:to-zinc-900/70"
                 >
                   <div className="flex h-full items-center gap-2.5">
@@ -407,7 +408,7 @@ export default function HomePage() {
                 className="h-full"
               >
                 <Link
-                  href={`/main/article/${encodeURIComponent(article.id)}`}
+                  href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
                   className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 px-3 py-2 dark:from-zinc-900 dark:to-zinc-900/70"
                 >
                   <div className="flex h-full items-center gap-3">
@@ -559,7 +560,7 @@ export default function HomePage() {
                 : 'Read more stories in this category');
             const leadArticle = panel.lead || panel.rest[0] || null;
             const readHref = leadArticle
-              ? `/main/article/${encodeURIComponent(leadArticle.id)}`
+              ? buildArticlePublicPath({ id: leadArticle.id, slug: leadArticle.slug })
               : `/main/category/${panel.slug}`;
 
             return (
@@ -569,7 +570,7 @@ export default function HomePage() {
                 className="group flex min-h-[312px] w-[82%] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border bg-zinc-100 transition-transform duration-300 hover:-translate-y-0.5 sm:min-h-[344px] sm:w-[60%] lg:w-[42%] xl:w-[28%] dark:bg-zinc-900"
               >
                 {panel.lead ? (
-                  <Link href={`/main/article/${encodeURIComponent(panel.lead.id)}`} className="block">
+                  <Link href={buildArticlePublicPath({ id: panel.lead.id, slug: panel.lead.slug })} className="block">
                     <div className="relative aspect-[16/10] overflow-hidden border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800">
                       <Image
                         src={buildArticleImageVariantUrl(panel.lead.image, 'card')}

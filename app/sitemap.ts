@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { listArticlesForSitemap } from '@/lib/content/serverArticles';
+import { getServerArticlePath, listArticlesForSitemap } from '@/lib/content/serverArticles';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +43,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const articles = await listArticlesForSitemap(500);
   const articleEntries: MetadataRoute.Sitemap = articles.map((article) => ({
-    url: absoluteUrl(siteUrl, `/main/article/${encodeURIComponent(article.id)}`),
+    url: absoluteUrl(siteUrl, getServerArticlePath(article)),
     lastModified: new Date(article.updatedAt),
     changeFrequency: 'weekly',
     priority: 0.8,

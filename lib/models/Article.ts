@@ -16,6 +16,14 @@ export interface IArticleSeo {
   metaDescription: string;
   ogImage: string;
   canonicalUrl: string;
+  focusKeyword: string;
+  secondaryKeywords: string;
+  featuredImageAlt: string;
+  featuredImageCaption: string;
+  imageCredit: string;
+  authorProfileUrl: string;
+  includeInNewsSitemap: boolean;
+  majorUpdateNote: string;
 }
 
 export interface IArticleRevision {
@@ -26,6 +34,8 @@ export interface IArticleRevision {
   image: string;
   category: string;
   author: string;
+  slug: string;
+  previousSlugs: string[];
   isBreaking: boolean;
   isTrending: boolean;
   seo: IArticleSeo;
@@ -52,6 +62,8 @@ export interface IArticle {
   image: string;
   category: string;
   author: string;
+  slug: string;
+  previousSlugs: string[];
   publishedAt: Date;
   updatedAt: Date;
   views: number;
@@ -77,6 +89,14 @@ const SeoSchema = new mongoose.Schema<IArticleSeo>(
     metaDescription: { type: String, default: '', maxlength: 320 },
     ogImage: { type: String, default: '' },
     canonicalUrl: { type: String, default: '' },
+    focusKeyword: { type: String, default: '', maxlength: 120 },
+    secondaryKeywords: { type: String, default: '', maxlength: 240 },
+    featuredImageAlt: { type: String, default: '', maxlength: 220 },
+    featuredImageCaption: { type: String, default: '', maxlength: 300 },
+    imageCredit: { type: String, default: '', maxlength: 180 },
+    authorProfileUrl: { type: String, default: '' },
+    includeInNewsSitemap: { type: Boolean, default: true },
+    majorUpdateNote: { type: String, default: '', maxlength: 240 },
   },
   { _id: false }
 );
@@ -89,6 +109,8 @@ const RevisionSchema = new mongoose.Schema<IArticleRevision>(
     image: { type: String, required: true },
     category: { type: String, required: true },
     author: { type: String, required: true },
+    slug: { type: String, default: '', trim: true, lowercase: true, index: true },
+    previousSlugs: { type: [String], default: [] },
     isBreaking: { type: Boolean, default: false },
     isTrending: { type: Boolean, default: false },
     seo: { type: SeoSchema, default: () => ({}) },
@@ -120,6 +142,8 @@ const ArticleSchema = new mongoose.Schema<IArticle>({
   // category is stored as a string (category name or slug). Categories are managed separately.
   category: { type: String, required: true },
   author: { type: String, required: true },
+  slug: { type: String, default: '', trim: true, lowercase: true, index: true },
+  previousSlugs: { type: [String], default: [] },
   publishedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   views: { type: Number, default: 0 },

@@ -8,6 +8,7 @@ import {
   normalizeCopyEditorMeta,
   normalizeReporterMeta,
 } from '@/lib/content/newsroomMetadata';
+import { normalizeArticleSeo } from '@/lib/seo/articleSeo';
 import {
   buildArticleActivityMessage,
   recordArticleActivity,
@@ -34,13 +35,7 @@ async function shouldUseFileStore() {
 }
 
 function normalizeSeo(input: unknown) {
-  const source = typeof input === 'object' && input ? (input as Record<string, unknown>) : {};
-  return {
-    metaTitle: typeof source.metaTitle === 'string' ? source.metaTitle : '',
-    metaDescription: typeof source.metaDescription === 'string' ? source.metaDescription : '',
-    ogImage: typeof source.ogImage === 'string' ? source.ogImage : '',
-    canonicalUrl: typeof source.canonicalUrl === 'string' ? source.canonicalUrl : '',
-  };
+  return normalizeArticleSeo(input);
 }
 
 function buildRevisionSnapshot(article: Record<string, unknown>) {

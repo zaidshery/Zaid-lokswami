@@ -3,6 +3,7 @@ import connectDB from '@/lib/db/mongoose';
 import Article from '@/lib/models/Article';
 import { resolveReusableBreakingTts } from '@/lib/server/breakingTts';
 import { listAllStoredArticles } from '@/lib/storage/articlesFile';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 
 const DEFAULT_LIMIT = 10;
 const MIN_LIMIT = 1;
@@ -65,7 +66,7 @@ function normalizeBreakingItem(source: unknown): BreakingItem | null {
     title,
     category: category || undefined,
     createdAt: normalizeTimestamp(input.publishedAt || input.createdAt),
-    href: `/main/article/${encodeURIComponent(id)}`,
+    href: buildArticlePublicPath({ id, slug: String(input.slug || '') }),
     priority: Math.max(1, Number.isFinite(views) ? views : 1),
     ...(reusableTts
       ? {
@@ -100,7 +101,7 @@ async function shouldUseFileStore() {
 
 async function listFromMongo(limit: number) {
   const docs = await Article.find({ isBreaking: true })
-    .select('_id title category publishedAt views breakingTts')
+    .select('_id slug title category publishedAt views breakingTts')
     .sort({ publishedAt: -1, _id: -1 })
     .limit(limit)
     .lean();

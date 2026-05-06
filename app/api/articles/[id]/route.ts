@@ -3,7 +3,8 @@ import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 import Article from '@/lib/models/Article';
-import { getStoredArticleById } from '@/lib/storage/articlesFile';
+import { getStoredArticleByIdOrSlug } from '@/lib/storage/articlesFile';
+import { normalizeArticleSlug } from '@/lib/seo/articleSeo';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -26,7 +27,7 @@ async function shouldUseFileStore() {
 export async function GET(_: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const articleId = id.trim();
+    const articleId = decodeURIComponent(id).trim();
 
     if (!articleId) {
       return NextResponse.json(
@@ -36,7 +37,7 @@ export async function GET(_: Request, context: RouteContext) {
     }
 
     if (await shouldUseFileStore()) {
-      const stored = await getStoredArticleById(articleId);
+      const stored = await getStoredArticleByIdOrSlug(articleId);
       if (!stored || !isPubliclyPublishedArticle(stored)) {
         return NextResponse.json(
           { success: false, error: 'Article not found' },
@@ -47,14 +48,12 @@ export async function GET(_: Request, context: RouteContext) {
       return NextResponse.json({ success: true, data: stored });
     }
 
-    if (!Types.ObjectId.isValid(articleId)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid article ID' },
-        { status: 400 }
-      );
-    }
-
-    const article = await Article.findById(articleId).lean();
+    const slug = normalizeArticleSlug(articleId);
+    const article = Types.ObjectId.isValid(articleId)
+      ? await Article.findById(articleId).lean()
+      : slug
+        ? await Article.findOne({ $or: [{ slug }, { previousSlugs: slug }] }).lean()
+        : null;
     if (!article || !isPubliclyPublishedArticle(article)) {
       return NextResponse.json(
         { success: false, error: 'Article not found' },

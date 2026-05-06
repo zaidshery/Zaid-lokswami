@@ -16,6 +16,7 @@ export interface Author {
 
 export interface Article {
   id: string;
+  slug?: string;
   title: string;
   summary: string;
   content?: string;
@@ -27,6 +28,12 @@ export interface Article {
   views: number;
   isBreaking?: boolean;
   isTrending?: boolean;
+  seo?: {
+    featuredImageAlt?: string;
+    featuredImageCaption?: string;
+    imageCredit?: string;
+    authorProfileUrl?: string;
+  };
 }
 
 export interface BreakingNews {

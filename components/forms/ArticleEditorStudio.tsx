@@ -13,6 +13,12 @@ import {
 import RichTextEditor from '@/components/forms/RichTextEditor';
 import { analyzeArticleEditorContent } from '@/lib/utils/articleEditorAnalysis';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
+import {
+  analyzeArticleSeo,
+  buildArticlePublicPath,
+  normalizeArticleSeo,
+  type ArticleSeoFields,
+} from '@/lib/seo/articleSeo';
 
 export type ArticleEditorStudioMode = 'write' | 'split' | 'preview';
 
@@ -157,6 +163,16 @@ type ArticleEditorSidebarProps = {
   title: string;
   summary: string;
   content: string;
+  slug?: string;
+  image?: string;
+  seo?: Partial<ArticleSeoFields>;
+  category?: string;
+  relatedArticles?: Array<{
+    id: string;
+    slug?: string;
+    title: string;
+    category?: string;
+  }>;
   className?: string;
 };
 
@@ -164,31 +180,35 @@ export function ArticleEditorSidebar({
   title,
   summary,
   content,
+  slug = '',
+  image = '',
+  seo,
+  category = '',
+  relatedArticles = [],
   className,
 }: ArticleEditorSidebarProps) {
   const insights = analyzeArticleEditorContent(content);
-  const checklist = [
-    {
-      label: 'Title added',
-      done: title.trim().length >= 8,
-    },
-    {
-      label: 'Summary ready',
-      done: summary.trim().length >= 30,
-    },
-    {
-      label: 'Structure with headings',
-      done: insights.headingCount >= 2,
-    },
-    {
-      label: 'Reference or links added',
-      done: insights.linkCount > 0 || insights.resourceCount > 0,
-    },
-    {
-      label: 'Visual/data support added',
-      done: insights.imageCount > 0 || insights.tableCount > 0,
-    },
-  ];
+  const normalizedSeo = normalizeArticleSeo(seo);
+  const seoAnalysis = analyzeArticleSeo({
+    title,
+    summary,
+    content,
+    slug,
+    seo: normalizedSeo,
+    hasFeaturedImage: Boolean(image),
+    hasSourceOrExternalLink: insights.linkCount > 0 || insights.resourceCount > 0,
+  });
+  const lowerCategory = category.trim().toLowerCase();
+  const focusKeyword = normalizedSeo.focusKeyword.trim().toLowerCase();
+  const suggestions = relatedArticles
+    .filter((article) => {
+      const sameCategory =
+        lowerCategory && article.category?.trim().toLowerCase() === lowerCategory;
+      const keywordMatch =
+        focusKeyword && article.title.toLowerCase().includes(focusKeyword);
+      return sameCategory || keywordMatch;
+    })
+    .slice(0, 4);
 
   return (
     <aside className={cx('space-y-4', className)}>
@@ -205,12 +225,43 @@ export function ArticleEditorSidebar({
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h3 className="text-sm font-semibold text-gray-900">Desk Checklist</h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-gray-900">SEO Score</h3>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-900">
+            {seoAnalysis.score}%
+          </span>
+        </div>
         <div className="mt-3 space-y-2">
-          {checklist.map((item) => (
+          {seoAnalysis.items.map((item) => (
             <ChecklistItem key={item.label} label={item.label} done={item.done} />
           ))}
         </div>
+        {seoAnalysis.missingInlineImageAltCount > 0 ? (
+          <p className="mt-3 text-xs font-medium text-amber-700">
+            {seoAnalysis.missingInlineImageAltCount} inline image needs alt text.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <h3 className="text-sm font-semibold text-gray-900">Internal Links</h3>
+        {suggestions.length ? (
+          <div className="mt-3 space-y-2">
+            {suggestions.map((article) => {
+              const href = buildArticlePublicPath({ id: article.id, slug: article.slug });
+              return (
+                <div key={`${article.id}-${article.slug || ''}`} className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="line-clamp-2 text-sm font-semibold text-gray-800">{article.title}</p>
+                  <p className="mt-1 break-all text-xs text-gray-500">{href}</p>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-gray-500">
+            Related article suggestions appear after category or keyword matches are available.
+          </p>
+        )}
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">

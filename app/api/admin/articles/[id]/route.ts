@@ -32,6 +32,7 @@ import {
 import {
   deleteStoredArticle,
   getStoredArticleById,
+  listAllStoredArticles,
   updateStoredArticle,
 } from '@/lib/storage/articlesFile';
 import {
@@ -56,6 +57,12 @@ import {
 import { isAllowedAssetPath } from '@/lib/utils/epaperStorage';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
+  isValidArticleSlug,
+  normalizeArticleSeo,
+  normalizeArticleSlug,
+  resolveUniqueArticleSlug,
+} from '@/lib/seo/articleSeo';
+import {
   applyArticleWorkflowAction,
   resolveArticleWorkflow,
 } from '@/lib/workflow/article';
@@ -66,6 +73,14 @@ type NormalizedSeo = {
   metaDescription: string;
   ogImage: string;
   canonicalUrl: string;
+  focusKeyword: string;
+  secondaryKeywords: string;
+  featuredImageAlt: string;
+  featuredImageCaption: string;
+  imageCredit: string;
+  authorProfileUrl: string;
+  includeInNewsSitemap: boolean;
+  majorUpdateNote: string;
 };
 
 type RouteContext = {
@@ -216,14 +231,7 @@ async function resolveAssignee(assignedToId: string) {
 }
 
 function normalizeSeo(input: unknown): NormalizedSeo {
-  const source = typeof input === 'object' && input ? (input as Record<string, unknown>) : {};
-  return {
-    metaTitle: typeof source.metaTitle === 'string' ? source.metaTitle.trim() : '',
-    metaDescription:
-      typeof source.metaDescription === 'string' ? source.metaDescription.trim() : '',
-    ogImage: typeof source.ogImage === 'string' ? source.ogImage.trim() : '',
-    canonicalUrl: typeof source.canonicalUrl === 'string' ? source.canonicalUrl.trim() : '',
-  };
+  return normalizeArticleSeo(input);
 }
 
 function normalizeSeoPartial(input: unknown): Partial<NormalizedSeo> {
@@ -235,6 +243,26 @@ function normalizeSeoPartial(input: unknown): Partial<NormalizedSeo> {
   }
   if (typeof source.ogImage === 'string') partial.ogImage = source.ogImage.trim();
   if (typeof source.canonicalUrl === 'string') partial.canonicalUrl = source.canonicalUrl.trim();
+  if (typeof source.focusKeyword === 'string') partial.focusKeyword = source.focusKeyword.trim();
+  if (typeof source.secondaryKeywords === 'string') {
+    partial.secondaryKeywords = source.secondaryKeywords.trim();
+  }
+  if (typeof source.featuredImageAlt === 'string') {
+    partial.featuredImageAlt = source.featuredImageAlt.trim();
+  }
+  if (typeof source.featuredImageCaption === 'string') {
+    partial.featuredImageCaption = source.featuredImageCaption.trim();
+  }
+  if (typeof source.imageCredit === 'string') partial.imageCredit = source.imageCredit.trim();
+  if (typeof source.authorProfileUrl === 'string') {
+    partial.authorProfileUrl = source.authorProfileUrl.trim();
+  }
+  if (typeof source.includeInNewsSitemap === 'boolean') {
+    partial.includeInNewsSitemap = source.includeInNewsSitemap;
+  }
+  if (typeof source.majorUpdateNote === 'string') {
+    partial.majorUpdateNote = source.majorUpdateNote.trim();
+  }
   return partial;
 }
 
@@ -267,6 +295,8 @@ function normalizePartialInput(body: unknown) {
   const copyEditorMeta = normalizeCopyEditorMetaPartial(source.copyEditorMeta);
   return {
     ...(typeof source.title === 'string' ? { title: source.title.trim() } : {}),
+    ...(typeof source.slug === 'string' ? { slug: source.slug.trim() } : {}),
+    ...(Array.isArray(source.previousSlugs) ? { previousSlugs: source.previousSlugs } : {}),
     ...(typeof source.summary === 'string' ? { summary: source.summary.trim() } : {}),
     ...(typeof source.content === 'string' ? { content: source.content.trim() } : {}),
     ...(typeof source.image === 'string' ? { image: source.image.trim() } : {}),
@@ -283,6 +313,9 @@ function normalizePartialInput(body: unknown) {
 function validateLengths(input: Record<string, unknown>) {
   if (typeof input.title === 'string' && input.title.length > 200) {
     return 'Title is too long (max 200 characters)';
+  }
+  if (typeof input.slug === 'string' && input.slug && !isValidArticleSlug(input.slug)) {
+    return 'SEO slug must use lowercase letters, numbers, and hyphens only';
   }
   if (typeof input.summary === 'string' && input.summary.length > 500) {
     return 'Summary is too long (max 500 characters)';
@@ -308,6 +341,13 @@ function validateLengths(input: Record<string, unknown>) {
       !isValidAbsoluteHttpUrl(seo.canonicalUrl)
     ) {
       return 'Canonical URL must be a valid absolute URL';
+    }
+    if (
+      typeof seo.authorProfileUrl === 'string' &&
+      seo.authorProfileUrl &&
+      !isValidAbsoluteHttpUrl(seo.authorProfileUrl)
+    ) {
+      return 'Author profile URL must be a valid absolute URL';
     }
     if (
       typeof seo.ogImage === 'string' &&
@@ -360,6 +400,8 @@ function normalizeFullInput(body: unknown) {
 
   return {
     title: typeof source.title === 'string' ? source.title.trim() : '',
+    slug: typeof source.slug === 'string' ? source.slug.trim() : '',
+    previousSlugs: Array.isArray(source.previousSlugs) ? source.previousSlugs : [],
     summary: typeof source.summary === 'string' ? source.summary.trim() : '',
     content: typeof source.content === 'string' ? source.content.trim() : '',
     image,
@@ -400,6 +442,10 @@ function buildRevisionSnapshot(article: Record<string, unknown>) {
     image: typeof article.image === 'string' ? article.image : '',
     category: typeof article.category === 'string' ? article.category : '',
     author: typeof article.author === 'string' ? article.author : '',
+    slug: normalizeArticleSlug(String(article.slug || '')),
+    previousSlugs: Array.isArray(article.previousSlugs)
+      ? article.previousSlugs.map((item) => normalizeArticleSlug(String(item || ''))).filter(Boolean)
+      : [],
     isBreaking: Boolean(article.isBreaking),
     isTrending: Boolean(article.isTrending),
     seo,
@@ -1056,6 +1102,29 @@ export async function PATCH(
         );
       }
 
+      if (typeof updates.slug === 'string' || !currentArticle.slug) {
+        const existingArticles = await listAllStoredArticles();
+        const resolvedSlug = await resolveUniqueArticleSlug(
+          typeof updates.slug === 'string' && updates.slug
+            ? updates.slug
+            : typeof updates.title === 'string' && updates.title
+              ? updates.title
+              : currentArticle.title,
+          async (candidate) =>
+            existingArticles.some(
+              (article) =>
+                article._id !== id &&
+                (article.slug === candidate || (article.previousSlugs || []).includes(candidate))
+            )
+        );
+        const previousSlugs = new Set(currentArticle.previousSlugs || []);
+        if (currentArticle.slug && currentArticle.slug !== resolvedSlug) {
+          previousSlugs.add(currentArticle.slug);
+        }
+        updates.slug = resolvedSlug;
+        updates.previousSlugs = Array.from(previousSlugs).filter((item) => item !== resolvedSlug);
+      }
+
       const article = await updateStoredArticle(id, updates);
       if (!article) {
         return NextResponse.json(
@@ -1130,6 +1199,32 @@ export async function PATCH(
         { success: false, error: 'Forbidden' },
         { status: 403 }
       );
+    }
+
+    if (typeof updates.slug === 'string' || !normalizeArticleSlug(String(current.slug || ''))) {
+      const currentSlug = normalizeArticleSlug(String(current.slug || ''));
+      const resolvedSlug = await resolveUniqueArticleSlug(
+        typeof updates.slug === 'string' && updates.slug
+          ? updates.slug
+          : typeof updates.title === 'string' && updates.title
+            ? updates.title
+            : String(current.title || ''),
+        async (candidate) =>
+          Boolean(
+            await Article.exists({
+              _id: { $ne: id },
+              $or: [{ slug: candidate }, { previousSlugs: candidate }],
+            })
+          )
+      );
+      const previousSlugs = new Set(
+        Array.isArray(current.previousSlugs)
+          ? current.previousSlugs.map((item) => normalizeArticleSlug(String(item || '')))
+          : []
+      );
+      if (currentSlug && currentSlug !== resolvedSlug) previousSlugs.add(currentSlug);
+      updates.slug = resolvedSlug;
+      updates.previousSlugs = Array.from(previousSlugs).filter((item) => item && item !== resolvedSlug);
     }
 
     const revision = buildRevisionSnapshot(current as Record<string, unknown>);
@@ -1257,6 +1352,25 @@ export async function PUT(
         );
       }
 
+      {
+        const existingArticles = await listAllStoredArticles();
+        const resolvedSlug = await resolveUniqueArticleSlug(
+          input.slug || input.seo.metaTitle || input.title,
+          async (candidate) =>
+            existingArticles.some(
+              (article) =>
+                article._id !== id &&
+                (article.slug === candidate || (article.previousSlugs || []).includes(candidate))
+            )
+        );
+        const previousSlugs = new Set(currentArticle.previousSlugs || []);
+        if (currentArticle.slug && currentArticle.slug !== resolvedSlug) {
+          previousSlugs.add(currentArticle.slug);
+        }
+        input.slug = resolvedSlug;
+        input.previousSlugs = Array.from(previousSlugs).filter((item) => item !== resolvedSlug);
+      }
+
       const article = await updateStoredArticle(id, input);
       if (!article) {
         return NextResponse.json(
@@ -1332,6 +1446,28 @@ export async function PUT(
         { success: false, error: 'Forbidden' },
         { status: 403 }
       );
+    }
+
+    {
+      const currentSlug = normalizeArticleSlug(String(current.slug || ''));
+      const resolvedSlug = await resolveUniqueArticleSlug(
+        input.slug || input.seo.metaTitle || input.title,
+        async (candidate) =>
+          Boolean(
+            await Article.exists({
+              _id: { $ne: id },
+              $or: [{ slug: candidate }, { previousSlugs: candidate }],
+            })
+          )
+      );
+      const previousSlugs = new Set(
+        Array.isArray(current.previousSlugs)
+          ? current.previousSlugs.map((item) => normalizeArticleSlug(String(item || '')))
+          : []
+      );
+      if (currentSlug && currentSlug !== resolvedSlug) previousSlugs.add(currentSlug);
+      input.slug = resolvedSlug;
+      input.previousSlugs = Array.from(previousSlugs).filter((item) => item && item !== resolvedSlug);
     }
 
     const revision = buildRevisionSnapshot(current as Record<string, unknown>);

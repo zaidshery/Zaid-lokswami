@@ -10,6 +10,7 @@ import { Share2, Bookmark, TrendingUp } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import type { Article } from '@/lib/mock/data';
 import { buildArticleImageVariantUrl } from '@/lib/utils/articleMedia';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import ArticleMetaRow from './ArticleMetaRow';
 
 interface NewsCardProps {
@@ -30,7 +31,7 @@ export default function NewsCard({ article, variant = 'default', size = 'default
   const isSignedIn = status === 'authenticated';
   const isSavedInProfile = Array.isArray(savedArticleIds) && savedArticleIds.includes(article.id);
   const isSmall = size === 'sm';
-  const articleHref = `/main/article/${encodeURIComponent(article.id)}`;
+  const articleHref = buildArticlePublicPath({ id: article.id, slug: article.slug });
   const canSaveArticle = /^[a-fA-F0-9]{24}$/.test(article.id);
   const horizontalImage = buildArticleImageVariantUrl(article.image, 'thumb');
   const featuredImage = buildArticleImageVariantUrl(article.image, 'featured');

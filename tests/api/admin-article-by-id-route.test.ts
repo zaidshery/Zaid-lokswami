@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getAdminSessionMock = vi.fn();
 const getStoredArticleByIdMock = vi.fn();
+const listAllStoredArticlesMock = vi.fn();
 const updateStoredArticleMock = vi.fn();
 const deleteStoredArticleMock = vi.fn();
 const connectDBMock = vi.fn();
@@ -17,6 +18,7 @@ vi.mock('@/lib/db/mongoose', () => ({
 
 vi.mock('@/lib/models/Article', () => ({
   default: {
+    exists: vi.fn(),
     findById: vi.fn(),
     findByIdAndUpdate: vi.fn(),
     findByIdAndDelete: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock('@/lib/models/User', () => ({
 vi.mock('@/lib/storage/articlesFile', () => ({
   deleteStoredArticle: deleteStoredArticleMock,
   getStoredArticleById: getStoredArticleByIdMock,
+  listAllStoredArticles: listAllStoredArticlesMock,
   updateStoredArticle: updateStoredArticleMock,
 }));
 
@@ -83,6 +86,7 @@ describe('/api/admin/articles/[id] route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.MONGODB_URI;
+    listAllStoredArticlesMock.mockResolvedValue([]);
   });
 
   it('prevents reporters from opening article detail through the API', async () => {
@@ -165,5 +169,65 @@ describe('/api/admin/articles/[id] route', () => {
     expect(getStoredArticleByIdMock).not.toHaveBeenCalled();
     expect(updateStoredArticleMock).not.toHaveBeenCalled();
     expect(deleteStoredArticleMock).not.toHaveBeenCalled();
+  });
+
+  it('records the old slug when replacing an article slug', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk',
+      role: 'admin',
+    });
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      title: 'Old title',
+      summary: 'Old summary',
+      content: 'Old content',
+      image: 'https://cdn.example.com/old.jpg',
+      category: 'General',
+      author: 'Desk',
+      slug: 'old-title',
+      previousSlugs: [],
+      workflow: { status: 'published' },
+    });
+    listAllStoredArticlesMock.mockResolvedValue([
+      {
+        _id: 'article-1',
+        slug: 'old-title',
+        previousSlugs: [],
+      },
+    ]);
+    updateStoredArticleMock.mockResolvedValue({
+      _id: 'article-1',
+      slug: 'new-title',
+      previousSlugs: ['old-title'],
+      isBreaking: false,
+      workflow: { status: 'published' },
+    });
+
+    const { PUT } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await PUT(
+      createJsonRequest('PUT', {
+        title: 'New title',
+        slug: 'new-title',
+        summary: 'Updated summary',
+        content: 'Updated content',
+        image: 'https://cdn.example.com/updated.jpg',
+        category: 'General',
+        author: 'Desk',
+      }),
+      {
+        params: Promise.resolve({ id: 'article-1' }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateStoredArticleMock).toHaveBeenCalledWith(
+      'article-1',
+      expect.objectContaining({
+        slug: 'new-title',
+        previousSlugs: ['old-title'],
+      })
+    );
   });
 });

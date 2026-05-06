@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -34,6 +34,13 @@ import {
   prepareArticleImageFile,
 } from '@/lib/utils/articleImageUpload';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
+import {
+  buildArticleGooglePreview,
+  buildArticlePublicPath,
+  isValidArticleSlug,
+  normalizeArticleSeo,
+  normalizeArticleSlug,
+} from '@/lib/seo/articleSeo';
 
 const DEFAULT_CATEGORIES = NEWS_CATEGORIES.map((category) => category.nameEn);
 const DRAFT_STORAGE_KEY = 'lokswami:article-draft:new';
@@ -51,10 +58,26 @@ type ArticleFormState = {
   reporterNotes: string;
   isBreaking: boolean;
   isTrending: boolean;
+  seoSlug: string;
   seoTitle: string;
   seoDescription: string;
   ogImage: string;
   canonicalUrl: string;
+  focusKeyword: string;
+  secondaryKeywords: string;
+  featuredImageAlt: string;
+  featuredImageCaption: string;
+  imageCredit: string;
+  authorProfileUrl: string;
+  includeInNewsSitemap: boolean;
+  majorUpdateNote: string;
+};
+
+type RelatedArticleSuggestion = {
+  id: string;
+  slug?: string;
+  title: string;
+  category?: string;
 };
 
 type SourceStoryRecord = {
@@ -86,10 +109,19 @@ const EMPTY_FORM: ArticleFormState = {
   reporterNotes: '',
   isBreaking: false,
   isTrending: false,
+  seoSlug: '',
   seoTitle: '',
   seoDescription: '',
   ogImage: '',
   canonicalUrl: '',
+  focusKeyword: '',
+  secondaryKeywords: '',
+  featuredImageAlt: '',
+  featuredImageCaption: '',
+  imageCredit: '',
+  authorProfileUrl: '',
+  includeInNewsSitemap: true,
+  majorUpdateNote: '',
 };
 
 function formatDraftTimestamp(value: string) {
@@ -133,6 +165,8 @@ export default function UploadArticle() {
   const [isLoadingSourceStory, setIsLoadingSourceStory] = useState(false);
   const [sourceStoryError, setSourceStoryError] = useState('');
   const [sourcePrefillApplied, setSourcePrefillApplied] = useState(false);
+  const [isSeoSlugTouched, setIsSeoSlugTouched] = useState(false);
+  const [relatedArticles, setRelatedArticles] = useState<RelatedArticleSuggestion[]>([]);
 
   const sourceStoryId = searchParams.get('sourceStoryId')?.trim() || '';
   const canPublishImmediately =
@@ -155,10 +189,18 @@ export default function UploadArticle() {
         formData.locationTag.trim() ||
         formData.sourceInfo.trim() ||
         formData.reporterNotes.trim() ||
+        formData.seoSlug.trim() ||
         formData.seoTitle.trim() ||
         formData.seoDescription.trim() ||
         formData.ogImage.trim() ||
         formData.canonicalUrl.trim() ||
+        formData.focusKeyword.trim() ||
+        formData.secondaryKeywords.trim() ||
+        formData.featuredImageAlt.trim() ||
+        formData.featuredImageCaption.trim() ||
+        formData.imageCredit.trim() ||
+        formData.authorProfileUrl.trim() ||
+        formData.majorUpdateNote.trim() ||
         imagePreview.trim()
     );
 
@@ -254,13 +296,52 @@ export default function UploadArticle() {
     };
   }, [draftReady, persistDraft]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadRelatedArticles = async () => {
+      try {
+        const response = await fetch('/api/articles/latest?limit=50', { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const rows = Array.isArray(payload?.items) ? payload.items : [];
+        if (!active) return;
+        setRelatedArticles(
+          rows
+            .map((item: Record<string, unknown>) => ({
+              id: String(item._id || item.id || ''),
+              slug: typeof item.slug === 'string' ? item.slug : undefined,
+              title: String(item.title || ''),
+              category: typeof item.category === 'string' ? item.category : undefined,
+            }))
+            .filter((item: RelatedArticleSuggestion) => item.id && item.title)
+        );
+      } catch {
+        // Suggestions are helpful, not required for article submission.
+      }
+    };
+
+    void loadRelatedArticles();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
+    const nextValue = name === 'seoSlug' ? normalizeArticleSlug(value) : value;
+    if (name === 'seoSlug') {
+      setIsSeoSlugTouched(true);
+    }
     setFormData((current) => ({
       ...current,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : nextValue,
+      ...(!isSeoSlugTouched && (name === 'title' || name === 'seoTitle')
+        ? { seoSlug: normalizeArticleSlug(nextValue) }
+        : {}),
     }));
   };
 
@@ -469,6 +550,21 @@ export default function UploadArticle() {
         return;
       }
 
+      if (formData.seoSlug.trim() && !isValidArticleSlug(formData.seoSlug.trim())) {
+        setError('SEO slug must use lowercase letters, numbers, and hyphens only');
+        setIsLoading(false);
+        return;
+      }
+
+      if (
+        formData.authorProfileUrl.trim() &&
+        !isValidAbsoluteHttpUrl(formData.authorProfileUrl.trim())
+      ) {
+        setError('Author profile URL must start with http:// or https://');
+        setIsLoading(false);
+        return;
+      }
+
       const ogImage = formData.ogImage.trim();
       if (
         ogImage &&
@@ -497,6 +593,7 @@ export default function UploadArticle() {
         body: JSON.stringify({
           intent: canPublishImmediately ? 'publish' : 'submit',
           title: formData.title,
+          slug: formData.seoSlug,
           summary: formData.summary,
           content: formData.content,
           category: formData.category,
@@ -515,6 +612,14 @@ export default function UploadArticle() {
             metaDescription: formData.seoDescription,
             ogImage: resolvedOgImage,
             canonicalUrl: formData.canonicalUrl,
+            focusKeyword: formData.focusKeyword,
+            secondaryKeywords: formData.secondaryKeywords,
+            featuredImageAlt: formData.featuredImageAlt,
+            featuredImageCaption: formData.featuredImageCaption,
+            imageCredit: formData.imageCredit,
+            authorProfileUrl: formData.authorProfileUrl,
+            includeInNewsSitemap: formData.includeInNewsSitemap,
+            majorUpdateNote: formData.majorUpdateNote,
           },
           ...(sourceStoryId ? { sourceStoryId } : {}),
         }),
@@ -536,6 +641,7 @@ export default function UploadArticle() {
       setImageFile(null);
       setImagePreview('');
       setContentMode('write');
+      setIsSeoSlugTouched(false);
       clearDraft();
 
       setTimeout(() => {
@@ -547,6 +653,41 @@ export default function UploadArticle() {
       setIsLoading(false);
     }
   };
+
+  const normalizedSeo = useMemo(
+    () =>
+      normalizeArticleSeo({
+        metaTitle: formData.seoTitle,
+        metaDescription: formData.seoDescription,
+        ogImage: formData.ogImage,
+        canonicalUrl: formData.canonicalUrl,
+        focusKeyword: formData.focusKeyword,
+        secondaryKeywords: formData.secondaryKeywords,
+        featuredImageAlt: formData.featuredImageAlt,
+        featuredImageCaption: formData.featuredImageCaption,
+        imageCredit: formData.imageCredit,
+        authorProfileUrl: formData.authorProfileUrl,
+        includeInNewsSitemap: formData.includeInNewsSitemap,
+        majorUpdateNote: formData.majorUpdateNote,
+      }),
+    [formData]
+  );
+  const googlePreview = useMemo(
+    () =>
+      buildArticleGooglePreview({
+        id: 'article-preview',
+        slug: formData.seoSlug,
+        title: formData.title,
+        summary: formData.summary,
+        image: imagePreview,
+        seo: normalizedSeo,
+      }),
+    [formData.seoSlug, formData.title, formData.summary, imagePreview, normalizedSeo]
+  );
+  const previewPath = buildArticlePublicPath({
+    id: 'article-preview',
+    slug: formData.seoSlug || undefined,
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
@@ -955,6 +1096,21 @@ export default function UploadArticle() {
                 <div className="space-y-4 border-t border-gray-200 p-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">
+                    SEO Slug
+                  </label>
+                  <input
+                    type="text"
+                    name="seoSlug"
+                    value={formData.seoSlug}
+                    onChange={handleInputChange}
+                    placeholder="article-public-url-slug"
+                    maxLength={200}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <p className="mt-1 break-all text-xs text-gray-500">{previewPath}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
                     Meta Title
                   </label>
                   <input
@@ -989,6 +1145,34 @@ export default function UploadArticle() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Focus Keyword
+                  </label>
+                  <input
+                    type="text"
+                    name="focusKeyword"
+                    value={formData.focusKeyword}
+                    onChange={handleInputChange}
+                    placeholder="Primary topic for internal SEO checks"
+                    maxLength={120}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Secondary Keywords
+                  </label>
+                  <input
+                    type="text"
+                    name="secondaryKeywords"
+                    value={formData.secondaryKeywords}
+                    onChange={handleInputChange}
+                    placeholder="Comma separated supporting topics"
+                    maxLength={240}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
                     OG Image URL
                   </label>
                   <input
@@ -1019,6 +1203,35 @@ export default function UploadArticle() {
                     Leave empty to use the default public article permalink after publish. You can
                     override it here for migrated or syndicated stories.
                   </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Author Profile URL
+                  </label>
+                  <input
+                    type="url"
+                    name="authorProfileUrl"
+                    value={formData.authorProfileUrl}
+                    onChange={handleInputChange}
+                    placeholder="https://example.com/authors/name"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                </div>
+                <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                  <input
+                    type="checkbox"
+                    name="includeInNewsSitemap"
+                    checked={formData.includeInNewsSitemap}
+                    onChange={handleInputChange}
+                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                  />
+                  <span className="text-sm text-gray-700">Include in Google News sitemap after publish</span>
+                </label>
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Google Preview</p>
+                  <p className="mt-2 line-clamp-2 text-sm font-semibold text-blue-700">{googlePreview.title}</p>
+                  <p className="mt-1 break-all text-xs text-green-700">{googlePreview.url}</p>
+                  <p className="mt-1 line-clamp-3 text-xs text-gray-600">{googlePreview.description || 'Meta description or summary will appear here.'}</p>
                 </div>
                 </div>
               </details>
@@ -1066,6 +1279,35 @@ export default function UploadArticle() {
                     </button>
                   </motion.div>
                 )}
+                <div className="mt-4 space-y-3">
+                  <input
+                    type="text"
+                    name="featuredImageAlt"
+                    value={formData.featuredImageAlt}
+                    onChange={handleInputChange}
+                    placeholder="Featured image alt text"
+                    maxLength={220}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
+                  />
+                  <textarea
+                    name="featuredImageCaption"
+                    value={formData.featuredImageCaption}
+                    onChange={handleInputChange}
+                    placeholder="Featured image caption"
+                    rows={2}
+                    maxLength={300}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    name="imageCredit"
+                    value={formData.imageCredit}
+                    onChange={handleInputChange}
+                    placeholder="Image credit/source"
+                    maxLength={180}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
+                  />
+                </div>
               </div>
 
               <details className="rounded-xl border border-gray-200 bg-gray-50">
@@ -1098,6 +1340,25 @@ export default function UploadArticle() {
                   />
                   <span className="text-sm text-gray-700">Mark as Trending</span>
                 </label>
+                </div>
+              </details>
+
+              <details className="rounded-xl border border-gray-200 bg-gray-50">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
+                  Publish timing
+                </summary>
+                <div className="space-y-3 border-t border-gray-200 p-4 text-sm text-gray-700">
+                  <p>Timezone: Asia/Calcutta</p>
+                  <p>Status: {canPublishImmediately ? 'Publish now' : 'Submit for review'}</p>
+                  <textarea
+                    name="majorUpdateNote"
+                    value={formData.majorUpdateNote}
+                    onChange={handleInputChange}
+                    placeholder="Major update note (optional)"
+                    rows={2}
+                    maxLength={240}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
+                  />
                 </div>
               </details>
 
@@ -1148,6 +1409,11 @@ export default function UploadArticle() {
                     title={formData.title}
                     summary={formData.summary}
                     content={formData.content}
+                    slug={formData.seoSlug}
+                    image={imagePreview}
+                    seo={normalizedSeo}
+                    category={formData.category}
+                    relatedArticles={relatedArticles}
                     className="space-y-3"
                   />
                 </div>

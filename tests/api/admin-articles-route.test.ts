@@ -30,6 +30,7 @@ vi.mock('@/lib/db/mongoose', () => ({
 
 vi.mock('@/lib/models/Article', () => ({
   default: {
+    exists: vi.fn(),
     find: vi.fn(),
   },
 }));
@@ -247,6 +248,65 @@ describe('/api/admin/articles route', () => {
         sourceType: 'story',
       }),
     });
+  });
+
+  it('persists article SEO fields and a unique slug on create', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk Admin',
+      role: 'admin',
+    });
+    listAllStoredArticlesMock.mockResolvedValue([
+      {
+        _id: 'existing-1',
+        slug: 'indore-metro-update',
+        previousSlugs: [],
+      },
+    ]);
+    createStoredArticleMock.mockResolvedValue({
+      _id: 'article-3',
+      slug: 'indore-metro-update-2',
+      title: 'Indore Metro update',
+      workflow: { status: 'published', createdBy: { id: 'admin-1' } },
+    });
+
+    const { POST } = await import('@/app/api/admin/articles/route');
+    const response = await POST(
+      new Request('http://localhost/api/admin/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: 'publish',
+          title: 'Indore Metro update',
+          slug: 'indore-metro-update',
+          summary: 'Story summary',
+          content: 'Story body',
+          image: 'https://cdn.example.com/story.jpg',
+          category: 'General',
+          author: 'Desk Admin',
+          seo: {
+            focusKeyword: 'Indore Metro',
+            featuredImageAlt: 'Metro construction',
+            authorProfileUrl: 'https://lokswami.com/authors/desk',
+            includeInNewsSitemap: true,
+          },
+        }),
+      }) as unknown as NextRequest
+    );
+
+    expect(response.status).toBe(201);
+    expect(createStoredArticleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: 'indore-metro-update-2',
+        seo: expect.objectContaining({
+          focusKeyword: 'Indore Metro',
+          featuredImageAlt: 'Metro construction',
+          authorProfileUrl: 'https://lokswami.com/authors/desk',
+          includeInNewsSitemap: true,
+        }),
+      })
+    );
   });
 
   it('prevents duplicate primary linked articles for the same story', async () => {

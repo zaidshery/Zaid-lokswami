@@ -17,6 +17,7 @@ import {
 import {
   buildArticleImageVariantUrl,
 } from '@/lib/utils/articleMedia';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import {
@@ -33,6 +34,7 @@ import {
 type ApiArticle = {
   _id?: string;
   id?: string;
+  slug?: string;
   title?: string;
   summary?: string;
   content?: string;
@@ -43,6 +45,7 @@ type ApiArticle = {
   views?: number;
   isBreaking?: boolean;
   isTrending?: boolean;
+  seo?: Article['seo'];
 };
 
 const DEFAULT_AVATAR = '/logo-icon-final.png';
@@ -96,6 +99,7 @@ function normalizeApiArticle(raw: ApiArticle | null | undefined): Article | null
 
   return {
     id,
+    slug: raw.slug,
     title,
     summary,
     content: raw.content || '',
@@ -110,6 +114,7 @@ function normalizeApiArticle(raw: ApiArticle | null | undefined): Article | null
     views: Number.isFinite(raw.views) ? Number(raw.views) : 0,
     isBreaking: Boolean(raw.isBreaking),
     isTrending: Boolean(raw.isTrending),
+    seo: raw.seo,
   };
 }
 
@@ -404,49 +409,6 @@ export default function ArticleDetailPage() {
     return { readMinutes, publishedText };
   }, [article]);
 
-  const articleStructuredData = useMemo(() => {
-    if (!article) return null;
-
-    const siteOrigin =
-      typeof window !== 'undefined'
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-
-    const articleUrl = toAbsoluteShareUrl(
-      `/main/article/${encodeURIComponent(article.id)}`,
-      siteOrigin
-    );
-    const structuredImage = buildArticleImageVariantUrl(article.image, 'detail');
-
-    return {
-      '@context': 'https://schema.org',
-      '@type': 'NewsArticle',
-      headline: article.title,
-      description: article.summary,
-      image: [toAbsoluteShareUrl(structuredImage, siteOrigin)],
-      datePublished: article.publishedAt,
-      dateModified: article.publishedAt,
-      author: [
-        {
-          '@type': 'Person',
-          name: article.author.name,
-        },
-      ],
-      publisher: {
-        '@type': 'Organization',
-        name: 'Lokswami',
-        logo: {
-          '@type': 'ImageObject',
-          url: toAbsoluteShareUrl('/logo-app-512.png', siteOrigin),
-        },
-      },
-      mainEntityOfPage: {
-        '@type': 'WebPage',
-        '@id': articleUrl,
-      },
-    };
-  }, [article]);
-
   const listenLanguageOptions = useMemo(() => {
     return GEMINI_TTS_LANGUAGE_OPTIONS;
   }, []);
@@ -730,7 +692,7 @@ export default function ArticleDetailPage() {
   const handleWhatsAppShare = () => {
     if (typeof window === 'undefined' || !article) return;
 
-    const articlePath = `/main/article/${encodeURIComponent(article.id)}`;
+    const articlePath = buildArticlePublicPath({ id: article.id, slug: article.slug });
     const articleUrl = toAbsoluteShareUrl(articlePath, window.location.origin);
     const shareUrl = buildArticleWhatsAppShareUrl({
       title: article.title,
@@ -829,13 +791,6 @@ export default function ArticleDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl pb-12">
-      {articleStructuredData ? (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(articleStructuredData) }}
-        />
-      ) : null}
-
       <div className="pointer-events-none fixed left-0 right-0 top-0 z-50 h-1 bg-transparent">
         <div
           className="h-full bg-gradient-to-r from-orange-500 via-orange-600 to-red-600 transition-[width] duration-150 ease-out"
@@ -855,13 +810,21 @@ export default function ArticleDetailPage() {
         <div className="relative aspect-[16/9] w-full overflow-hidden">
           <Image
             src={buildArticleImageVariantUrl(article.image, 'detail')}
-            alt={article.title}
+            alt={article.seo?.featuredImageAlt || article.title}
             fill
             className="object-cover"
             sizes="(max-width: 639px) 100vw, (max-width: 1023px) 92vw, 896px"
             priority
           />
         </div>
+        {article.seo?.featuredImageCaption || article.seo?.imageCredit ? (
+          <div className="border-b border-zinc-200 px-4 py-2 text-xs text-zinc-500 dark:border-white/10 dark:text-zinc-400">
+            {article.seo.featuredImageCaption ? <span>{article.seo.featuredImageCaption}</span> : null}
+            {article.seo.imageCredit ? (
+              <span className="ml-2 font-medium">{article.seo.imageCredit}</span>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="space-y-3.5 p-3.5 sm:space-y-4 sm:p-6 md:p-8">
           <div className="-mx-0.5 overflow-x-auto pb-0.5 pl-0.5 pr-0.5 scrollbar-hide sm:mx-0 sm:overflow-visible sm:pb-0 sm:pl-0 sm:pr-0">

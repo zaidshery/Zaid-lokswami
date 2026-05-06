@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const connectDBMock = vi.fn();
 const listAllStoredArticlesMock = vi.fn();
 const getStoredArticleByIdMock = vi.fn();
+const getStoredArticleByIdOrSlugMock = vi.fn();
 
 vi.mock('@/lib/db/mongoose', () => ({
   default: connectDBMock,
@@ -13,11 +14,13 @@ vi.mock('@/lib/models/Article', () => ({
   default: {
     find: vi.fn(),
     findById: vi.fn(),
+    findOne: vi.fn(),
   },
 }));
 
 vi.mock('@/lib/storage/articlesFile', () => ({
   getStoredArticleById: getStoredArticleByIdMock,
+  getStoredArticleByIdOrSlug: getStoredArticleByIdOrSlugMock,
   listAllStoredArticles: listAllStoredArticlesMock,
 }));
 
@@ -25,6 +28,9 @@ describe('public article routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.MONGODB_URI;
+    getStoredArticleByIdOrSlugMock.mockImplementation((token: string) =>
+      getStoredArticleByIdMock(token)
+    );
   });
 
   it('excludes unpublished articles from the latest feed', async () => {
@@ -47,6 +53,7 @@ describe('public article routes', () => {
       },
       {
         _id: 'published-1',
+        slug: 'published-slug',
         title: 'Published article',
         summary: 'Published summary',
         content: 'Published content',
@@ -75,13 +82,14 @@ describe('public article routes', () => {
     expect(payload.items[0]).toEqual(
       expect.objectContaining({
         id: 'published-1',
+        slug: 'published-slug',
         title: 'Published article',
       })
     );
   });
 
   it('returns 404 for unpublished public article detail requests', async () => {
-    getStoredArticleByIdMock.mockResolvedValue({
+    getStoredArticleByIdOrSlugMock.mockResolvedValue({
       _id: 'draft-1',
       title: 'Draft article',
       summary: 'Draft summary',
@@ -107,5 +115,41 @@ describe('public article routes', () => {
       success: false,
       error: 'Article not found',
     });
+  });
+
+  it('resolves public article detail by current slug', async () => {
+    getStoredArticleByIdOrSlugMock.mockResolvedValue({
+      _id: 'published-1',
+      slug: 'published-slug',
+      previousSlugs: [],
+      title: 'Published article',
+      summary: 'Published summary',
+      content: 'Published content',
+      image: '/published.jpg',
+      category: 'General',
+      author: 'Desk',
+      publishedAt: '2026-04-13T09:00:00.000Z',
+      views: 12,
+      isBreaking: false,
+      isTrending: false,
+      workflow: {
+        status: 'published',
+      },
+    });
+
+    const { GET } = await import('@/app/api/articles/[id]/route');
+    const response = await GET(
+      new Request('http://localhost/api/articles/published-slug') as unknown as Request,
+      { params: Promise.resolve({ id: 'published-slug' }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data).toEqual(
+      expect.objectContaining({
+        _id: 'published-1',
+        slug: 'published-slug',
+      })
+    );
   });
 });

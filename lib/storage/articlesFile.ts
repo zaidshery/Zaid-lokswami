@@ -25,13 +25,14 @@ import {
   type WorkflowStatus,
 } from '@/lib/workflow/types';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
+import {
+  defaultArticleSeo,
+  normalizeArticleSeo,
+  normalizeArticleSlug,
+  type ArticleSeoFields,
+} from '@/lib/seo/articleSeo';
 
-export interface ArticleSeo {
-  metaTitle: string;
-  metaDescription: string;
-  ogImage: string;
-  canonicalUrl: string;
-}
+export type ArticleSeo = ArticleSeoFields;
 
 export interface StoredArticleRevision {
   _id: string;
@@ -81,6 +82,8 @@ export interface StoredArticle {
   image: string;
   category: string;
   author: string;
+  slug: string;
+  previousSlugs: string[];
   publishedAt: string;
   updatedAt: string;
   views: number;
@@ -104,6 +107,8 @@ export interface CreateArticleInput {
   image: string;
   category: string;
   author: string;
+  slug?: string;
+  previousSlugs?: string[];
   isBreaking?: boolean;
   isTrending?: boolean;
   seo?: Partial<ArticleSeo>;
@@ -118,6 +123,8 @@ export interface CreateArticleInput {
 type UpdateArticleInput = Partial<CreateArticleInput> & {
   views?: number;
   publishedAt?: string;
+  slug?: string;
+  previousSlugs?: string[];
   seo?: Partial<ArticleSeo>;
   breakingTts?: BreakingTtsMetadata | null;
   workflow?: Partial<StoredWorkflowMeta>;
@@ -140,12 +147,7 @@ function createId() {
 }
 
 function emptySeo(): ArticleSeo {
-  return {
-    metaTitle: '',
-    metaDescription: '',
-    ogImage: '',
-    canonicalUrl: '',
-  };
+  return defaultArticleSeo();
 }
 
 function normalizeMediaUrl(input: unknown, fallback = LOCAL_NEWS_FALLBACK_IMAGE) {
@@ -158,13 +160,24 @@ function normalizeMediaUrl(input: unknown, fallback = LOCAL_NEWS_FALLBACK_IMAGE)
 }
 
 function normalizeSeo(input: unknown): ArticleSeo {
-  const source = typeof input === 'object' && input ? (input as Record<string, unknown>) : {};
+  const seo = normalizeArticleSeo(input);
   return {
-    metaTitle: typeof source.metaTitle === 'string' ? source.metaTitle.trim() : '',
-    metaDescription: typeof source.metaDescription === 'string' ? source.metaDescription.trim() : '',
-    ogImage: normalizeMediaUrl(source.ogImage, ''),
-    canonicalUrl: typeof source.canonicalUrl === 'string' ? source.canonicalUrl.trim() : '',
+    ...seo,
+    ogImage: normalizeMediaUrl(seo.ogImage, ''),
   };
+}
+
+function normalizeSlugList(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const output: string[] = [];
+  input.forEach((item) => {
+    const slug = typeof item === 'string' ? normalizeArticleSlug(item) : '';
+    if (!slug || seen.has(slug)) return;
+    seen.add(slug);
+    output.push(slug);
+  });
+  return output;
 }
 
 function normalizeOptionalDateString(value: unknown) {
@@ -263,7 +276,6 @@ function normalizeRevision(input: unknown): StoredArticleRevision | null {
   const image = normalizeMediaUrl(source.image);
   const category = typeof source.category === 'string' ? source.category : '';
   const author = typeof source.author === 'string' ? source.author : '';
-
   if (!title || !summary || !content || !image || !category || !author) {
     return null;
   }
@@ -298,6 +310,10 @@ function normalizeStoredArticle(input: unknown): StoredArticle | null {
   const image = normalizeMediaUrl(source.image);
   const category = typeof source.category === 'string' ? source.category : '';
   const author = typeof source.author === 'string' ? source.author : '';
+  const slug = normalizeArticleSlug(
+    typeof source.slug === 'string' && source.slug.trim() ? source.slug : title
+  );
+  const previousSlugs = normalizeSlugList(source.previousSlugs).filter((item) => item !== slug);
 
   if (!title || !summary || !content || !image || !category || !author) {
     return null;
@@ -321,6 +337,8 @@ function normalizeStoredArticle(input: unknown): StoredArticle | null {
     image,
     category,
     author,
+    slug,
+    previousSlugs,
     isBreaking: Boolean(source.isBreaking),
     isTrending: Boolean(source.isTrending),
     views: Number.isFinite(viewsRaw) ? viewsRaw : 0,
@@ -419,6 +437,21 @@ export async function getStoredArticleById(id: string) {
   return all.find((item) => item._id === id) || null;
 }
 
+export async function getStoredArticleByIdOrSlug(token: string) {
+  const normalized = token.trim();
+  if (!normalized) return null;
+
+  const slug = normalizeArticleSlug(normalized);
+  const all = await readAllArticles();
+  return (
+    all.find(
+      (item) =>
+        item._id === normalized ||
+        (slug && (item.slug === slug || item.previousSlugs.includes(slug)))
+    ) || null
+  );
+}
+
 export async function findStoredArticleBySourceStoryId(sourceStoryId: string) {
   const normalized = sourceStoryId.trim();
   if (!normalized) return null;
@@ -448,6 +481,8 @@ export async function createStoredArticle(input: CreateArticleInput) {
     image: normalizeMediaUrl(input.image),
     category: input.category,
     author: input.author,
+    slug: normalizeArticleSlug(input.slug || input.title),
+    previousSlugs: normalizeSlugList(input.previousSlugs),
     isBreaking: Boolean(input.isBreaking),
     isTrending: Boolean(input.isTrending),
     views: 0,
@@ -499,6 +534,14 @@ export async function updateStoredArticle(
     ...current,
     ...updates,
     image: nextImage,
+    slug:
+      updates.slug !== undefined
+        ? normalizeArticleSlug(updates.slug)
+        : current.slug,
+    previousSlugs:
+      updates.previousSlugs !== undefined
+        ? normalizeSlugList(updates.previousSlugs)
+        : current.previousSlugs,
     seo: withSeoOgFallback(nextSeo, nextImage),
     isBreaking:
       updates.isBreaking !== undefined ? updates.isBreaking : current.isBreaking,
@@ -541,12 +584,22 @@ export async function updateStoredArticle(
     current.image !== next.image ||
     current.category !== next.category ||
     current.author !== next.author ||
+    current.slug !== next.slug ||
+    current.previousSlugs.join('|') !== next.previousSlugs.join('|') ||
     current.isBreaking !== next.isBreaking ||
     current.isTrending !== next.isTrending ||
     current.seo.metaTitle !== next.seo.metaTitle ||
     current.seo.metaDescription !== next.seo.metaDescription ||
     current.seo.ogImage !== next.seo.ogImage ||
     current.seo.canonicalUrl !== next.seo.canonicalUrl ||
+    current.seo.focusKeyword !== next.seo.focusKeyword ||
+    current.seo.secondaryKeywords !== next.seo.secondaryKeywords ||
+    current.seo.featuredImageAlt !== next.seo.featuredImageAlt ||
+    current.seo.featuredImageCaption !== next.seo.featuredImageCaption ||
+    current.seo.imageCredit !== next.seo.imageCredit ||
+    current.seo.authorProfileUrl !== next.seo.authorProfileUrl ||
+    current.seo.includeInNewsSitemap !== next.seo.includeInNewsSitemap ||
+    current.seo.majorUpdateNote !== next.seo.majorUpdateNote ||
     current.reporterMeta.locationTag !== next.reporterMeta.locationTag ||
     current.reporterMeta.sourceInfo !== next.reporterMeta.sourceInfo ||
     current.reporterMeta.sourceConfidential !== next.reporterMeta.sourceConfidential ||

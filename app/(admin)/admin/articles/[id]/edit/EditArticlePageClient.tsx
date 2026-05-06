@@ -54,6 +54,13 @@ import {
 } from '@/lib/utils/articleImageUpload';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
+  buildArticleGooglePreview,
+  buildArticlePublicPath,
+  isValidArticleSlug,
+  normalizeArticleSeo,
+  normalizeArticleSlug,
+} from '@/lib/seo/articleSeo';
+import {
   buildWorkflowFeedbackSummary,
   type WorkflowFeedbackTone,
 } from '@/lib/workflow/feedback';
@@ -111,10 +118,19 @@ type ArticleFormState = {
   returnForChangesReason: string;
   isBreaking: boolean;
   isTrending: boolean;
+  seoSlug: string;
   seoTitle: string;
   seoDescription: string;
   ogImage: string;
   canonicalUrl: string;
+  focusKeyword: string;
+  secondaryKeywords: string;
+  featuredImageAlt: string;
+  featuredImageCaption: string;
+  imageCredit: string;
+  authorProfileUrl: string;
+  includeInNewsSitemap: boolean;
+  majorUpdateNote: string;
   sourceType: 'story' | 'direct';
   sourceStoryId: string;
   sourceStoryTitle: string;
@@ -125,6 +141,21 @@ type ArticleSeo = {
   metaDescription?: string;
   ogImage?: string;
   canonicalUrl?: string;
+  focusKeyword?: string;
+  secondaryKeywords?: string;
+  featuredImageAlt?: string;
+  featuredImageCaption?: string;
+  imageCredit?: string;
+  authorProfileUrl?: string;
+  includeInNewsSitemap?: boolean;
+  majorUpdateNote?: string;
+};
+
+type RelatedArticleSuggestion = {
+  id: string;
+  slug?: string;
+  title: string;
+  category?: string;
 };
 
 type ArticleReporterMeta = {
@@ -247,10 +278,19 @@ const EMPTY_FORM: ArticleFormState = {
   returnForChangesReason: '',
   isBreaking: false,
   isTrending: false,
+  seoSlug: '',
   seoTitle: '',
   seoDescription: '',
   ogImage: '',
   canonicalUrl: '',
+  focusKeyword: '',
+  secondaryKeywords: '',
+  featuredImageAlt: '',
+  featuredImageCaption: '',
+  imageCredit: '',
+  authorProfileUrl: '',
+  includeInNewsSitemap: true,
+  majorUpdateNote: '',
   sourceType: 'direct',
   sourceStoryId: '',
   sourceStoryTitle: '',
@@ -519,6 +559,8 @@ export default function EditArticle() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isSeoSlugTouched, setIsSeoSlugTouched] = useState(false);
+  const [relatedArticles, setRelatedArticles] = useState<RelatedArticleSuggestion[]>([]);
   const [contentMode, setContentMode] = useState<ArticleEditorStudioMode>('write');
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState('');
@@ -832,6 +874,7 @@ export default function EditArticle() {
         category?: string;
         author?: string;
         image?: string;
+        slug?: string;
         isBreaking?: boolean;
         isTrending?: boolean;
         sourceType?: 'story' | 'direct';
@@ -864,10 +907,19 @@ export default function EditArticle() {
           article.copyEditorMeta?.returnForChangesReason || '',
         isBreaking: Boolean(article.isBreaking),
         isTrending: Boolean(article.isTrending),
+        seoSlug: article.slug || normalizeArticleSlug(article.seo?.metaTitle || article.title || ''),
         seoTitle: article.seo?.metaTitle || '',
         seoDescription: article.seo?.metaDescription || '',
         ogImage: article.seo?.ogImage || '',
         canonicalUrl: article.seo?.canonicalUrl || '',
+        focusKeyword: article.seo?.focusKeyword || '',
+        secondaryKeywords: article.seo?.secondaryKeywords || '',
+        featuredImageAlt: article.seo?.featuredImageAlt || '',
+        featuredImageCaption: article.seo?.featuredImageCaption || '',
+        imageCredit: article.seo?.imageCredit || '',
+        authorProfileUrl: article.seo?.authorProfileUrl || '',
+        includeInNewsSitemap: article.seo?.includeInNewsSitemap !== false,
+        majorUpdateNote: article.seo?.majorUpdateNote || '',
         sourceType: article.sourceType === 'story' ? 'story' : 'direct',
         sourceStoryId: article.sourceStoryId || '',
         sourceStoryTitle: article.sourceStoryTitle || '',
@@ -915,6 +967,7 @@ export default function EditArticle() {
       }
 
       setFormData(nextForm);
+      setIsSeoSlugTouched(true);
       setImagePreview(nextImage);
       setContentMode(nextMode);
       setIsFocusMode(nextFocusMode);
@@ -971,6 +1024,38 @@ export default function EditArticle() {
     void loadCategories();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadRelatedArticles = async () => {
+      try {
+        const response = await fetch('/api/articles/latest?limit=50', { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const rows = Array.isArray(payload?.items) ? payload.items : [];
+        if (!active) return;
+        setRelatedArticles(
+          rows
+            .map((item: Record<string, unknown>) => ({
+              id: String(item._id || item.id || ''),
+              slug: typeof item.slug === 'string' ? item.slug : undefined,
+              title: String(item.title || ''),
+              category: typeof item.category === 'string' ? item.category : undefined,
+            }))
+            .filter((item: RelatedArticleSuggestion) => item.id && item.title && item.id !== articleId)
+        );
+      } catch {
+        // Internal link suggestions should not block editing.
+      }
+    };
+
+    void loadRelatedArticles();
+
+    return () => {
+      active = false;
+    };
+  }, [articleId]);
+
   const persistDraft = useCallback(() => {
     if (!draftReady || typeof window === 'undefined' || !articleId) return;
     const hasAnyContent = Boolean(
@@ -978,10 +1063,18 @@ export default function EditArticle() {
       formData.summary.trim() ||
       formData.content.trim() ||
       formData.author.trim() ||
+      formData.seoSlug.trim() ||
       formData.seoTitle.trim() ||
       formData.seoDescription.trim() ||
       formData.ogImage.trim() ||
       formData.canonicalUrl.trim() ||
+      formData.focusKeyword.trim() ||
+      formData.secondaryKeywords.trim() ||
+      formData.featuredImageAlt.trim() ||
+      formData.featuredImageCaption.trim() ||
+      formData.imageCredit.trim() ||
+      formData.authorProfileUrl.trim() ||
+      formData.majorUpdateNote.trim() ||
       imagePreview.trim()
     );
     if (!hasAnyContent) return;
@@ -1022,9 +1115,16 @@ export default function EditArticle() {
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = event.target;
+    const nextValue = name === 'seoSlug' ? normalizeArticleSlug(value) : value;
+    if (name === 'seoSlug') {
+      setIsSeoSlugTouched(true);
+    }
     setFormData((current) => ({
       ...current,
-      [name]: type === 'checkbox' ? (event.target as HTMLInputElement).checked : value,
+      [name]: type === 'checkbox' ? (event.target as HTMLInputElement).checked : nextValue,
+      ...(!isSeoSlugTouched && (name === 'title' || name === 'seoTitle')
+        ? { seoSlug: normalizeArticleSlug(nextValue) }
+        : {}),
     }));
   };
 
@@ -1112,6 +1212,7 @@ export default function EditArticle() {
         category?: string;
         author?: string;
         image?: string;
+        slug?: string;
         isBreaking?: boolean;
         isTrending?: boolean;
         sourceType?: 'story' | 'direct';
@@ -1144,10 +1245,19 @@ export default function EditArticle() {
           article.copyEditorMeta?.returnForChangesReason || '',
         isBreaking: Boolean(article.isBreaking),
         isTrending: Boolean(article.isTrending),
+        seoSlug: article.slug || normalizeArticleSlug(article.seo?.metaTitle || article.title || ''),
         seoTitle: article.seo?.metaTitle || '',
         seoDescription: article.seo?.metaDescription || '',
         ogImage: article.seo?.ogImage || '',
         canonicalUrl: article.seo?.canonicalUrl || '',
+        focusKeyword: article.seo?.focusKeyword || '',
+        secondaryKeywords: article.seo?.secondaryKeywords || '',
+        featuredImageAlt: article.seo?.featuredImageAlt || '',
+        featuredImageCaption: article.seo?.featuredImageCaption || '',
+        imageCredit: article.seo?.imageCredit || '',
+        authorProfileUrl: article.seo?.authorProfileUrl || '',
+        includeInNewsSitemap: article.seo?.includeInNewsSitemap !== false,
+        majorUpdateNote: article.seo?.majorUpdateNote || '',
         sourceType: article.sourceType === 'story' ? 'story' : 'direct',
         sourceStoryId: article.sourceStoryId || '',
         sourceStoryTitle: article.sourceStoryTitle || '',
@@ -1155,6 +1265,7 @@ export default function EditArticle() {
       const restoredWorkflow = normalizeWorkflowState(article.workflow);
 
       setFormData(restoredForm);
+      setIsSeoSlugTouched(true);
       setImagePreview(article.image || '');
       setImageFile(null);
       setImageQualityNote('');
@@ -1277,6 +1388,21 @@ export default function EditArticle() {
         return;
       }
 
+      if (formData.seoSlug.trim() && !isValidArticleSlug(formData.seoSlug.trim())) {
+        setError('SEO slug must use lowercase letters, numbers, and hyphens only');
+        setIsSaving(false);
+        return;
+      }
+
+      if (
+        formData.authorProfileUrl.trim() &&
+        !isValidAbsoluteHttpUrl(formData.authorProfileUrl.trim())
+      ) {
+        setError('Author profile URL must start with http:// or https://');
+        setIsSaving(false);
+        return;
+      }
+
       if (
         formData.ogImage.trim() &&
         !formData.ogImage.trim().startsWith('/') &&
@@ -1300,6 +1426,7 @@ export default function EditArticle() {
         },
         body: JSON.stringify({
           title: formData.title,
+          slug: formData.seoSlug,
           summary: formData.summary,
           content: formData.content,
           category: formData.category,
@@ -1326,6 +1453,14 @@ export default function EditArticle() {
             metaDescription: formData.seoDescription,
             ogImage: resolvedOgImage,
             canonicalUrl: formData.canonicalUrl,
+            focusKeyword: formData.focusKeyword,
+            secondaryKeywords: formData.secondaryKeywords,
+            featuredImageAlt: formData.featuredImageAlt,
+            featuredImageCaption: formData.featuredImageCaption,
+            imageCredit: formData.imageCredit,
+            authorProfileUrl: formData.authorProfileUrl,
+            includeInNewsSitemap: formData.includeInNewsSitemap,
+            majorUpdateNote: formData.majorUpdateNote,
           },
         }),
       });
@@ -1432,6 +1567,41 @@ export default function EditArticle() {
       setRunningWorkflowAction('');
     }
   };
+
+  const normalizedSeo = useMemo(
+    () =>
+      normalizeArticleSeo({
+        metaTitle: formData.seoTitle,
+        metaDescription: formData.seoDescription,
+        ogImage: formData.ogImage,
+        canonicalUrl: formData.canonicalUrl,
+        focusKeyword: formData.focusKeyword,
+        secondaryKeywords: formData.secondaryKeywords,
+        featuredImageAlt: formData.featuredImageAlt,
+        featuredImageCaption: formData.featuredImageCaption,
+        imageCredit: formData.imageCredit,
+        authorProfileUrl: formData.authorProfileUrl,
+        includeInNewsSitemap: formData.includeInNewsSitemap,
+        majorUpdateNote: formData.majorUpdateNote,
+      }),
+    [formData]
+  );
+  const googlePreview = useMemo(
+    () =>
+      buildArticleGooglePreview({
+        id: articleId,
+        slug: formData.seoSlug,
+        title: formData.title,
+        summary: formData.summary,
+        image: imagePreview,
+        seo: normalizedSeo,
+      }),
+    [articleId, formData.seoSlug, formData.title, formData.summary, imagePreview, normalizedSeo]
+  );
+  const previewPath = buildArticlePublicPath({
+    id: articleId,
+    slug: formData.seoSlug || undefined,
+  });
 
   const workflowMetaItems = [
     {
@@ -2170,6 +2340,16 @@ export default function EditArticle() {
                   <p className="text-sm font-semibold text-gray-900">SEO Settings</p>
                   <input
                     type="text"
+                    name="seoSlug"
+                    value={formData.seoSlug}
+                    onChange={handleInputChange}
+                    placeholder="SEO slug"
+                    maxLength={200}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <p className="-mt-2 break-all text-xs text-gray-500">{previewPath}</p>
+                  <input
+                    type="text"
                     name="seoTitle"
                     value={formData.seoTitle}
                     onChange={handleInputChange}
@@ -2198,6 +2378,32 @@ export default function EditArticle() {
                     Leave empty to auto-use featured image as 1200x630 OG preview.
                   </p>
                   <input
+                    type="text"
+                    name="focusKeyword"
+                    value={formData.focusKeyword}
+                    onChange={handleInputChange}
+                    placeholder="Focus keyword"
+                    maxLength={120}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <input
+                    type="text"
+                    name="secondaryKeywords"
+                    value={formData.secondaryKeywords}
+                    onChange={handleInputChange}
+                    placeholder="Secondary keywords"
+                    maxLength={240}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <input
+                    type="url"
+                    name="authorProfileUrl"
+                    value={formData.authorProfileUrl}
+                    onChange={handleInputChange}
+                    placeholder="Author profile URL"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <input
                     type="url"
                     name="canonicalUrl"
                     value={formData.canonicalUrl}
@@ -2225,6 +2431,31 @@ export default function EditArticle() {
                       </button>
                     ) : null}
                   </div>
+                  <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                    <input
+                      type="checkbox"
+                      name="includeInNewsSitemap"
+                      checked={formData.includeInNewsSitemap}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                    />
+                    <span className="text-sm text-gray-700">Include in Google News sitemap</span>
+                  </label>
+                  <textarea
+                    name="majorUpdateNote"
+                    value={formData.majorUpdateNote}
+                    onChange={handleInputChange}
+                    placeholder="Major update note"
+                    rows={2}
+                    maxLength={240}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                  />
+                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Google Preview</p>
+                    <p className="mt-2 line-clamp-2 text-sm font-semibold text-blue-700">{googlePreview.title}</p>
+                    <p className="mt-1 break-all text-xs text-green-700">{googlePreview.url}</p>
+                    <p className="mt-1 line-clamp-3 text-xs text-gray-600">{googlePreview.description || 'Meta description or summary will appear here.'}</p>
+                  </div>
                 </div>
 
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -2247,6 +2478,35 @@ export default function EditArticle() {
                       <img src={imagePreview} alt="Preview" className="w-full h-52 object-cover" />
                     </div>
                   ) : null}
+                  <div className="mt-4 space-y-3">
+                    <input
+                      type="text"
+                      name="featuredImageAlt"
+                      value={formData.featuredImageAlt}
+                      onChange={handleInputChange}
+                      placeholder="Featured image alt text"
+                      maxLength={220}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
+                    />
+                    <textarea
+                      name="featuredImageCaption"
+                      value={formData.featuredImageCaption}
+                      onChange={handleInputChange}
+                      placeholder="Featured image caption"
+                      rows={2}
+                      maxLength={300}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      name="imageCredit"
+                      value={formData.imageCredit}
+                      onChange={handleInputChange}
+                      placeholder="Image credit/source"
+                      maxLength={180}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
@@ -2271,6 +2531,14 @@ export default function EditArticle() {
                     />
                     <span className="text-sm text-gray-700">Mark as Trending</span>
                   </label>
+                </div>
+
+                <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                  <p className="font-semibold text-gray-900">Publish timing</p>
+                  <p>Timezone: Asia/Calcutta</p>
+                  <p>Scheduled: {workflow.scheduledFor ? formatDraftTimestamp(workflow.scheduledFor) : 'Not scheduled'}</p>
+                  <p>Published: {workflow.publishedAt ? formatDraftTimestamp(workflow.publishedAt) : 'Not published'}</p>
+                  <p>Updated: {formData.majorUpdateNote ? formData.majorUpdateNote : 'No major update note'}</p>
                 </div>
 
                 <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -2572,6 +2840,11 @@ export default function EditArticle() {
               title={formData.title}
               summary={formData.summary}
               content={formData.content}
+              slug={formData.seoSlug}
+              image={imagePreview}
+              seo={normalizedSeo}
+              category={formData.category}
+              relatedArticles={relatedArticles}
               className="space-y-3"
             />
             </CmsEditorSidebar>

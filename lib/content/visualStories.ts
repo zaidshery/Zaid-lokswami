@@ -5,6 +5,7 @@ import {
   normalizeStoryMediaAssets,
   type StoryMediaAsset,
 } from '@/lib/content/storyMedia';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 
 export type VisualStory = Story & {
   href?: string;
@@ -194,7 +195,7 @@ export function buildVisualStoriesFromArticles(
       views: article.views || 0,
       publishedAt: article.publishedAt,
       viewed: false,
-      href: `/main/article/${encodeURIComponent(article.id)}`,
+      href: buildArticlePublicPath({ id: article.id, slug: article.slug }),
     });
 
     if (stories.length >= limit) break;

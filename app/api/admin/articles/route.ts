@@ -38,6 +38,11 @@ import {
 } from '@/lib/server/newsroomStoryLinks';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
+  isValidArticleSlug,
+  normalizeArticleSeo,
+  resolveUniqueArticleSlug,
+} from '@/lib/seo/articleSeo';
+import {
   resolveArticleWorkflow,
   toWorkflowActorRef,
 } from '@/lib/workflow/article';
@@ -74,6 +79,14 @@ type NormalizedSeo = {
   metaDescription: string;
   ogImage: string;
   canonicalUrl: string;
+  focusKeyword: string;
+  secondaryKeywords: string;
+  featuredImageAlt: string;
+  featuredImageCaption: string;
+  imageCredit: string;
+  authorProfileUrl: string;
+  includeInNewsSitemap: boolean;
+  majorUpdateNote: string;
 };
 
 function parsePositiveInt(value: string | null, fallback: number) {
@@ -219,14 +232,7 @@ function buildInitialWorkflow(
 }
 
 function normalizeSeo(input: unknown): NormalizedSeo {
-  const source = typeof input === 'object' && input ? (input as Record<string, unknown>) : {};
-  return {
-    metaTitle: typeof source.metaTitle === 'string' ? source.metaTitle.trim() : '',
-    metaDescription:
-      typeof source.metaDescription === 'string' ? source.metaDescription.trim() : '',
-    ogImage: typeof source.ogImage === 'string' ? source.ogImage.trim() : '',
-    canonicalUrl: typeof source.canonicalUrl === 'string' ? source.canonicalUrl.trim() : '',
-  };
+  return normalizeArticleSeo(input);
 }
 
 function isValidAbsoluteHttpUrl(value: string) {
@@ -262,6 +268,7 @@ function normalizeArticleInput(body: unknown) {
 
   return {
     title: typeof source.title === 'string' ? source.title.trim() : '',
+    slug: typeof source.slug === 'string' ? source.slug.trim() : '',
     summary: typeof source.summary === 'string' ? source.summary.trim() : '',
     content: typeof source.content === 'string' ? source.content.trim() : '',
     image,
@@ -298,6 +305,10 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
     return 'Title is too long (max 200 characters)';
   }
 
+  if (input.slug && !isValidArticleSlug(input.slug)) {
+    return 'SEO slug must use lowercase letters, numbers, and hyphens only';
+  }
+
   if (input.summary.length > 500) {
     return 'Summary is too long (max 500 characters)';
   }
@@ -312,6 +323,10 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
 
   if (input.seo.canonicalUrl && !isValidAbsoluteHttpUrl(input.seo.canonicalUrl)) {
     return 'Canonical URL must be a valid absolute URL';
+  }
+
+  if (input.seo.authorProfileUrl && !isValidAbsoluteHttpUrl(input.seo.authorProfileUrl)) {
+    return 'Author profile URL must be a valid absolute URL';
   }
 
   if (input.seo.ogImage && !isValidAbsoluteHttpUrl(input.seo.ogImage) && !input.seo.ogImage.startsWith('/')) {
@@ -555,9 +570,28 @@ export async function POST(req: NextRequest) {
           : '';
     }
 
+    let resolvedSlug = '';
+    if (useFileStore) {
+      const existingArticles = await listAllStoredArticles();
+      resolvedSlug = await resolveUniqueArticleSlug(
+        input.slug || input.seo.metaTitle || input.title,
+        async (candidate) =>
+          existingArticles.some(
+            (article) =>
+              article.slug === candidate || (article.previousSlugs || []).includes(candidate)
+          )
+      );
+    } else {
+      resolvedSlug = await resolveUniqueArticleSlug(
+        input.slug || input.seo.metaTitle || input.title,
+        async (candidate) => Boolean(await Article.exists({ slug: candidate }))
+      );
+    }
+
     if (useFileStore) {
       const stored = await createStoredArticle({
         ...input,
+        slug: resolvedSlug,
         sourceType: input.sourceStoryId ? 'story' : input.sourceType,
         sourceStoryTitle,
         workflow: {
@@ -617,6 +651,8 @@ export async function POST(req: NextRequest) {
 
     const article = new Article({
       ...input,
+      slug: resolvedSlug,
+      previousSlugs: [],
       sourceType: input.sourceStoryId ? 'story' : input.sourceType,
       sourceStoryTitle,
       views: 0,

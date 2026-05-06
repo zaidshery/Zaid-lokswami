@@ -3,6 +3,7 @@ import { articles as mockArticles, type Article } from '@/lib/mock/data';
 type ApiArticle = {
   _id?: string;
   id?: string;
+  slug?: string;
   title?: string;
   summary?: string;
   content?: string;
@@ -13,6 +14,7 @@ type ApiArticle = {
   views?: number;
   isBreaking?: boolean;
   isTrending?: boolean;
+  seo?: Article['seo'];
 };
 
 const DEFAULT_AVATAR = '/logo-icon-final.png';
@@ -53,6 +55,7 @@ function normalizeArticle(raw: ApiArticle, index: number): Article | null {
 
   return {
     id,
+    slug: raw.slug,
     title,
     summary,
     content: raw.content || '',
@@ -67,6 +70,7 @@ function normalizeArticle(raw: ApiArticle, index: number): Article | null {
     views: Number.isFinite(raw.views) ? Number(raw.views) : 0,
     isBreaking: Boolean(raw.isBreaking),
     isTrending: Boolean(raw.isTrending),
+    seo: raw.seo,
   };
 }
 

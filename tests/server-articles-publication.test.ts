@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const connectDBMock = vi.fn();
 const getStoredArticleByIdMock = vi.fn();
+const getStoredArticleByIdOrSlugMock = vi.fn();
 const listAllStoredArticlesMock = vi.fn();
 
 vi.mock('@/lib/db/mongoose', () => ({
@@ -12,11 +13,13 @@ vi.mock('@/lib/models/Article', () => ({
   default: {
     find: vi.fn(),
     findById: vi.fn(),
+    findOne: vi.fn(),
   },
 }));
 
 vi.mock('@/lib/storage/articlesFile', () => ({
   getStoredArticleById: getStoredArticleByIdMock,
+  getStoredArticleByIdOrSlug: getStoredArticleByIdOrSlugMock,
   listAllStoredArticles: listAllStoredArticlesMock,
 }));
 
@@ -24,6 +27,9 @@ describe('server article publication helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.MONGODB_URI;
+    getStoredArticleByIdOrSlugMock.mockImplementation((token: string) =>
+      getStoredArticleByIdMock(token)
+    );
   });
 
   it('hides unpublished articles from metadata lookups', async () => {
@@ -66,6 +72,7 @@ describe('server article publication helpers', () => {
       },
       {
         _id: 'published-1',
+        slug: 'published-slug',
         updatedAt: '2026-04-13T09:00:00.000Z',
         publishedAt: '2026-04-13T09:00:00.000Z',
         workflow: {
@@ -80,8 +87,89 @@ describe('server article publication helpers', () => {
     expect(articles).toEqual([
       {
         id: 'published-1',
+        slug: 'published-slug',
         updatedAt: '2026-04-13T09:00:00.000Z',
       },
+    ]);
+  });
+
+  it('resolves metadata by slug and preserves canonical slug fields', async () => {
+    getStoredArticleByIdOrSlugMock.mockResolvedValue({
+      _id: 'article-1',
+      slug: 'indore-metro-update',
+      previousSlugs: ['old-indore-metro-update'],
+      title: 'Indore Metro update',
+      summary: 'Metro summary',
+      content: 'Metro content',
+      image: '/metro.jpg',
+      category: 'National',
+      author: 'Desk',
+      publishedAt: '2026-05-06T09:00:00.000Z',
+      updatedAt: '2026-05-06T10:00:00.000Z',
+      seo: {
+        metaTitle: 'SEO title',
+        metaDescription: '',
+        ogImage: '',
+        canonicalUrl: '',
+        includeInNewsSitemap: true,
+      },
+      workflow: {
+        status: 'published',
+      },
+    });
+
+    const { getArticleForMetadata } = await import('@/lib/content/serverArticles');
+    const article = await getArticleForMetadata('old-indore-metro-update');
+
+    expect(article).toEqual(
+      expect.objectContaining({
+        id: 'article-1',
+        slug: 'indore-metro-update',
+        previousSlugs: ['old-indore-metro-update'],
+      })
+    );
+  });
+
+  it('filters Google News sitemap articles to recent opted-in published stories', async () => {
+    listAllStoredArticlesMock.mockResolvedValue([
+      {
+        _id: 'recent-1',
+        slug: 'recent-story',
+        title: 'Recent story',
+        updatedAt: '2026-05-06T09:30:00.000Z',
+        publishedAt: '2026-05-06T09:00:00.000Z',
+        seo: { includeInNewsSitemap: true },
+        workflow: { status: 'published' },
+      },
+      {
+        _id: 'old-1',
+        slug: 'old-story',
+        title: 'Old story',
+        updatedAt: '2026-05-01T09:30:00.000Z',
+        publishedAt: '2026-05-01T09:00:00.000Z',
+        seo: { includeInNewsSitemap: true },
+        workflow: { status: 'published' },
+      },
+      {
+        _id: 'hidden-1',
+        slug: 'hidden-story',
+        title: 'Hidden story',
+        updatedAt: '2026-05-06T09:30:00.000Z',
+        publishedAt: '2026-05-06T09:00:00.000Z',
+        seo: { includeInNewsSitemap: false },
+        workflow: { status: 'published' },
+      },
+    ]);
+
+    const { listNewsArticlesForSitemap } = await import('@/lib/content/serverArticles');
+    const articles = await listNewsArticlesForSitemap(100, new Date('2026-05-06T12:00:00.000Z'));
+
+    expect(articles).toEqual([
+      expect.objectContaining({
+        id: 'recent-1',
+        slug: 'recent-story',
+        title: 'Recent story',
+      }),
     ]);
   });
 });
