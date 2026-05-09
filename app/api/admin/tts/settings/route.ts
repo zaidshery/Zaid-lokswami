@@ -203,7 +203,7 @@ export async function PUT(req: NextRequest) {
         },
         article: {
           ...normalizeSurfaceUpdate(body.surfaces?.article, current.surfaces.article),
-          autoGenerate: true,
+          autoGenerate: false,
           defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
         },
         epaper: {

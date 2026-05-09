@@ -14,6 +14,7 @@ import {
   buildTtsAudioSource,
   fetchTtsStatus,
   requestTtsAudio,
+  TtsRequestError,
 } from '@/lib/ai/ttsClient';
 
 const BREAKING_LIMIT = 10;
@@ -372,7 +373,14 @@ export function useBreakingNewsController({
         rememberPreparedAudio(prepared);
         primePreparedAudio(prepared);
         return prepared;
-      } catch {
+      } catch (error) {
+        if (
+          error instanceof TtsRequestError &&
+          (error.status === 429 || error.status === 501)
+        ) {
+          setTtsAvailable(false);
+        }
+
         return null;
       }
     },

@@ -26,7 +26,6 @@ import {
 } from '@/lib/constants/tts';
 import {
   buildTtsAudioSource,
-  fetchTtsStatus,
   requestArticleTtsAudio,
   type TtsAudioData,
 } from '@/lib/ai/ttsClient';
@@ -188,7 +187,6 @@ export default function ArticleDetailPage() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isSavingBookmark, setIsSavingBookmark] = useState(false);
   const [listenError, setListenError] = useState('');
-  const [isTtsConfigured, setIsTtsConfigured] = useState<boolean | null>(null);
   const [preparedListenAudio, setPreparedListenAudio] = useState<PreparedArticleAudio | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const preloadedListenAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -205,7 +203,7 @@ export default function ArticleDetailPage() {
   );
   const visibleRelatedArticles = relatedArticles.slice(0, visibleRelatedCount);
   const hasMoreRelatedStories = visibleRelatedCount < relatedArticles.length;
-  const canPrepareListen = isTtsConfigured === true;
+  const canPrepareListen = true;
   const currentListenSourceId = article?.id || '';
   const currentListenVoice = listenVoiceId || '';
   const canUsePreparedListenAudio = Boolean(
@@ -214,19 +212,7 @@ export default function ArticleDetailPage() {
       preparedListenAudio.languageCode === listenLanguageCode &&
       preparedListenAudio.voice === currentListenVoice
   );
-  const listenButtonTitle = (() => {
-    if (isTtsConfigured === null) {
-      return language === 'hi' ? 'Audio service check ho raha hai' : 'Audio service is checking';
-    }
-
-    if (isTtsConfigured === false) {
-      return language === 'hi'
-        ? 'Gemini audio configured nahi hai'
-        : 'Gemini audio is not configured';
-    }
-
-    return language === 'hi' ? 'Lekh sunein' : 'Listen to article';
-  })();
+  const listenButtonTitle = language === 'hi' ? 'Lekh sunein' : 'Listen to article';
 
   useEffect(() => {
     let active = true;
@@ -367,27 +353,6 @@ export default function ArticleDetailPage() {
     void trackArticleRead(readingProgress);
   }, [readingProgress, trackArticleRead]);
 
-  useEffect(() => {
-    let active = true;
-
-    const loadTtsStatus = async () => {
-      try {
-        const payload = await fetchTtsStatus();
-        if (!active) return;
-        setIsTtsConfigured(Boolean(payload.configured));
-      } catch {
-        if (!active) return;
-        setIsTtsConfigured(false);
-      }
-    };
-
-    void loadTtsStatus();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const contentHtml = useMemo(() => {
     if (!article) return '';
     const raw = article.content && article.content.trim() ? article.content : article.summary;
@@ -460,7 +425,7 @@ export default function ArticleDetailPage() {
 
   const prepareArticleListenAudio = useCallback(
     async (options?: { force?: boolean }) => {
-      if (!article || isTtsConfigured !== true) {
+      if (!article) {
         return null;
       }
 
@@ -524,7 +489,7 @@ export default function ArticleDetailPage() {
       listenPrefetchPromiseRef.current = promise;
       return await promise;
     },
-    [article, isTtsConfigured, listenLanguageCode, listenVoiceId, preparedListenAudio]
+    [article, listenLanguageCode, listenVoiceId, preparedListenAudio]
   );
 
   const handleGenerateSummary = async () => {
@@ -592,24 +557,6 @@ export default function ArticleDetailPage() {
     }
 
     try {
-      if (isTtsConfigured === null) {
-        setListenError(
-          language === 'hi'
-            ? 'Audio service check ho raha hai. Ek pal baad phir try karein.'
-            : 'Audio service is still checking. Please try again in a moment.'
-        );
-        return;
-      }
-
-      if (!isTtsConfigured) {
-        setListenError(
-          language === 'hi'
-            ? 'Gemini audio abhi configured nahi hai. Thodi der baad phir try karein.'
-            : 'Gemini audio is not configured right now. Please try again shortly.'
-        );
-        return;
-      }
-
       const preparedAudio = await prepareArticleListenAudio();
       if (requestId !== listenRequestIdRef.current) return;
 
@@ -623,7 +570,7 @@ export default function ArticleDetailPage() {
 
       const src = preparedAudio?.src || buildTtsAudioSource(payload);
       if (!src) {
-        throw new Error('Gemini TTS returned no audio payload.');
+        throw new Error('Article audio returned no playable audio payload.');
       }
 
       const preloadedAudio = preloadedListenAudioRef.current;
@@ -643,8 +590,8 @@ export default function ArticleDetailPage() {
         setIsPlayingAudio(false);
         setListenError(
           language === 'hi'
-            ? 'Generated Gemini audio play nahi ho paaya.'
-            : 'Unable to play the generated Gemini audio.'
+            ? 'Article audio play nahi ho paaya.'
+            : 'Unable to play the article audio.'
         );
       };
 
@@ -660,8 +607,8 @@ export default function ArticleDetailPage() {
         error instanceof Error && error.message.trim()
           ? error.message
           : language === 'hi'
-            ? 'Gemini audio generate karne mein dikkat aayi.'
-            : 'Unable to generate Gemini audio right now.'
+            ? 'Article audio chalane mein dikkat aayi.'
+            : 'Unable to play article audio right now.'
       );
     } finally {
       if (requestId === listenRequestIdRef.current) {
@@ -685,9 +632,9 @@ export default function ArticleDetailPage() {
   }, [article?.id, listenLanguageCode, listenVoiceId]);
 
   useEffect(() => {
-    if (!article || isTtsConfigured !== true) return;
+    if (!article) return;
     void prepareArticleListenAudio();
-  }, [article, isTtsConfigured, prepareArticleListenAudio]);
+  }, [article, prepareArticleListenAudio]);
 
   const handleWhatsAppShare = () => {
     if (typeof window === 'undefined' || !article) return;

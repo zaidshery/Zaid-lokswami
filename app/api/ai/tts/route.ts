@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  getGeminiTtsActiveCooldown,
   getGeminiTtsRuntimeConfig,
   getGeminiTtsUnavailableStatus,
   isGeminiTtsConfigured,
@@ -12,13 +13,42 @@ import {
   GEMINI_TTS_VOICE_OPTIONS,
 } from '@/lib/constants/tts';
 
+const TTS_UNAVAILABLE_LOG_COOLDOWN_MS = 60_000;
+let lastUnavailableLogKey = '';
+let lastUnavailableLogAt = 0;
+
+function logTtsUnavailable(reason: string) {
+  const normalizedReason = reason.replace(/\s+/g, ' ').trim() || 'Unknown TTS error.';
+  const status = getGeminiTtsUnavailableStatus(normalizedReason);
+  const logKey = `${status}:${normalizedReason}`;
+  const now = Date.now();
+
+  if (
+    logKey === lastUnavailableLogKey &&
+    now - lastUnavailableLogAt < TTS_UNAVAILABLE_LOG_COOLDOWN_MS
+  ) {
+    return;
+  }
+
+  lastUnavailableLogKey = logKey;
+  lastUnavailableLogAt = now;
+  console.error('AI tts unavailable:', normalizedReason);
+}
+
 export async function GET() {
   const runtime = getGeminiTtsRuntimeConfig();
+  const cooldown = getGeminiTtsActiveCooldown();
+  const apiConfigured = isGeminiTtsConfigured();
 
   return NextResponse.json({
     success: true,
     data: {
-      configured: isGeminiTtsConfigured(),
+      configured: apiConfigured && !cooldown,
+      apiConfigured,
+      temporarilyUnavailable: Boolean(cooldown),
+      ...(cooldown?.retryAfterSeconds
+        ? { retryAfterSeconds: cooldown.retryAfterSeconds }
+        : {}),
       provider: GEMINI_TTS_PROVIDER,
       model: runtime.model,
       defaultVoice: runtime.defaultVoice,
@@ -50,7 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!isGeminiTtsConfigured()) {
-      console.error('AI tts unavailable: Gemini TTS is not configured. Set GEMINI_API_KEY.');
+      logTtsUnavailable('Gemini TTS is not configured. Set GEMINI_API_KEY.');
       return NextResponse.json(
         { success: false, error: 'Gemini TTS is not configured. Set GEMINI_API_KEY.' },
         { status: 501 }
@@ -74,7 +104,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (synthesized.mode === 'unavailable') {
-      console.error('AI tts unavailable:', synthesized.reason);
+      logTtsUnavailable(synthesized.reason);
       const status = getGeminiTtsUnavailableStatus(synthesized.reason);
       const headers =
         synthesized.retryAfterSeconds && status === 429

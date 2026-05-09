@@ -469,13 +469,15 @@ export default function TtsSettingsPanel() {
                 <label className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
                   <input
                     type="checkbox"
-                    checked={payload.config.surfaces[surface].autoGenerate}
-                    onChange={(event) =>
-                      updateSurface(surface, { autoGenerate: event.target.checked })
-                    }
-                    className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                    checked={surface === 'article' ? false : payload.config.surfaces[surface].autoGenerate}
+                    disabled={surface === 'article'}
+                    onChange={(event) => {
+                      if (surface === 'article') return;
+                      updateSurface(surface, { autoGenerate: event.target.checked });
+                    }}
+                    className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500 disabled:opacity-50"
                   />
-                  Auto-generate by default
+                  {surface === 'article' ? 'Manual upload only' : 'Auto-generate by default'}
                 </label>
 
                 <label className="block">

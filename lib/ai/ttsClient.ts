@@ -2,6 +2,9 @@ import type { TtsLanguageOption, TtsVoiceOption } from '@/lib/constants/tts';
 
 export type TtsStatusData = {
   configured: boolean;
+  apiConfigured?: boolean;
+  temporarilyUnavailable?: boolean;
+  retryAfterSeconds?: number;
   provider: 'gemini' | null;
   model: string;
   defaultVoice: string;
@@ -30,7 +33,20 @@ type TtsAudioResponse = {
   success?: boolean;
   data?: Partial<TtsAudioData>;
   error?: string;
+  retryAfterSeconds?: number;
 };
+
+export class TtsRequestError extends Error {
+  status: number;
+  retryAfterSeconds?: number;
+
+  constructor(message: string, options: { status: number; retryAfterSeconds?: number }) {
+    super(message);
+    this.name = 'TtsRequestError';
+    this.status = options.status;
+    this.retryAfterSeconds = options.retryAfterSeconds;
+  }
+}
 
 export async function fetchTtsStatus() {
   const response = await fetch('/api/ai/tts', {
@@ -61,7 +77,13 @@ export async function requestTtsAudio(input: {
   const payload = (await response.json().catch(() => ({}))) as TtsAudioResponse;
 
   if (!response.ok || !payload.success || !payload.data) {
-    throw new Error(payload.error || 'Unable to generate audio.');
+    throw new TtsRequestError(payload.error || 'Unable to generate audio.', {
+      status: response.status,
+      retryAfterSeconds:
+        typeof payload.retryAfterSeconds === 'number'
+          ? payload.retryAfterSeconds
+          : undefined,
+    });
   }
 
   return payload.data as TtsAudioData;
@@ -84,7 +106,7 @@ export async function requestArticleTtsAudio(
   const payload = (await response.json().catch(() => ({}))) as TtsAudioResponse;
 
   if (!response.ok || !payload.success || !payload.data) {
-    throw new Error(payload.error || 'Unable to generate article audio.');
+    throw new Error(payload.error || 'Unable to load article audio.');
   }
 
   return payload.data as TtsAudioData;

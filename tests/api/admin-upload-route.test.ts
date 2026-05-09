@@ -14,7 +14,7 @@ vi.mock('@/lib/utils/digitalOceanSpaces', () => ({
 
 function createRequest(formData: FormData) {
   return {
-    formData: async () => formData,
+    formData: vi.fn(async () => formData),
     clone: function () {
       return this;
     },
@@ -85,6 +85,61 @@ describe('/api/admin/upload POST', () => {
     expect(response.status).toBe(201);
     expect(uploadBufferToSpacesMock).toHaveBeenCalledTimes(1);
     expect(payload.data.url).toBe('https://cdn.example.com/lokswami/images/image.jpg');
+  });
+
+  it('reads upload form data from an early request clone', async () => {
+    getAdminSessionFromReqMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
+    uploadBufferToSpacesMock.mockResolvedValue({
+      secureUrl: 'https://cdn.example.com/lokswami/images/image.jpg',
+      publicId: 'lokswami/images/image.jpg',
+      resourceType: 'image',
+      bytes: 2048,
+    });
+
+    const formData = new FormData();
+    formData.set('file', createFile('image.jpg', 'image/jpeg'));
+    const originalFormData = vi.fn(async () => {
+      throw new Error('Original request body should not be read first.');
+    });
+    const cloneFormData = vi.fn(async () => formData);
+    const request = {
+      formData: originalFormData,
+      clone: vi.fn(() => ({ formData: cloneFormData })),
+    } as unknown as NextRequest;
+
+    const { POST } = await import('@/app/api/admin/upload/route');
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+    expect(request.clone).toHaveBeenCalledTimes(1);
+    expect(cloneFormData).toHaveBeenCalledTimes(1);
+    expect(originalFormData).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when upload form data cannot be read', async () => {
+    getAdminSessionFromReqMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
+    const error = new Error('Response body object should not be disturbed or locked');
+    const request = {
+      formData: vi.fn(async () => {
+        throw error;
+      }),
+      clone: vi.fn(() => ({
+        formData: vi.fn(async () => {
+          throw error;
+        }),
+      })),
+    } as unknown as NextRequest;
+
+    const { POST } = await import('@/app/api/admin/upload/route');
+    const response = await POST(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload).toEqual({
+      success: false,
+      error: 'Failed to process request body',
+    });
+    expect(uploadBufferToSpacesMock).not.toHaveBeenCalled();
   });
 
   it('blocks reporter uploads for desk-only purposes', async () => {

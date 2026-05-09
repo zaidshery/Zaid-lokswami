@@ -7,7 +7,6 @@ import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import TtsAuditEvent from '@/lib/models/TtsAuditEvent';
 import {
-  buildArticleFullTtsText,
   buildEpaperStoryTtsText,
   ensureTtsAsset,
   getTtsConfig,
@@ -67,45 +66,6 @@ export async function POST(req: NextRequest) {
           result.breaking.ready += 1;
         } else {
           result.breaking.failed += 1;
-        }
-      }
-    }
-
-    if (scope === 'all' || scope === 'article') {
-      const articles = await Article.find({})
-        .select('_id title summary content')
-        .sort({ publishedAt: -1, _id: -1 })
-        .limit(config.prewarm.latestArticleLimit)
-        .lean();
-
-      for (const article of articles) {
-        const sourceId = String(article._id || '').trim();
-        const text = buildArticleFullTtsText({
-          title: String(article.title || ''),
-          summary: String(article.summary || ''),
-          content: String(article.content || ''),
-        });
-
-        if (!sourceId || !text) {
-          continue;
-        }
-
-        result.article.processed += 1;
-        const ensured = await ensureTtsAsset({
-          sourceType: 'article',
-          sourceId,
-          variant: 'article_full',
-          title: String(article.title || ''),
-          text,
-          forceRegenerate,
-          actor: admin,
-          metadata: { source: 'admin-prewarm' },
-        });
-
-        if (ensured.asset?.status === 'ready' && ensured.asset.audioUrl) {
-          result.article.ready += 1;
-        } else {
-          result.article.failed += 1;
         }
       }
     }

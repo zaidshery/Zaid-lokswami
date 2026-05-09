@@ -10,7 +10,6 @@ import TtsAsset from '@/lib/models/TtsAsset';
 import TtsAuditEvent from '@/lib/models/TtsAuditEvent';
 import { ensureBreakingTtsForArticle } from '@/lib/server/breakingTts';
 import {
-  buildArticleFullTtsText,
   buildEpaperStoryTtsText,
   ensureTtsAsset,
 } from '@/lib/server/ttsAssets';
@@ -149,46 +148,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (asset.sourceType === 'article' && asset.variant === 'article_full') {
-        const article = await Article.findById(asset.sourceId).select('_id title summary content');
-
-        if (!article) {
-          result.failed += 1;
-          continue;
-        }
-
-        const text = buildArticleFullTtsText({
-          title: String(article.title || ''),
-          summary: String(article.summary || ''),
-          content: String(article.content || ''),
-        });
-
-        if (!text) {
-          result.skipped += 1;
-          continue;
-        }
-
-        const ensured = await ensureTtsAsset({
-          sourceType: 'article',
-          sourceId: String(article._id),
-          variant: 'article_full',
-          title: String(article.title || ''),
-          text,
-          languageCode: asset.languageCode,
-          voice: asset.voice,
-          model: asset.model,
-          forceRegenerate: true,
-          actor: admin,
-          metadata: {
-            source: 'admin-retry',
-            retriedAssetId: asset._id.toString(),
-          },
-        });
-
-        if (ensured.asset?.status === 'ready' && ensured.asset.audioUrl) {
-          result.ready += 1;
-        } else {
-          result.failed += 1;
-        }
+        result.skipped += 1;
         continue;
       }
 

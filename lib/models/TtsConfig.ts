@@ -67,7 +67,7 @@ const TtsConfigSchema = new mongoose.Schema<ITtsConfig>(
         type: TtsSurfaceConfigSchema,
         default: () => ({
           enabled: true,
-          autoGenerate: true,
+          autoGenerate: false,
           defaultLanguageCode: 'hi-IN',
           defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
         }),
@@ -84,7 +84,7 @@ const TtsConfigSchema = new mongoose.Schema<ITtsConfig>(
     },
     prewarm: {
       latestBreakingLimit: { type: Number, min: 0, max: 1000, default: 10 },
-      latestArticleLimit: { type: Number, min: 0, max: 1000, default: 25 },
+      latestArticleLimit: { type: Number, min: 0, max: 1000, default: 0 },
       latestEpaperStoryLimit: { type: Number, min: 0, max: 5000, default: 50 },
     },
   },

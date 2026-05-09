@@ -47,6 +47,7 @@ import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { normalizeBreakingTtsMetadata, type BreakingTtsMetadata } from '@/lib/types/breaking';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
 import { buildDefaultArticlePermalink } from '@/lib/utils/articleEditorTemplates';
+import { uploadArticleTtsAudioDirect } from '@/lib/utils/articleTtsUploadClient';
 import {
   ARTICLE_IMAGE_UPLOAD_GUIDE,
   getArticleImageHints,
@@ -182,6 +183,7 @@ type BreakingTtsResponse = {
 type ManagedTtsAsset = {
   id?: string;
   status?: string;
+  provider?: string;
   audioUrl?: string;
   voice?: string;
   model?: string;
@@ -1329,41 +1331,43 @@ export default function EditArticle() {
     }
   };
 
-  const handleRegenerateArticleTts = async () => {
-    if (!articleId) return;
+  const handleUploadArticleTts = async (file: File | null) => {
+    if (!articleId || !file) return;
+
+    if (articleTtsNeedsSave) {
+      setError('Save article title, summary, or content changes before uploading listen audio.');
+      return;
+    }
 
     setIsRegeneratingArticleTts(true);
     setError('');
     setSuccess('');
 
     try {
-      const response = await fetch(`/api/admin/articles/${encodeURIComponent(articleId)}/tts?force=1`, {
-        method: 'POST',
-        headers: {
-          ...getAuthHeader(),
-        },
+      const uploaded = await uploadArticleTtsAudioDirect({
+        articleId,
+        file,
+        authHeaders: getAuthHeader(),
       });
-      const data = (await response.json().catch(() => ({}))) as {
-        success?: boolean;
-        error?: string;
-        data?: ManagedTtsResponse;
-      };
+      const ttsAsset = uploaded.ttsAsset && typeof uploaded.ttsAsset === 'object'
+        ? (uploaded.ttsAsset as ManagedTtsAsset)
+        : null;
 
-      if (!response.ok || !data.success || !data.data?.asset) {
-        setError(data.error || 'Failed to generate article listen audio');
-        return;
-      }
-
-      setArticleTtsEligible(Boolean(data.data.eligible));
-      setArticleTtsReady(Boolean(data.data.ready));
-      setArticleTtsInfo(data.data.asset || null);
-      setSuccess(
-        data.data.ready
-          ? 'Article listen audio is ready for the current saved text.'
-          : 'Article listen audio request completed.'
+      setArticleTtsEligible(true);
+      setArticleTtsReady(Boolean(ttsAsset?.audioUrl || uploaded.asset.mediaUrl));
+      setArticleTtsInfo(ttsAsset || {
+        status: 'ready',
+        provider: 'manual',
+        audioUrl: uploaded.asset.mediaUrl,
+        mimeType: uploaded.asset.mediaMimeType,
+      });
+      setSuccess('Manual article listen audio uploaded successfully.');
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Failed to upload article listen audio. Please try again.'
       );
-    } catch {
-      setError('Failed to generate article listen audio. Please try again.');
     } finally {
       setIsRegeneratingArticleTts(false);
     }
@@ -2619,14 +2623,14 @@ export default function EditArticle() {
                     {articleTtsNeedsSave
                       ? 'Save the title, summary, or content changes first. Listen audio follows the last saved article text.'
                       : articleTtsStatus === 'ready'
-                        ? 'Reusable listen audio is ready for readers.'
+                        ? 'Manual listen audio is ready for readers.'
                         : articleTtsStatus === 'failed'
-                          ? 'The last listen-audio generation failed. You can try again.'
+                          ? 'The last listen-audio upload failed. Upload a new file.'
                           : articleTtsStatus === 'stale'
-                            ? 'The saved listen-audio asset needs regeneration.'
+                            ? 'The saved listen-audio asset needs a fresh upload.'
                             : articleTtsStatus === 'disabled'
-                              ? 'Save article title, summary, and content before generating listen audio.'
-                              : 'No reusable listen audio is ready yet for the current saved article text.'}
+                              ? 'Save article title, summary, and content before uploading listen audio.'
+                              : 'No manual listen audio is uploaded for this article yet.'}
                   </p>
                   {articleTtsInfo?.generatedAt ? (
                     <p className="mt-1 text-xs text-gray-500">
@@ -2649,24 +2653,39 @@ export default function EditArticle() {
                     <p className="mt-1 text-xs text-amber-700">{articleTtsInfo.lastError}</p>
                   ) : null}
                 </div>
-                <button
-                  type="button"
-                  onClick={handleRegenerateArticleTts}
-                  disabled={
+                <label
+                  className={`inline-flex items-center gap-2 rounded-md border border-spanish-red bg-white px-3 py-2 text-xs font-semibold text-spanish-red hover:bg-red-50 ${
                     articleTtsNeedsSave ||
                     !articleTtsEligible ||
                     isLoadingArticleTts ||
                     isRegeneratingArticleTts
-                  }
-                  className="inline-flex items-center gap-2 rounded-md border border-spanish-red bg-white px-3 py-2 text-xs font-semibold text-spanish-red hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      ? 'pointer-events-none cursor-not-allowed opacity-50'
+                      : 'cursor-pointer'
+                  }`}
                 >
                   {isLoadingArticleTts || isRegeneratingArticleTts ? (
                     <Loader className="h-4 w-4 animate-spin" />
                   ) : (
-                    <RefreshCw className="h-4 w-4" />
+                    <Upload className="h-4 w-4" />
                   )}
-                  {articleTtsInfo?.audioUrl ? 'Regenerate Audio' : 'Generate Audio'}
-                </button>
+                  {articleTtsInfo?.audioUrl ? 'Replace Audio' : 'Upload Audio'}
+                  <input
+                    type="file"
+                    accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4"
+                    disabled={
+                      articleTtsNeedsSave ||
+                      !articleTtsEligible ||
+                      isLoadingArticleTts ||
+                      isRegeneratingArticleTts
+                    }
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      event.currentTarget.value = '';
+                      void handleUploadArticleTts(file);
+                    }}
+                    className="sr-only"
+                  />
+                </label>
               </div>
               {articleTtsInfo?.audioUrl ? (
                 <div className="space-y-2 rounded-md border border-gray-200 bg-white px-3 py-2">

@@ -266,6 +266,10 @@ function getActiveGeminiTtsCooldown() {
   };
 }
 
+export function getGeminiTtsActiveCooldown() {
+  return getActiveGeminiTtsCooldown();
+}
+
 export function getGeminiTtsUnavailableStatus(reason: string) {
   return isLikelyQuotaOrRateLimitError(reason) ? 429 : 501;
 }

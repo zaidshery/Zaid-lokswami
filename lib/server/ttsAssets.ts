@@ -111,7 +111,7 @@ function createDefaultTtsConfig(): TtsConfigShape {
       },
       article: {
         enabled: true,
-        autoGenerate: true,
+        autoGenerate: false,
         defaultLanguageCode: 'hi-IN',
         defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
       },
@@ -124,7 +124,7 @@ function createDefaultTtsConfig(): TtsConfigShape {
     },
     prewarm: {
       latestBreakingLimit: 10,
-      latestArticleLimit: 25,
+      latestArticleLimit: 0,
       latestEpaperStoryLimit: 50,
     },
   };
@@ -215,7 +215,7 @@ function normalizeTtsConfig(
           surfaces?.article,
           migrateLegacyDefaultVoice
         ),
-        autoGenerate: true,
+        autoGenerate: false,
         defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
       },
       epaper: mergeSurfaceConfig(
@@ -784,7 +784,7 @@ export async function saveManualTtsAsset(input: {
     sourceType: input.sourceType,
     sourceId,
     variant: input.variant,
-    message: 'Manual story listen audio uploaded successfully.',
+    message: 'Manual listen audio uploaded successfully.',
     metadata,
   });
 
@@ -805,6 +805,15 @@ export async function ensureTtsAsset(input: EnsureTtsAssetInput): Promise<Ensure
       reused: false,
       config,
       error: 'Source id and text are required to create a shared TTS asset.',
+    };
+  }
+
+  if (input.sourceType === 'article' && input.variant === 'article_full') {
+    return {
+      asset: null,
+      reused: false,
+      config,
+      error: 'Article listen audio now uses manual audio uploads.',
     };
   }
 
@@ -1046,6 +1055,15 @@ export async function queueTtsAsset(input: EnsureTtsAssetInput): Promise<QueueTt
     };
   }
 
+  if (input.sourceType === 'article' && input.variant === 'article_full') {
+    return {
+      asset: null,
+      status: 'failed',
+      config,
+      error: 'Article listen audio now uses manual audio uploads.',
+    };
+  }
+
   const surfaceKey = variantToSurfaceKey(input.variant);
   const surface = config.surfaces[surfaceKey];
   if (!surface.enabled) {
@@ -1174,6 +1192,15 @@ export async function processQueuedTtsAssets(input: { limit?: number; staleProce
 
   for (const job of jobs) {
     try {
+      if (job.sourceType === 'article' && job.variant === 'article_full') {
+        job.status = 'stale';
+        job.lastError = 'Article listen audio now uses manual audio uploads.';
+        job.lastVerifiedAt = new Date();
+        await job.save();
+        skipped += 1;
+        continue;
+      }
+
       const metadata = buildMetadataWithDefaults(job.metadata);
       const queuedText = typeof metadata.queuedText === 'string' ? metadata.queuedText.trim() : '';
 

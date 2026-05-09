@@ -715,17 +715,17 @@ export default function ArticlesManagement() {
   }, [articleTtsById]);
 
   const handleGenerateTts = async (article: Article, variant: TtsVariant) => {
+    if (variant === 'article_full') {
+      setError('Article listen audio now uses manual uploads. Open the article editor to upload audio.');
+      return;
+    }
+
     const actionKey = `${variant}:${article._id}`;
     setRunningTtsActionKey(actionKey);
     setError('');
 
     try {
-      const endpoint =
-        variant === 'breaking_headline'
-          ? `/api/admin/articles/${encodeURIComponent(article._id)}/breaking-tts?force=1`
-          : `/api/admin/articles/${encodeURIComponent(article._id)}/tts?force=1`;
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(`/api/admin/articles/${encodeURIComponent(article._id)}/breaking-tts?force=1`, {
         method: 'POST',
         headers: {
           ...getAuthHeader(),
@@ -1124,19 +1124,13 @@ export default function ArticlesManagement() {
                           ) : null}
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleGenerateTts(article, 'article_full')}
-                            disabled={runningTtsActionKey !== ''}
-                            className={cx(SECONDARY_BUTTON_CLASS, 'px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60')}
+                          <Link
+                            href={`/admin/articles/${article._id}/edit`}
+                            className={cx(SECONDARY_BUTTON_CLASS, 'px-3 py-2 text-xs')}
                           >
-                            {runningTtsActionKey === `article_full:${article._id}` ? (
-                              <Loader className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Volume2 className="h-3.5 w-3.5" />
-                            )}
-                            Listen
-                          </button>
+                            <Volume2 className="h-3.5 w-3.5" />
+                            Upload Listen
+                          </Link>
                           {article.isBreaking ? (
                             <button
                               type="button"

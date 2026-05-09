@@ -3,6 +3,8 @@ import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { isReporterDeskRole } from '@/lib/auth/roles';
 import { uploadBufferToDigitalOceanSpaces } from '@/lib/utils/digitalOceanSpaces';
 
+export const runtime = 'nodejs';
+
 type UploadPurpose =
   | 'image'
   | 'story-thumbnail'
@@ -119,6 +121,32 @@ function canUseUploadPurpose(role: string | null | undefined, purpose: UploadPur
   return purpose === 'image' || purpose === 'story-thumbnail';
 }
 
+function isRetriableBodyReadError(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
+
+  return (
+    /disturbed|locked|aborted|body.*used/i.test(message) ||
+    code === 'ERR_HTTP_REQUEST_TIMEOUT' ||
+    code === 'ABORT_ERR'
+  );
+}
+
+async function readUploadFormData(req: NextRequest) {
+  try {
+    return await req.clone().formData();
+  } catch (cloneError) {
+    if (!isRetriableBodyReadError(cloneError)) {
+      throw cloneError;
+    }
+
+    return req.formData();
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const user = await getAdminSessionFromReq(req);
@@ -126,31 +154,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Clone request to avoid "body locked" error when accessed by middleware
-    let formData;
+    let formData: FormData;
     try {
-      formData = await req.formData();
-    } catch (bodyError) {
-      // If body is locked/disturbed, try cloning the request
-      const isBodyError = bodyError instanceof Error &&
-        (bodyError.message.includes('disturbed') || bodyError.message.includes('locked'));
-      const isTimeoutError = bodyError && typeof bodyError === 'object' && 'code' in bodyError &&
-        (bodyError as { code?: string }).code === 'ERR_HTTP_REQUEST_TIMEOUT';
-      if (isBodyError || isTimeoutError) {
-        try {
-          const clonedReq = req.clone();
-          formData = await clonedReq.formData();
-        } catch (cloneError) {
-          console.error('Failed to read form data after cloning:', cloneError);
-          return NextResponse.json(
-            { success: false, error: 'Failed to process request body' },
-            { status: 400 }
-          );
-        }
-      } else {
-        throw bodyError;
-      }
+      formData = await readUploadFormData(req);
+    } catch (error) {
+      console.error('Failed to read upload form data:', error);
+      return NextResponse.json(
+        { success: false, error: 'Failed to process request body' },
+        { status: 400 }
+      );
     }
+
     const file = formData.get('file');
     const purpose = parseUploadPurpose(formData.get('purpose'));
 
