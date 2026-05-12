@@ -44,7 +44,7 @@ export async function ensureEpaperStoryAudio(input: {
     return { attempted: false, ready: false, error: 'Story has no readable text.' };
   }
 
-  const result = await ensureTtsAsset({
+  const result = (await ensureTtsAsset({
     sourceType: 'epaperArticle',
     sourceId: String(input.story._id || ''),
     sourceParentId: String(input.story.epaperId || ''),
@@ -60,7 +60,7 @@ export async function ensureEpaperStoryAudio(input: {
       cityName: String(input.paper.cityName || ''),
       publishDate: toPublishDate(input.paper.publishDate),
     },
-  });
+  })) as any;
 
   return {
     attempted: true,
