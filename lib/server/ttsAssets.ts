@@ -393,6 +393,7 @@ export async function processQueuedTtsAssets(_options?: { limit?: number }) {
 
 export async function ensureTtsAsset(_options: any) {
   return {
+    asset: null,
     reused: false,
     error: 'TTS Auto-Synthesis is decommissioned. Manual upload required.',
   };

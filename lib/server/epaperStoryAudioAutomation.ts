@@ -64,7 +64,7 @@ export async function ensureEpaperStoryAudio(input: {
 
   return {
     attempted: true,
-    ready: Boolean(result.asset?.status === 'ready' && result.asset.audioUrl),
+    ready: Boolean(result.asset?.status === 'ready' && result.asset?.audioUrl),
     reused: result.reused,
     error: result.error || '',
   };
