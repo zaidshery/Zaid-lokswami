@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canManageWorkflowAssignments } from '@/lib/auth/permissions';
 import { ADMIN_ROLE_QUERY_VALUES, normalizeAdminRole } from '@/lib/auth/roles';
 import User from '@/lib/models/User';
@@ -35,7 +35,7 @@ function toOption(record: TeamOptionRecord) {
 
 export async function GET() {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin || !canManageWorkflowAssignments(admin.role)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canManageSettings } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
 import TtsAsset from '@/lib/models/TtsAsset';
@@ -12,7 +12,7 @@ import { getTtsStorageConfig } from '@/lib/utils/ttsStorage';
 
 export async function GET() {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
@@ -63,7 +63,7 @@ export async function GET() {
 // PUT is no longer supported — auto-TTS configuration has been removed.
 export async function PUT() {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

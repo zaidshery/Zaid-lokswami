@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import Video from '@/lib/models/Video';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canReadContent } from '@/lib/auth/permissions';
 import { listVideoActivity } from '@/lib/server/videoActivity';
 import { getStoredVideoById } from '@/lib/storage/videosFile';
@@ -52,7 +52,7 @@ function buildVideoPermissionRecord(video: {
 
 export async function GET(_req: Request, context: RouteContext) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

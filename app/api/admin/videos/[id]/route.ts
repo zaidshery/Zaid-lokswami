@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import Video from '@/lib/models/Video';
 import User from '@/lib/models/User';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   canDeleteContent,
   canEditContent,
@@ -303,7 +303,7 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -367,7 +367,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -618,7 +618,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await context.params;
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -784,7 +784,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

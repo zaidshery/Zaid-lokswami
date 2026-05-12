@@ -5,7 +5,7 @@ import Article from '@/lib/models/Article';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import User from '@/lib/models/User';
-import { getAdminSessionFromReq } from '@/lib/auth/admin';
+import { getAdminSession, getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   createEmptyCopyEditorMeta,
   createEmptyReporterMeta,
@@ -553,7 +553,7 @@ async function updateEpaperArticleById(
   id: string,
   body: unknown,
   isPut: boolean,
-  actor?: Awaited<ReturnType<typeof getAdminSession>>
+  actor?: Awaited<ReturnType<typeof getAdminSessionFromReqFromReq>>
 ) {
   if (!Types.ObjectId.isValid(id)) {
     return {

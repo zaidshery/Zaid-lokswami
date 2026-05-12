@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError, apiSuccess, withAdminApi } from '@/lib/api/adminRoute';
 import connectDB from '@/lib/db/mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   canManageTargetAdminRole,
   canManageTeam,
@@ -84,7 +84,7 @@ function toTeamMember(record: TeamMemberRecord) {
 
 export async function GET() {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin || !canManageTeam(admin.role)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }

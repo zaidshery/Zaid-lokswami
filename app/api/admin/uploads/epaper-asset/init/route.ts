@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
 import {
   createEpaperAssetUploadTarget,
@@ -20,7 +20,7 @@ function parseKind(value: unknown): EpaperAssetKind | null {
 
 export async function POST(req: NextRequest) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

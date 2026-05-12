@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canRunGlobalAiOps } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
 import TtsAsset from '@/lib/models/TtsAsset';
@@ -59,7 +59,7 @@ function isHttpUrl(value: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

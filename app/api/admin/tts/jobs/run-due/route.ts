@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
 import { processQueuedTtsAssets } from '@/lib/server/ttsAssets';
 
@@ -12,7 +12,7 @@ function hasCronSecret(request: NextRequest) {
 async function canRunWorker(request: NextRequest) {
   if (hasCronSecret(request)) return true;
 
-  const admin = await getAdminSession();
+  const admin = await getAdminSessionFromReq(req);
   return Boolean(admin && canViewPage(admin.role, 'ai_ops'));
 }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canEditContent, canViewPage } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
 import { loadArticleManualTtsSource } from '@/lib/server/articleTtsManual';
@@ -11,7 +11,7 @@ import {
 
 export const runtime = 'nodejs';
 
-async function requireEditableArticle(admin: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>, articleId: string) {
+async function requireEditableArticle(admin: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>, articleId: string) {
   const article = await loadArticleManualTtsSource(articleId);
   if (!article) {
     return {
@@ -32,7 +32,7 @@ async function requireEditableArticle(admin: NonNullable<Awaited<ReturnType<type
 
 export async function POST(req: NextRequest) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

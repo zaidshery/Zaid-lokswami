@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import Video from '@/lib/models/Video';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   canCreateContent,
   canReadContent,
@@ -173,7 +173,7 @@ async function shouldUseFileStore() {
 
 function buildInitialWorkflow(
   intent: CreateIntent,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>
 ) {
   const actor = toWorkflowActorRef(user);
   const now = new Date();
@@ -227,7 +227,7 @@ function buildVideoPermissionRecord(video: ReturnType<typeof resolveVideoRecord>
 
 function matchesFilters(
   video: ReturnType<typeof resolveVideoRecord>,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   filters: {
     category: string | null;
     type: string | null;
@@ -292,7 +292,7 @@ function sortVideos(videos: ReturnType<typeof resolveVideoRecord>[], sort: strin
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -406,7 +406,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

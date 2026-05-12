@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
@@ -96,7 +96,7 @@ async function loadStorySource(paperId: string, storyId: string): Promise<StoryS
 
 export async function POST(req: NextRequest) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canReadContent, canViewPage } from '@/lib/auth/permissions';
 import {
   buildArticleFullTtsText,
@@ -29,9 +29,9 @@ async function requireMongoBackedTts() {
   }
 }
 
-export async function GET(_req: NextRequest, context: RouteContext) {
+export async function GET(req: NextRequest, context: RouteContext) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -121,9 +121,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   }
 }
 
-export async function POST(_req: NextRequest, _context: RouteContext) {
+export async function POST(req: NextRequest, _context: RouteContext) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

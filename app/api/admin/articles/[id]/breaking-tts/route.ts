@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canEditContent, canViewPage } from '@/lib/auth/permissions';
 import Article from '@/lib/models/Article';
 import { resolveArticleWorkflow } from '@/lib/workflow/article';
@@ -31,7 +31,7 @@ async function shouldUseFileStore() {
 
 export async function POST(req: NextRequest, context: RouteContext) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

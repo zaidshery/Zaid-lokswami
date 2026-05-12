@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canManageTargetAdminRole, canManageTeam } from '@/lib/auth/permissions';
 import { issueStaffSetupToken, reserveUniqueStaffLoginId } from '@/lib/auth/staffCredentials';
 import { normalizeAdminRole } from '@/lib/auth/roles';
@@ -27,7 +27,7 @@ function getRequestOrigin(req: Pick<NextRequest, 'url'> & { nextUrl?: { origin?:
 
 export async function POST(req: NextRequest, context: RouteContext) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin || !canManageTeam(admin.role)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
