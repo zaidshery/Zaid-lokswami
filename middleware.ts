@@ -24,24 +24,27 @@ async function getSessionToken(request: NextRequest) {
 
 /** Protects admin and signed-in reader routes with the active NextAuth session. */
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
+  const { pathname } = request.nextUrl;
+  const isApiRequest = pathname.startsWith('/api/');
+  const contentType = request.headers.get('content-type') || '';
+  
+  // CRITICAL: Skip middleware processing for large file upload routes IMMEDIATELY.
+  // Any property access or function call on 'request' before this point (like getSessionToken)
+  // may disturb the request body stream, causing failures in Next.js 15.
+  const isLargeUploadRoute =
+    pathname === '/api/admin/epapers/upload' ||
+    pathname === '/api/admin/upload' ||
+    (pathname.includes('/api/admin/epapers/') && pathname.includes('/pages')) ||
+    (isApiRequest && contentType.includes('multipart/form-data'));
+
+  if (isLargeUploadRoute) {
+    return NextResponse.next();
+  }
+
   const startedAt = Date.now();
 
   try {
-    const { pathname } = request.nextUrl;
     const isApiRequest = pathname.startsWith('/api/');
-    
-    // Skip middleware processing for large file upload routes
-    // Bypass body processing to allow large multipart uploads
-    const isLargeUploadRoute = 
-      pathname === '/api/admin/epapers/upload' ||
-      pathname === '/api/admin/upload' ||
-      pathname.includes('/api/admin/epapers/') && pathname.includes('/pages');
-    
-    if (isLargeUploadRoute) {
-      // For upload routes, bypass middleware auth checks entirely to avoid "disturbed body" errors in Next.js 15
-      // The individual route handlers (e.g. /api/admin/upload) must perform their own authentication checks
-      return NextResponse.next();
-    }
     
     let session: Awaited<ReturnType<typeof getSessionToken>> = null;
 
@@ -116,9 +119,8 @@ export const config = {
   runtime: 'nodejs',
   matcher: [
     '/admin/:path*',
-    // Exclude specific upload routes from middleware to prevent "disturbed body" errors in Next.js 15
-    '/api/admin/((?!upload|epapers/upload).*)',
-    '/api/((?!admin).*)',
+    '/api/admin/:path*',
+    '/api/:path*',
     '/login',
     '/signin',
     '/main/account/:path*',

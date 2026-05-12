@@ -22,7 +22,7 @@ async function shouldUseFileStore() {
   }
 }
 
-export async function GET(req: Request, context: RouteContext) {
+export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const user = await getAdminSession();
     if (!user) {

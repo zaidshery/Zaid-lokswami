@@ -53,7 +53,7 @@ function buildArticlePermissionRecord(article: {
   };
 }
 
-export async function GET(req: Request, context: RouteContext) {
+export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const user = await getAdminSessionFromReq(req);
     if (!user) {
