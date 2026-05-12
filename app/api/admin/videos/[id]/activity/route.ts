@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import Video from '@/lib/models/Video';
