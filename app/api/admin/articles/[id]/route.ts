@@ -5,7 +5,7 @@ import Article from '@/lib/models/Article';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import User from '@/lib/models/User';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   createEmptyCopyEditorMeta,
   createEmptyReporterMeta,
@@ -688,7 +688,7 @@ export async function GET(
   context: RouteContext
 ) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -807,15 +807,16 @@ export async function PATCH(
   try {
     const { id } = await context.params;
 
-    const user = await getAdminSession();
+    // Read body FIRST
+    const body = await req.json();
+
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
-
-    const body = await req.json();
 
     if (isEpaperKind(req)) {
       if (!canViewPage(user.role, 'epapers')) {
@@ -1300,15 +1301,16 @@ export async function PUT(
   try {
     const { id } = await context.params;
 
-    const user = await getAdminSession();
+    // Read body FIRST
+    const body = await req.json();
+
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
-
-    const body = await req.json();
 
     if (isEpaperKind(req)) {
       if (!canViewPage(user.role, 'epapers')) {
@@ -1544,7 +1546,7 @@ export async function DELETE(
   try {
     const { id } = await context.params;
 
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

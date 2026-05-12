@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import Article from '@/lib/models/Article';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   normalizeCopyEditorMeta,
   normalizeReporterMeta,
@@ -147,7 +147,7 @@ function buildArticlePermissionRecord(article: ReturnType<typeof resolveArticleR
 
 function matchesListFilters(
   article: ReturnType<typeof resolveArticleRecord>,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   filters: {
     scope: 'all' | 'mine' | 'assigned' | 'review';
     workflowStatus: string;
@@ -201,7 +201,7 @@ function matchesListFilters(
 
 function buildInitialWorkflow(
   intent: CreateIntent,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>
 ) {
   const actor = toWorkflowActorRef(user);
   const now = new Date();
@@ -348,7 +348,7 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -468,10 +468,12 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAdminSession();
+    // Read JSON body FIRST to avoid disturbed/locked body errors in Next.js 15
+    const body = await req.json();
+
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -491,7 +493,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
     const intent = normalizeCreateIntent((body as Record<string, unknown>)?.intent);
     const input = normalizeArticleInput(body);
     const validationError = validateArticleInput(input);

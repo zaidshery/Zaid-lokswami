@@ -122,26 +122,25 @@ function canUseUploadPurpose(role: string | null | undefined, purpose: UploadPur
 }
 
 
-async function readUploadFormData(req: NextRequest) {
-  return await req.formData();
-}
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAdminSessionFromReq(req);
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
+    // Read form data FIRST before any other async operations that might touch the request
+    // This is the most reliable way to avoid "Response body object should not be disturbed or locked" in Next.js 15
     let formData: FormData;
     try {
-      formData = await readUploadFormData(req);
+      formData = await req.formData();
     } catch (error) {
       console.error('Failed to read upload form data:', error);
       return NextResponse.json(
         { success: false, error: 'Failed to process request body' },
         { status: 400 }
       );
+    }
+
+    const user = await getAdminSessionFromReq(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const file = formData.get('file');
@@ -193,9 +192,15 @@ export async function POST(req: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error) {
-    console.error('Error uploading file:', error);
-    return NextResponse.json({ success: false, error: 'Failed to upload file' }, { status: 500 });
+  } catch (error: any) {
+    console.error('CRITICAL: Upload handler failed:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return NextResponse.json(
+      { success: false, error: 'Failed to upload file' },
+      { status: 500 }
+    );
   }
 }
-

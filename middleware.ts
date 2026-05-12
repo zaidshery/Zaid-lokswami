@@ -38,26 +38,8 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       pathname.includes('/api/admin/epapers/') && pathname.includes('/pages');
     
     if (isLargeUploadRoute) {
-      // For upload routes, just check auth without reading the body
-      // Let the route handler deal with formData parsing
-      const secret = getJwtSecretOrNull();
-      if (!secret) {
-        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-      }
-
-      const token = await getToken({ 
-        req: request, 
-        secret, 
-        cookieName: LOKSWAMI_SESSION_COOKIE 
-      });
-      
-      const hasAdminRole = token?.role && isAdminRole(token.role as string);
-      const isActive = token?.isActive !== false;
-      
-      if (!token || !hasAdminRole || !isActive) {
-        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-      }
-      
+      // For upload routes, bypass middleware auth checks entirely to avoid "disturbed body" errors in Next.js 15
+      // The individual route handlers (e.g. /api/admin/upload) must perform their own authentication checks
       return NextResponse.next();
     }
     
@@ -134,8 +116,9 @@ export const config = {
   runtime: 'nodejs',
   matcher: [
     '/admin/:path*',
-    '/api/admin/:path*',
-    '/api/:path*',
+    // Exclude specific upload routes from middleware to prevent "disturbed body" errors in Next.js 15
+    '/api/admin/((?!upload|epapers/upload).*)',
+    '/api/((?!admin).*)',
     '/login',
     '/signin',
     '/main/account/:path*',

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import Story from '@/lib/models/Story';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   createEmptyCopyEditorMeta,
   normalizeCopyEditorMeta,
@@ -184,7 +184,7 @@ function normalizeStoryInput(body: unknown) {
 }
 
 function getReporterDisplayName(
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   fallbackAuthor: string
 ) {
   const sessionName = user.name.trim();
@@ -194,7 +194,7 @@ function getReporterDisplayName(
 }
 
 function sanitizeCreateInputForUser(
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   input: ReturnType<typeof normalizeStoryInput>
 ) {
   if (user.role !== 'reporter') {
@@ -295,7 +295,7 @@ async function shouldUseFileStore() {
 
 function buildInitialWorkflow(
   intent: CreateIntent,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>
 ) {
   const actor = toWorkflowActorRef(user);
   const now = new Date();
@@ -357,7 +357,7 @@ function buildStoryPermissionRecord(story: ReturnType<typeof resolveStoryRecord>
 
 function matchesFilters(
   story: ReturnType<typeof resolveStoryRecord>,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSession>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   filters: {
     category: string | null;
     search: string;
@@ -418,7 +418,7 @@ function sortStories(stories: ReturnType<typeof resolveStoryRecord>[], sort: str
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -523,7 +523,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAdminSession();
+    // Read JSON body FIRST to avoid disturbed/locked body errors in Next.js 15
+    const body = await req.json();
+
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -537,7 +540,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
     const rawInput = normalizeStoryInput(body);
     const input = sanitizeCreateInputForUser(user, rawInput);
     const validationError = validateStoryInput(input, {

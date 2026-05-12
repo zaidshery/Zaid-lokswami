@@ -50,7 +50,21 @@ export async function getAdminSessionFromReq(req: NextRequest): Promise<AdminSes
   const secret = getJwtSecretOrNull();
   if (!secret) return null;
 
-  const token = await getToken({ req, secret, cookieName: LOKSWAMI_SESSION_COOKIE });
+  // Next.js 15 fix: construct a minimal request object for getToken
+  // to avoid disturbing the actual request body stream.
+  const minimalReq = {
+    headers: Object.fromEntries(req.headers.entries()),
+    cookies: Object.fromEntries(
+      req.cookies.getAll().map((c) => [c.name, c.value])
+    ),
+  } as any;
+
+  const token = await getToken({ 
+    req: minimalReq, 
+    secret, 
+    cookieName: LOKSWAMI_SESSION_COOKIE 
+  });
+  
   const email = token?.email?.trim() || '';
   const role = token?.role;
 

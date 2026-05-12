@@ -109,7 +109,7 @@ const RevisionSchema = new mongoose.Schema<IArticleRevision>(
     image: { type: String, required: true },
     category: { type: String, required: true },
     author: { type: String, required: true },
-    slug: { type: String, default: '', trim: true, lowercase: true, index: true },
+    slug: { type: String, default: '', trim: true, lowercase: true },
     previousSlugs: { type: [String], default: [] },
     isBreaking: { type: Boolean, default: false },
     isTrending: { type: Boolean, default: false },
@@ -142,7 +142,7 @@ const ArticleSchema = new mongoose.Schema<IArticle>({
   // category is stored as a string (category name or slug). Categories are managed separately.
   category: { type: String, required: true },
   author: { type: String, required: true },
-  slug: { type: String, default: '', trim: true, lowercase: true, index: true },
+  slug: { type: String, default: '', trim: true, lowercase: true },
   previousSlugs: { type: [String], default: [] },
   publishedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
