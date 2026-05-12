@@ -13,9 +13,8 @@ const CHAT_TABS: Record<'hi' | 'en', Array<{ id: AiChatActionTab; label: string 
   hi: [
     { id: 'search', label: '\u0916\u094b\u091c' },
     { id: 'summary', label: '\u0938\u093e\u0930\u093e\u0902\u0936' },
-    { id: 'explain', label: '\u0938\u0930\u0932 \u0938\u092e\u091d\u093e\u090f\u0902' },
+    { id: 'explain', label: '\u0938\u093er\u0932 \u0938\u092e\u091d\u093e\u090f\u0902' },
     { id: 'translate', label: '\u0905\u0928\u0941\u0935\u093e\u0926' },
-    { id: 'listen', label: '\u0938\u0941\u0928\u0947\u0902' },
     { id: 'headlines', label: '\u092e\u0941\u0916\u094d\u092f \u0916\u092c\u0930\u0947\u0902' },
     { id: 'trending', label: '\u091f\u094d\u0930\u0947\u0902\u0921\u093f\u0902\u0917' },
   ],
@@ -24,7 +23,6 @@ const CHAT_TABS: Record<'hi' | 'en', Array<{ id: AiChatActionTab; label: string 
     { id: 'summary', label: 'Summary' },
     { id: 'explain', label: 'Explain' },
     { id: 'translate', label: 'Translate' },
-    { id: 'listen', label: 'Listen' },
     { id: 'headlines', label: 'Headlines' },
     { id: 'trending', label: 'Trending' },
   ],

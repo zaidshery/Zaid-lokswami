@@ -2,11 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  fetchTtsStatus,
-} from '@/lib/ai/ttsClient';
-import { NEWS_CATEGORIES, resolveNewsCategory } from '@/lib/constants/newsCategories';
-import { TTS_LANGUAGE_OPTIONS } from '@/lib/constants/tts';
+import { resolveNewsCategory } from '@/lib/constants/newsCategories';
 import { useAppStore } from '@/lib/store/appStore';
 import type {
   AiAnswerSource,
@@ -243,13 +239,6 @@ function hasContentGroups(groups: AiContentGroups) {
   );
 }
 
-function toSpeakableText(value: string) {
-  return value.replace(/\s+/g, ' ').trim().slice(0, 3200);
-}
-
-function getPreferredListenLanguageCode(language: 'hi' | 'en') {
-  return language === 'hi' ? 'hi-IN' : 'en-US';
-}
 
 function normalizeAnswerSource(value: unknown): AiAnswerSource | undefined {
   if (
@@ -385,7 +374,7 @@ function buildTechnicalFallbackMessage(
 function getGreetingMessage(language: 'hi' | 'en') {
   return language === 'hi'
     ? 'नमस्कार, मैं Lokswami AI Desk हूँ। मैं आपको सुर्खियाँ, जिला कवरेज, ई-पेपर और सारांश में मदद कर सकता हूँ।'
-    : 'Hello, this is Lokswami AI Desk. I can help with headlines, local coverage, e-paper access, summaries, and read-aloud support.';
+    : 'Hello, this is Lokswami AI Desk. I can help with headlines, local coverage, e-paper access, and summaries.';
 }
 
 export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
@@ -393,15 +382,10 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   const { language } = useAppStore();
   const pathname = usePathname();
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isWorking, setIsWorking] = useState(false);
   const [errorText, setErrorText] = useState('');
-
-  const [isTtsConfigured, setIsTtsConfigured] = useState(false);
   const [suggestions, setSuggestions] = useState<AiChatSuggestions>(emptySuggestions());
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [categorySuggestions, setCategorySuggestions] = useState<AiCategorySuggestion[]>([]);
@@ -426,9 +410,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     return '';
   }, [messages]);
 
-  const listenLanguageOptions = useMemo(() => {
-    return TTS_LANGUAGE_OPTIONS;
-  }, []);
 
   const searchRouteHref = draft.trim()
     ? `/main/search?q=${encodeURIComponent(draft.trim())}`
@@ -438,13 +419,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     setMessages((prev) => [...prev, message]);
   }, []);
 
-  const stopListening = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-    }
-  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -458,32 +432,7 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [isOpen, messages, isWorking]);
 
-  useEffect(() => {
-    let active = true;
 
-    const loadTtsStatus = async () => {
-      try {
-        const payload = await fetchTtsStatus();
-        if (!active) return;
-        setIsTtsConfigured(Boolean(payload.configured));
-      } catch {
-        if (!active) return;
-        setIsTtsConfigured(false);
-      }
-    };
-
-    void loadTtsStatus();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stopListening();
-    };
-  }, [stopListening]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -711,7 +660,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     }
 
     setErrorText('');
-    setListenError('');
     setIsWorking(true);
 
     if (useText) {
@@ -792,69 +740,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     }
   };
 
-  const handleListen = async () => {
-    const sourceText = toSpeakableText(draft.trim() || latestAssistantText);
-    if (!sourceText) {
-      setListenError(
-        language === 'hi'
-          ? 'सुनने के लिए पहले AI जवाब या टेक्स्ट चाहिए।'
-          : 'Need an AI response or some text before using read-aloud.'
-      );
-      return;
-    }
-
-    setListenError('');
-    setErrorText('');
-    setIsPreparingListen(true);
-    stopListening();
-
-    try {
-      if (!isTtsConfigured) {
-        setListenError(
-          language === 'hi'
-            ? 'Gemini audio abhi configured nahi hai. Thodi der baad phir try karein.'
-            : 'Gemini audio is not configured right now. Please try again shortly.'
-        );
-        return;
-      }
-
-      const payload = await requestTtsAudio({
-        text: sourceText,
-        languageCode: listenLanguageCode,
-      });
-      const src = buildTtsAudioSource(payload);
-      if (!src) {
-        throw new Error('Gemini TTS returned no audio payload.');
-      }
-
-      const audio = new Audio(src);
-      audioRef.current = audio;
-      audio.onended = () => {
-        setIsPlayingAudio(false);
-      };
-      audio.onerror = () => {
-        setIsPlayingAudio(false);
-        setListenError(
-          language === 'hi'
-            ? 'ऑडियो चलाने में समस्या आई।'
-            : 'Unable to play the generated audio.'
-        );
-      };
-
-      await audio.play();
-      setIsPlayingAudio(true);
-    } catch (error) {
-      setListenError(
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : language === 'hi'
-            ? 'Gemini audio sunane mein dikkat aayi.'
-            : 'Unable to play Gemini audio right now.'
-      );
-    } finally {
-      setIsPreparingListen(false);
-    }
-  };
 
   const sendMessage = () => {
     const cleanQuery = draft.trim();
@@ -1067,12 +952,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     errorText,
     searchRouteHref,
     currentArticleId,
-    listenLanguageCode,
-    setListenLanguageCode,
-    listenLanguageOptions,
-    isPreparingListen,
-    isPlayingAudio,
-    listenError,
     messagesEndRef,
     suggestions,
     isLoadingSuggestions,
@@ -1087,7 +966,5 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     runTrendingTopics,
     runSuggestedQuery,
     retrySearch,
-    handleListen,
-    stopListening: () => stopListening(),
   };
 }

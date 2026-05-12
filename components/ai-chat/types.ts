@@ -7,7 +7,6 @@ export type AiChatActionTab =
   | 'summary'
   | 'explain'
   | 'translate'
-  | 'listen'
   | 'headlines'
   | 'trending';
 export type AiAnswerSource =
@@ -105,12 +104,6 @@ export type UseAiChatResult = {
   errorText: string;
   searchRouteHref: string;
   currentArticleId: string;
-  listenLanguageCode: string;
-  setListenLanguageCode: (value: string) => void;
-  listenLanguageOptions: Array<{ code: string; label: string; native?: string }>;
-  isPreparingListen: boolean;
-  isPlayingAudio: boolean;
-  listenError: string;
   messagesEndRef: RefObject<HTMLDivElement>;
   suggestions: AiChatSuggestions;
   isLoadingSuggestions: boolean;
@@ -125,6 +118,4 @@ export type UseAiChatResult = {
   runTrendingTopics: () => void;
   runSuggestedQuery: (query: string) => void;
   retrySearch: (query: string) => void;
-  handleListen: () => Promise<void>;
-  stopListening: () => void;
 };

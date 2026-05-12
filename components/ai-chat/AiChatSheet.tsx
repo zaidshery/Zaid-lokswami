@@ -191,11 +191,6 @@ export default function AiChatSheet({
       return;
     }
 
-    if (activeTab === 'listen') {
-      void chat.handleListen();
-      return;
-    }
-
     if (activeTab === 'headlines') {
       chat.runTopHeadlines();
       return;
@@ -302,16 +297,6 @@ export default function AiChatSheet({
             isWorking={chat.isWorking}
             canSubmit={canSubmit}
             onSubmit={handleSubmit}
-            onListen={() => {
-              void chat.handleListen();
-            }}
-            onStop={chat.stopListening}
-            isPreparingListen={chat.isPreparingListen}
-            isPlayingAudio={chat.isPlayingAudio}
-            listenError={chat.listenError}
-            listenLanguageCode={chat.listenLanguageCode}
-            setListenLanguageCode={chat.setListenLanguageCode}
-            listenLanguageOptions={chat.listenLanguageOptions}
             isLight={isLight}
           />
         </div>

@@ -58,7 +58,6 @@ export default function AiChatLauncher() {
 
   const handleToggle = () => {
     if (sheetOpen) {
-      chat.stopListening();
       setSheetOpen(false);
       return;
     }
@@ -67,7 +66,6 @@ export default function AiChatLauncher() {
   };
 
   const handleClose = () => {
-    chat.stopListening();
     setSheetOpen(false);
   };
 
