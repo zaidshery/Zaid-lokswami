@@ -1849,13 +1849,11 @@ export default function EPaperPageClient({
     stopArticleListening(true);
 
     try {
-      const payload = await requestEpaperStoryTtsAudio(activePaper._id, activeArticle._id, {
-        languageCode: 'hi-IN',
-      });
+      const payload = await requestEpaperStoryTtsAudio(activePaper._id, activeArticle._id);
       const src = buildTtsAudioSource(payload);
 
       if (!src) {
-        throw new Error('Gemini TTS returned no audio payload.');
+        throw new Error('Audio payload is not available.');
       }
 
       const audio = new Audio(src);

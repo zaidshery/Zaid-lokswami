@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import connectDB from '@/lib/db/mongoose';
 import TtsAsset, { type TtsAssetDocument } from '@/lib/models/TtsAsset';
 import TtsAuditEvent from '@/lib/models/TtsAuditEvent';
+import TtsConfig from '@/lib/models/TtsConfig';
 import { buildSpokenBreakingHeadline } from '@/lib/types/breaking';
 import {
   type TtsAuditAction,
@@ -374,4 +375,25 @@ export async function deleteManualTtsAsset(input: {
       message: 'Manual TTS asset deleted.',
     });
   }
+}
+// ---------------------------------------------------------------------------
+// Decommissioned Synthesis Helpers (Satisfying Legacy Callers)
+// ---------------------------------------------------------------------------
+
+export async function getTtsConfig() {
+  await connectDB();
+  const config = await TtsConfig.findOne({ key: 'default' });
+  if (config) return config;
+  return new TtsConfig({ key: 'default' });
+}
+
+export async function processQueuedTtsAssets(_options?: { limit?: number }) {
+  return { processed: 0, errors: 0, message: 'TTS Auto-Synthesis is decommissioned.' };
+}
+
+export async function ensureTtsAsset(_options: any) {
+  return {
+    reused: false,
+    error: 'TTS Auto-Synthesis is decommissioned. Manual upload required.',
+  };
 }

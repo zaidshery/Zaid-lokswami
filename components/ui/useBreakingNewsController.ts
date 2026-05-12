@@ -13,8 +13,6 @@ import {
 import {
   buildTtsAudioSource,
   fetchTtsStatus,
-  requestTtsAudio,
-  TtsRequestError,
 } from '@/lib/ai/ttsClient';
 
 const BREAKING_LIMIT = 10;
@@ -345,42 +343,8 @@ export function useBreakingNewsController({
         return prepared;
       }
 
-      try {
-        const payload = await withTimeout(
-          requestTtsAudio({
-            text: spokenText,
-            languageCode: detectBreakingTtsLanguage(spokenText, preferredLanguage),
-          }),
-          TTS_PREP_TIMEOUT_MS
-        );
-
-        if (!mountedRef.current || token !== cancelTokenRef.current) {
-          return null;
-        }
-
-        const src = buildTtsAudioSource(payload);
-        if (!src) {
-          return null;
-        }
-
-        const prepared = {
-          itemId: item.id,
-          src,
-          cacheKey,
-        };
-        rememberPreparedAudio(prepared);
-        primePreparedAudio(prepared);
-        return prepared;
-      } catch (error) {
-        if (
-          error instanceof TtsRequestError &&
-          (error.status === 429 || error.status === 501)
-        ) {
-          setTtsAvailable(false);
-        }
-
-        return null;
-      }
+      // Auto-synthesis is decommissioned — manual audio upload required for spoken headlines.
+      return null;
     },
     [buildPreparedAudioCacheKey, preferredLanguage, primePreparedAudio, rememberPreparedAudio]
   );
