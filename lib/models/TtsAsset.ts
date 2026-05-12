@@ -53,7 +53,7 @@ const TtsAssetSchema = new mongoose.Schema<ITtsAsset>(
     contentVersionHash: { type: String, required: true, trim: true, maxlength: 80 },
     languageCode: { type: String, required: true, trim: true, maxlength: 20 },
     voice: { type: String, required: true, trim: true, maxlength: 80 },
-    provider: { type: String, enum: TTS_PROVIDERS, default: 'gemini', required: true },
+    provider: { type: String, enum: TTS_PROVIDERS, default: 'manual', required: true },
     model: { type: String, required: true, trim: true, maxlength: 160 },
     mimeType: { type: String, required: true, trim: true, maxlength: 80 },
     audioUrl: { type: String, trim: true, maxlength: 800, default: '' },

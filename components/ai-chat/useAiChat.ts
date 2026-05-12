@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { resolveNewsCategory } from '@/lib/constants/newsCategories';
+import { NEWS_CATEGORIES, resolveNewsCategory } from '@/lib/constants/newsCategories';
 import { useAppStore } from '@/lib/store/appStore';
 import type {
   AiAnswerSource,
@@ -381,6 +381,8 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   const { isOpen } = options;
   const { language } = useAppStore();
   const pathname = usePathname();
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -798,7 +800,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     }
 
     setErrorText('');
-    setListenError('');
     setIsWorking(true);
 
     if (cleanDraft) {
@@ -848,7 +849,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     }
 
     setErrorText('');
-    setListenError('');
     setIsWorking(true);
 
     if (cleanDraft) {
@@ -890,7 +890,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     }
 
     setErrorText('');
-    setListenError('');
     setIsWorking(true);
     appendMessage(
       createMessage(
@@ -923,7 +922,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     }
 
     setErrorText('');
-    setListenError('');
     setIsWorking(true);
     appendMessage(
       createMessage(
