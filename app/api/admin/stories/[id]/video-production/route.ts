@@ -135,7 +135,7 @@ function normalizeVideoProductionUpdate(body: unknown) {
   return updates;
 }
 
-export async function POST(_req: NextRequest, context: RouteContext) {
+export async function POST(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const user = await getAdminSession();

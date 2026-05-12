@@ -23,7 +23,7 @@ async function requireLeadershipAdmin() {
 }
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const adminResult = await requireLeadershipAdmin();

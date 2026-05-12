@@ -298,7 +298,7 @@ function applyLegacyPublishCompatibility(
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: RouteContext
 ) {
   try {
@@ -779,7 +779,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   context: RouteContext
 ) {
   try {

@@ -145,7 +145,7 @@ export const PATCH = withAdminApi<RouteContext>(
 );
 
 export const DELETE = withAdminApi<RouteContext>(
-  async (_req: NextRequest, context: RouteContext, { admin }) => {
+  async (req: NextRequest, context: RouteContext, { admin }) => {
     const { id } = await context.params;
     await connectDB();
 

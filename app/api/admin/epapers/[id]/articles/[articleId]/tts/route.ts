@@ -104,7 +104,7 @@ async function loadStorySource(paperId: string, storyId: string) {
   };
 }
 
-export async function GET(_req: NextRequest, context: RouteContext) {
+export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const admin = await getAdminSession();
     if (!admin) {
@@ -180,7 +180,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 }
 
 // POST: Auto-synthesis removed. Audio must be uploaded manually.
-export async function POST(_req: NextRequest, _context: RouteContext) {
+export async function POST(req: NextRequest, _context: RouteContext) {
   try {
     const admin = await getAdminSession();
     if (!admin) {

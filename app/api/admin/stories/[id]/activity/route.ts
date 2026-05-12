@@ -53,7 +53,7 @@ function buildStoryPermissionRecord(story: {
   };
 }
 
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   try {
     const user = await getAdminSession();
     if (!user) {

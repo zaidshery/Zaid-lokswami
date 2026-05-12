@@ -50,7 +50,7 @@ function buildVideoPermissionRecord(video: {
   };
 }
 
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   try {
     const user = await getAdminSessionFromReq(req);
     if (!user) {
