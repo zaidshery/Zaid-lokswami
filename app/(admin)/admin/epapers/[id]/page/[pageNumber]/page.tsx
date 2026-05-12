@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 import { ArrowLeft, Loader2, Plus, RefreshCw, Save, Sparkles, Trash2, UploadCloud, Volume2 } from 'lucide-react';
+import { CmsWorkflowPriorityBadge, CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import type {
   EPaperArticleRecord,
@@ -217,34 +218,6 @@ function pageReviewTone(status: string | null | undefined) {
       return 'bg-red-100 text-red-700';
     default:
       return 'bg-amber-100 text-amber-700';
-  }
-}
-
-function formatWorkflowStatusLabel(status: string | null | undefined) {
-  return String(status || 'draft')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function workflowTone(status: string | null | undefined) {
-  switch (status) {
-    case 'published':
-      return 'bg-emerald-100 text-emerald-700';
-    case 'approved':
-    case 'scheduled':
-      return 'bg-blue-100 text-blue-700';
-    case 'copy_edit':
-    case 'in_review':
-    case 'submitted':
-    case 'assigned':
-      return 'bg-amber-100 text-amber-700';
-    case 'rejected':
-      return 'bg-red-100 text-red-700';
-    case 'archived':
-      return 'bg-zinc-200 text-zinc-700';
-    case 'draft':
-    default:
-      return 'bg-zinc-100 text-zinc-700';
   }
 }
 
@@ -1350,22 +1323,14 @@ export default function EPaperPageHotspotEditor() {
                     <div>
                       <p className="text-xs font-semibold text-gray-600">Article {index + 1}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${workflowTone(
-                            article.workflow?.status
-                          )}`}
-                        >
-                          {formatWorkflowStatusLabel(article.workflow?.status)}
-                        </span>
+                        <CmsWorkflowStatusBadge status={article.workflow?.status} />
                         {article.workflow?.assignedTo?.name ? (
                           <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-700">
                             Assigned to {article.workflow.assignedTo.name}
                           </span>
                         ) : null}
                         {article.workflow?.priority ? (
-                          <span className="rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-medium text-primary-700">
-                            Priority {String(article.workflow.priority).replace(/\b\w/g, (char) => char.toUpperCase())}
-                          </span>
+                          <CmsWorkflowPriorityBadge priority={article.workflow.priority} showPrefix />
                         ) : null}
                       </div>
                     </div>

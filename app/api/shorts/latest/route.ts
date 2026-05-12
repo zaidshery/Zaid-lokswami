@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicJsonCacheHeaders } from '@/lib/api/cache';
 import connectDB from '@/lib/db/mongoose';
 import Video from '@/lib/models/Video';
 import { listAllStoredVideos } from '@/lib/storage/videosFile';
@@ -20,6 +21,11 @@ type PublicShortItem = {
   publishedAt: string;
   updatedAt: string;
 };
+
+const SHORTS_CACHE_HEADERS = publicJsonCacheHeaders({
+  sMaxAge: 60,
+  staleWhileRevalidate: 300,
+});
 
 function asObject(value: unknown) {
   return typeof value === 'object' && value !== null
@@ -115,7 +121,7 @@ export async function GET(req: NextRequest) {
         cursorId,
         mapItem: (raw) => mapShortItem(asObject(raw)),
       });
-      return NextResponse.json(result);
+      return NextResponse.json(result, { headers: SHORTS_CACHE_HEADERS });
     }
 
     const result = await cursorPage<PublicShortItem>({
@@ -131,7 +137,7 @@ export async function GET(req: NextRequest) {
       mapItem: (raw) => mapShortItem(asObject(raw)),
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: SHORTS_CACHE_HEADERS });
   } catch (error) {
     console.error('Failed to fetch public shorts latest feed:', error);
     return NextResponse.json(

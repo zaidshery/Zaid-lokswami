@@ -22,6 +22,7 @@ import {
   getImageDimensionsFromFile,
   uploadEpaperAssetDirect,
 } from '@/lib/utils/epaperDirectUploadClient';
+import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
 import type {
   EPaperArticleRecord,
   EPaperPageReviewStatus,
@@ -1721,51 +1722,22 @@ export default function AdminEPaperDetailPage() {
                     </div>
                   ) : null}
 
-                  <div>
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-gray-700">Activity timeline</p>
-                      <button
-                        type="button"
-                        onClick={() => void loadProductionActivity()}
-                        disabled={isLoadingProductionActivity}
-                        className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {isLoadingProductionActivity ? 'Refreshing...' : 'Refresh'}
-                      </button>
-                    </div>
-                    <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
-                      {isLoadingProductionActivity ? (
-                        <div className="flex items-center justify-center py-8 text-gray-500">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        </div>
-                      ) : productionActivity.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-600">
-                          No production activity yet.
-                        </div>
-                      ) : (
-                        productionActivity.map((item, index) => (
-                          <div
-                            key={item.id || `${item.action || 'activity'}-${item.createdAt || index}`}
-                            className="rounded-lg border border-gray-200 bg-gray-50 p-3"
-                          >
-                            <p className="text-sm font-semibold text-gray-900">
-                              {item.message || formatProductionStatusLabel(item.toStatus)}
-                            </p>
-                            <p className="mt-1 text-xs text-gray-600">
-                              {item.actor?.name || item.actor?.email || 'System'}
-                              {item.actor?.role ? ` (${item.actor.role})` : ''}
-                            </p>
-                            <p className="mt-2 text-[11px] text-gray-500">
-                              {formatUiDateTime(
-                                item.createdAt,
-                                formatUiDate(item.createdAt, '')
-                              ) || 'Unknown time'}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                  <CmsWorkflowActivityTimeline
+                    title="Activity timeline"
+                    description="Production moves, page work, and notes land here."
+                    items={productionActivity}
+                    isLoading={isLoadingProductionActivity}
+                    onRefresh={loadProductionActivity}
+                    emptyMessage="No production activity yet."
+                    fallbackMessage="E-paper activity recorded."
+                    actionLabel={(action) => formatProductionStatusLabel(action)}
+                    formatTimestamp={(value) =>
+                      formatUiDateTime(value, formatUiDate(value, '')) || 'Unknown time'
+                    }
+                    formatStatusLabel={formatProductionStatusLabel}
+                    listClassName="max-h-[360px]"
+                    itemClassName="bg-gray-50"
+                  />
 
                   <button
                     type="button"

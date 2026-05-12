@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicJsonCacheHeaders } from '@/lib/api/cache';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import {
@@ -28,6 +29,11 @@ type PublicEPaperItem = {
   editionDate: string;
   publishedAt: string;
 };
+
+const EPAPERS_CACHE_HEADERS = publicJsonCacheHeaders({
+  sMaxAge: 300,
+  staleWhileRevalidate: 600,
+});
 
 function asObject(value: unknown) {
   return typeof value === 'object' && value !== null
@@ -222,7 +228,7 @@ export async function GET(req: NextRequest) {
         mapItem: (raw) => mapFileItem(asObject(raw)),
       });
 
-      return NextResponse.json(result);
+      return NextResponse.json(result, { headers: EPAPERS_CACHE_HEADERS });
     }
 
     const result = await cursorPage<PublicEPaperItem>({
@@ -241,7 +247,7 @@ export async function GET(req: NextRequest) {
       mapItem: (raw) => mapMongoItem(asObject(raw)),
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: EPAPERS_CACHE_HEADERS });
   } catch (error) {
     console.error('Failed to fetch public e-papers latest feed:', error);
     return NextResponse.json(

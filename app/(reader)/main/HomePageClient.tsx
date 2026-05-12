@@ -25,6 +25,11 @@ import {
   type VisualStory,
 } from '@/lib/content/visualStories';
 import { fetchLiveStories } from '@/lib/content/liveStories';
+import {
+  fetchHomeFeedForHomePage,
+  type HomePageEpaperPreview,
+  type HomePageFeedState,
+} from '@/lib/content/homeFeed';
 import { NEWS_CATEGORY_DEFINITIONS, resolveNewsCategory } from '@/lib/constants/newsCategories';
 import { useAppStore } from '@/lib/store/appStore';
 import {
@@ -82,27 +87,50 @@ const HI_EPAPER_CITY_LABELS: Record<string, string> = {
   delhi: '\u0926\u093f\u0932\u094d\u0932\u0940',
 };
 
-type HomeEpaperPreview = {
-  _id: string;
-  citySlug: string;
-  cityName: string;
-  title: string;
-  publishDate: string;
-  thumbnailPath: string;
-  pageCount: number;
-};
-
 type HomeEpaperResponse = {
-  items?: HomeEpaperPreview[];
+  items?: HomePageEpaperPreview[];
 };
 
-export default function HomePage() {
+type HomePageProps = {
+  initialHomeFeed?: HomePageFeedState | null;
+};
+
+async function fetchLatestEpaperPreview(): Promise<HomePageEpaperPreview | null> {
+  try {
+    const response = await fetch('/api/v1/public/epapers/latest?limit=1');
+    const payload = (await response.json().catch(() => ({}))) as HomeEpaperResponse;
+    if (!response.ok) return null;
+
+    const first = Array.isArray(payload.items) ? payload.items[0] : null;
+    if (!first) return null;
+
+    return {
+      _id: String(first._id || ''),
+      citySlug: String(first.citySlug || ''),
+      cityName: String(first.cityName || ''),
+      title: String(first.title || ''),
+      publishDate: String(first.publishDate || ''),
+      thumbnailPath: String(first.thumbnailPath || ''),
+      pageCount: Number(first.pageCount || 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const { language } = useAppStore();
   const topStoriesVariant: 'editorial' | 'modern' = 'editorial';
   const categoryScrollerRef = useRef<HTMLDivElement | null>(null);
-  const [feedArticles, setFeedArticles] = useState<Article[]>(mockArticles);
-  const [cmsStories, setCmsStories] = useState<VisualStory[]>([]);
-  const [latestEpaper, setLatestEpaper] = useState<HomeEpaperPreview | null>(null);
+  const [feedArticles, setFeedArticles] = useState<Article[]>(
+    () => initialHomeFeed?.articles.length ? initialHomeFeed.articles : mockArticles
+  );
+  const [cmsStories, setCmsStories] = useState<VisualStory[]>(
+    () => initialHomeFeed?.stories || []
+  );
+  const [latestEpaper, setLatestEpaper] = useState<HomePageEpaperPreview | null>(
+    () => initialHomeFeed?.epaper || null
+  );
   const [visibleLatestNewsCount, setVisibleLatestNewsCount] = useState(
     HOME_LATEST_INITIAL_COUNT
   );
@@ -169,28 +197,46 @@ export default function HomePage() {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const merged = await fetchMergedLiveArticles(100);
-      if (active) {
-        setFeedArticles(merged);
+      const homeFeed = await fetchHomeFeedForHomePage();
+      let hasArticles = false;
+      let hasStories = false;
+      let hasEpaper = false;
+
+      if (active && homeFeed) {
+        if (homeFeed.articles.length) {
+          setFeedArticles(homeFeed.articles);
+          hasArticles = true;
+        }
+        if (homeFeed.stories.length) {
+          setCmsStories(homeFeed.stories);
+          hasStories = true;
+        }
+        if (homeFeed.epaper) {
+          setLatestEpaper(homeFeed.epaper);
+          hasEpaper = true;
+        }
+      }
+
+      const [fallbackArticles, fallbackStories, fallbackEpaper] = await Promise.all([
+        hasArticles ? Promise.resolve(null) : fetchMergedLiveArticles(100),
+        hasStories ? Promise.resolve(null) : fetchLiveStories(20),
+        hasEpaper ? Promise.resolve(null) : fetchLatestEpaperPreview(),
+      ]);
+
+      if (!active) return;
+
+      if (fallbackArticles?.length) {
+        setFeedArticles(fallbackArticles);
+      }
+      if (fallbackStories?.length) {
+        setCmsStories(fallbackStories);
+      }
+      if (fallbackEpaper) {
+        setLatestEpaper(fallbackEpaper);
       }
     };
 
-    load();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const loadStories = async () => {
-      const rows = await fetchLiveStories(20);
-      if (active) {
-        setCmsStories(rows);
-      }
-    };
-
-    loadStories();
+    void load();
     return () => {
       active = false;
     };
@@ -199,39 +245,6 @@ export default function HomePage() {
   useEffect(() => {
     setVisibleLatestNewsCount(HOME_LATEST_INITIAL_COUNT);
   }, [feedArticles.length]);
-
-  useEffect(() => {
-    let active = true;
-    const loadLatestEpaper = async () => {
-      try {
-        const response = await fetch('/api/epapers/latest?limit=1', {
-          cache: 'no-store',
-        });
-        const payload = (await response.json().catch(() => ({}))) as HomeEpaperResponse;
-        if (!response.ok || !active) return;
-
-        const first = Array.isArray(payload.items) ? payload.items[0] : null;
-        if (!first) return;
-
-        setLatestEpaper({
-          _id: String(first._id || ''),
-          citySlug: String(first.citySlug || ''),
-          cityName: String(first.cityName || ''),
-          title: String(first.title || ''),
-          publishDate: String(first.publishDate || ''),
-          thumbnailPath: String(first.thumbnailPath || ''),
-          pageCount: Number(first.pageCount || 0),
-        });
-      } catch {
-        // Silent fail keeps the sidebar card usable with the default fallback art.
-      }
-    };
-
-    void loadLatestEpaper();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const epaperHref = (() => {
     if (!latestEpaper) return '/main/epaper';

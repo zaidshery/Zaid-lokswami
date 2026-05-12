@@ -201,6 +201,13 @@ describe('article workflow overview', () => {
         updatedAt: '2026-04-13T12:00:00.000Z',
         workflow: {
           status: 'submitted',
+          priority: 'high',
+          assignedTo: {
+            id: 'copy-1',
+            name: 'Copy Desk',
+            email: 'copy@example.com',
+            role: 'copy_editor',
+          },
         },
       },
       {
@@ -211,6 +218,7 @@ describe('article workflow overview', () => {
         updatedAt: '2026-04-13T09:00:00.000Z',
         workflow: {
           status: 'draft',
+          priority: 'normal',
         },
       },
     ]);
@@ -225,6 +233,7 @@ describe('article workflow overview', () => {
         isPublished: false,
         workflow: {
           status: 'copy_edit',
+          priority: 'high',
         },
       },
     ]);
@@ -238,6 +247,7 @@ describe('article workflow overview', () => {
         isPublished: false,
         workflow: {
           status: 'approved',
+          priority: 'urgent',
         },
       },
       {
@@ -270,5 +280,34 @@ describe('article workflow overview', () => {
       'story-copy',
       'video-approved',
     ]);
+
+    const highPriorityOverview = await getReviewQueueOverview({
+      maxItems: null,
+      filters: {
+        priority: 'high',
+      },
+    });
+    expect(highPriorityOverview.items.map((item) => item.id)).toEqual([
+      'article-review',
+      'story-copy',
+    ]);
+
+    const assignedSubmittedOverview = await getReviewQueueOverview({
+      maxItems: null,
+      filters: {
+        status: 'submitted',
+        assignment: 'assigned',
+      },
+    });
+    expect(assignedSubmittedOverview.items.map((item) => item.id)).toEqual(['article-review']);
+
+    const unassignedSubmittedOverview = await getReviewQueueOverview({
+      maxItems: null,
+      filters: {
+        status: 'submitted',
+        assignment: 'unassigned',
+      },
+    });
+    expect(unassignedSubmittedOverview.items).toEqual([]);
   });
 });

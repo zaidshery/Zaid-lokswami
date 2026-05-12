@@ -341,9 +341,7 @@ export default function VideosPageClient({
         params.set('cursorId', nextCursor.id);
       }
 
-      const response = await fetch(`/api/videos/latest?${params.toString()}`, {
-        cache: 'no-store',
-      });
+      const response = await fetch(`/api/v1/public/videos?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Failed to load more videos');
       }

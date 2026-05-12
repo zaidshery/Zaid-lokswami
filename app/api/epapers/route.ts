@@ -108,6 +108,10 @@ function mapStoredRecord(record: Record<string, unknown>) {
   };
 }
 
+const PUBLIC_EPAPER_CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+};
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -180,6 +184,8 @@ export async function GET(req: NextRequest) {
           limit,
           pages: Math.ceil(filteredRows.length / limit),
         },
+      }, {
+        headers: PUBLIC_EPAPER_CACHE_HEADERS,
       });
 
     if (await shouldUseFileStore()) {
@@ -233,6 +239,8 @@ export async function GET(req: NextRequest) {
         limit,
         pages: Math.ceil(total / limit),
       },
+    }, {
+      headers: PUBLIC_EPAPER_CACHE_HEADERS,
     });
   } catch (error) {
     console.error('Failed to list public e-papers:', error);

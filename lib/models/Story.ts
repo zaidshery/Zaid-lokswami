@@ -124,5 +124,7 @@ StorySchema.index({ publishedAt: -1, _id: -1 });
 StorySchema.index({ 'workflow.status': 1, publishedAt: -1, _id: -1 });
 StorySchema.index({ 'workflow.createdBy.id': 1, 'workflow.status': 1, updatedAt: -1 });
 StorySchema.index({ 'workflow.assignedTo.id': 1, 'workflow.status': 1, updatedAt: -1 });
+// Performance And Scaling Plan — recommended additions:
+StorySchema.index({ isPublished: 1, priority: -1, publishedAt: -1 });
 
 export default mongoose.models.Story || mongoose.model('Story', StorySchema);

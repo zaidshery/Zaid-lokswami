@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { buildVideosPageMetadata } from '@/lib/seo/readerPageMetadata';
+import { resolveRequestOrigin } from '@/lib/server/requestOrigin';
 import VideosPageClient, {
   type PublicCursor,
   type PublicVideoFeedItem,
@@ -23,37 +23,11 @@ function parseLimit(value: unknown) {
   return parsed;
 }
 
-function normalizeBaseUrl(raw: string) {
-  const fallback = 'http://localhost:3000';
-  if (!raw) return fallback;
-  try {
-    const parsed = new URL(raw);
-    return `${parsed.protocol}//${parsed.host}`;
-  } catch {
-    return fallback;
-  }
-}
-
-async function resolveRequestOrigin() {
-  const headerStore = await headers();
-  const forwardedHost = headerStore.get('x-forwarded-host');
-  const host = forwardedHost || headerStore.get('host');
-  const forwardedProto = headerStore.get('x-forwarded-proto');
-
-  if (host) {
-    const proto =
-      forwardedProto || (host.includes('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
-    return `${proto}://${host}`;
-  }
-
-  return normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL || '');
-}
-
 async function fetchInitialVideosFeed() {
   try {
     const origin = await resolveRequestOrigin();
-    const response = await fetch(`${origin}/api/videos/latest?limit=${VIDEOS_LIMIT}`, {
-      cache: 'no-store',
+    const response = await fetch(`${origin}/api/v1/public/videos?limit=${VIDEOS_LIMIT}`, {
+      next: { revalidate: 60 },
     });
 
     if (!response.ok) {

@@ -6,6 +6,12 @@ import { useAppStore } from '@/lib/store/appStore';
 import type { Article } from '@/lib/mock/data';
 import NewsCard from '@/components/ui/NewsCard';
 import HeroCard from '@/components/ui/HeroCard';
+import {
+  fetchPublicArticlesPage,
+  mapPublicArticleToUiArticle,
+  type PublicArticleApiItem,
+  type PublicArticlesCursor,
+} from '@/lib/content/publicArticles';
 
 const COPY = {
   en: {
@@ -36,32 +42,8 @@ const COPY = {
 
 const DEFAULT_AVATAR = '/logo-icon-final.png';
 
-export type LatestFeedCursor = {
-  publishedAt: string;
-  id: string;
-};
-
-export type LatestFeedApiItem = {
-  _id: string;
-  id?: string;
-  title: string;
-  summary: string;
-  content?: string;
-  image: string;
-  category?: string;
-  author?: string;
-  publishedAt: string;
-  views?: number;
-  isBreaking?: boolean;
-  isTrending?: boolean;
-};
-
-type LatestFeedResponse = {
-  items?: LatestFeedApiItem[];
-  limit?: number;
-  hasMore?: boolean;
-  nextCursor?: LatestFeedCursor | null;
-};
+export type LatestFeedCursor = PublicArticlesCursor;
+export type LatestFeedApiItem = PublicArticleApiItem;
 
 type LatestFeedClientProps = {
   initialItems: LatestFeedApiItem[];
@@ -72,10 +54,10 @@ type LatestFeedClientProps = {
 
 function sortByLatest(items: LatestFeedApiItem[]) {
   return [...items].sort((a, b) => {
-    const timeA = new Date(a.publishedAt).getTime();
-    const timeB = new Date(b.publishedAt).getTime();
+    const timeA = new Date(a.publishedAt || 0).getTime();
+    const timeB = new Date(b.publishedAt || 0).getTime();
     if (timeA !== timeB) return timeB - timeA;
-    return b._id.localeCompare(a._id);
+    return String(b._id || b.id || '').localeCompare(String(a._id || a.id || ''));
   });
 }
 
@@ -94,24 +76,20 @@ function mergeUniqueById(current: LatestFeedApiItem[], incoming: LatestFeedApiIt
 }
 
 function toUiArticle(item: LatestFeedApiItem): Article {
-  const articleId = (item._id || item.id || '').trim();
-  const authorName = (item.author || '').trim() || 'Editor';
-  const publishedAt = item.publishedAt || new Date().toISOString();
-
-  return {
-    id: articleId,
+  return mapPublicArticleToUiArticle(item) ?? {
+    id: String(item._id || item.id || ''),
     title: item.title || '',
     summary: item.summary || '',
     content: item.content || '',
     image: item.image || '/placeholders/news-16x9.svg',
     category: item.category || 'General',
     author: {
-      id: `author-${authorName.toLowerCase().replace(/\s+/g, '-')}`,
-      name: authorName,
+      id: 'author-editor',
+      name: 'Editor',
       avatar: DEFAULT_AVATAR,
     },
-    publishedAt,
-    views: Number.isFinite(item.views) ? Number(item.views) : 0,
+    publishedAt: item.publishedAt || new Date().toISOString(),
+    views: Number.isFinite(Number(item.views)) ? Number(item.views) : 0,
     isBreaking: Boolean(item.isBreaking),
     isTrending: Boolean(item.isTrending),
   };
@@ -151,23 +129,18 @@ export default function LatestFeedClient({
 
     setIsLoadingMore(true);
     try {
-      const params = new URLSearchParams({
-        limit: String(initialLimit),
-      });
+      const payload = await fetchPublicArticlesPage(
+        {
+          limit: initialLimit,
+          cursor: nextCursor,
+        },
+        { fallbackToLegacyLatest: true }
+      );
 
-      if (nextCursor?.publishedAt && nextCursor.id) {
-        params.set('cursorPublishedAt', nextCursor.publishedAt);
-        params.set('cursorId', nextCursor.id);
-      }
-
-      const response = await fetch(`/api/articles/latest?${params.toString()}`, {
-        cache: 'no-store',
-      });
-      if (!response.ok) {
+      if (!payload) {
         return;
       }
 
-      const payload = (await response.json()) as LatestFeedResponse;
       const incoming = Array.isArray(payload.items) ? payload.items : [];
       setItems((current) => sortByLatest(mergeUniqueById(current, incoming)));
       setHasMore(Boolean(payload.hasMore));

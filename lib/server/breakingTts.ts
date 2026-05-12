@@ -4,16 +4,19 @@ import crypto from 'crypto';
 import fsSync from 'fs';
 import fs from 'fs/promises';
 import path from 'path';
-import { getGeminiTtsRuntimeConfig, synthesizeGeminiSpeech } from '@/lib/ai/geminiTts';
 import connectDB from '@/lib/db/mongoose';
 import TtsAsset from '@/lib/models/TtsAsset';
-import { buildBreakingHeadlineTtsText, ensureTtsAsset } from '@/lib/server/ttsAssets';
+import { buildBreakingHeadlineTtsText } from '@/lib/server/ttsAssets';
 import {
   detectBreakingTtsLanguage,
   normalizeBreakingTtsMetadata,
   type BreakingTtsMetadata,
 } from '@/lib/types/breaking';
 import { deleteStoredTtsAsset, hasStoredTtsAsset } from '@/lib/utils/ttsStorage';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 type BreakingAudioPublicPathPrefix =
   | '/uploads/breaking-audio'
@@ -32,6 +35,10 @@ type BreakingArticleLike = {
   isBreaking: boolean;
   breakingTts: BreakingTtsMetadata | null;
 };
+
+// ---------------------------------------------------------------------------
+// Storage configuration
+// ---------------------------------------------------------------------------
 
 const DEFAULT_STORAGE_UPLOADS_BASE_DIR = path.resolve(process.cwd(), 'storage', 'uploads');
 const STORAGE_UPLOADS_BASE_DIR = (() => {
@@ -52,7 +59,6 @@ const STORAGE_BREAKING_AUDIO_BASE_DIR = path.resolve(
   'breaking-audio'
 );
 const SAFE_SEGMENT_PATTERN = /^[a-zA-Z0-9._-]+$/;
-const BREAKING_AUDIO_EXTENSION = '.wav';
 
 let storageConfigPromise: Promise<BreakingAudioStorageConfig> | null = null;
 
@@ -75,14 +81,6 @@ function sanitizePathSegment(segment: string) {
 function safeArticleSegment(articleId: string) {
   const normalized = articleId.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
   return sanitizePathSegment(normalized) || crypto.createHash('sha1').update(articleId).digest('hex');
-}
-
-function buildBreakingAudioPath(
-  prefix: BreakingAudioPublicPathPrefix,
-  articleId: string,
-  fileName: string
-) {
-  return `${prefix}/${articleId}/${fileName}`.replace(/\\/g, '/');
 }
 
 function isInsideBaseDir(baseDir: string, absolutePath: string) {
@@ -225,25 +223,22 @@ function normalizeBreakingArticle(source: unknown): BreakingArticleLike | null {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Breaking TTS text hash (language detection only — no Gemini)
+// ---------------------------------------------------------------------------
+
 function buildBreakingTtsExpectation(article: Pick<BreakingArticleLike, 'title' | 'city'>) {
   const spokenText = buildBreakingHeadlineTtsText({
     title: article.title,
     city: article.city,
   });
-  const runtimeConfig = getGeminiTtsRuntimeConfig();
+  // Use stable defaults since Gemini synthesis is removed
   const languageCode = detectBreakingTtsLanguage(spokenText, 'hi');
-  const voice = runtimeConfig.defaultVoice;
-  const model = runtimeConfig.model;
+  const voice = 'manual';
+  const model = 'manual';
   const textHash = crypto
     .createHash('sha1')
-    .update(
-      JSON.stringify({
-        text: spokenText,
-        languageCode,
-        voice,
-        model,
-      })
-    )
+    .update(JSON.stringify({ text: spokenText, languageCode }))
     .digest('hex');
 
   return {
@@ -260,56 +255,9 @@ function toBreakingLanguageCode(value: string) {
   return value === 'en-IN' ? 'en-IN' : 'hi-IN';
 }
 
-function toBreakingTtsMetadata(input: {
-  audioUrl: string;
-  expected: ReturnType<typeof buildBreakingTtsExpectation>;
-  generatedAt: Date | string | null | undefined;
-  mimeType?: string;
-  voice?: string;
-  model?: string;
-}) {
-  const generatedAt =
-    input.generatedAt instanceof Date
-      ? input.generatedAt
-      : input.generatedAt
-        ? new Date(input.generatedAt)
-        : null;
-
-  return {
-    audioUrl: input.audioUrl,
-    textHash: input.expected.textHash,
-    languageCode: toBreakingLanguageCode(input.expected.languageCode),
-    voice: String(input.voice || input.expected.voice || '').trim() || input.expected.voice,
-    model: String(input.model || input.expected.model || '').trim() || input.expected.model,
-    mimeType: String(input.mimeType || input.expected.mimeType || '').trim() || input.expected.mimeType,
-    generatedAt:
-      generatedAt && !Number.isNaN(generatedAt.getTime())
-        ? generatedAt.toISOString()
-        : new Date().toISOString(),
-  } satisfies BreakingTtsMetadata;
-}
-
-async function writeBreakingAudioBuffer(params: {
-  articleId: string;
-  textHash: string;
-  buffer: Buffer;
-}) {
-  const storage = await getBreakingAudioStorageConfig();
-  const safeArticleId = safeArticleSegment(params.articleId);
-  const fileName = `${params.textHash}${BREAKING_AUDIO_EXTENSION}`;
-  const targetDir = path.resolve(storage.fsBaseDir, safeArticleId);
-
-  if (!isInsideBaseDir(storage.fsBaseDir, targetDir)) {
-    throw new Error('Invalid breaking audio storage directory');
-  }
-
-  await fs.mkdir(targetDir, { recursive: true });
-  await fs.writeFile(path.join(targetDir, fileName), params.buffer);
-
-  return {
-    audioUrl: buildBreakingAudioPath(storage.publicPathPrefix, safeArticleId, fileName),
-  };
-}
+// ---------------------------------------------------------------------------
+// Deletion helpers
+// ---------------------------------------------------------------------------
 
 async function markSharedBreakingAudioDeleted(assetPath: string) {
   if (!isSharedBreakingAudioPath(assetPath) || !canAttemptSharedBreakingTts()) {
@@ -370,86 +318,6 @@ async function deleteLegacyBreakingAudio(assetPath: string) {
   );
 }
 
-async function tryEnsureSharedBreakingTts(
-  article: BreakingArticleLike,
-  expected: ReturnType<typeof buildBreakingTtsExpectation>,
-  options?: { forceRegenerate?: boolean }
-) {
-  if (!canAttemptSharedBreakingTts()) {
-    return null;
-  }
-
-  const result = await ensureTtsAsset({
-    sourceType: 'article',
-    sourceId: article.id,
-    variant: 'breaking_headline',
-    title: article.title,
-    text: expected.spokenText,
-    languageCode: expected.languageCode,
-    voice: expected.voice,
-    model: expected.model,
-    forceRegenerate: options?.forceRegenerate,
-    metadata: {
-      city: article.city || '',
-      migratedFrom: isLegacyBreakingAudioPath(article.breakingTts?.audioUrl || '')
-        ? 'breaking-audio'
-        : '',
-    },
-  });
-
-  if (!result.asset || result.asset.status !== 'ready' || !result.asset.audioUrl) {
-    return null;
-  }
-
-  return toBreakingTtsMetadata({
-    audioUrl: result.asset.audioUrl,
-    expected,
-    generatedAt: result.asset.generatedAt,
-    mimeType: result.asset.mimeType,
-    voice: result.asset.voice,
-    model: result.asset.model,
-  });
-}
-
-async function ensureLegacyBreakingTts(
-  article: BreakingArticleLike,
-  expected: ReturnType<typeof buildBreakingTtsExpectation>
-) {
-  if (!expected.spokenText) {
-    return null;
-  }
-
-  const result = await synthesizeGeminiSpeech({
-    text: expected.spokenText,
-    languageCode: expected.languageCode,
-    voice: expected.voice,
-  });
-
-  if (result.mode !== 'gemini') {
-    return null;
-  }
-
-  const audioBuffer = Buffer.from(result.audioBase64, 'base64');
-  if (!audioBuffer.length) {
-    return null;
-  }
-
-  const saved = await writeBreakingAudioBuffer({
-    articleId: article.id,
-    textHash: expected.textHash,
-    buffer: audioBuffer,
-  });
-
-  return toBreakingTtsMetadata({
-    audioUrl: saved.audioUrl,
-    expected,
-    generatedAt: new Date(),
-    mimeType: result.mimeType,
-    voice: result.voice,
-    model: result.model,
-  });
-}
-
 export async function deleteStoredBreakingAudio(assetPath: string) {
   const trimmed = assetPath.trim();
   if (!trimmed) return;
@@ -465,6 +333,17 @@ export async function deleteStoredBreakingAudio(assetPath: string) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves a reusable breaking TTS audio record from the article's stored metadata.
+ * Returns the metadata if the stored audio file still exists, otherwise null.
+ *
+ * Note: Auto-synthesis via Gemini has been removed. Breaking audio must be
+ * uploaded manually or regenerated via the article breaking-tts admin endpoint.
+ */
 export function resolveReusableBreakingTts(article: unknown): BreakingTtsMetadata | null {
   const normalized = normalizeBreakingArticle(article);
   if (!normalized?.breakingTts) return null;
@@ -472,13 +351,7 @@ export function resolveReusableBreakingTts(article: unknown): BreakingTtsMetadat
   const expected = buildBreakingTtsExpectation(normalized);
   const metadata = normalized.breakingTts;
 
-  if (
-    metadata.textHash !== expected.textHash ||
-    metadata.languageCode !== expected.languageCode ||
-    metadata.voice !== expected.voice ||
-    metadata.model !== expected.model ||
-    !metadata.audioUrl
-  ) {
+  if (!metadata.audioUrl) {
     return null;
   }
 
@@ -489,61 +362,50 @@ export function resolveReusableBreakingTts(article: unknown): BreakingTtsMetadat
   return metadata;
 }
 
+/**
+ * Saves manually-uploaded breaking audio metadata to the article record.
+ * Used when an admin uploads a breaking audio file directly.
+ */
+export async function saveBreakingTtsMetadata(input: {
+  articleId: string;
+  audioUrl: string;
+  mimeType?: string;
+}): Promise<BreakingTtsMetadata> {
+  const expected = buildBreakingTtsExpectation({ title: input.articleId });
+  return {
+    audioUrl: input.audioUrl,
+    textHash: expected.textHash,
+    languageCode: toBreakingLanguageCode(expected.languageCode),
+    voice: 'manual',
+    model: 'manual',
+    mimeType: input.mimeType || 'audio/wav',
+    generatedAt: new Date().toISOString(),
+  } satisfies BreakingTtsMetadata;
+}
+
+/**
+ * ensureBreakingTtsForArticle — kept as stub to avoid breaking imports.
+ * Without Gemini synthesis, this only returns the existing reusable asset if present.
+ * Breaking audio must be manually uploaded by the newsroom.
+ */
 export async function ensureBreakingTtsForArticle(
   article: unknown,
-  options?: { forceRegenerate?: boolean }
-) {
-  const normalized = normalizeBreakingArticle(article);
-  if (!normalized || !normalized.isBreaking) {
-    return null;
+  _options?: { forceRegenerate?: boolean }
+): Promise<BreakingTtsMetadata | null> {
+  // Without Gemini synthesis, we can only return what is already stored.
+  // The admin must upload breaking audio manually.
+  return resolveReusableBreakingTts(article);
+}
+
+// ---------------------------------------------------------------------------
+// Storage config probe (used by diagnostics)
+// ---------------------------------------------------------------------------
+
+export async function probeBreakingAudioStorage() {
+  try {
+    const config = await getBreakingAudioStorageConfig();
+    return { ok: true, mode: config.mode };
+  } catch (error) {
+    return { ok: false, mode: 'unknown', error: String(error) };
   }
-
-  const expected = buildBreakingTtsExpectation(normalized);
-  const reusable = resolveReusableBreakingTts(normalized);
-  const prefersSharedTts =
-    canAttemptSharedBreakingTts() &&
-    (!reusable || options?.forceRegenerate || !isSharedBreakingAudioPath(reusable.audioUrl));
-
-  if (reusable && !options?.forceRegenerate && !prefersSharedTts) {
-    return reusable;
-  }
-
-  if (prefersSharedTts) {
-    try {
-      const sharedBreakingTts = await tryEnsureSharedBreakingTts(normalized, expected, options);
-      if (sharedBreakingTts) {
-        if (
-          reusable?.audioUrl &&
-          reusable.audioUrl !== sharedBreakingTts.audioUrl
-        ) {
-          await deleteStoredBreakingAudio(reusable.audioUrl).catch(() => undefined);
-        }
-
-        return sharedBreakingTts;
-      }
-
-      if (reusable && !options?.forceRegenerate) {
-        return reusable;
-      }
-    } catch (error) {
-      console.error('Failed to ensure shared breaking TTS asset:', error);
-      if (reusable && !options?.forceRegenerate) {
-        return reusable;
-      }
-    }
-  }
-
-  const legacyBreakingTts = await ensureLegacyBreakingTts(normalized, expected);
-  if (!legacyBreakingTts) {
-    return reusable && !options?.forceRegenerate ? reusable : null;
-  }
-
-  if (
-    normalized.breakingTts?.audioUrl &&
-    normalized.breakingTts.audioUrl !== legacyBreakingTts.audioUrl
-  ) {
-    await deleteStoredBreakingAudio(normalized.breakingTts.audioUrl).catch(() => undefined);
-  }
-
-  return legacyBreakingTts;
 }

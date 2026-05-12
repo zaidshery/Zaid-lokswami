@@ -8,7 +8,7 @@ type ApiStoryResponse = {
 
 export async function fetchLiveStories(limit = 20): Promise<VisualStory[]> {
   try {
-    const res = await fetch(`/api/stories/latest?limit=${limit}`, { cache: 'no-store' });
+    const res = await fetch(`/api/stories/latest?limit=${limit}`);
     if (!res.ok) return [];
 
     const payload = (await res.json()) as ApiStoryResponse;

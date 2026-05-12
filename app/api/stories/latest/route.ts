@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicJsonCacheHeaders } from '@/lib/api/cache';
 import connectDB from '@/lib/db/mongoose';
 import { normalizeStoryMediaAssets } from '@/lib/content/storyMedia';
 import Story from '@/lib/models/Story';
@@ -7,6 +8,10 @@ import { listAllStoredStories } from '@/lib/storage/storiesFile';
 const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 5;
 const MAX_LIMIT = 100;
+const STORIES_CACHE_HEADERS = publicJsonCacheHeaders({
+  sMaxAge: 60,
+  staleWhileRevalidate: 300,
+});
 
 type PublicStoryItem = {
   _id: string;
@@ -128,7 +133,7 @@ export async function GET(req: NextRequest) {
         .sort(compareStories)
         .slice(0, limit);
 
-      return NextResponse.json({ items, limit });
+      return NextResponse.json({ items, limit }, { headers: STORIES_CACHE_HEADERS });
     }
 
     const docs = await Story.find({ isPublished: true })
@@ -143,7 +148,7 @@ export async function GET(req: NextRequest) {
       .map((doc) => mapStoryItem(asObject(doc)))
       .filter((item): item is PublicStoryItem => Boolean(item));
 
-    return NextResponse.json({ items, limit });
+    return NextResponse.json({ items, limit }, { headers: STORIES_CACHE_HEADERS });
   } catch (error) {
     console.error('Failed to fetch public stories latest feed:', error);
     return NextResponse.json({ items: [], limit: DEFAULT_LIMIT }, { status: 500 });

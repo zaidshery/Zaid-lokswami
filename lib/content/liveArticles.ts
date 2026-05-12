@@ -92,9 +92,7 @@ function mergeUnique(primary: Article[], secondary: Article[]) {
 
 export async function fetchMergedLiveArticles(limit = 100): Promise<Article[]> {
   try {
-    const res = await fetch(`/api/articles/latest?limit=${limit}`, {
-      cache: 'no-store',
-    });
+    const res = await fetch(`/api/articles/latest?limit=${limit}`);
     if (!res.ok) {
       return mockArticles;
     }

@@ -2,13 +2,30 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { AlertTriangle, FileText, MessageSquare, Newspaper, Video } from 'lucide-react';
 import { getAdminSession } from '@/lib/auth/admin';
-import { getReviewQueueOverview } from '@/lib/admin/articleWorkflowOverview';
+import {
+  getReviewQueueOverview,
+  REVIEW_QUEUE_EPAPER_STATUSES,
+  REVIEW_QUEUE_STATUSES,
+} from '@/lib/admin/articleWorkflowOverview';
+import type {
+  ReviewQueueAssignmentFilter,
+  WorkflowContentKey,
+} from '@/lib/admin/articleWorkflowOverview';
 import { getAdminDashboardData } from '@/lib/admin/dashboard';
 import { getEpaperInsights } from '@/lib/admin/epaperInsights';
 import { canViewPage } from '@/lib/auth/permissions';
 import { formatUserRoleLabel } from '@/lib/auth/roles';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
+import {
+  isEpaperProductionStatus,
+  isWorkflowPriority,
+  isWorkflowStatus,
+  WORKFLOW_PRIORITIES,
+  type EPaperProductionStatus,
+  type WorkflowPriority,
+  type WorkflowStatus,
+} from '@/lib/workflow/types';
 import {
   CmsCollectionHero,
   CmsCollectionPage,
@@ -17,6 +34,13 @@ import {
   CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
   CMS_COLLECTION_SOFT_CARD_CLASS as SOFT_CARD_CLASS,
 } from '@/components/admin/CmsCollectionLayout';
+import {
+  CmsWorkflowPriorityBadge,
+  CmsWorkflowStatusBadge,
+  formatWorkflowContentTypeLabel,
+  formatWorkflowPriorityLabel,
+  formatWorkflowStatusLabel,
+} from '@/components/admin/CmsWorkflowStatusBadge';
 
 type QueueCard = {
   title: string;
@@ -27,19 +51,108 @@ type QueueCard = {
   tone: string;
 };
 
+type ReviewQueueStatusFilter = WorkflowStatus | EPaperProductionStatus;
+
+const CONTENT_TYPE_FILTERS: Array<{ id: 'all' | WorkflowContentKey; label: string }> = [
+  { id: 'all', label: 'All content' },
+  { id: 'article', label: 'Articles' },
+  { id: 'story', label: 'Stories' },
+  { id: 'video', label: 'Videos' },
+  { id: 'epaper', label: 'E-Papers' },
+];
+
+const STATUS_FILTERS: Array<{ id: 'all' | ReviewQueueStatusFilter; label: string }> = [
+  { id: 'all', label: 'All statuses' },
+  ...REVIEW_QUEUE_STATUSES.map((status) => ({
+    id: status,
+    label: formatWorkflowStatusLabel(status),
+  })),
+  ...REVIEW_QUEUE_EPAPER_STATUSES.map((status) => ({
+    id: status,
+    label: formatWorkflowStatusLabel(status),
+  })),
+];
+
+const PRIORITY_FILTERS: Array<{ id: 'all' | WorkflowPriority; label: string }> = [
+  { id: 'all', label: 'All priorities' },
+  ...WORKFLOW_PRIORITIES.map((priority) => ({
+    id: priority,
+    label: formatWorkflowPriorityLabel(priority),
+  })),
+];
+
+const ASSIGNMENT_FILTERS: Array<{ id: 'all' | ReviewQueueAssignmentFilter; label: string }> = [
+  { id: 'all', label: 'All assignees' },
+  { id: 'assigned', label: 'Assigned' },
+  { id: 'unassigned', label: 'Unassigned' },
+];
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
-function formatStatusLabel(status: string) {
-  return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+function getSearchParamValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
-function formatContentTypeLabel(contentType: string) {
-  return contentType === 'epaper' ? 'E-Paper' : formatStatusLabel(contentType);
+function parseContentTypeFilter(value: string | undefined): WorkflowContentKey | undefined {
+  if (value === 'article' || value === 'story' || value === 'video' || value === 'epaper') {
+    return value;
+  }
+  return undefined;
 }
 
-export default async function AdminReviewQueuePage() {
+function parseStatusFilter(value: string | undefined): ReviewQueueStatusFilter | undefined {
+  if (isWorkflowStatus(value) && REVIEW_QUEUE_STATUSES.includes(value)) {
+    return value;
+  }
+  if (isEpaperProductionStatus(value) && REVIEW_QUEUE_EPAPER_STATUSES.includes(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+function parsePriorityFilter(value: string | undefined): WorkflowPriority | undefined {
+  return isWorkflowPriority(value) ? value : undefined;
+}
+
+function parseAssignmentFilter(value: string | undefined): ReviewQueueAssignmentFilter | undefined {
+  if (value === 'assigned' || value === 'unassigned') {
+    return value;
+  }
+  return undefined;
+}
+
+function buildReviewQueueHref(filters: {
+  contentType?: WorkflowContentKey;
+  status?: ReviewQueueStatusFilter;
+  priority?: WorkflowPriority;
+  assignment?: ReviewQueueAssignmentFilter;
+}) {
+  const params = new URLSearchParams();
+  if (filters.contentType) params.set('type', filters.contentType);
+  if (filters.status) params.set('status', filters.status);
+  if (filters.priority) params.set('priority', filters.priority);
+  if (filters.assignment) params.set('assignment', filters.assignment);
+  const query = params.toString();
+  return query ? `/admin/review-queue?${query}` : '/admin/review-queue';
+}
+
+function filterChipClass(isActive: boolean) {
+  return cx(
+    'whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition-colors sm:px-4 sm:text-sm',
+    isActive
+      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800/50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+  );
+}
+
+export default async function AdminReviewQueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const resolvedSearchParams = await searchParams;
   const admin = await getAdminSession();
   if (!admin) {
     redirect('/signin?redirect=/admin/review-queue');
@@ -48,8 +161,23 @@ export default async function AdminReviewQueuePage() {
     redirect('/admin');
   }
 
+  const typeFilter = parseContentTypeFilter(getSearchParamValue(resolvedSearchParams.type));
+  const statusFilter = parseStatusFilter(getSearchParamValue(resolvedSearchParams.status));
+  const priorityFilter = parsePriorityFilter(getSearchParamValue(resolvedSearchParams.priority));
+  const assignmentFilter = parseAssignmentFilter(getSearchParamValue(resolvedSearchParams.assignment));
+  const activeFilterCount = [typeFilter, statusFilter, priorityFilter, assignmentFilter].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
+
   const dashboard = await getAdminDashboardData();
-  const reviewQueue = await getReviewQueueOverview();
+  const reviewQueue = await getReviewQueueOverview({
+    maxItems: hasActiveFilters ? null : 12,
+    filters: {
+      contentType: typeFilter,
+      status: statusFilter,
+      priority: priorityFilter,
+      assignment: assignmentFilter,
+    },
+  });
   const epaperInsights = await getEpaperInsights();
   const visibleLowQualityPages = epaperInsights.lowQualityPages.slice(0, 5);
   const visibleBlockedEditions = epaperInsights.blockedEditions.slice(0, 6);
@@ -161,7 +289,7 @@ export default async function AdminReviewQueuePage() {
       </section>
 
       <section className={PANEL_CLASS}>
-        <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-bold text-[color:var(--admin-shell-text)]">
               Live Newsroom Queue
@@ -170,33 +298,158 @@ export default async function AdminReviewQueuePage() {
               Mixed workflow and production items currently waiting on editorial or production desk action.
             </p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
+              {hasActiveFilters ? `${activeFilterCount} active` : 'All items'}
+            </span>
+            {hasActiveFilters ? (
+              <Link
+                href="/admin/review-queue"
+                className="rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                Clear
+              </Link>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-[color:var(--admin-shell-border)] pt-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">
+                Content
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {CONTENT_TYPE_FILTERS.map((filter) => {
+                  const nextContentType = filter.id === 'all' ? undefined : filter.id;
+                  const isActive = (typeFilter || 'all') === filter.id;
+                  return (
+                    <Link
+                      key={filter.id}
+                      href={buildReviewQueueHref({
+                        contentType: nextContentType,
+                        status: statusFilter,
+                        priority: priorityFilter,
+                        assignment: assignmentFilter,
+                      })}
+                      className={filterChipClass(isActive)}
+                    >
+                      {filter.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">
+                Status
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {STATUS_FILTERS.map((filter) => {
+                  const nextStatus = filter.id === 'all' ? undefined : filter.id;
+                  const isActive = (statusFilter || 'all') === filter.id;
+                  return (
+                    <Link
+                      key={filter.id}
+                      href={buildReviewQueueHref({
+                        contentType: typeFilter,
+                        status: nextStatus,
+                        priority: priorityFilter,
+                        assignment: assignmentFilter,
+                      })}
+                      className={filterChipClass(isActive)}
+                    >
+                      {filter.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">
+                Priority
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {PRIORITY_FILTERS.map((filter) => {
+                  const nextPriority = filter.id === 'all' ? undefined : filter.id;
+                  const isActive = (priorityFilter || 'all') === filter.id;
+                  return (
+                    <Link
+                      key={filter.id}
+                      href={buildReviewQueueHref({
+                        contentType: typeFilter,
+                        status: statusFilter,
+                        priority: nextPriority,
+                        assignment: assignmentFilter,
+                      })}
+                      className={filterChipClass(isActive)}
+                    >
+                      {filter.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">
+                Assignment
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {ASSIGNMENT_FILTERS.map((filter) => {
+                  const nextAssignment = filter.id === 'all' ? undefined : filter.id;
+                  const isActive = (assignmentFilter || 'all') === filter.id;
+                  return (
+                    <Link
+                      key={filter.id}
+                      href={buildReviewQueueHref({
+                        contentType: typeFilter,
+                        status: statusFilter,
+                        priority: priorityFilter,
+                        assignment: nextAssignment,
+                      })}
+                      className={filterChipClass(isActive)}
+                    >
+                      {filter.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="mt-6 space-y-3">
           {reviewQueue.items.length ? (
             reviewQueue.items.map((item) => (
-            <Link
-              key={`${item.contentType}-${item.id}`}
-              href={item.editHref}
-              className={cx(
-                'flex flex-col gap-3 transition-colors hover:border-zinc-300/90 hover:bg-zinc-100/80 dark:hover:border-white/15 dark:hover:bg-white/[0.06]',
-                SOFT_CARD_CLASS
-              )}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-[color:var(--admin-shell-text)]">
-                    {item.title}
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
-                    {item.category} / {item.author} / {formatContentTypeLabel(item.contentType)}
-                  </p>
+              <Link
+                key={`${item.contentType}-${item.id}`}
+                href={item.editHref}
+                className={cx(
+                  'flex flex-col gap-3 transition-colors hover:border-zinc-300/90 hover:bg-zinc-100/80 dark:hover:border-white/15 dark:hover:bg-white/[0.06]',
+                  SOFT_CARD_CLASS
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[color:var(--admin-shell-text)]">
+                      {item.title}
+                    </p>
+                    <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
+                      {item.category} / {item.author} / {formatWorkflowContentTypeLabel(item.contentType)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                    <CmsWorkflowStatusBadge status={item.status} />
+                    {item.priority ? <CmsWorkflowPriorityBadge priority={item.priority} /> : null}
+                  </div>
                 </div>
-                <span className={META_CHIP_CLASS}>
-                  {formatStatusLabel(item.status)}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-3 text-xs text-[color:var(--admin-shell-text-muted)]">
+                <div className="flex flex-wrap gap-3 text-xs text-[color:var(--admin-shell-text-muted)]">
                   <span>Updated {formatUiDate(item.updatedAt, item.updatedAt)}</span>
                   {item.assignedToName ? <span>Assignee: {item.assignedToName}</span> : null}
                   {item.createdByName ? <span>Created by: {item.createdByName}</span> : null}
@@ -288,7 +541,7 @@ export default async function AdminReviewQueuePage() {
                   </div>
                   <div className="flex flex-wrap gap-3 text-xs text-[color:var(--admin-shell-text-muted)]">
                     <span>Updated {formatUiDate(page.updatedAt, page.updatedAt)}</span>
-                    <span>Page QA: {formatStatusLabel(page.reviewStatus)}</span>
+                    <span>Page QA: {formatWorkflowStatusLabel(page.reviewStatus)}</span>
                     {page.reviewedByName ? <span>Reviewer: {page.reviewedByName}</span> : null}
                   </div>
                 </Link>
@@ -337,7 +590,7 @@ export default async function AdminReviewQueuePage() {
                         {edition.title}
                       </p>
                       <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
-                        {edition.cityName} / {formatStatusLabel(edition.productionStatus)}
+                        {edition.cityName} / {formatWorkflowStatusLabel(edition.productionStatus)}
                       </p>
                     </div>
                     <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-300">

@@ -21,7 +21,6 @@ const defaultImageHosts = [
   'i3.ytimg.com',
   'i4.ytimg.com',
   'api.dicebear.com',
-  'res.cloudinary.com',
   '**.digitaloceanspaces.com',
   '**.googleusercontent.com',
 ];

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicJsonCacheHeaders } from '@/lib/api/cache';
 import connectDB from '@/lib/db/mongoose';
 import Video from '@/lib/models/Video';
 import { listAllStoredVideos } from '@/lib/storage/videosFile';
@@ -20,6 +21,11 @@ type PublicVideoItem = {
   publishedAt: string;
   updatedAt: string;
 };
+
+const VIDEOS_CACHE_HEADERS = publicJsonCacheHeaders({
+  sMaxAge: 60,
+  staleWhileRevalidate: 300,
+});
 
 function asObject(value: unknown) {
   return typeof value === 'object' && value !== null
@@ -111,7 +117,7 @@ export async function GET(req: NextRequest) {
         cursorId,
         mapItem: (raw) => mapVideoItem(asObject(raw)),
       });
-      return NextResponse.json(result);
+      return NextResponse.json(result, { headers: VIDEOS_CACHE_HEADERS });
     }
 
     const result = await cursorPage<PublicVideoItem>({
@@ -126,7 +132,7 @@ export async function GET(req: NextRequest) {
       mapItem: (raw) => mapVideoItem(asObject(raw)),
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: VIDEOS_CACHE_HEADERS });
   } catch (error) {
     console.error('Failed to fetch public videos latest feed:', error);
     return NextResponse.json(

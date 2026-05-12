@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Types } from 'mongoose';
-import {
-  isGeminiTtsConfigured,
-  synthesizeGeminiSpeech,
-} from '@/lib/ai/geminiTts';
-import { GEMINI_TTS_MAX_TOTAL_CHARS } from '@/lib/constants/tts';
-import connectDB from '@/lib/db/mongoose';
+import { Types } from 'mongoose';\nimport connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import {
   buildEpaperStoryTtsText,
-  ensureTtsAsset,
   findReadyManualTtsAsset,
 } from '@/lib/server/ttsAssets';
 import { getStoredEPaperById } from '@/lib/storage/epapersFile';
@@ -30,15 +23,6 @@ type EpaperStoryListenSource = {
   excerpt: string;
   contentHtml: string;
 };
-
-function clampTtsText(value: string, maxChars: number) {
-  const trimmed = value.trim();
-  if (trimmed.length <= maxChars) {
-    return trimmed;
-  }
-
-  return trimmed.slice(0, maxChars).trim();
-}
 
 async function shouldUseFileStore() {
   if (!process.env.MONGODB_URI) {
@@ -127,36 +111,11 @@ async function loadEpaperStoryForListen(params: {
   } satisfies EpaperStoryListenSource;
 }
 
-async function synthesizeEpaperStoryAudio(input: {
-  text: string;
-  languageCode?: string;
-  voice?: string;
-}) {
-  const synthesized = await synthesizeGeminiSpeech({
-    text: input.text,
-    languageCode: input.languageCode,
-    voice: input.voice,
-  });
-
-  if (synthesized.mode === 'unavailable') {
-    throw new Error(synthesized.reason);
-  }
-
-  return synthesized;
-}
-
-export async function POST(req: NextRequest, context: RouteContext) {
+export async function POST(_req: NextRequest, context: RouteContext) {
   try {
     const { id, articleId } = await context.params;
     const paperId = id.trim();
     const storyId = articleId.trim();
-    const body = (await req.json().catch(() => ({}))) as {
-      languageCode?: string;
-      voice?: string;
-    };
-    const languageCode =
-      typeof body.languageCode === 'string' ? body.languageCode.trim() : '';
-    const voice = typeof body.voice === 'string' ? body.voice.trim() : '';
 
     if (!paperId || !storyId) {
       return NextResponse.json(
@@ -200,14 +159,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
       }
     }
 
-    const sourceText = clampTtsText(
-      buildEpaperStoryTtsText({
-        title: story.title,
-        excerpt: story.excerpt,
-        contentHtml: story.contentHtml,
-      }),
-      GEMINI_TTS_MAX_TOTAL_CHARS
-    );
+    const sourceText = buildEpaperStoryTtsText({
+      title: story.title,
+      excerpt: story.excerpt,
+      contentHtml: story.contentHtml,
+    });
 
     if (!sourceText) {
       return NextResponse.json(
@@ -216,71 +172,14 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    if (!isGeminiTtsConfigured()) {
-      return NextResponse.json(
-        { success: false, error: 'Gemini TTS is not configured. Set GEMINI_API_KEY.' },
-        { status: 501 }
-      );
-    }
-
-    if (!useFileStore) {
-      try {
-        const result = await ensureTtsAsset({
-          sourceType: 'epaperArticle',
-          sourceId: story.storyId,
-          sourceParentId: story.paperId,
-          variant: 'epaper_story',
-          title: story.title || story.paperTitle,
-          text: sourceText,
-          ...(languageCode ? { languageCode } : {}),
-          ...(voice ? { voice } : {}),
-          metadata: {
-            source: 'epaper-reader',
-            paperTitle: story.paperTitle,
-            cityName: story.cityName,
-            publishDate: story.publishDate,
-            pageNumber: story.pageNumber,
-          },
-        });
-
-        if (result.asset?.status === 'ready' && result.asset.audioUrl) {
-          return NextResponse.json({
-            success: true,
-            data: {
-              provider: 'gemini',
-              model: result.asset.model,
-              voice: result.asset.voice,
-              mimeType: result.asset.mimeType,
-              chunkCount: result.asset.chunkCount,
-              audioUrl: result.asset.audioUrl,
-            },
-          });
-        }
-
-        if (result.error) {
-          console.error(
-            'Shared e-paper TTS asset unavailable, falling back to direct synthesis:',
-            result.error
-          );
-        }
-      } catch (error) {
-        console.error(
-          'Shared e-paper TTS asset generation failed, falling back to direct synthesis:',
-          error
-        );
-      }
-    }
-
-    const synthesized = await synthesizeEpaperStoryAudio({
-      text: sourceText,
-      ...(languageCode ? { languageCode } : {}),
-      ...(voice ? { voice } : {}),
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: synthesized,
-    });
+    // No auto-synthesis available — manual audio upload required
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'No manual audio has been uploaded for this story yet. Upload audio from the admin e-paper editor.',
+      },
+      { status: 404 }
+    );
   } catch (error) {
     console.error('E-paper story TTS route failed:', error);
     return NextResponse.json(
@@ -289,7 +188,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         error:
           error instanceof Error && error.message.trim()
             ? error.message
-            : 'Failed to synthesize e-paper story audio.',
+            : 'Failed to load e-paper story audio.',
       },
       { status: 500 }
     );

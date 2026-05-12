@@ -1,8 +1,6 @@
 import connectDB from '@/lib/db/mongoose';
 import TtsAsset from '@/lib/models/TtsAsset';
 import TtsAuditEvent from '@/lib/models/TtsAuditEvent';
-import { isGeminiTtsConfigured, getGeminiTtsRuntimeConfig } from '@/lib/ai/geminiTts';
-import { getTtsConfig } from '@/lib/server/ttsAssets';
 import { getTtsStorageConfig } from '@/lib/utils/ttsStorage';
 
 export type SystemHealthStatus = 'healthy' | 'watch' | 'critical' | 'inactive';
@@ -106,8 +104,8 @@ function toneForStatus(status: SystemHealthStatus): SystemHealthSignal['tone'] {
 export async function getSystemHealthSummary(
   options: SystemHealthOptions
 ): Promise<SystemHealthSummary> {
-  const geminiConfigured = isGeminiTtsConfigured();
-  const runtime = getGeminiTtsRuntimeConfig();
+  // Gemini TTS has been removed. Check for general Gemini API key (used for non-TTS AI features).
+  const geminiAiConfigured = Boolean(process.env.GEMINI_API_KEY?.trim());
   const dataSourceStatus = mapDataSourceStatus(options.dataSource);
 
   let writableStorage = false;
@@ -125,15 +123,12 @@ export async function getSystemHealthSummary(
   let failedAssets = 0;
   let staleAssets = 0;
   let recentFailures: SystemHealthFailure[] = [];
-  let enabledSurfaceCount = 0;
-  let enabledSurfaces: string[] = [];
 
   if (options.dataSource !== 'file') {
     try {
       await connectDB();
 
-      const [ttsConfig, failedAssetsCount, staleAssetsCount, recentFailureDocs] = await Promise.all([
-        getTtsConfig(),
+      const [failedAssetsCount, staleAssetsCount, recentFailureDocs] = await Promise.all([
         TtsAsset.countDocuments({ status: 'failed' }),
         TtsAsset.countDocuments({ status: 'stale' }),
         TtsAuditEvent.find({
@@ -149,18 +144,14 @@ export async function getSystemHealthSummary(
             sourceType?: string;
             variant?: string;
             createdAt?: Date | string;
-          }>>(),
+          }>>()
       ]);
 
       failedAssets = failedAssetsCount;
       staleAssets = staleAssetsCount;
-      enabledSurfaces = Object.entries(ttsConfig.surfaces)
-        .filter(([, surface]) => surface.enabled)
-        .map(([surfaceKey]) => surfaceKey);
-      enabledSurfaceCount = enabledSurfaces.length;
       recentFailures = recentFailureDocs.map((event) => ({
         id: typeof event._id?.toString === 'function' ? event._id.toString() : String(event._id || ''),
-        message: String(event.message || 'TTS operation failed.'),
+        message: String(event.message || 'Audio operation failed.'),
         action: String(event.action || 'unknown'),
         sourceType: String(event.sourceType || 'unknown'),
         variant: String(event.variant || 'unknown'),
@@ -185,29 +176,29 @@ export async function getSystemHealthSummary(
     {
       id: 'gemini-ai',
       label: 'Gemini AI',
-      status: geminiConfigured ? 'healthy' : 'critical',
-      summary: geminiConfigured
-        ? 'Gemini API is configured for TTS and embeddings.'
-        : 'Gemini API key is missing.',
-      detail: geminiConfigured
-        ? `AI runtime is configured with model ${runtime.model}.`
-        : 'Set GEMINI_API_KEY to enable TTS, embeddings, and other Gemini-backed newsroom features.',
+      status: geminiAiConfigured ? 'healthy' : 'watch',
+      summary: geminiAiConfigured
+        ? 'Gemini API is configured for AI features (embeddings, summaries).'
+        : 'Gemini API key is missing. TTS is manual-upload-only (no impact).',
+      detail: geminiAiConfigured
+        ? 'GEMINI_API_KEY is set. Non-TTS AI features are available.'
+        : 'Set GEMINI_API_KEY to enable AI features. Audio is uploaded manually — no TTS required.',
       href: '/admin/settings',
     },
     {
-      id: 'shared-tts',
-      label: 'Shared TTS',
+      id: 'manual-audio',
+      label: 'Manual Audio',
       status: !writableStorage
-        ? 'critical'
+        ? 'watch'
         : recentFailures.length > 0 || failedAssets > 0
           ? 'watch'
           : 'healthy',
       summary: writableStorage
-        ? `Shared TTS storage is writable in ${storageMode} mode.`
-        : 'Shared TTS storage is not writable.',
+        ? `Manual audio storage is accessible in ${storageMode} mode.`
+        : 'Audio storage may be limited — DigitalOcean Spaces handles primary uploads.',
       detail: writableStorage
-        ? `${enabledSurfaceCount} surface${enabledSurfaceCount === 1 ? '' : 's'} enabled, ${failedAssets} failed asset${failedAssets === 1 ? '' : 's'}, ${staleAssets} stale asset${staleAssets === 1 ? '' : 's'}.`
-        : storageError || 'No writable TTS storage directory is currently available.',
+        ? `${failedAssets} failed asset(s), ${staleAssets} stale asset(s).`
+        : storageError || 'Audio is uploaded directly to DigitalOcean Spaces.',
       href: '/admin/settings',
     },
     {
@@ -233,11 +224,11 @@ export async function getSystemHealthSummary(
   if (options.dataSource !== 'mongodb') {
     risks.push('Primary database mode is not fully live.');
   }
-  if (!geminiConfigured) {
-    risks.push('Gemini API is not configured, so TTS and embeddings are unavailable.');
+  if (!geminiAiConfigured) {
+    risks.push('Gemini API key is missing — AI embeddings and summaries are unavailable.');
   }
   if (!writableStorage) {
-    risks.push('Shared TTS storage is not writable.');
+    risks.push('Fallback audio storage directory is not writable (DigitalOcean Spaces primary).');
   }
   if ((options.blockedEditions || 0) > 0) {
     risks.push(`${options.blockedEditions} blocked edition(s) still need attention.`);
@@ -252,7 +243,7 @@ export async function getSystemHealthSummary(
     risks.push(`${options.teamAlerts} team coverage alert(s) are active.`);
   }
   if (recentFailures.length > 0) {
-    risks.push(`${recentFailures.length} TTS failure event(s) were recorded in the selected time window.`);
+    risks.push(`${recentFailures.length} audio operation failure event(s) were recorded in the selected time window.`);
   }
 
   return {
@@ -265,19 +256,19 @@ export async function getSystemHealthSummary(
         tone: toneForStatus(dataSourceStatus.status),
       },
       {
-        label: 'Gemini Runtime',
-        value: geminiConfigured ? runtime.model : 'Unavailable',
-        tone: geminiConfigured ? 'good' : 'critical',
+        label: 'Gemini AI',
+        value: geminiAiConfigured ? 'Configured' : 'Missing API Key',
+        tone: geminiAiConfigured ? 'good' : 'warning',
       },
       {
-        label: 'TTS Storage',
-        value: writableStorage ? `${storageMode} mode` : 'Unavailable',
-        tone: writableStorage ? 'good' : 'critical',
+        label: 'Audio Mode',
+        value: 'Manual Upload (DigitalOcean Spaces)',
+        tone: 'good',
       },
       {
-        label: 'Enabled Surfaces',
-        value: enabledSurfaces.length ? enabledSurfaces.join(', ') : 'None',
-        tone: enabledSurfaceCount > 0 ? 'good' : 'warning',
+        label: 'Audio Storage',
+        value: writableStorage ? `${storageMode} mode` : 'DO Spaces primary',
+        tone: writableStorage ? 'good' : 'neutral',
       },
       {
         label: 'Failed Assets',
@@ -297,7 +288,7 @@ export async function getSystemHealthSummary(
       recentFailures: recentFailures.length,
       failedAssets,
       staleAssets,
-      enabledSurfaces: enabledSurfaceCount,
+      enabledSurfaces: 0,
       writableStorage,
     },
   };

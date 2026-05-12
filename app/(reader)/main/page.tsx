@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import HomePageClient from './HomePageClient';
+import { mapHomeFeedToHomePageState } from '@/lib/content/homeFeed';
+import { resolveRequestOrigin } from '@/lib/server/requestOrigin';
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const canonical = `${siteUrl}/main`;
@@ -33,6 +35,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default function HomePage() {
-  return <HomePageClient />;
+async function fetchInitialHomeFeed() {
+  try {
+    const origin = await resolveRequestOrigin();
+    const response = await fetch(`${origin}/api/v1/public/home-feed`, {
+      next: { revalidate: 60 },
+    });
+    if (!response.ok) return null;
+
+    const payload = await response.json().catch(() => null);
+    return mapHomeFeedToHomePageState(payload);
+  } catch {
+    return null;
+  }
+}
+
+export default async function HomePage() {
+  const initialHomeFeed = await fetchInitialHomeFeed();
+  return <HomePageClient initialHomeFeed={initialHomeFeed} />;
 }

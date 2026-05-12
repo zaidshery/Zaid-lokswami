@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Types } from 'mongoose';
+import { publicJsonCacheHeaders } from '@/lib/api/cache';
 import connectDB from '@/lib/db/mongoose';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 import Article from '@/lib/models/Article';
@@ -9,6 +10,11 @@ import { normalizeArticleSlug } from '@/lib/seo/articleSeo';
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
+
+const ARTICLE_DETAIL_CACHE_HEADERS = publicJsonCacheHeaders({
+  sMaxAge: 120,
+  staleWhileRevalidate: 600,
+});
 
 async function shouldUseFileStore() {
   if (!process.env.MONGODB_URI) {
@@ -45,7 +51,10 @@ export async function GET(_: Request, context: RouteContext) {
         );
       }
 
-      return NextResponse.json({ success: true, data: stored });
+      return NextResponse.json(
+        { success: true, data: stored },
+        { headers: ARTICLE_DETAIL_CACHE_HEADERS }
+      );
     }
 
     const slug = normalizeArticleSlug(articleId);
@@ -61,7 +70,10 @@ export async function GET(_: Request, context: RouteContext) {
       );
     }
 
-    return NextResponse.json({ success: true, data: article });
+    return NextResponse.json(
+      { success: true, data: article },
+      { headers: ARTICLE_DETAIL_CACHE_HEADERS }
+    );
   } catch (error) {
     console.error('Failed to load public article detail:', error);
     return NextResponse.json(

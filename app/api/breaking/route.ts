@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicJsonCacheHeaders } from '@/lib/api/cache';
 import connectDB from '@/lib/db/mongoose';
 import Article from '@/lib/models/Article';
 import { resolveReusableBreakingTts } from '@/lib/server/breakingTts';
@@ -8,6 +9,10 @@ import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 const DEFAULT_LIMIT = 10;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 25;
+const BREAKING_CACHE_HEADERS = publicJsonCacheHeaders({
+  sMaxAge: 20,
+  staleWhileRevalidate: 120,
+});
 
 type BreakingItem = {
   id: string;
@@ -133,11 +138,14 @@ export async function GET(req: NextRequest) {
       ? await listFromFileStore(limit)
       : await listFromMongo(limit);
 
-    return NextResponse.json({
-      success: true,
-      items,
-      total: items.length,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        items,
+        total: items.length,
+      },
+      { headers: BREAKING_CACHE_HEADERS }
+    );
   } catch (error) {
     console.error('Failed to load breaking items:', error);
     return NextResponse.json(

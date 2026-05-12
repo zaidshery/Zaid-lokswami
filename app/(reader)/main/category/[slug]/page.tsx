@@ -1,203 +1,44 @@
-'use client';
+import { parsePublicArticlesPayload } from '@/lib/content/publicArticles';
+import type { PublicArticleApiItem } from '@/lib/content/publicArticles';
+import { resolveRequestOrigin } from '@/lib/server/requestOrigin';
+import CategoryPageClient from './CategoryPageClient';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { useAppStore } from '@/lib/store/appStore';
-import { articles as mockArticles, type Article } from '@/lib/mock/data';
-import NewsCard from '@/components/ui/NewsCard';
-import HeroCard from '@/components/ui/HeroCard';
-import { ChevronRight, Grid3X3, List } from 'lucide-react';
-import { categoryMatches, fetchMergedLiveArticles } from '@/lib/content/liveArticles';
-import {
-  NEWS_CATEGORY_DEFINITIONS,
-  resolveNewsCategory,
-} from '@/lib/constants/newsCategories';
-
-const CATEGORY_INITIAL_VISIBLE_COUNT = 10;
-const CATEGORY_LOAD_MORE_STEP = 9;
-
-type CategoryMeta = {
-  id: string;
-  slug: string;
-  name: string;
-  nameEn: string;
-  icon: string;
-  color: string;
-  aliases: string[];
+type PageContext = {
+  params: Promise<{ slug: string }>;
 };
 
-function slugToTitle(slug: string) {
-  return slug
-    .split('-')
-    .filter(Boolean)
-    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(' ');
+const CATEGORY_FEED_LIMIT = 120;
+
+async function fetchInitialCategoryFeed(slug: string) {
+  try {
+    const origin = await resolveRequestOrigin();
+    const fetchFeed = async (path: string) => {
+      const response = await fetch(path, { next: { revalidate: 60 } });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) return [] as PublicArticleApiItem[];
+      return parsePublicArticlesPayload(payload, CATEGORY_FEED_LIMIT).items;
+    };
+
+    const query = new URLSearchParams({
+      limit: String(CATEGORY_FEED_LIMIT),
+      category: slug,
+    });
+    const v1Items = await fetchFeed(
+      `${origin}/api/v1/public/articles?${query.toString()}`
+    );
+
+    if (v1Items.length) return v1Items;
+
+    return fetchFeed(`${origin}/api/articles/latest?limit=${CATEGORY_FEED_LIMIT}`);
+  } catch {
+    return [] as PublicArticleApiItem[];
+  }
 }
 
-export default function CategoryPage() {
-  const { language } = useAppStore();
-  const params = useParams();
-  const slug = String(params.slug || '').toLowerCase();
+export default async function CategoryPage(context: PageContext) {
+  const { slug: rawSlug } = await context.params;
+  const slug = decodeURIComponent(rawSlug || '').toLowerCase();
+  const initialItems = await fetchInitialCategoryFeed(slug);
 
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
-  const [articlesData, setArticlesData] = useState<Article[]>(mockArticles);
-  const [visibleCount, setVisibleCount] = useState(CATEGORY_INITIAL_VISIBLE_COUNT);
-
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      const merged = await fetchMergedLiveArticles(120);
-      if (active) setArticlesData(merged);
-    };
-
-    load();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const category = useMemo(() => {
-    const matched = resolveNewsCategory(slug);
-    if (matched) {
-      return matched as CategoryMeta;
-    }
-
-    return {
-        id: slug,
-        slug,
-        name: slugToTitle(slug),
-        nameEn: slugToTitle(slug),
-        icon: '\ud83d\udcf0',
-        color: '#EF4444',
-        aliases: [slug],
-      };
-  }, [slug]);
-
-  const categoryArticles = useMemo(() => {
-    return articlesData.filter(
-      (article) =>
-        categoryMatches(article.category, slug, NEWS_CATEGORY_DEFINITIONS) ||
-        categoryMatches(article.category, category.name, NEWS_CATEGORY_DEFINITIONS) ||
-        categoryMatches(article.category, category.nameEn, NEWS_CATEGORY_DEFINITIONS)
-    );
-  }, [articlesData, slug, category]);
-
-  const sortedArticles = useMemo(() => {
-    const next = [...categoryArticles];
-    next.sort((a, b) => {
-      if (sortBy === 'popular') return (b.views || 0) - (a.views || 0);
-      return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
-    });
-    return next;
-  }, [categoryArticles, sortBy]);
-
-  const heroArticle = sortedArticles[0];
-  const visibleArticles = sortedArticles.slice(0, visibleCount);
-  const otherArticles = visibleArticles.slice(1);
-  const hasMoreStories = visibleCount < sortedArticles.length;
-
-  useEffect(() => {
-    setVisibleCount(CATEGORY_INITIAL_VISIBLE_COUNT);
-  }, [slug, sortBy, articlesData.length]);
-
-  return (
-    <div className="space-y-6">
-      <nav className="flex items-center gap-2 text-sm text-lokswami-text-muted">
-        <span>{language === 'hi' ? '\u0939\u094b\u092e' : 'Home'}</span>
-        <ChevronRight className="h-4 w-4" />
-        <span className="text-lokswami-white">
-          {language === 'hi' ? category.name : category.nameEn}
-        </span>
-      </nav>
-
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
-          <span className="text-3xl sm:text-4xl">{category.icon}</span>
-          <div>
-            <h1 className="text-2xl font-bold text-lokswami-white">
-              {language === 'hi' ? category.name : category.nameEn}
-            </h1>
-            <p className="text-sm text-lokswami-text-secondary">
-              {categoryArticles.length} {language === 'hi' ? '\u0916\u092c\u0930\u0947\u0902' : 'articles'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end sm:gap-3">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'latest' | 'popular')}
-            className="min-w-[124px] rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red focus:outline-none sm:min-w-[140px]"
-          >
-            <option value="latest">{language === 'hi' ? '\u0924\u093e\u091c\u093c\u093e' : 'Latest'}</option>
-            <option value="popular">{language === 'hi' ? '\u0932\u094b\u0915\u092a\u094d\u0930\u093f\u092f' : 'Popular'}</option>
-          </select>
-
-          <div className="flex shrink-0 items-center rounded-lg border border-lokswami-border bg-lokswami-surface">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 ${viewMode === 'grid' ? 'text-lokswami-red' : 'text-lokswami-text-secondary hover:text-lokswami-white'}`}
-              aria-label="Grid view"
-            >
-              <Grid3X3 className="h-5 w-5" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 ${viewMode === 'list' ? 'text-lokswami-red' : 'text-lokswami-text-secondary hover:text-lokswami-white'}`}
-              aria-label="List view"
-            >
-              <List className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {heroArticle ? (
-        <section>
-          <HeroCard article={heroArticle} />
-        </section>
-      ) : null}
-
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {otherArticles.map((article, index) => (
-            <NewsCard key={article.id} article={article} size="sm" index={index} />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {otherArticles.map((article, index) => (
-            <NewsCard key={article.id} article={article} variant="horizontal" index={index} />
-          ))}
-        </div>
-      )}
-
-      {hasMoreStories ? (
-        <div className="pt-8 text-center">
-          <button
-            type="button"
-            onClick={() =>
-              setVisibleCount((current) =>
-                Math.min(current + CATEGORY_LOAD_MORE_STEP, sortedArticles.length)
-              )
-            }
-            className="rounded-full border border-lokswami-border bg-lokswami-surface px-8 py-3 text-lokswami-text-secondary transition-colors hover:border-lokswami-red hover:text-lokswami-white"
-          >
-            {language === 'hi' ? '\u0914\u0930 \u0916\u092c\u0930\u0947\u0902 \u0932\u094b\u0921 \u0915\u0930\u0947\u0902' : 'Load More Stories'}
-          </button>
-        </div>
-      ) : null}
-
-      {otherArticles.length === 0 && !heroArticle ? (
-        <div className="py-16 text-center">
-          <p className="text-lokswami-text-secondary">
-            {language === 'hi'
-              ? '\u0907\u0938 \u0936\u094d\u0930\u0947\u0923\u0940 \u092e\u0947\u0902 \u0915\u094b\u0908 \u0916\u092c\u0930 \u0928\u0939\u0940\u0902 \u092e\u093f\u0932\u0940'
-              : 'No articles found in this category'}
-          </p>
-        </div>
-      ) : null}
-    </div>
-  );
+  return <CategoryPageClient slug={slug} initialItems={initialItems} />;
 }

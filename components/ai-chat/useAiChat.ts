@@ -3,12 +3,10 @@
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  buildTtsAudioSource,
   fetchTtsStatus,
-  requestTtsAudio,
 } from '@/lib/ai/ttsClient';
 import { NEWS_CATEGORIES, resolveNewsCategory } from '@/lib/constants/newsCategories';
-import { GEMINI_TTS_LANGUAGE_OPTIONS } from '@/lib/constants/tts';
+import { TTS_LANGUAGE_OPTIONS } from '@/lib/constants/tts';
 import { useAppStore } from '@/lib/store/appStore';
 import type {
   AiAnswerSource,
@@ -403,12 +401,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   const [isWorking, setIsWorking] = useState(false);
   const [errorText, setErrorText] = useState('');
 
-  const [listenLanguageCode, setListenLanguageCode] = useState(
-    getPreferredListenLanguageCode(language)
-  );
-  const [isPreparingListen, setIsPreparingListen] = useState(false);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [listenError, setListenError] = useState('');
   const [isTtsConfigured, setIsTtsConfigured] = useState(false);
   const [suggestions, setSuggestions] = useState<AiChatSuggestions>(emptySuggestions());
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -435,7 +427,7 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   }, [messages]);
 
   const listenLanguageOptions = useMemo(() => {
-    return GEMINI_TTS_LANGUAGE_OPTIONS;
+    return TTS_LANGUAGE_OPTIONS;
   }, []);
 
   const searchRouteHref = draft.trim()
@@ -446,15 +438,11 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
     setMessages((prev) => [...prev, message]);
   }, []);
 
-  const stopListening = useCallback((suppressState = false) => {
+  const stopListening = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current = null;
-    }
-
-    if (!suppressState) {
-      setIsPlayingAudio(false);
     }
   }, []);
 
@@ -492,23 +480,8 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
   }, []);
 
   useEffect(() => {
-    const preferredCode = getPreferredListenLanguageCode(language);
-    setListenLanguageCode((current) =>
-      current === preferredCode ? current : preferredCode
-    );
-  }, [language]);
-
-  useEffect(() => {
-    if (!listenLanguageOptions.length) return;
-    const exists = listenLanguageOptions.some((item) => item.code === listenLanguageCode);
-    if (!exists) {
-      setListenLanguageCode(listenLanguageOptions[0].code);
-    }
-  }, [listenLanguageCode, listenLanguageOptions]);
-
-  useEffect(() => {
     return () => {
-      stopListening(true);
+      stopListening();
     };
   }, [stopListening]);
 

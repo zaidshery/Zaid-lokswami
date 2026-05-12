@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSessionFromReq } from '@/lib/auth/admin';
+import { getAdminSession } from '@/lib/auth/admin';
 import { isReporterDeskRole } from '@/lib/auth/roles';
 import { uploadBufferToDigitalOceanSpaces } from '@/lib/utils/digitalOceanSpaces';
 
@@ -137,19 +137,19 @@ function isRetriableBodyReadError(error: unknown) {
 
 async function readUploadFormData(req: NextRequest) {
   try {
-    return await req.clone().formData();
-  } catch (cloneError) {
-    if (!isRetriableBodyReadError(cloneError)) {
-      throw cloneError;
+    return await req.formData();
+  } catch (bodyError) {
+    if (!isRetriableBodyReadError(bodyError)) {
+      throw bodyError;
     }
 
-    return req.formData();
+    return req.clone().formData();
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAdminSessionFromReq(req);
+    const user = await getAdminSession();
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

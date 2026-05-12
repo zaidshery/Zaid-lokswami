@@ -1,7 +1,7 @@
 import mongoose, { type Model } from 'mongoose';
 import {
-  GEMINI_TTS_DEFAULT_VOICE,
-  GEMINI_TTS_PROVIDER,
+  TTS_DEFAULT_VOICE,
+  TTS_PROVIDER,
 } from '@/lib/constants/tts';
 import {
   type TtsConfigShape,
@@ -29,7 +29,7 @@ const TtsSurfaceConfigSchema = new mongoose.Schema<TtsSurfaceConfig>(
       required: true,
       trim: true,
       maxlength: 80,
-      default: GEMINI_TTS_DEFAULT_VOICE,
+      default: TTS_DEFAULT_VOICE,
     },
   },
   { _id: false }
@@ -46,11 +46,11 @@ const TtsConfigSchema = new mongoose.Schema<ITtsConfig>(
     },
     provider: {
       type: String,
-      enum: [GEMINI_TTS_PROVIDER],
+      enum: [TTS_PROVIDER],
       required: true,
-      default: GEMINI_TTS_PROVIDER,
+      default: TTS_PROVIDER,
     },
-    regenerateMissingFiles: { type: Boolean, default: true },
+    regenerateMissingFiles: { type: Boolean, default: false },
     retentionDays: { type: Number, min: 1, max: 3650, default: 90 },
     forceStorage: { type: Boolean, default: () => process.env.EPAPER_FORCE_STORAGE === '1' },
     surfaces: {
@@ -58,9 +58,9 @@ const TtsConfigSchema = new mongoose.Schema<ITtsConfig>(
         type: TtsSurfaceConfigSchema,
         default: () => ({
           enabled: true,
-          autoGenerate: true,
+          autoGenerate: false,
           defaultLanguageCode: 'hi-IN',
-          defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
+          defaultVoice: TTS_DEFAULT_VOICE,
         }),
       },
       article: {
@@ -69,7 +69,7 @@ const TtsConfigSchema = new mongoose.Schema<ITtsConfig>(
           enabled: true,
           autoGenerate: false,
           defaultLanguageCode: 'hi-IN',
-          defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
+          defaultVoice: TTS_DEFAULT_VOICE,
         }),
       },
       epaper: {
@@ -78,7 +78,7 @@ const TtsConfigSchema = new mongoose.Schema<ITtsConfig>(
           enabled: true,
           autoGenerate: false,
           defaultLanguageCode: 'hi-IN',
-          defaultVoice: GEMINI_TTS_DEFAULT_VOICE,
+          defaultVoice: TTS_DEFAULT_VOICE,
         }),
       },
     },

@@ -7,6 +7,7 @@ const listAllStoredArticlesMock = vi.fn();
 const updateStoredArticleMock = vi.fn();
 const deleteStoredArticleMock = vi.fn();
 const connectDBMock = vi.fn();
+const recordArticleActivityMock = vi.fn();
 
 vi.mock('@/lib/auth/admin', () => ({
   getAdminSession: getAdminSessionMock,
@@ -60,7 +61,7 @@ vi.mock('@/lib/server/breakingTts', () => ({
 
 vi.mock('@/lib/server/articleActivity', () => ({
   buildArticleActivityMessage: vi.fn(() => 'Article activity recorded.'),
-  recordArticleActivity: vi.fn(),
+  recordArticleActivity: recordArticleActivityMock,
 }));
 
 vi.mock('@/lib/server/newsroomStoryLinks', () => ({
@@ -169,6 +170,74 @@ describe('/api/admin/articles/[id] route', () => {
     expect(getStoredArticleByIdMock).not.toHaveBeenCalled();
     expect(updateStoredArticleMock).not.toHaveBeenCalled();
     expect(deleteStoredArticleMock).not.toHaveBeenCalled();
+  });
+
+  it('publishes an approved article through the workflow action route', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk',
+      role: 'admin',
+    });
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      title: 'Ready article',
+      summary: 'Ready summary',
+      content: 'Ready content',
+      image: 'https://cdn.example.com/image.jpg',
+      category: 'General',
+      author: 'Desk',
+      workflow: {
+        status: 'approved',
+        priority: 'normal',
+        createdBy: {
+          id: 'admin-1',
+          name: 'Desk',
+          email: 'desk@example.com',
+          role: 'admin',
+        },
+      },
+    });
+    updateStoredArticleMock.mockResolvedValue({
+      _id: 'article-1',
+      title: 'Ready article',
+      workflow: { status: 'published' },
+      publishedAt: '2026-05-12T10:00:00.000Z',
+    });
+
+    const { PATCH } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await PATCH(createJsonRequest('PATCH', { action: 'publish' }), {
+      params: Promise.resolve({ id: 'article-1' }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        _id: 'article-1',
+        workflow: { status: 'published' },
+      }),
+      message: 'Article moved to published.',
+    });
+    expect(updateStoredArticleMock).toHaveBeenCalledWith(
+      'article-1',
+      expect.objectContaining({
+        workflow: expect.objectContaining({
+          status: 'published',
+        }),
+        publishedAt: expect.any(String),
+      }),
+      { skipRevision: true }
+    );
+    expect(recordArticleActivityMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        articleId: 'article-1',
+        action: 'publish',
+        fromStatus: 'approved',
+        toStatus: 'published',
+      })
+    );
   });
 
   it('records the old slug when replacing an article slug', async () => {

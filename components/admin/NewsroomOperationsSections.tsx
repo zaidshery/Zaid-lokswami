@@ -9,6 +9,10 @@ import type {
 import type { WorkflowArticleCard } from '@/lib/admin/articleWorkflowOverview';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
+import {
+  CmsWorkflowStatusBadge,
+  formatWorkflowContentTypeLabel,
+} from '@/components/admin/CmsWorkflowStatusBadge';
 
 const SECTION_LINK_CLASS =
   'admin-shell-toolbar-btn inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] sm:text-xs sm:tracking-[0.14em]';
@@ -27,48 +31,6 @@ const EMPTY_STATE_CLASS =
 
 function cx(...classes: Array<string | undefined | false>) {
   return classes.filter(Boolean).join(' ');
-}
-
-function formatStatusLabel(status: string) {
-  return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function formatContentTypeLabel(contentType: string) {
-  return contentType === 'epaper' ? 'E-Paper' : formatStatusLabel(contentType);
-}
-
-function getWorkflowToneClass(status: string) {
-  switch (status) {
-    case 'published':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-    case 'approved':
-    case 'ready_for_approval':
-    case 'scheduled':
-    case 'ready_to_publish':
-      return 'border-blue-200 bg-blue-50 text-blue-700';
-    case 'pages_ready':
-    case 'ocr_review':
-    case 'hotspot_mapping':
-    case 'qa_review':
-    case 'submitted':
-    case 'assigned':
-    case 'in_review':
-    case 'copy_edit':
-    case 'changes_requested':
-      return 'border-amber-200 bg-amber-50 text-amber-700';
-    case 'rejected':
-      return 'border-red-200 bg-red-50 text-red-700';
-    default:
-      return 'border-gray-200 bg-gray-100 text-gray-700';
-  }
-}
-
-function WorkflowPill({ status }: { status: string }) {
-  return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getWorkflowToneClass(status)}`}>
-      {formatStatusLabel(status)}
-    </span>
-  );
 }
 
 function formatSeverityLabel(severity: SuperAdminAlert['severity']) {
@@ -150,9 +112,9 @@ export function DecisionCenterSection({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{item.title}</p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{item.category} / {formatContentTypeLabel(item.contentType)}</p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{item.category} / {formatWorkflowContentTypeLabel(item.contentType)}</p>
                 </div>
-                <WorkflowPill status={item.status} />
+                <CmsWorkflowStatusBadge status={item.status} />
               </div>
               <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">Updated {formatUiDate(item.updatedAt, item.updatedAt)}</p>
             </Link>
@@ -175,7 +137,7 @@ export function DecisionCenterSection({
                     {edition.cityName} / {edition.blockerCount} blocker{edition.blockerCount === 1 ? '' : 's'}
                   </p>
                 </div>
-                <WorkflowPill status={edition.productionStatus} />
+                <CmsWorkflowStatusBadge status={edition.productionStatus} />
               </div>
               <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">{edition.blockers[0] || 'Edition needs QA or hotspot cleanup before release.'}</p>
             </Link>

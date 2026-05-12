@@ -961,9 +961,9 @@ export default function EPaperPageClient({
       setLoadingList(true);
       setError('');
       try {
-        const response = await fetch(`/api/epapers/latest?${buildListQueryParams().toString()}`, {
-          cache: 'no-store',
-        });
+        const response = await fetch(
+          `/api/v1/public/epapers/latest?${buildListQueryParams().toString()}`
+        );
         const payload = (await response.json()) as LatestListResponse;
         if (!response.ok) {
           throw new Error(payload.error || 'Failed to load e-papers');
@@ -1009,9 +1009,9 @@ export default function EPaperPageClient({
     setIsLoadingMore(true);
     setError('');
     try {
-      const response = await fetch(`/api/epapers/latest?${buildListQueryParams(nextCursor).toString()}`, {
-        cache: 'no-store',
-      });
+      const response = await fetch(
+        `/api/v1/public/epapers/latest?${buildListQueryParams(nextCursor).toString()}`
+      );
       const payload = (await response.json()) as LatestListResponse;
       if (!response.ok) {
         throw new Error(payload.error || 'Failed to load more e-papers');

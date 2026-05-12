@@ -6,7 +6,7 @@ export const TTS_VARIANTS = [
 ] as const;
 export const TTS_ASSET_STATUSES = ['pending', 'processing', 'ready', 'failed', 'stale'] as const;
 export const TTS_STORAGE_MODES = ['public', 'proxy', 'spaces'] as const;
-export const TTS_PROVIDERS = ['gemini', 'manual'] as const;
+export const TTS_PROVIDERS = ['manual'] as const;
 export const TTS_AUDIT_ACTIONS = [
   'generate',
   'regenerate',
@@ -37,7 +37,7 @@ export type TtsSurfaceConfig = {
 
 export type TtsConfigShape = {
   key: 'default';
-  provider: 'gemini';
+  provider: 'manual';
   regenerateMissingFiles: boolean;
   retentionDays: number;
   forceStorage: boolean;

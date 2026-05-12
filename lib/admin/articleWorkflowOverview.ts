@@ -30,11 +30,13 @@ import { resolveVideoWorkflow } from '@/lib/workflow/video';
 import {
   isWorkflowStatus,
   type EPaperProductionStatus,
+  type WorkflowPriority,
   type WorkflowStatus,
 } from '@/lib/workflow/types';
 
-type WorkflowContentKey = 'article' | 'story' | 'video' | 'epaper';
+export type WorkflowContentKey = 'article' | 'story' | 'video' | 'epaper';
 type DeskStatus = WorkflowStatus | EPaperProductionStatus;
+export type ReviewQueueAssignmentFilter = 'assigned' | 'unassigned';
 
 type ArticleSource = {
   _id?: unknown;
@@ -100,6 +102,7 @@ type DeskItem = {
   author: string;
   updatedAt: string;
   status: DeskStatus;
+  priority: WorkflowPriority | null;
   assignedToId: string;
   assignedToEmail: string;
   assignedToName: string;
@@ -137,6 +140,12 @@ export type ReviewQueueOverview = {
 
 type OverviewOptions = {
   maxItems?: number | null;
+  filters?: {
+    contentType?: WorkflowContentKey;
+    status?: DeskStatus;
+    priority?: WorkflowPriority;
+    assignment?: ReviewQueueAssignmentFilter;
+  };
 };
 
 export type ArticleWorkflowSummary = {
@@ -148,7 +157,7 @@ export type ArticleWorkflowSummary = {
   rejected: number;
 };
 
-const REVIEW_QUEUE_STATUSES: WorkflowStatus[] = [
+export const REVIEW_QUEUE_STATUSES: WorkflowStatus[] = [
   'submitted',
   'assigned',
   'in_review',
@@ -159,7 +168,7 @@ const REVIEW_QUEUE_STATUSES: WorkflowStatus[] = [
   'scheduled',
 ];
 
-const REVIEW_QUEUE_EPAPER_STATUSES: EPaperProductionStatus[] = [
+export const REVIEW_QUEUE_EPAPER_STATUSES: EPaperProductionStatus[] = [
   'pages_ready',
   'ocr_review',
   'hotspot_mapping',
@@ -236,6 +245,7 @@ function buildArticleItem(source: ArticleSource): DeskItem | null {
     author: String(source.author || 'Desk').trim() || 'Desk',
     updatedAt: toIsoDate(source.updatedAt || source.publishedAt),
     status: workflow.status,
+    priority: workflow.priority,
     assignedToId: workflow.assignedTo?.id || '',
     assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
@@ -275,6 +285,7 @@ function buildStoryItem(source: StorySource): DeskItem | null {
     author: workflow.createdBy?.name || String(source.author || 'Desk').trim() || 'Desk',
     updatedAt: toIsoDate(source.updatedAt || source.publishedAt),
     status: workflow.status,
+    priority: workflow.priority,
     assignedToId: workflow.assignedTo?.id || '',
     assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
@@ -313,6 +324,7 @@ function buildVideoItem(source: VideoSource): DeskItem | null {
     author: workflow.createdBy?.name || 'Desk',
     updatedAt: toIsoDate(source.updatedAt || source.publishedAt),
     status: workflow.status,
+    priority: workflow.priority,
     assignedToId: workflow.assignedTo?.id || '',
     assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
@@ -348,6 +360,7 @@ function buildEpaperItem(source: EPaperSource): DeskItem | null {
     author: sourceLabel,
     updatedAt: toIsoDate(source.updatedAt || source.publishDate || source.createdAt),
     status: production.productionStatus,
+    priority: null,
     assignedToId: production.productionAssignee?.id || '',
     assignedToEmail: production.productionAssignee?.email || '',
     assignedToName: production.productionAssignee?.name || '',
@@ -608,7 +621,34 @@ export async function getReviewQueueOverview(
         }
         bumpContentCount(contentCounts, entry.contentType);
       }
-      return included;
+
+      if (!included) return false;
+
+      if (options.filters?.contentType && item.contentType !== options.filters.contentType) {
+        return false;
+      }
+
+      if (options.filters?.status && item.status !== options.filters.status) {
+        return false;
+      }
+
+      if (options.filters?.priority && item.priority !== options.filters.priority) {
+        return false;
+      }
+
+      if (options.filters?.assignment) {
+        const hasAssignee = Boolean(
+          item.assignedToId || item.assignedToEmail || item.assignedToName
+        );
+        if (options.filters.assignment === 'assigned' && !hasAssignee) {
+          return false;
+        }
+        if (options.filters.assignment === 'unassigned' && hasAssignee) {
+          return false;
+        }
+      }
+
+      return true;
     })
     .map((entry) => toDeskItem(entry))
     .filter((item): item is DeskItem => Boolean(item))

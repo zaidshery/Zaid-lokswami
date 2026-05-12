@@ -303,9 +303,7 @@ export function useBreakingNewsController({
   const fetchBreakingItems = useCallback(
     async (options?: { fallbackToMock?: boolean }) => {
       try {
-        const response = await fetch(`/api/breaking?limit=${BREAKING_LIMIT}`, {
-          cache: 'no-store',
-        });
+        const response = await fetch(`/api/breaking?limit=${BREAKING_LIMIT}`);
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);

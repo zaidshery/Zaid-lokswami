@@ -564,33 +564,6 @@ function parseDigitalOceanSpacesUrl(parsed: URL): ParsedDigitalOceanSpacesAsset 
   };
 }
 
-function parseLegacyCloudinaryUrl(parsed: URL): ParsedDigitalOceanSpacesAsset | null {
-  if (!parsed.hostname.endsWith('res.cloudinary.com')) {
-    return null;
-  }
-
-  const match = parsed.pathname.match(/\/(image|video|raw)\/upload\/(?:v\d+\/)?(.+)$/);
-  if (!match) {
-    return null;
-  }
-
-  const resourceType = match[1] as ParsedDigitalOceanSpacesAsset['resourceType'];
-  const rawId = decodeURIComponent(match[2] || '').replace(/^\/+|\/+$/g, '');
-  if (!rawId) {
-    return null;
-  }
-
-  const publicId = rawId.replace(/\.[^/.]+$/, '');
-  if (!publicId) {
-    return null;
-  }
-
-  return {
-    publicId,
-    resourceType,
-  };
-}
-
 export function parseDigitalOceanSpacesAssetFromUrl(value: string): ParsedDigitalOceanSpacesAsset | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -602,17 +575,12 @@ export function parseDigitalOceanSpacesAssetFromUrl(value: string): ParsedDigita
     return null;
   }
 
-  return parseDigitalOceanSpacesUrl(parsed) || parseLegacyCloudinaryUrl(parsed);
+  return parseDigitalOceanSpacesUrl(parsed);
 }
 
 export async function deleteDigitalOceanSpacesAssetByUrl(value: string) {
   const parsed = parseDigitalOceanSpacesAssetFromUrl(value);
   if (!parsed) return;
-
-  if (value.includes('res.cloudinary.com')) {
-    return;
-  }
-
   await deleteDigitalOceanSpacesAssetByPublicId(parsed.publicId, parsed.resourceType);
 }
 

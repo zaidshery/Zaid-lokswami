@@ -5,18 +5,14 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2,
-  PauseCircle,
   Search,
   SendHorizonal,
   Sparkles,
-  Volume2,
   X,
 } from 'lucide-react';
-import { GEMINI_TTS_LANGUAGE_OPTIONS } from '@/lib/constants/tts';
+import { TTS_LANGUAGE_OPTIONS } from '@/lib/constants/tts';
 import {
-  buildTtsAudioSource,
   fetchTtsStatus,
-  requestTtsAudio,
 } from '@/lib/ai/ttsClient';
 import { useAppStore } from '@/lib/store/appStore';
 
@@ -72,10 +68,6 @@ function isAwarenessResult(value: unknown): value is AwarenessResult {
   );
 }
 
-function toSpeakableText(value: string) {
-  return value.replace(/\s+/g, ' ').trim().slice(0, 3200);
-}
-
 function AiIdentityMark({
   compact = false,
   status = 'online',
@@ -124,7 +116,6 @@ function AiIdentityMark({
 export default function LokswamiAIBot() {
   const { language } = useAppStore();
   const pathname = usePathname();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const [isOpen, setIsOpen] = useState(false);
@@ -132,11 +123,6 @@ export default function LokswamiAIBot() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isWorking, setIsWorking] = useState(false);
   const [errorText, setErrorText] = useState('');
-
-  const [listenLanguageCode, setListenLanguageCode] = useState('hi-IN');
-  const [isPreparingListen, setIsPreparingListen] = useState(false);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [listenError, setListenError] = useState('');
   const [isTtsConfigured, setIsTtsConfigured] = useState(false);
 
   const currentArticleId = useMemo(() => {
@@ -149,19 +135,6 @@ export default function LokswamiAIBot() {
     }
   }, [pathname]);
 
-  const latestAssistantText = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (messages[i].role === 'assistant' && messages[i].text.trim()) {
-        return messages[i].text;
-      }
-    }
-    return '';
-  }, [messages]);
-
-  const listenLanguageOptions = useMemo(() => {
-    return GEMINI_TTS_LANGUAGE_OPTIONS;
-  }, []);
-
   const searchRouteHref = draft.trim()
     ? `/main/search?q=${encodeURIComponent(draft.trim())}`
     : '/main/search';
@@ -170,24 +143,13 @@ export default function LokswamiAIBot() {
     setMessages((prev) => [...prev, message]);
   };
 
-  const stopListening = (suppressState = false) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-    }
-    if (!suppressState) {
-      setIsPlayingAudio(false);
-    }
-  };
-
   useEffect(() => {
     if (!isOpen) return;
     if (!messages.length) {
       const greeting =
         language === 'hi'
-          ? 'Namaste, main Lokswami AI hoon. Aap search, TL;DR summary, ya listen feature use kar sakte hain.'
-          : 'Hello, I am Lokswami AI. You can use semantic search, TL;DR summary, and listen mode here.';
+          ? 'Namaste, main Lokswami AI hoon. Aap search aur TL;DR summary use kar sakte hain.'
+          : 'Hello, I am Lokswami AI. You can use semantic search and TL;DR summary here.';
       setMessages([createMessage('assistant', greeting)]);
     }
   }, [isOpen, language, messages.length]);
@@ -199,7 +161,6 @@ export default function LokswamiAIBot() {
 
   useEffect(() => {
     let active = true;
-
     const loadTtsStatus = async () => {
       try {
         const payload = await fetchTtsStatus();
@@ -210,40 +171,20 @@ export default function LokswamiAIBot() {
         setIsTtsConfigured(false);
       }
     };
-
     void loadTtsStatus();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    if (!listenLanguageOptions.length) return;
-    const exists = listenLanguageOptions.some(
-      (item) => item.code === listenLanguageCode
-    );
-    if (!exists) {
-      setListenLanguageCode(listenLanguageOptions[0].code);
-    }
-  }, [listenLanguageCode, listenLanguageOptions]);
 
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        stopListening();
         setIsOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen]);
-
-  useEffect(() => {
-    return () => {
-      stopListening(true);
-    };
-  }, []);
 
   const runAwarenessSearch = async (query: string) => {
     const cleanQuery = query.trim();
@@ -256,13 +197,8 @@ export default function LokswamiAIBot() {
     try {
       const response = await fetch('/api/ai/search', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: cleanQuery,
-          limit: 6,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: cleanQuery, limit: 6 }),
       });
       const payload = (await response.json().catch(() => ({}))) as AwarenessResponse;
 
@@ -270,8 +206,7 @@ export default function LokswamiAIBot() {
         throw new Error(payload.error || 'AI search failed.');
       }
 
-      const answer =
-        typeof payload.data.answer === 'string' && payload.data.answer.trim()
+      const answer = typeof payload.data.answer === 'string' && payload.data.answer.trim()
           ? payload.data.answer.trim()
           : language === 'hi'
             ? 'Search result mil gaya. Neeche relevant stories dekh sakte hain.'
@@ -286,12 +221,8 @@ export default function LokswamiAIBot() {
 
       appendMessage(createMessage('assistant', answer, links.length ? links : undefined));
     } catch (error) {
-      const fallback =
-        error instanceof Error
-          ? error.message
-          : language === 'hi'
-            ? 'AI search is samay uplabdh nahi hai.'
-            : 'AI search is currently unavailable.';
+      const fallback = error instanceof Error ? error.message : 
+        language === 'hi' ? 'AI search is samay uplabdh nahi hai.' : 'AI search is currently unavailable.';
       setErrorText(fallback);
       appendMessage(createMessage('assistant', fallback));
     } finally {
@@ -305,10 +236,7 @@ export default function LokswamiAIBot() {
     const useText = mode === 'text' && Boolean(trimmedText);
 
     if (!useArticle && !useText) {
-      const noSourceText =
-        language === 'hi'
-          ? 'Summary ke liye article open karein ya text likhein.'
-          : 'Open an article or enter text for summary.';
+      const noSourceText = language === 'hi' ? 'Summary ke liye article open karein ya text likhein.' : 'Open an article or enter text for summary.';
       setErrorText(noSourceText);
       appendMessage(createMessage('assistant', noSourceText));
       return;
@@ -321,29 +249,17 @@ export default function LokswamiAIBot() {
       appendMessage(createMessage('user', trimmedText));
       setDraft('');
     } else {
-      appendMessage(
-        createMessage(
-          'user',
-          language === 'hi' ? 'Is article ka TL;DR do.' : 'Summarize this article.'
-        )
-      );
+      appendMessage(createMessage('user', language === 'hi' ? 'Is article ka TL;DR do.' : 'Summarize this article.'));
     }
 
     try {
-      const body: { articleId?: string; text?: string; language: 'hi' | 'en' } = {
-        language,
-      };
-      if (useArticle) {
-        body.articleId = currentArticleId;
-      } else {
-        body.text = trimmedText;
-      }
+      const body: { articleId?: string; text?: string; language: 'hi' | 'en' } = { language };
+      if (useArticle) body.articleId = currentArticleId;
+      else body.text = trimmedText;
 
       const response = await fetch('/api/ai/summary', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const payload = (await response.json().catch(() => ({}))) as SummaryResponse;
@@ -353,88 +269,20 @@ export default function LokswamiAIBot() {
       }
 
       const bullets = Array.isArray(payload.data.bullets)
-        ? payload.data.bullets.filter(
-            (item): item is string =>
-              typeof item === 'string' && item.trim().length > 0
-          )
+        ? payload.data.bullets.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
         : [];
 
-      if (!bullets.length) {
-        throw new Error('Summary returned no points.');
-      }
+      if (!bullets.length) throw new Error('Summary returned no points.');
 
       const summaryText = bullets.slice(0, 3).map((item) => `- ${item}`).join('\n');
       appendMessage(createMessage('assistant', summaryText));
     } catch (error) {
-      const fallback =
-        error instanceof Error
-          ? error.message
-          : language === 'hi'
-            ? 'Summary banaane mein dikkat aayi.'
-            : 'Unable to generate summary.';
+      const fallback = error instanceof Error ? error.message :
+        language === 'hi' ? 'Summary banaane mein dikkat aayi.' : 'Unable to generate summary.';
       setErrorText(fallback);
       appendMessage(createMessage('assistant', fallback));
     } finally {
       setIsWorking(false);
-    }
-  };
-
-  const handleListen = async () => {
-    const sourceText = toSpeakableText(latestAssistantText || draft.trim());
-    if (!sourceText) {
-      setListenError(
-        language === 'hi'
-          ? 'Sunane ke liye pehle AI response ya text chahiye.'
-          : 'Need AI response or text before using Listen.'
-      );
-      return;
-    }
-
-    setListenError('');
-    setIsPreparingListen(true);
-    stopListening();
-
-    try {
-      if (!isTtsConfigured) {
-        setListenError(
-          language === 'hi'
-            ? 'Gemini audio abhi configured nahi hai. Thodi der baad phir try karein.'
-            : 'Gemini audio is not configured right now. Please try again shortly.'
-        );
-        return;
-      }
-
-      const payload = await requestTtsAudio({
-        text: sourceText,
-        languageCode: listenLanguageCode,
-      });
-      const src = buildTtsAudioSource(payload);
-      if (!src) {
-        throw new Error('Gemini TTS returned no audio payload.');
-      }
-
-      const audio = new Audio(src);
-      audioRef.current = audio;
-      audio.onended = () => {
-        setIsPlayingAudio(false);
-      };
-      audio.onerror = () => {
-        setIsPlayingAudio(false);
-        setListenError('Unable to play generated audio.');
-      };
-
-      await audio.play();
-      setIsPlayingAudio(true);
-    } catch (error) {
-      setListenError(
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : language === 'hi'
-            ? 'Gemini audio sunane mein dikkat aayi.'
-            : 'Unable to play Gemini audio right now.'
-      );
-    } finally {
-      setIsPreparingListen(false);
     }
   };
 
@@ -447,7 +295,6 @@ export default function LokswamiAIBot() {
   };
 
   const handleClose = () => {
-    stopListening();
     setIsOpen(false);
   };
 
@@ -596,48 +443,6 @@ export default function LokswamiAIBot() {
                 <SendHorizonal className="h-4 w-4" />
               </button>
             </form>
-
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <select
-                value={listenLanguageCode}
-                onChange={(event) => setListenLanguageCode(event.target.value)}
-                className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-              >
-                {listenLanguageOptions.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                onClick={() => void handleListen()}
-                disabled={isPreparingListen}
-                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
-              >
-                {isPreparingListen ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Volume2 className="h-3.5 w-3.5" />
-                )}
-                Listen
-              </button>
-
-              <button
-                type="button"
-                onClick={() => stopListening()}
-                disabled={!isPlayingAudio && !isPreparingListen}
-                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-              >
-                <PauseCircle className="h-3.5 w-3.5" />
-                Stop
-              </button>
-            </div>
-
-            {listenError ? (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{listenError}</p>
-            ) : null}
           </div>
         </section>
       ) : null}

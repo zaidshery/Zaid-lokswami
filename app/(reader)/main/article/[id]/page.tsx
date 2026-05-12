@@ -21,8 +21,8 @@ import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import {
-  GEMINI_TTS_LANGUAGE_OPTIONS,
-  GEMINI_TTS_VOICE_OPTIONS,
+  TTS_LANGUAGE_OPTIONS,
+  TTS_VOICE_OPTIONS,
 } from '@/lib/constants/tts';
 import {
   buildTtsAudioSource,
@@ -235,9 +235,7 @@ export default function ArticleDetailPage() {
       let merged: Article[] = [];
 
       try {
-        const res = await fetch(`/api/articles/${encodeURIComponent(articleId)}`, {
-          cache: 'no-store',
-        });
+        const res = await fetch(`/api/articles/${encodeURIComponent(articleId)}`);
         if (res.ok) {
           const payload = await res.json();
           found = normalizeApiArticle(payload?.data);
@@ -375,11 +373,11 @@ export default function ArticleDetailPage() {
   }, [article]);
 
   const listenLanguageOptions = useMemo(() => {
-    return GEMINI_TTS_LANGUAGE_OPTIONS;
+    return TTS_LANGUAGE_OPTIONS;
   }, []);
 
   const listenVoiceOptions = useMemo(() => {
-    return GEMINI_TTS_VOICE_OPTIONS;
+    return TTS_VOICE_OPTIONS;
   }, []);
 
   useEffect(() => {
@@ -450,10 +448,7 @@ export default function ArticleDetailPage() {
       const requestId = listenPrefetchRequestIdRef.current + 1;
       listenPrefetchRequestIdRef.current = requestId;
 
-      const promise = requestArticleTtsAudio(sourceId, {
-        languageCode,
-        voice: voice || undefined,
-      })
+      const promise = requestArticleTtsAudio(sourceId)
         .then((payload) => {
           if (requestId !== listenPrefetchRequestIdRef.current) {
             return null;
@@ -562,10 +557,7 @@ export default function ArticleDetailPage() {
 
       const payload =
         preparedAudio?.payload ||
-        (await requestArticleTtsAudio(articleListenSourceId, {
-          languageCode: listenLanguageCode,
-          voice: listenVoiceId || undefined,
-        }));
+        (await requestArticleTtsAudio(articleListenSourceId));
       if (requestId !== listenRequestIdRef.current) return;
 
       const src = preparedAudio?.src || buildTtsAudioSource(payload);
