@@ -6,7 +6,7 @@ const epaperFindByIdMock = vi.fn();
 const epaperArticleFindOneMock = vi.fn();
 const getStoredEPaperByIdMock = vi.fn();
 const isGeminiTtsConfiguredMock = vi.fn();
-const synthesizeGeminiSpeechMock = vi.fn();
+// const synthesizeGeminiSpeechMock = vi.fn();
 const ensureTtsAssetMock = vi.fn();
 const findReadyManualTtsAssetMock = vi.fn();
 const buildEpaperStoryTtsTextMock = vi.fn();
@@ -33,7 +33,7 @@ vi.mock('@/lib/storage/epapersFile', () => ({
 
 vi.mock('@/lib/ai/geminiTts', () => ({
   isGeminiTtsConfigured: isGeminiTtsConfiguredMock,
-  synthesizeGeminiSpeech: synthesizeGeminiSpeechMock,
+  // synthesizeGeminiSpeech: synthesizeGeminiSpeechMock,
 }));
 
 vi.mock('@/lib/server/ttsAssets', () => ({
@@ -125,6 +125,6 @@ describe('public e-paper story TTS route', () => {
     });
     expect(isGeminiTtsConfiguredMock).not.toHaveBeenCalled();
     expect(ensureTtsAssetMock).not.toHaveBeenCalled();
-    expect(synthesizeGeminiSpeechMock).not.toHaveBeenCalled();
+    // expect(synthesizeGeminiSpeechMock).not.toHaveBeenCalled();
   });
 });

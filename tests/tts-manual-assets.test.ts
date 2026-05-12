@@ -30,7 +30,7 @@ vi.mock('@/lib/ai/geminiTts', () => ({
   getGeminiTtsRuntimeConfig: vi.fn(),
   getGeminiTtsUnavailableStatus: vi.fn(),
   isGeminiTtsConfigured: vi.fn(),
-  synthesizeGeminiSpeech: vi.fn(),
+  // synthesizeGeminiSpeech: vi.fn(),
 }));
 
 vi.mock('@/lib/utils/ttsStorage', () => ({
