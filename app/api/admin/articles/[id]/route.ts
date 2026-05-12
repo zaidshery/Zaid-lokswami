@@ -553,7 +553,7 @@ async function updateEpaperArticleById(
   id: string,
   body: unknown,
   isPut: boolean,
-  actor?: Awaited<ReturnType<typeof getAdminSessionFromReqFromReq>>
+  actor?: Awaited<ReturnType<typeof getAdminSessionFromReq>>
 ) {
   if (!Types.ObjectId.isValid(id)) {
     return {

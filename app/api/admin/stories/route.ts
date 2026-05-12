@@ -184,7 +184,7 @@ function normalizeStoryInput(body: unknown) {
 }
 
 function getReporterDisplayName(
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReqFromReq>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   fallbackAuthor: string
 ) {
   const sessionName = user.name.trim();
@@ -194,7 +194,7 @@ function getReporterDisplayName(
 }
 
 function sanitizeCreateInputForUser(
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReqFromReq>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   input: ReturnType<typeof normalizeStoryInput>
 ) {
   if (user.role !== 'reporter') {
@@ -295,7 +295,7 @@ async function shouldUseFileStore() {
 
 function buildInitialWorkflow(
   intent: CreateIntent,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReqFromReq>>>
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>
 ) {
   const actor = toWorkflowActorRef(user);
   const now = new Date();
@@ -357,7 +357,7 @@ function buildStoryPermissionRecord(story: ReturnType<typeof resolveStoryRecord>
 
 function matchesFilters(
   story: ReturnType<typeof resolveStoryRecord>,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReqFromReq>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   filters: {
     category: string | null;
     search: string;

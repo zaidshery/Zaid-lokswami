@@ -147,7 +147,7 @@ function buildArticlePermissionRecord(article: ReturnType<typeof resolveArticleR
 
 function matchesListFilters(
   article: ReturnType<typeof resolveArticleRecord>,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReqFromReq>>>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   filters: {
     scope: 'all' | 'mine' | 'assigned' | 'review';
     workflowStatus: string;
@@ -201,7 +201,7 @@ function matchesListFilters(
 
 function buildInitialWorkflow(
   intent: CreateIntent,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReqFromReq>>>
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>
 ) {
   const actor = toWorkflowActorRef(user);
   const now = new Date();
