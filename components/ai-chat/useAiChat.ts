@@ -541,7 +541,6 @@ export function useAiChat(options: UseAiChatOptions): UseAiChatResult {
       if (!cleanQuery) return;
 
       setErrorText('');
-      setListenError('');
       setIsWorking(true);
       appendMessage(createMessage('user', cleanQuery));
 
