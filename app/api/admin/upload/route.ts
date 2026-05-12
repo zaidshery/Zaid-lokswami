@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { isReporterDeskRole } from '@/lib/auth/roles';
 import { uploadBufferToDigitalOceanSpaces } from '@/lib/utils/digitalOceanSpaces';
 
@@ -121,35 +121,14 @@ function canUseUploadPurpose(role: string | null | undefined, purpose: UploadPur
   return purpose === 'image' || purpose === 'story-thumbnail';
 }
 
-function isRetriableBodyReadError(error: unknown) {
-  const message = error instanceof Error ? error.message : '';
-  const code =
-    error && typeof error === 'object' && 'code' in error
-      ? String((error as { code?: unknown }).code || '')
-      : '';
-
-  return (
-    /disturbed|locked|aborted|body.*used/i.test(message) ||
-    code === 'ERR_HTTP_REQUEST_TIMEOUT' ||
-    code === 'ABORT_ERR'
-  );
-}
 
 async function readUploadFormData(req: NextRequest) {
-  try {
-    return await req.formData();
-  } catch (bodyError) {
-    if (!isRetriableBodyReadError(bodyError)) {
-      throw bodyError;
-    }
-
-    return req.clone().formData();
-  }
+  return await req.formData();
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
