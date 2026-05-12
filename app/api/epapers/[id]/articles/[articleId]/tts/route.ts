@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Types } from 'mongoose';\nimport connectDB from '@/lib/db/mongoose';
+import { Types } from 'mongoose';
+import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import {
