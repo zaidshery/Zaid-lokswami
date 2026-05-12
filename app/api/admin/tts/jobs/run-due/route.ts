@@ -12,7 +12,7 @@ function hasCronSecret(request: NextRequest) {
 async function canRunWorker(request: NextRequest) {
   if (hasCronSecret(request)) return true;
 
-  const admin = await getAdminSessionFromReq(req);
+  const admin = await getAdminSessionFromReq(request);
   return Boolean(admin && canViewPage(admin.role, 'ai_ops'));
 }
 

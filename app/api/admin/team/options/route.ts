@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canManageWorkflowAssignments } from '@/lib/auth/permissions';
@@ -33,7 +33,7 @@ function toOption(record: TeamOptionRecord) {
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const admin = await getAdminSessionFromReq(req);
     if (!admin || !canManageWorkflowAssignments(admin.role)) {

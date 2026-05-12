@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { runFailedLeadershipReportSchedules } from '@/lib/admin/leadershipReportRunner';
 import { getAdminSession } from '@/lib/auth/admin';
 import { canManageLeadershipReports } from '@/lib/auth/permissions';
@@ -22,7 +22,7 @@ async function requireLeadershipAdmin() {
   return { ok: true as const, admin };
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const adminResult = await requireLeadershipAdmin();
   if (!adminResult.ok) {
     return adminResult.response;

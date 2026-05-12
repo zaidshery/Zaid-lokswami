@@ -82,7 +82,7 @@ function toTeamMember(record: TeamMemberRecord) {
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const admin = await getAdminSessionFromReq(req);
     if (!admin || !canManageTeam(admin.role)) {

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canManageSettings } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
@@ -10,7 +10,7 @@ import { getTtsStorageConfig } from '@/lib/utils/ttsStorage';
 // All article audio is uploaded manually via DigitalOcean Spaces.
 // This settings endpoint now only reports on manual upload storage and asset health.
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const admin = await getAdminSessionFromReq(req);
     if (!admin) {
@@ -61,7 +61,7 @@ export async function GET() {
 }
 
 // PUT is no longer supported — auto-TTS configuration has been removed.
-export async function PUT() {
+export async function PUT(req: NextRequest) {
   try {
     const admin = await getAdminSessionFromReq(req);
     if (!admin) {
