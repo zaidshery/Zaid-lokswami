@@ -31,3 +31,15 @@ source-code.zip
 # Local content / uploads
 data/articles.json
 public/uploads/*
+
+# Local secret env files
+.env
+.env.local
+.env.hostinger
+.env.production
+.env.test
+.env*.local
+
+# Runtime logs
+storage/logs/
+*.log

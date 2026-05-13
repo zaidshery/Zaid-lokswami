@@ -1,24 +1,26 @@
 import { NextResponse } from 'next/server';
-
-// Gemini TTS synthesis has been removed.
-// Article audio is now uploaded manually via DigitalOcean Spaces.
-// See: /api/admin/uploads/article-tts/init and /complete
+import { TTS_LANGUAGE_OPTIONS, TTS_VOICE_OPTIONS } from '@/lib/constants/tts';
 
 export async function GET() {
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'Gemini TTS has been removed. Upload audio files manually from the article editor.',
+  return NextResponse.json({
+    success: true,
+    data: {
+      provider: 'manual',
+      configured: false,
+      supportedLanguages: TTS_LANGUAGE_OPTIONS,
+      voices: TTS_VOICE_OPTIONS,
+      articleListenMode: 'manual-upload',
+      disclosure:
+        'Paid AI TTS previews are disabled. Upload article and e-paper audio manually.',
     },
-    { status: 410 }
-  );
+  });
 }
 
 export async function POST() {
   return NextResponse.json(
     {
       success: false,
-      error: 'Gemini TTS has been removed. Upload audio files manually from the article editor.',
+      error: 'Paid AI TTS preview is disabled. Upload audio manually for published content.',
     },
     { status: 410 }
   );

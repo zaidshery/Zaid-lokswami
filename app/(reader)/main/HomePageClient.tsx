@@ -131,6 +131,9 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const [latestEpaper, setLatestEpaper] = useState<HomePageEpaperPreview | null>(
     () => initialHomeFeed?.epaper || null
   );
+  const hasInitialArticles = Boolean(initialHomeFeed?.articles.length);
+  const hasInitialStories = Boolean(initialHomeFeed?.stories.length);
+  const hasInitialEpaper = Boolean(initialHomeFeed?.epaper);
   const [visibleLatestNewsCount, setVisibleLatestNewsCount] = useState(
     HOME_LATEST_INITIAL_COUNT
   );
@@ -197,23 +200,26 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const homeFeed = await fetchHomeFeedForHomePage();
-      let hasArticles = false;
-      let hasStories = false;
-      let hasEpaper = false;
+      let hasArticles = hasInitialArticles;
+      let hasStories = hasInitialStories;
+      let hasEpaper = hasInitialEpaper;
 
-      if (active && homeFeed) {
-        if (homeFeed.articles.length) {
-          setFeedArticles(homeFeed.articles);
-          hasArticles = true;
-        }
-        if (homeFeed.stories.length) {
-          setCmsStories(homeFeed.stories);
-          hasStories = true;
-        }
-        if (homeFeed.epaper) {
-          setLatestEpaper(homeFeed.epaper);
-          hasEpaper = true;
+      if (!hasArticles || !hasStories || !hasEpaper) {
+        const homeFeed = await fetchHomeFeedForHomePage();
+
+        if (active && homeFeed) {
+          if (!hasArticles && homeFeed.articles.length) {
+            setFeedArticles(homeFeed.articles);
+            hasArticles = true;
+          }
+          if (!hasStories && homeFeed.stories.length) {
+            setCmsStories(homeFeed.stories);
+            hasStories = true;
+          }
+          if (!hasEpaper && homeFeed.epaper) {
+            setLatestEpaper(homeFeed.epaper);
+            hasEpaper = true;
+          }
         }
       }
 
@@ -236,11 +242,14 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       }
     };
 
-    void load();
+    if (!hasInitialArticles || !hasInitialStories || !hasInitialEpaper) {
+      void load();
+    }
+
     return () => {
       active = false;
     };
-  }, []);
+  }, [hasInitialArticles, hasInitialStories, hasInitialEpaper]);
 
   useEffect(() => {
     setVisibleLatestNewsCount(HOME_LATEST_INITIAL_COUNT);

@@ -70,7 +70,7 @@ describe('public e-paper story TTS route', () => {
     }
   });
 
-  it('returns ready manual audio before Gemini-generated TTS', async () => {
+  it('returns ready manual audio without auto-generated TTS', async () => {
     const epaperId = '665000000000000000000001';
     const articleId = '665000000000000000000002';
     epaperFindByIdMock.mockReturnValue({

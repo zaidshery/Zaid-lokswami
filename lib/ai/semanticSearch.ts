@@ -42,7 +42,7 @@ export type SemanticSearchResult = {
 export type SemanticSearchResponse = {
   query: string;
   answer: string;
-  mode: 'semantic-rag';
+  mode: 'local-search';
   language: 'hi' | 'en';
   results: SemanticSearchResult[];
 };
@@ -173,73 +173,9 @@ function templateAnswer(query: string, language: 'hi' | 'en', results: SemanticS
 
   const top = results.slice(0, 3).map((item) => item.title);
   if (language === 'hi') {
-    return `Maine Semantic RAG retrieval se ${results.length} relevant stories nikali hain. Sabse upyogi coverage: ${top.join('; ')}.`;
+    return `Local search se ${results.length} relevant stories mili hain. Sabse upyogi coverage: ${top.join('; ')}.`;
   }
-  return `Semantic RAG retrieved ${results.length} relevant stories. Most useful coverage includes: ${top.join('; ')}.`;
-}
-
-type OpenAiChatResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string;
-    };
-  }>;
-};
-
-async function tryOpenAiAnswer(
-  query: string,
-  language: 'hi' | 'en',
-  results: SemanticSearchResult[]
-) {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey || !results.length) return null;
-
-  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
-  const context = results
-    .slice(0, 4)
-    .map(
-      (item, index) =>
-        `[${index + 1}] ${item.title}\nCategory: ${item.category}\nSummary: ${item.summary}`
-    )
-    .join('\n\n');
-
-  const systemPrompt =
-    language === 'hi'
-      ? 'Aap Lokswami AI ho. Sirf diye gaye context se short, precise answer do. Agar context weak ho to clearly bolo.'
-      : 'You are Lokswami AI. Answer briefly and precisely using only the provided context. If context is weak, say so clearly.';
-
-  const userPrompt =
-    language === 'hi'
-      ? `Query: ${query}\n\nContext:\n${context}\n\n2-3 lines me concise answer do.`
-      : `Query: ${query}\n\nContext:\n${context}\n\nReturn a concise 2-3 line answer.`;
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_tokens: 220,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
-    });
-
-    if (!response.ok) return null;
-    const payload = (await response.json()) as OpenAiChatResponse;
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content || typeof content !== 'string') return null;
-    return content.trim();
-  } catch (error) {
-    console.error('AI search answer fallback triggered:', error);
-    return null;
-  }
+  return `Local search found ${results.length} relevant stories. Most useful coverage includes: ${top.join('; ')}.`;
 }
 
 export async function runSemanticRagSearch(params: {
@@ -260,7 +196,7 @@ export async function runSemanticRagSearch(params: {
         language === 'hi'
           ? 'Apna sawal type karein, main relevant coverage turant nikal dunga.'
           : 'Type your question and I will retrieve relevant coverage instantly.',
-      mode: 'semantic-rag',
+      mode: 'local-search',
       language,
       results: [],
     } as SemanticSearchResponse;
@@ -319,13 +255,12 @@ export async function runSemanticRagSearch(params: {
     .slice(0, limit)
     .map((item) => normalizeArticleForResponse(item.article, item.score, tokens));
 
-  const openAiAnswer = await tryOpenAiAnswer(query, language, results);
-  const answer = openAiAnswer || templateAnswer(query, language, results);
+  const answer = templateAnswer(query, language, results);
 
   return {
     query,
     answer,
-    mode: 'semantic-rag',
+    mode: 'local-search',
     language,
     results,
   } as SemanticSearchResponse;

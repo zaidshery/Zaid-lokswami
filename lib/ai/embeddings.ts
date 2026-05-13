@@ -1,5 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
 type ArticleEmbeddingSource = {
   title: string;
   category?: string;
@@ -8,27 +6,19 @@ type ArticleEmbeddingSource = {
   aiSummary?: string;
 };
 
-const apiKey = process.env.GEMINI_API_KEY || '';
-const configuredEmbeddingModel =
-  process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
-const fallbackEmbeddingModels = ['text-embedding-004'] as const;
-const candidateEmbeddingModels = Array.from(
-  new Set([configuredEmbeddingModel, ...fallbackEmbeddingModels].filter(Boolean))
-);
-
-if (!apiKey) {
-  console.warn('[Gemini Embeddings] GEMINI_API_KEY is not set.');
-}
-
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const LOCAL_EMBEDDING_DIMENSIONS = 64;
 
 function normalizeText(input: string) {
   return input.replace(/\s+/g, ' ').trim();
 }
 
-function shouldRetryWithNextModel(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  return /404|not found|not supported/i.test(message);
+function hashToken(token: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < token.length; index += 1) {
+    hash ^= token.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 export function buildArticleEmbeddingText(article: ArticleEmbeddingSource): string {
@@ -45,50 +35,18 @@ export function buildArticleEmbeddingText(article: ArticleEmbeddingSource): stri
 }
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  if (!genAI) {
-    throw new Error('Gemini API key not configured. Set GEMINI_API_KEY.');
+  const vector = new Array<number>(LOCAL_EMBEDDING_DIMENSIONS).fill(0);
+  const tokens = normalizeText(text).toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+
+  for (const token of tokens) {
+    const hash = hashToken(token);
+    const index = hash % LOCAL_EMBEDDING_DIMENSIONS;
+    vector[index] += token.length >= 6 ? 1.35 : 1;
   }
 
-  const normalized = normalizeText(text).slice(0, 8000);
-  if (!normalized) {
-    return [];
-  }
-
-  let lastError: unknown;
-
-  for (let index = 0; index < candidateEmbeddingModels.length; index += 1) {
-    const modelName = candidateEmbeddingModels[index];
-    const model = genAI.getGenerativeModel({ model: modelName });
-
-    try {
-      const response = await model.embedContent(normalized);
-      const values = Array.isArray(response.embedding.values)
-        ? response.embedding.values.filter((value) => Number.isFinite(value))
-        : [];
-
-      if (values.length) {
-        return values;
-      }
-    } catch (error) {
-      lastError = error;
-
-      if (
-        !shouldRetryWithNextModel(error) ||
-        index === candidateEmbeddingModels.length - 1
-      ) {
-        break;
-      }
-
-      const message = error instanceof Error ? error.message : 'Unknown embedding error';
-      console.warn(
-        `[Gemini Embeddings] Model "${modelName}" unavailable, retrying with next candidate. ${message}`
-      );
-    }
-  }
-
-  const message =
-    lastError instanceof Error ? lastError.message : 'Gemini embedding request failed';
-  throw new Error(`Gemini embedding error: ${message}`);
+  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  if (!magnitude) return vector;
+  return vector.map((value) => Number((value / magnitude).toFixed(6)));
 }
 
 export function cosineSimilarity(left: number[], right: number[]): number {

@@ -1,58 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import Article from '@/lib/models/Article';
-import { generateJSON, isGeminiConfigured } from '@/lib/ai/gemini';
+import { generateThreePointSummary } from '@/lib/ai/summarizer';
 
-interface GeminiSummaryResponse {
-  points: string[];
-  headline: string;
-  sentiment: 'positive' | 'negative' | 'neutral';
-}
-
-interface SummaryRequestBody {
+type SummaryRequestBody = {
   articleId?: string;
   text?: string;
   language?: 'hi' | 'en';
-}
+};
 
-interface ArticleSummaryDoc {
+type ArticleSummaryDoc = {
   title?: string;
   content?: string;
   summary?: string;
-}
-
-function normalizeSummaryPoints(points: string[]) {
-  const cleaned = points
-    .filter((point): point is string => typeof point === 'string')
-    .map((point) => point.trim())
-    .filter(Boolean)
-    .slice(0, 3);
-
-  if (cleaned.length !== 3) {
-    throw new Error('Gemini summary did not return exactly 3 points.');
-  }
-
-  return [cleaned[0], cleaned[1], cleaned[2]] as [string, string, string];
-}
+};
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as SummaryRequestBody;
     const language = body.language === 'en' ? 'en' : 'hi';
-
-    if (!isGeminiConfigured()) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'AI summary not configured. Set GEMINI_API_KEY.',
-        },
-        { status: 500 }
-      );
-    }
+    const articleId = typeof body.articleId === 'string' ? body.articleId.trim() : '';
 
     let textToSummarize = '';
     let sourceTitle = '';
-    const articleId = typeof body.articleId === 'string' ? body.articleId.trim() : '';
 
     if (articleId) {
       await connectDB();
@@ -75,7 +45,7 @@ export async function POST(req: NextRequest) {
 
       textToSummarize = `${sourceTitle}. ${articleSummary} ${articleContent}`.trim();
     } else if (typeof body.text === 'string' && body.text.trim()) {
-      textToSummarize = body.text.trim().substring(0, 2000);
+      textToSummarize = body.text.trim().slice(0, 6000);
     }
 
     if (!textToSummarize) {
@@ -85,40 +55,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const languageInstruction =
-      language === 'hi'
-        ? 'Write all 3 points in Hindi (Devanagari script).'
-        : 'Write all 3 points in English.';
-
-    const prompt = `Summarize this news article in exactly 3 bullet points.
-${languageInstruction}
-Each point must be one clear, complete sentence.
-
-Article: ${textToSummarize}
-
-Respond ONLY in valid JSON (no markdown, no code fences):
-{
-  "points": ["point 1", "point 2", "point 3"],
-  "headline": "5 word max summary",
-  "sentiment": "positive"
-}`;
-
-    const result = await generateJSON<GeminiSummaryResponse>(prompt);
-    const points = normalizeSummaryPoints(Array.isArray(result.points) ? result.points : []);
+    const summary = await generateThreePointSummary(textToSummarize, language);
+    const points = summary.bullets.slice(0, 3);
+    const headline = sourceTitle || (language === 'hi' ? 'Lokswami summary' : 'Lokswami summary');
 
     return NextResponse.json({
       success: true,
-      headline: result.headline,
+      headline,
       points,
-      sentiment: result.sentiment,
+      sentiment: 'neutral',
       language,
       data: {
         sourceTitle,
         language,
         mode: articleId ? 'article' : 'text',
+        provider: summary.mode,
         bullets: points,
-        headline: result.headline,
-        sentiment: result.sentiment,
+        headline,
+        sentiment: 'neutral',
       },
     });
   } catch (error) {

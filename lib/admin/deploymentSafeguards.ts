@@ -128,18 +128,13 @@ function buildUploadCheck(): DeploymentSafeguardCheck {
   };
 }
 
-function buildGeminiCheck(): DeploymentSafeguardCheck {
-  const configured = Boolean(trim(process.env.GEMINI_API_KEY));
+function buildPaidAiCheck(): DeploymentSafeguardCheck {
   return {
-    id: 'gemini',
-    label: 'Gemini AI',
-    status: configured ? 'healthy' : 'watch',
-    summary: configured
-      ? 'Gemini AI is configured.'
-      : 'Gemini AI is not configured.',
-    detail: configured
-      ? 'AI summaries, embeddings, and Gemini-backed TTS can run in production.'
-      : 'Set GEMINI_API_KEY if you want AI summaries, embeddings, and Gemini-backed newsroom features to work live.',
+    id: 'paid-ai',
+    label: 'Paid AI APIs',
+    status: 'healthy',
+    summary: 'Paid AI APIs are disabled.',
+    detail: 'OpenAI and Gemini keys are not required; runtime uses local/manual fallbacks.',
     href: '/admin/operations-diagnostics',
   };
 }
@@ -195,7 +190,7 @@ export function getDeploymentSafeguardsSnapshot(): DeploymentSafeguardsSnapshot 
     buildAuthSecretCheck(),
     buildSiteOriginCheck(),
     buildUploadCheck(),
-    buildGeminiCheck(),
+    buildPaidAiCheck(),
     buildOcrCheck(),
     buildReportAutomationCheck(),
   ];

@@ -253,5 +253,8 @@ describe('HomePageClient v1 home-feed integration', () => {
       node.textContent?.includes('Latest Story From Feed')
     )).toBe(true);
     expect(screen.getByTestId('epaper-card')).toHaveTextContent('Indore Edition');
+    expect(mocks.fetchHomeFeedForHomePage).not.toHaveBeenCalled();
+    expect(mocks.fetchMergedLiveArticles).not.toHaveBeenCalled();
+    expect(mocks.fetchLiveStories).not.toHaveBeenCalled();
   });
 });

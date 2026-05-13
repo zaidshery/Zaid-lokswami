@@ -104,8 +104,6 @@ function toneForStatus(status: SystemHealthStatus): SystemHealthSignal['tone'] {
 export async function getSystemHealthSummary(
   options: SystemHealthOptions
 ): Promise<SystemHealthSummary> {
-  // Gemini TTS has been removed. Check for general Gemini API key (used for non-TTS AI features).
-  const geminiAiConfigured = Boolean(process.env.GEMINI_API_KEY?.trim());
   const dataSourceStatus = mapDataSourceStatus(options.dataSource);
 
   let writableStorage = false;
@@ -174,15 +172,11 @@ export async function getSystemHealthSummary(
       detail: dataSourceStatus.detail,
     },
     {
-      id: 'gemini-ai',
-      label: 'Gemini AI',
-      status: geminiAiConfigured ? 'healthy' : 'watch',
-      summary: geminiAiConfigured
-        ? 'Gemini API is configured for AI features (embeddings, summaries).'
-        : 'Gemini API key is missing. TTS is manual-upload-only (no impact).',
-      detail: geminiAiConfigured
-        ? 'GEMINI_API_KEY is set. Non-TTS AI features are available.'
-        : 'Set GEMINI_API_KEY to enable AI features. Audio is uploaded manually — no TTS required.',
+      id: 'paid-ai',
+      label: 'Paid AI APIs',
+      status: 'inactive',
+      summary: 'OpenAI and Gemini API usage is disabled.',
+      detail: 'Use ChatGPT Plus manually in the browser; runtime features use local/manual fallbacks.',
       href: '/admin/settings',
     },
     {
@@ -224,9 +218,6 @@ export async function getSystemHealthSummary(
   if (options.dataSource !== 'mongodb') {
     risks.push('Primary database mode is not fully live.');
   }
-  if (!geminiAiConfigured) {
-    risks.push('Gemini API key is missing — AI embeddings and summaries are unavailable.');
-  }
   if (!writableStorage) {
     risks.push('Fallback audio storage directory is not writable (DigitalOcean Spaces primary).');
   }
@@ -256,9 +247,9 @@ export async function getSystemHealthSummary(
         tone: toneForStatus(dataSourceStatus.status),
       },
       {
-        label: 'Gemini AI',
-        value: geminiAiConfigured ? 'Configured' : 'Missing API Key',
-        tone: geminiAiConfigured ? 'good' : 'warning',
+        label: 'Paid AI',
+        value: 'Disabled',
+        tone: 'neutral',
       },
       {
         label: 'Audio Mode',

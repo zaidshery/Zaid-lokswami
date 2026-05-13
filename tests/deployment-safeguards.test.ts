@@ -37,7 +37,6 @@ describe('getDeploymentSafeguardsSnapshot', () => {
     process.env.DIGITALOCEAN_SPACES_REGION = 'sgp1';
     process.env.DIGITALOCEAN_SPACES_CDN_BASE_URL =
       'https://lokswami-storage-2026.sgp1.cdn.digitaloceanspaces.com';
-    process.env.GEMINI_API_KEY = 'gemini';
     process.env.LEADERSHIP_REPORT_CRON_SECRET = 'cron-secret';
     process.env.RESEND_API_KEY = 'resend';
     process.env.LEADERSHIP_REPORT_FROM_EMAIL = 'reports@lokswami.com';

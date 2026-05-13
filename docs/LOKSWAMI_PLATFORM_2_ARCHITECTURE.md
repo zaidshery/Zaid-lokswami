@@ -18,8 +18,8 @@ Lokswami is a Next.js 15 App Router modular monolith. The repo currently has:
   some local/degraded flows.
 - DigitalOcean Spaces upload utilities, Cloudinary URL compatibility, e-paper
   PDF/image support, and TTS asset storage.
-- AI modules for Gemini content, embeddings, semantic search, summaries, AI
-  assistant, and TTS.
+- Local retrieval, extractive summaries, manual audio, and editorial assistant
+  surfaces that do not require paid external AI APIs.
 - Security modules for audit logging, request logging, rate limiting, anti-bot,
   CSP reports, request validation, and IP handling.
 - Deployment scripts for Hostinger standalone builds, smoke checks, env
@@ -183,8 +183,8 @@ Target:
 
 Current state:
 
-- Gemini content, embeddings, content indexing, semantic search, summaries, AI
-  assistant, and TTS modules exist.
+- Local retrieval, content indexing, extractive summaries, assistant UI, and
+  manual TTS/audio modules exist.
 - Article/e-paper/video/story schemas include embedding and AI summary fields.
 
 Target:
@@ -272,7 +272,7 @@ Target:
 
 - PDF to image conversion.
 - OCR and e-paper article extraction.
-- AI summaries, embeddings, search indexing, and SEO suggestions.
+- Local summaries, search indexing, OCR cleanup, and editorial checklists.
 - Push notification fanout.
 - Social draft generation and dispatch.
 - Video thumbnail/transcoding/transcription.

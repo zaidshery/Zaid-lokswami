@@ -198,14 +198,15 @@ Closeout still needed:
 
 ### Phase 7: Business Value and Revenue Intelligence
 
-Status: not started
+Status: in progress (backend aggregation APIs built)
 
 Recommended scope:
 
-- lead-value scoring
-- section-value scoring
-- top lead-producing pages
-- business impact ranking
+- [x] lead-value scoring API
+- [x] top lead-producing pages API
+- [ ] section-value scoring
+- [ ] business impact ranking
+- [ ] strongest campaign-to-contact surfaces
 - strongest campaign-to-contact surfaces
 
 ### Phase 8: Advanced External Analytics and Monetization Ops

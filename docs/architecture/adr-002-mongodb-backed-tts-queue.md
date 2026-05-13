@@ -6,18 +6,17 @@ Accepted
 
 ## Context
 
-Article listen mode can call Gemini TTS, which is too slow for reader-facing
-request latency when audio is not already cached.
+Article listen mode previously considered provider-generated TTS, but the
+platform now avoids paid external TTS APIs and uses manually uploaded audio.
 
 ## Decision
 
-Use existing MongoDB-backed TTS asset records as the first queue layer. Public
-requests return a state (`ready`, `queued`, `processing`, or `failed`) and a
-worker route/script performs due generation.
+Use existing MongoDB-backed TTS asset records for manual audio state. Public
+requests return `ready` when an uploaded asset exists, otherwise the newsroom
+uploads audio manually through the CMS.
 
 ## Consequences
 
 This avoids Redis/BullMQ for the current scale. It is simpler to operate, but it
 requires careful locking and diagnostics. If TTS volume grows, this queue can be
 replaced by a dedicated worker system without changing the public response shape.
-

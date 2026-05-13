@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchLokswamiNews, type SearchRequestBody } from '@/lib/ai/lokswamiSearchAssistant';
+import { runSemanticRagSearch } from '@/lib/ai/semanticSearch';
+
+type SearchRequestBody = {
+  query?: string;
+  category?: string;
+  limit?: number;
+  sortBy?: 'relevance' | 'latest' | 'popular';
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,10 +20,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const payload = await searchLokswamiNews(body);
-    return NextResponse.json(payload);
+    const payload = await runSemanticRagSearch({
+      query,
+      category: body.category,
+      limit: body.limit,
+      sortBy: body.sortBy,
+    });
+
+    return NextResponse.json({
+      success: true,
+      answer: payload.answer,
+      answerSource: payload.results.length ? 'cms_articles' : 'empty_database',
+      confidence: payload.results.length ? 'medium' : 'low',
+      query: payload.query,
+      data: {
+        ...payload,
+        provider: 'local',
+      },
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'AI search failed';
+    const message = error instanceof Error ? error.message : 'Local search failed';
     console.error('[AI Search Route] Error:', message);
     return NextResponse.json(
       { success: false, error: message },

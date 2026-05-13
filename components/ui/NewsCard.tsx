@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import { Share2, Bookmark, TrendingUp } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import type { Article } from '@/lib/mock/data';
@@ -22,13 +21,13 @@ interface NewsCardProps {
 
 export default function NewsCard({ article, variant = 'default', size = 'default', index = 0 }: NewsCardProps) {
   const router = useRouter();
-  const { status } = useSession();
   const language = useAppStore((state) => state.language);
-  const savedArticleIds = useAppStore((state) => state.currentUser?.savedArticles ?? null);
+  const currentUser = useAppStore((state) => state.currentUser);
+  const savedArticleIds = currentUser?.savedArticles ?? null;
   const [isHydrated, setIsHydrated] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isSavingBookmark, setIsSavingBookmark] = useState(false);
-  const isSignedIn = status === 'authenticated';
+  const isSignedIn = Boolean(currentUser);
   const isSavedInProfile = Array.isArray(savedArticleIds) && savedArticleIds.includes(article.id);
   const isSmall = size === 'sm';
   const articleHref = buildArticlePublicPath({ id: article.id, slug: article.slug });

@@ -2,6 +2,10 @@ import type { Article } from '@/lib/mock/data';
 
 const DEFAULT_AVATAR = '/logo-icon-final.png';
 const DEFAULT_LIMIT = 20;
+const USE_REMOTE_DEMO_MEDIA =
+  process.env.NEXT_PUBLIC_USE_REMOTE_DEMO_MEDIA === 'true';
+const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
+const LOCAL_NEWS_FALLBACK_IMAGE = '/placeholders/news-16x9.svg';
 
 export type PublicArticlesCursor = {
   publishedAt: string;
@@ -43,6 +47,10 @@ export type PublicArticlesQuery = {
   basePath?: string;
 };
 
+export type PublicArticleDetailQuery = {
+  basePath?: string;
+};
+
 type PublicArticlesEnvelope = {
   success?: boolean;
   data?: {
@@ -59,6 +67,13 @@ type PublicArticlesEnvelope = {
   limit?: number;
   hasMore?: boolean;
   nextCursor?: PublicArticlesCursor | null;
+};
+
+type PublicArticleDetailEnvelope = {
+  success?: boolean;
+  data?: PublicArticleApiItem | { article?: PublicArticleApiItem } | null;
+  article?: PublicArticleApiItem;
+  item?: PublicArticleApiItem;
 };
 
 function asObject(value: unknown) {
@@ -88,6 +103,15 @@ function normalizeDate(value: unknown) {
   );
   if (Number.isNaN(parsed.getTime())) return new Date().toISOString();
   return parsed.toISOString();
+}
+
+function normalizeArticleImage(input: string) {
+  const image = input.trim();
+  if (!image) return '';
+  if (!USE_REMOTE_DEMO_MEDIA && UNSPLASH_IMAGE_HOST.test(image)) {
+    return LOCAL_NEWS_FALLBACK_IMAGE;
+  }
+  return image;
 }
 
 function normalizeAuthor(value: PublicArticleApiItem['author']) {
@@ -135,6 +159,34 @@ export function parsePublicArticlesPayload(
   };
 }
 
+export function parsePublicArticleDetailPayload(
+  payload: unknown
+): PublicArticleApiItem | null {
+  const envelope = asObject(payload) as PublicArticleDetailEnvelope;
+  const data = envelope.data;
+  const dataObject = asObject(data);
+
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    if ('title' in dataObject || 'id' in dataObject || '_id' in dataObject) {
+      return data as PublicArticleApiItem;
+    }
+
+    if (dataObject.article && typeof dataObject.article === 'object') {
+      return dataObject.article as PublicArticleApiItem;
+    }
+  }
+
+  if (envelope.article && typeof envelope.article === 'object') {
+    return envelope.article;
+  }
+
+  if (envelope.item && typeof envelope.item === 'object') {
+    return envelope.item;
+  }
+
+  return null;
+}
+
 export function buildPublicArticlesPath(query: PublicArticlesQuery = {}) {
   const path = query.basePath || '/api/v1/public/articles';
   const params = new URLSearchParams();
@@ -154,6 +206,14 @@ export function buildPublicArticlesPath(query: PublicArticlesQuery = {}) {
   return `${path}?${params.toString()}`;
 }
 
+export function buildPublicArticleDetailPath(
+  slugOrId: string,
+  query: PublicArticleDetailQuery = {}
+) {
+  const basePath = (query.basePath || '/api/v1/public/articles').replace(/\/+$/, '');
+  return `${basePath}/${encodeURIComponent(slugOrId.trim())}`;
+}
+
 export function mapPublicArticleToUiArticle(
   item: PublicArticleApiItem,
   index = 0
@@ -161,7 +221,7 @@ export function mapPublicArticleToUiArticle(
   const id = String(item._id || item.id || `public-article-${index}`).trim();
   const title = String(item.title || '').trim();
   const summary = String(item.summary || '').trim();
-  const image = String(item.image || '').trim();
+  const image = normalizeArticleImage(String(item.image || ''));
   if (!id || !title || !summary || !image) return null;
 
   return {
@@ -218,6 +278,39 @@ export async function fetchPublicArticlesPage(
     const payload = await response.json().catch(() => null);
     if (!response.ok) return null;
     return parsePublicArticlesPayload(payload, limit);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchPublicArticleDetail(
+  slugOrId: string,
+  options: { fallbackToLegacy?: boolean } = {}
+) {
+  const token = slugOrId.trim();
+  if (!token) return null;
+
+  try {
+    const response = await fetch(buildPublicArticleDetailPath(token));
+    const payload = await response.json().catch(() => null);
+    if (response.ok) {
+      return parsePublicArticleDetailPayload(payload);
+    }
+  } catch {
+    // Fall through to the legacy detail endpoint when requested.
+  }
+
+  if (!options.fallbackToLegacy) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      buildPublicArticleDetailPath(token, { basePath: '/api/articles' })
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) return null;
+    return parsePublicArticleDetailPayload(payload);
   } catch {
     return null;
   }

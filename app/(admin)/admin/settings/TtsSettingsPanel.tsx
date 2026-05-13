@@ -242,7 +242,7 @@ export default function TtsSettingsPanel() {
               Runtime
             </p>
             <p className="mt-2 text-lg font-bold text-zinc-900 dark:text-zinc-100">
-              {payload.runtime.configured ? 'Configured' : 'Missing Gemini'}
+              {payload.runtime.configured ? 'Configured' : 'Manual only'}
             </p>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               {payload.runtime.provider} | {payload.runtime.model}

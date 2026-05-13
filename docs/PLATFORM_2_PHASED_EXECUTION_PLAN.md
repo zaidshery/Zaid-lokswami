@@ -236,18 +236,19 @@ Done when:
 - Slow AI/e-paper/notification work is not performed directly in normal admin
   request handlers.
 
-## Phase 7: AI And Search Expansion
+## Phase 7: Local Search And Editorial Assist
 
-Goal: improve newsroom assistance while keeping editorial control.
+Goal: improve newsroom assistance while keeping editorial control and avoiding
+paid external AI APIs.
 
 Tasks:
 
-1. Move summaries, SEO suggestions, embeddings, and transcript summaries into
+1. Move extractive summaries, search index refreshes, and transcript cleanup into
    queued jobs.
-2. Add admin AI job status and error visibility.
-3. Add production search strategy using Atlas Search or a dedicated engine.
-4. Keep AI output marked as assistive until reviewed.
-5. Rate limit public AI/search endpoints.
+2. Add admin local-assist job status and error visibility.
+3. Add production search strategy using Atlas Search or a dedicated local engine.
+4. Keep generated/checklist output marked as assistive until reviewed.
+5. Rate limit public search and assist endpoints.
 
 Done when:
 

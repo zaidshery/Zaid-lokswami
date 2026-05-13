@@ -5,9 +5,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Bookmark, Newspaper, Sparkles, Volume2, PauseCircle, Loader2 } from 'lucide-react';
-import { useSession } from 'next-auth/react';
 import NewsCard from '@/components/ui/NewsCard';
 import { fetchMergedLiveArticles } from '@/lib/content/liveArticles';
+import {
+  fetchPublicArticleDetail,
+  mapPublicArticleToUiArticle,
+} from '@/lib/content/publicArticles';
 import type { Article } from '@/lib/mock/data';
 import { useAppStore } from '@/lib/store/appStore';
 import {
@@ -30,28 +33,6 @@ import {
   type TtsAudioData,
 } from '@/lib/ai/ttsClient';
 
-type ApiArticle = {
-  _id?: string;
-  id?: string;
-  slug?: string;
-  title?: string;
-  summary?: string;
-  content?: string;
-  image?: string;
-  category?: string;
-  author?: string | { name?: string; avatar?: string };
-  publishedAt?: string;
-  views?: number;
-  isBreaking?: boolean;
-  isTrending?: boolean;
-  seo?: Article['seo'];
-};
-
-const DEFAULT_AVATAR = '/logo-icon-final.png';
-const USE_REMOTE_DEMO_MEDIA =
-  process.env.NEXT_PUBLIC_USE_REMOTE_DEMO_MEDIA === 'true';
-const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
-const LOCAL_NEWS_FALLBACK_IMAGE = '/placeholders/news-16x9.svg';
 const MONGO_OBJECT_ID_REGEX = /^[a-fA-F0-9]{24}$/;
 const DEVANAGARI_REGEX = /[\u0900-\u097F]/;
 const RELATED_STORIES_INITIAL_COUNT = 4;
@@ -65,57 +46,6 @@ type PreparedArticleAudio = {
   src: string;
   payload: TtsAudioData;
 };
-
-function normalizeArticleImage(input: string) {
-  const image = input.trim();
-  if (!image) return '';
-  if (!USE_REMOTE_DEMO_MEDIA && UNSPLASH_IMAGE_HOST.test(image)) {
-    return LOCAL_NEWS_FALLBACK_IMAGE;
-  }
-  return image;
-}
-
-function normalizeApiArticle(raw: ApiArticle | null | undefined): Article | null {
-  if (!raw) return null;
-
-  const id = raw._id || raw.id;
-  const title = (raw.title || '').trim();
-  const summary = (raw.summary || '').trim();
-  const image = normalizeArticleImage(raw.image || '');
-
-  if (!id || !title || !summary || !image) {
-    return null;
-  }
-
-  const authorName =
-    typeof raw.author === 'string'
-      ? raw.author
-      : raw.author?.name || 'Editor';
-  const authorAvatar =
-    typeof raw.author === 'string'
-      ? DEFAULT_AVATAR
-      : raw.author?.avatar || DEFAULT_AVATAR;
-
-  return {
-    id,
-    slug: raw.slug,
-    title,
-    summary,
-    content: raw.content || '',
-    image,
-    category: raw.category || 'General',
-    author: {
-      id: `author-${authorName.toLowerCase().replace(/\s+/g, '-')}`,
-      name: authorName,
-      avatar: authorAvatar,
-    },
-    publishedAt: raw.publishedAt || new Date().toISOString(),
-    views: Number.isFinite(raw.views) ? Number(raw.views) : 0,
-    isBreaking: Boolean(raw.isBreaking),
-    isTrending: Boolean(raw.isTrending),
-    seo: raw.seo,
-  };
-}
 
 function buildRelatedArticles(source: Article[], current: Article | null) {
   if (!source.length) return [];
@@ -166,11 +96,11 @@ function getPreferredListenLanguageCode(article: Article | null) {
 
 export default function ArticleDetailPage() {
   const router = useRouter();
-  const { status } = useSession();
   const params = useParams<{ id: string }>();
   const routeId = Array.isArray(params?.id) ? params.id[0] || '' : params?.id || '';
   const language = useAppStore((state) => state.language);
-  const savedArticleIds = useAppStore((state) => state.currentUser?.savedArticles ?? null);
+  const currentUser = useAppStore((state) => state.currentUser);
+  const savedArticleIds = currentUser?.savedArticles ?? null;
   const [article, setArticle] = useState<Article | null>(null);
   const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
   const [visibleRelatedCount, setVisibleRelatedCount] = useState(
@@ -195,7 +125,7 @@ export default function ArticleDetailPage() {
   const listenPrefetchPromiseRef = useRef<Promise<PreparedArticleAudio | null> | null>(null);
   const hasTrackedReadRef = useRef(false);
   const readingProgressRef = useRef(0);
-  const isSignedIn = status === 'authenticated';
+  const isSignedIn = Boolean(currentUser);
   const canSaveArticle = Boolean(article && MONGO_OBJECT_ID_REGEX.test(article.id));
   const articleContentLanguage = useMemo(() => inferArticleContentLanguage(article), [article]);
   const isBookmarked = Boolean(
@@ -230,19 +160,15 @@ export default function ArticleDetailPage() {
         return;
       }
 
-      const articleId = decodeURIComponent(routeId);
+      const articleId = decodeURIComponent(routeId).trim();
+      const articleSlug = articleId.toLowerCase();
       let found: Article | null = null;
       let merged: Article[] = [];
 
-      try {
-        const res = await fetch(`/api/articles/${encodeURIComponent(articleId)}`);
-        if (res.ok) {
-          const payload = await res.json();
-          found = normalizeApiArticle(payload?.data);
-        }
-      } catch {
-        // fallback to merged feed below
-      }
+      const detail = await fetchPublicArticleDetail(articleId, {
+        fallbackToLegacy: true,
+      });
+      found = detail ? mapPublicArticleToUiArticle(detail) : null;
 
       try {
         merged = await fetchMergedLiveArticles(200);
@@ -251,7 +177,12 @@ export default function ArticleDetailPage() {
       }
 
       if (!found && merged.length) {
-        found = merged.find((item) => item.id === articleId) || null;
+        found =
+          merged.find(
+            (item) =>
+              item.id === articleId ||
+              item.slug?.trim().toLowerCase() === articleSlug
+          ) || null;
       }
 
       if (!active) return;

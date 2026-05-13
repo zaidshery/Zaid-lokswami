@@ -1,8 +1,8 @@
 export const LOKSWAMI_AI_PILLARS = {
   awareness:
-    'We use Semantic RAG (Retrieval-Augmented Generation) so users can ask questions in their native tongue, like Hindi, Marathi, or Hinglish, and get precise results instantly.',
+    'We use local retrieval so users can search Lokswami coverage in Hindi, Marathi, or Hinglish without paid external AI API calls.',
   abridgment:
-    'To support users with cognitive or time constraints, our AI generates instant TL;DR summaries, breaking down complex articles into 3 simple, accessible bullet points.',
+    'To support users with cognitive or time constraints, local extractive summaries break articles into 3 simple, accessible bullet points.',
   audibility:
-    "Integrating Gemini 2.5 Text-to-Speech, we provide a site-wide 'Listen' feature for articles, breaking news, and e-paper stories so users can hear Lokswami clearly across the platform.",
+    "Manual audio uploads provide the site-wide 'Listen' feature for articles, breaking news, and e-paper stories.",
 } as const;

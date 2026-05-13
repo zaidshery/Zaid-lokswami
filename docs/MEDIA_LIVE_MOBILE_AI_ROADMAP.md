@@ -79,16 +79,16 @@ Notification types:
 
 ## AI Roadmap
 
-Current repo already has Gemini, embeddings, semantic search, summaries, AI
-assistant, and TTS modules.
+Current repo uses local retrieval, extractive summaries, manual audio uploads,
+and optional custom/local OCR. Paid external AI APIs are intentionally disabled.
 
 Next features:
 
-- Article summary worker.
-- SEO suggestions.
-- Headline suggestions.
-- Hindi grammar/correction assistant.
-- AI search assistant improvements.
+- Local article summary worker.
+- Manual SEO checklist helpers.
+- Headline checklist helpers.
+- Hindi grammar/correction workflow using editor review.
+- Local search assistant improvements.
 - Related article recommendations.
 - E-paper OCR cleanup.
 - Video/story transcript summaries.
@@ -97,7 +97,7 @@ TTS direction:
 
 - Article listen audio should use manual upload for editorial control.
 - E-paper story audio can keep manual asset priority.
-- AI TTS generation should be optional, throttled, and worker-backed.
+- Paid AI TTS generation is disabled; publish audio through manual uploads.
 
 Editorial rule:
 
@@ -124,7 +124,7 @@ social.draft.create
 Initial workers:
 
 - `epaper.worker.ts`: PDF pages, OCR, thumbnails, article hotspots.
-- `ai.worker.ts`: summaries, SEO suggestions, embeddings.
+- `ai.worker.ts`: local summaries, local search index refresh, editorial checklists.
 - `notification.worker.ts`: push fanout and delivery logging.
 - `media.worker.ts`: thumbnails, video metadata, transcript jobs.
 - `social.worker.ts`: social draft creation and dispatch tracking.

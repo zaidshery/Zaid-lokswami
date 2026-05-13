@@ -10,10 +10,6 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { TTS_LANGUAGE_OPTIONS } from '@/lib/constants/tts';
-import {
-  fetchTtsStatus,
-} from '@/lib/ai/ttsClient';
 import { useAppStore } from '@/lib/store/appStore';
 
 type ChatRole = 'assistant' | 'user';
@@ -123,7 +119,6 @@ export default function LokswamiAIBot() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isWorking, setIsWorking] = useState(false);
   const [errorText, setErrorText] = useState('');
-  const [isTtsConfigured, setIsTtsConfigured] = useState(false);
 
   const currentArticleId = useMemo(() => {
     const match = pathname.match(/\/main\/article\/([^/?#]+)/i);
@@ -158,22 +153,6 @@ export default function LokswamiAIBot() {
     if (!isOpen) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [isOpen, messages, isWorking]);
-
-  useEffect(() => {
-    let active = true;
-    const loadTtsStatus = async () => {
-      try {
-        const payload = await fetchTtsStatus();
-        if (!active) return;
-        setIsTtsConfigured(Boolean(payload.configured));
-      } catch {
-        if (!active) return;
-        setIsTtsConfigured(false);
-      }
-    };
-    void loadTtsStatus();
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     if (!isOpen) return;

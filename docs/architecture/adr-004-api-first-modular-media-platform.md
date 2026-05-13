@@ -81,7 +81,7 @@ Private and mutation routes must not use public cache headers.
 These jobs should not run in normal request/response paths:
 
 - e-paper PDF conversion, OCR, and page image generation
-- AI summaries, SEO suggestions, and transcription
+- local summaries, editorial checklists, OCR cleanup, and transcription
 - push notification fanout
 - social post creation and dispatch
 - video thumbnail/transcoding workflows

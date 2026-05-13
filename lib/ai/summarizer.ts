@@ -148,69 +148,13 @@ function buildFallbackBullets(text: string, language: 'hi' | 'en') {
   return bullets.slice(0, 3);
 }
 
-type OpenAiChatResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string;
-    };
-  }>;
-};
-
-async function tryOpenAiSummary(text: string, language: 'hi' | 'en') {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) return null;
-
-  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
-  const systemPrompt =
-    language === 'hi'
-      ? 'Aap Lokswami AI ho. Article ko 3 simple bullets me summarize karo. Har bullet short aur clear ho.'
-      : 'You are Lokswami AI. Summarize the article into exactly 3 short and clear bullets.';
-  const userPrompt = `${stripHtml(text).slice(0, 8000)}\n\nReturn exactly 3 bullet lines.`;
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_tokens: 250,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
-    });
-    if (!response.ok) return null;
-    const payload = (await response.json()) as OpenAiChatResponse;
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content || typeof content !== 'string') return null;
-
-    const bullets = content
-      .split('\n')
-      .map((line) => line.replace(/^[\s\-*0-9.)]+/, '').trim())
-      .filter(Boolean)
-      .slice(0, 3);
-
-    if (!bullets.length) return null;
-    return bullets;
-  } catch (error) {
-    console.error('AI summary fallback triggered:', error);
-    return null;
-  }
-}
-
 export async function generateThreePointSummary(source: string, forcedLanguage?: 'hi' | 'en') {
   const detectedLanguage = forcedLanguage || detectLanguage(source);
-  const openAiBullets = await tryOpenAiSummary(source, detectedLanguage);
-  const bullets = openAiBullets || buildFallbackBullets(source, detectedLanguage);
+  const bullets = buildFallbackBullets(source, detectedLanguage);
 
   return {
     language: detectedLanguage,
     bullets: bullets.slice(0, 3),
-    mode: openAiBullets ? 'llm' : 'extractive',
+    mode: 'extractive',
   } as const;
 }

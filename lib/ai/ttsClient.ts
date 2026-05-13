@@ -3,8 +3,12 @@ import type { TtsLanguageOption, TtsVoiceOption } from '@/lib/constants/tts';
 export type TtsStatusData = {
   configured: boolean;
   provider: 'manual' | null;
-  supportedLanguages: TtsLanguageOption[];
+  supportedLanguages?: TtsLanguageOption[];
   voices: TtsVoiceOption[];
+  model?: string;
+  defaultVoice?: string;
+  articleListenMode?: string;
+  disclosure?: string;
 };
 
 export type TtsAudioData = {
@@ -18,7 +22,9 @@ export type TtsAudioData = {
 
 type TtsStatusResponse = {
   success?: boolean;
-  data?: Partial<TtsStatusData>;
+  data?: Partial<Omit<TtsStatusData, 'voices'>> & {
+    voices?: Array<TtsVoiceOption | string>;
+  };
   error?: string;
 };
 
@@ -29,7 +35,7 @@ type TtsAudioResponse = {
 };
 
 export async function fetchTtsStatus() {
-  const response = await fetch('/api/admin/tts/settings', {
+  const response = await fetch('/api/ai/tts', {
     method: 'GET',
     cache: 'no-store',
   });
@@ -39,7 +45,35 @@ export async function fetchTtsStatus() {
     throw new Error(payload.error || 'TTS status is unavailable.');
   }
 
-  return payload.data as TtsStatusData;
+  const voices = Array.isArray(payload.data.voices)
+    ? payload.data.voices
+        .map((voice) => {
+          if (typeof voice === 'string') {
+            return { id: voice, label: voice };
+          }
+
+          if (
+            voice &&
+            typeof voice.id === 'string' &&
+            typeof voice.label === 'string'
+          ) {
+            return voice;
+          }
+
+          return null;
+        })
+        .filter((voice): voice is TtsVoiceOption => Boolean(voice))
+    : [];
+
+  return {
+    ...payload.data,
+    configured: Boolean(payload.data.configured),
+    provider:
+      payload.data.provider === 'manual'
+        ? payload.data.provider
+        : null,
+    voices,
+  } satisfies TtsStatusData;
 }
 
 export async function requestArticleTtsAudio(

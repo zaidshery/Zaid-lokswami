@@ -10,7 +10,7 @@ describe('TTS queue public states', () => {
   });
 
   it('supports manual audio as an authoritative TTS provider', () => {
-    expect(TTS_PROVIDERS).toContain('gemini');
     expect(TTS_PROVIDERS).toContain('manual');
+    expect(TTS_PROVIDERS).not.toContain('gemini');
   });
 });

@@ -112,6 +112,7 @@ const HI = {
 const SUPER_ADMIN_ITEMS: SidebarItem[] = [
   { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
   { icon: BarChart3, labelEn: 'Analytics', labelHi: HI.analytics, href: '/admin/analytics' },
+  { icon: BarChart3, labelEn: 'Business Value', labelHi: 'बिजनेस वैल्यू', href: '/admin/analytics/business-value' },
   { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls' },
   { icon: BarChart3, labelEn: 'Revenue', labelHi: HI.revenue, href: '/admin/revenue' },
   { icon: ClipboardList, labelEn: 'Audit Log', labelHi: HI.auditLog, href: '/admin/audit-log' },
@@ -227,7 +228,7 @@ function getSidebarSections(
       {
         labelEn: 'Overview',
         labelHi: '\u0913\u0935\u0930\u0935\u094d\u092f\u0942',
-        items: pick(['/admin', '/admin/analytics', '/admin/revenue']),
+        items: pick(['/admin', '/admin/analytics', '/admin/analytics/business-value', '/admin/revenue']),
       },
       {
         labelEn: 'Governance',
