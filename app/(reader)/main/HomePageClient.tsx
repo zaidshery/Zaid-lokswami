@@ -456,7 +456,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
           </div>
         </div>
 
-      </motion.section>
+      </section>
 
       <section className="relative mt-[var(--section-gap)] cnp-surface px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-3.5 md:px-6 md:py-4 lg:py-[1.1rem] xl:py-[1.2rem]">
         <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-2 sm:gap-2.5 md:mb-2 md:gap-3">
