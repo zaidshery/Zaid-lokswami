@@ -147,10 +147,7 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
   };
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+    <article
       className="relative h-full group"
     >
       <Link href={articleHref} className="block h-full md:flex md:flex-col">
@@ -299,7 +296,7 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
           </motion.div>
         ) : null}
       </Link>
-    </motion.article>
+    </article>
   );
 }
 

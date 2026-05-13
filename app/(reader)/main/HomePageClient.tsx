@@ -325,11 +325,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       <div className="pointer-events-none absolute -top-16 right-0 h-60 w-60 rounded-full bg-orange-200/45 blur-3xl dark:bg-orange-900/20" />
       <div className="pointer-events-none absolute top-[26rem] -left-16 h-64 w-64 rounded-full bg-cyan-200/35 blur-3xl dark:bg-cyan-900/20" />
 
-      <motion.section
-        initial={{ opacity: 0, y: 12 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.2 }}
-        transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
+      <section
         className={`relative overflow-hidden cnp-surface [--ts-pad:0.45rem] [--ts-gap:0.55rem] [--ts-toolbar-gap:0.35rem] max-[360px]:[--ts-pad:0.34rem] max-[360px]:[--ts-gap:0.4rem] max-[360px]:[--ts-toolbar-gap:0.22rem] p-[var(--ts-pad)] sm:[--ts-pad:0.875rem] sm:[--ts-gap:0.875rem] md:[--ts-pad:1.125rem] md:[--ts-gap:1rem] lg:[--ts-pad:1.25rem] ${
           topStoriesVariant === 'editorial'
             ? 'bg-white/95 dark:bg-zinc-950/90'
@@ -384,6 +380,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
                         fill
                         className="object-cover transition-transform duration-500 group-hover:scale-105"
                         sizes="(max-width: 1023px) 112px, 112px"
+                        priority
                       />
                       <span className="absolute left-1.5 top-1.5 inline-flex max-w-[72px] items-center rounded-full bg-red-600/95 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white shadow-sm">
                         <span className="truncate">{article.category}</span>
@@ -441,6 +438,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
                         fill
                         className="object-cover transition-transform duration-500 group-hover:scale-105"
                         sizes="108px"
+                        priority
                       />
                       <span className="absolute left-1.5 top-1.5 inline-flex max-w-[80px] items-center rounded-full bg-red-600/95 px-2 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
                         <span className="truncate">{article.category}</span>
