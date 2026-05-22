@@ -106,4 +106,24 @@ describe('article SEO helpers', () => {
       },
     ]);
   });
+
+  it('keeps sanitized article image input ahead of stale SEO OG images in JSON-LD', () => {
+    const jsonLd = buildNewsArticleJsonLd({
+      id: 'abc123',
+      slug: 'indore-metro-update',
+      title: 'Article title',
+      summary: 'Article summary',
+      image: '/placeholders/news-16x9.svg',
+      category: 'National',
+      author: 'Desk',
+      publishedAt: '2026-05-06T09:00:00.000Z',
+      updatedAt: '2026-05-06T10:00:00.000Z',
+      siteUrl: 'https://lokswami.com',
+      seo: {
+        ogImage: 'https://res.cloudinary.com/demo/image/upload/old.jpg',
+      },
+    });
+
+    expect(jsonLd.image).toEqual(['https://lokswami.com/placeholders/news-16x9.svg']);
+  });
 });

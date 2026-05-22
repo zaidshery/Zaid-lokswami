@@ -1,6 +1,6 @@
 # Lokswami Platform 2 Architecture
 
-Last reviewed: 2026-05-09
+Last reviewed: 2026-05-22
 
 ## Current Architecture Summary
 
@@ -16,8 +16,9 @@ Lokswami is a Next.js 15 App Router modular monolith. The repo currently has:
   assignments, operations, team, settings, revenue, and audit log.
 - MongoDB/Mongoose as the main persistence layer, with file-store fallbacks for
   some local/degraded flows.
-- DigitalOcean Spaces upload utilities, Cloudinary URL compatibility, e-paper
-  PDF/image support, and TTS asset storage.
+- DigitalOcean Spaces upload utilities, local placeholders for legacy media that
+  should no longer be requested from Cloudinary, e-paper PDF/image support, and
+  TTS asset storage.
 - Local retrieval, extractive summaries, manual audio, and editorial assistant
   surfaces that do not require paid external AI APIs.
 - Security modules for audit logging, request logging, rate limiting, anti-bot,
@@ -81,7 +82,7 @@ Readers / Mobile Users / Admins / Reporters / Advertisers
                  |
       -------------------------------
       | MongoDB | DigitalOcean Spaces |
-      | file fallback | AI providers  |
+      | file fallback | local AI tools |
       -------------------------------
                  |
                  v
@@ -302,7 +303,9 @@ Target:
 - Store metadata in MongoDB.
 - Store raw files, PDFs, page images, videos, and manual audio in
   DigitalOcean Spaces or another S3-compatible store.
-- Keep Cloudinary URL support for legacy images and transformations.
+- Do not introduce new Cloudinary storage or transforms. Legacy Cloudinary image
+  URLs are treated as compatibility data and should fall back locally unless the
+  content team replaces them with DigitalOcean assets.
 - Use CDN URLs for public delivery.
 - Store dimensions, MIME type, byte size, provider, and media key for every
   durable asset.

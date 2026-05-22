@@ -276,7 +276,7 @@ export function buildNewsArticleJsonLd(input: {
   const seo = normalizeArticleSeo(input.seo);
   const siteUrl = getSiteUrl(input.siteUrl);
   const articleUrl = seo.canonicalUrl || buildArticlePublicUrl(input, siteUrl);
-  const imageUrl = toAbsoluteArticleUrl(seo.ogImage || input.image, siteUrl);
+  const imageUrl = toAbsoluteArticleUrl(input.image || seo.ogImage, siteUrl);
   const author: Record<string, string> = {
     '@type': 'Person',
     name: input.author,

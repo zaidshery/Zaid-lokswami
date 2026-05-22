@@ -161,7 +161,10 @@ export async function buildArticleSocialPreview(input: ArticlePreviewInput) {
             `<text x="800" y="${384 + index * 32}" fill="#d4d4d8" font-size="22" font-weight="500">${escapeXml(line)}</text>`
         )
         .join('')}
-      ${logoSvg(800, 506)}
+      <rect x="800" y="462" width="336" height="38" rx="19" fill="#ffffff"/>
+      <text x="820" y="487" fill="#18181b" font-size="17" font-weight="900">READ FULL STORY</text>
+      <text x="990" y="487" fill="#dc2626" font-size="17" font-weight="900">lokswami.com</text>
+      ${logoSvg(800, 526)}
     </svg>
   `);
 
@@ -195,6 +198,9 @@ export async function buildEpaperSocialPreview(input: EpaperPreviewInput) {
       ${textLinesSvg(titleLines, 540, 210, 54, 62)}
       <text x="540" y="366" fill="#ffffff" font-size="30" font-weight="800">${escapeXml(input.cityLabel)} | ${escapeXml(input.dateLabel)}</text>
       <text x="540" y="414" fill="#d4d4d8" font-size="24" font-weight="500">Read the full Lokswami digital newspaper edition online.</text>
+      <rect x="540" y="454" width="438" height="40" rx="20" fill="#ffffff"/>
+      <text x="562" y="480" fill="#18181b" font-size="18" font-weight="900">OPEN E-PAPER ONLINE</text>
+      <text x="856" y="480" fill="#dc2626" font-size="18" font-weight="900">lokswami.com</text>
       ${logoSvg(540, 506)}
     </svg>
   `);

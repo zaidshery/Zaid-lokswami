@@ -35,7 +35,11 @@ import {
 } from '@/lib/constants/epaperCities';
 import { useAppStore } from '@/lib/store/appStore';
 import {
-  buildArticleWhatsAppShareUrl,
+  buildEpaperIssueShareText,
+  buildEpaperIssueWhatsAppShareUrl,
+  buildEpaperSharePath,
+  buildEpaperStoryShareText,
+  buildEpaperStoryWhatsAppShareUrl,
   toAbsoluteShareUrl,
 } from '@/lib/utils/articleShare';
 import { formatUiDate } from '@/lib/utils/dateFormat';
@@ -1467,15 +1471,20 @@ export default function EPaperPageClient({
   const shareActivePaperOnWhatsApp = async () => {
     if (!activePaper) return;
 
-    const params = buildReaderSearchParams({
-      city: selectedCity,
-      publishDate: selectedPublishDate,
+    const sharePath = buildEpaperSharePath({
       paperId: activePaper._id,
       page: activePage,
     });
-
-    const shareUrl = `${window.location.origin}/main/epaper?${params.toString()}`;
-    const shareText = `${activePaper.title}\n${shareUrl}`;
+    const shareUrl = toAbsoluteShareUrl(sharePath, window.location.origin);
+    const dateLabel = activePaper.publishDate
+      ? formatUiDate(activePaper.publishDate, activePaper.publishDate)
+      : selectedPublishDate;
+    const shareText = buildEpaperIssueShareText({
+      title: activePaper.title,
+      issueUrl: shareUrl,
+      cityLabel: activePaper.cityName,
+      dateLabel,
+    });
 
     if (navigator.share) {
       try {
@@ -1490,7 +1499,12 @@ export default function EPaperPageClient({
       }
     }
 
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    const whatsappUrl = buildEpaperIssueWhatsAppShareUrl({
+      title: activePaper.title,
+      issueUrl: shareUrl,
+      cityLabel: activePaper.cityName,
+      dateLabel,
+    });
     const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
     if (!opened) {
       window.location.href = whatsappUrl;
@@ -1501,24 +1515,25 @@ export default function EPaperPageClient({
     if (!activePaper || !activeArticle) return '';
 
     const storyToken = String(activeArticle.slug || activeArticle._id || '').trim();
-    const params = buildReaderSearchParams({
-      city: selectedCity,
-      publishDate: selectedPublishDate,
+    const sharePath = buildEpaperSharePath({
       paperId: activePaper._id,
       page: activeArticle.pageNumber || activePage,
       story: storyToken,
     });
 
-    return `${window.location.origin}/main/epaper?${params.toString()}`;
+    return toAbsoluteShareUrl(sharePath, window.location.origin);
   };
 
   const shareActiveArticleOnWhatsApp = async () => {
     if (!activePaper || !activeArticle) return;
 
     const shareUrl = buildActiveArticleShareUrl();
-    const whatsappUrl = buildArticleWhatsAppShareUrl({
+    const whatsappUrl = buildEpaperStoryWhatsAppShareUrl({
       title: activeArticle.title || activePaper.title,
-      articleUrl: shareUrl,
+      storyUrl: shareUrl,
+      paperTitle: activePaper.title,
+      excerpt: activeArticle.excerpt,
+      page: activeArticle.pageNumber || activePage,
     });
 
     const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
@@ -1531,7 +1546,13 @@ export default function EPaperPageClient({
     if (!activePaper || !activeArticle) return;
 
     const shareUrl = buildActiveArticleShareUrl();
-    const shareText = activeArticle.title || activePaper.title;
+    const shareText = buildEpaperStoryShareText({
+      title: activeArticle.title || activePaper.title,
+      storyUrl: shareUrl,
+      paperTitle: activePaper.title,
+      excerpt: activeArticle.excerpt,
+      page: activeArticle.pageNumber || activePage,
+    });
 
     if (navigator.share) {
       try {

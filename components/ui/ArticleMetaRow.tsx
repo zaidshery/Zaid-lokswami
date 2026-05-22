@@ -9,9 +9,15 @@ import {
   buildArticleWhatsAppShareUrl,
   toAbsoluteShareUrl,
 } from '@/lib/utils/articleShare';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 
 interface ArticleMetaRowProps {
-  article: Pick<Article, 'id' | 'title' | 'views'> & { image?: string };
+  article: Pick<Article, 'id' | 'title' | 'views'> & {
+    category?: string;
+    image?: string;
+    slug?: string;
+    summary?: string;
+  };
   timeText: string;
   language: 'hi' | 'en';
   className?: string;
@@ -53,11 +59,13 @@ export default function ArticleMetaRow({
     if (typeof window === 'undefined') return;
 
     const resolvedPath =
-      sharePath ?? `/main/article/${encodeURIComponent(article.id)}`;
+      sharePath ?? buildArticlePublicPath({ id: article.id, slug: article.slug });
     const articleUrl = toAbsoluteShareUrl(resolvedPath, window.location.origin);
     const shareUrl = buildArticleWhatsAppShareUrl({
       title: article.title,
       articleUrl,
+      summary: article.summary,
+      category: article.category,
     });
     window.open(shareUrl, '_blank', 'noopener,noreferrer');
   };

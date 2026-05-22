@@ -1,10 +1,55 @@
-type BuildArticleWhatsAppShareInput = {
+export type BuildArticleWhatsAppShareInput = {
   title: string;
   articleUrl: string;
+  summary?: string;
+  category?: string;
+  sourceLabel?: string;
+  ctaLabel?: string;
+};
+
+export type BuildEpaperIssueShareInput = {
+  title: string;
+  issueUrl: string;
+  cityLabel?: string;
+  dateLabel?: string;
+  sourceLabel?: string;
+  ctaLabel?: string;
+};
+
+export type BuildEpaperStoryShareInput = {
+  title: string;
+  storyUrl: string;
+  paperTitle?: string;
+  excerpt?: string;
+  page?: number;
+  sourceLabel?: string;
+  ctaLabel?: string;
+};
+
+export type BuildEpaperSharePathInput = {
+  paperId?: string;
+  page?: number;
+  story?: string;
 };
 
 function cleanUrl(value: string) {
   return value.trim();
+}
+
+function cleanShareLine(value?: string | null) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function truncateShareLine(value: string, maxLength: number) {
+  const normalized = cleanShareLine(value);
+  if (normalized.length <= maxLength) return normalized;
+  const clipped = normalized.slice(0, Math.max(0, maxLength - 3));
+  return `${clipped.replace(/\s+\S*$/, '').trim() || clipped.trim()}...`;
+}
+
+function pushShareLine(lines: string[], value?: string | null) {
+  const normalized = cleanShareLine(value);
+  if (normalized) lines.push(normalized);
 }
 
 function trimTrailingSlash(value: string) {
@@ -43,25 +88,105 @@ export function toAbsoluteShareUrl(value: string, origin: string) {
 export function buildArticleWhatsAppShareText({
   title,
   articleUrl,
+  summary,
+  category,
+  sourceLabel = 'Lokswami',
+  ctaLabel = 'Read full story',
 }: BuildArticleWhatsAppShareInput) {
   const lines: string[] = [];
-  const cleanTitle = title.trim();
+  const cleanTitle = truncateShareLine(title, 170);
+  const cleanSummary = truncateShareLine(summary || '', 220);
   const cleanArticleUrl = cleanUrl(articleUrl);
+  const cleanCategory = cleanShareLine(category);
+  const source = cleanShareLine(sourceLabel) || 'Lokswami';
 
-  // URL on the first line gives WhatsApp the best chance to create a preview card.
+  lines.push(cleanCategory ? `${source} | ${cleanCategory}` : `${source} | Top Story`);
+  pushShareLine(lines, cleanTitle);
+  pushShareLine(lines, cleanSummary);
   if (cleanArticleUrl) {
-    lines.push(cleanArticleUrl);
-    lines.push('');
+    lines.push(`${cleanShareLine(ctaLabel) || 'Read full story'}: ${cleanArticleUrl}`);
   }
-
-  if (cleanTitle) lines.push(cleanTitle);
-  lines.push('');
-  lines.push('Lokswami');
 
   return lines.join('\n').trim();
 }
 
 export function buildArticleWhatsAppShareUrl(input: BuildArticleWhatsAppShareInput) {
   const text = buildArticleWhatsAppShareText(input);
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+export function buildEpaperSharePath({ paperId, page, story }: BuildEpaperSharePathInput) {
+  const params = new URLSearchParams();
+  const cleanPaperId = cleanShareLine(paperId);
+  const pageNumber = Number.parseInt(String(page ?? ''), 10);
+  const storyToken = cleanShareLine(story);
+
+  if (cleanPaperId) params.set('paper', cleanPaperId);
+  if (Number.isFinite(pageNumber) && pageNumber > 0) {
+    params.set('page', String(Math.floor(pageNumber)));
+  }
+  if (storyToken) params.set('story', storyToken);
+
+  const query = params.toString();
+  return query ? `/main/epaper?${query}` : '/main/epaper';
+}
+
+export function buildEpaperIssueShareText({
+  title,
+  issueUrl,
+  cityLabel,
+  dateLabel,
+  sourceLabel = 'Lokswami E-Paper',
+  ctaLabel = 'Open e-paper',
+}: BuildEpaperIssueShareInput) {
+  const lines: string[] = [];
+  const meta = [cleanShareLine(cityLabel), cleanShareLine(dateLabel)].filter(Boolean).join(' | ');
+
+  lines.push(cleanShareLine(sourceLabel) || 'Lokswami E-Paper');
+  pushShareLine(lines, truncateShareLine(title, 160));
+  pushShareLine(lines, meta);
+  if (issueUrl) {
+    lines.push(`${cleanShareLine(ctaLabel) || 'Open e-paper'}: ${cleanUrl(issueUrl)}`);
+  }
+
+  return lines.join('\n').trim();
+}
+
+export function buildEpaperIssueWhatsAppShareUrl(input: BuildEpaperIssueShareInput) {
+  const text = buildEpaperIssueShareText(input);
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+export function buildEpaperStoryShareText({
+  title,
+  storyUrl,
+  paperTitle,
+  excerpt,
+  page,
+  sourceLabel = 'Lokswami E-Paper | Story',
+  ctaLabel = 'Read in e-paper',
+}: BuildEpaperStoryShareInput) {
+  const lines: string[] = [];
+  const pageNumber = Number.parseInt(String(page ?? ''), 10);
+  const meta = [
+    cleanShareLine(paperTitle),
+    Number.isFinite(pageNumber) && pageNumber > 0 ? `Page ${Math.floor(pageNumber)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
+  lines.push(cleanShareLine(sourceLabel) || 'Lokswami E-Paper | Story');
+  pushShareLine(lines, truncateShareLine(title, 170));
+  pushShareLine(lines, meta);
+  pushShareLine(lines, truncateShareLine(excerpt || '', 220));
+  if (storyUrl) {
+    lines.push(`${cleanShareLine(ctaLabel) || 'Read in e-paper'}: ${cleanUrl(storyUrl)}`);
+  }
+
+  return lines.join('\n').trim();
+}
+
+export function buildEpaperStoryWhatsAppShareUrl(input: BuildEpaperStoryShareInput) {
+  const text = buildEpaperStoryShareText(input);
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }

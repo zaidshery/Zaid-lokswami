@@ -2,6 +2,7 @@
 
 import Image, { type ImageProps } from 'next/image';
 import { useEffect, useState } from 'react';
+import { resolveArticleImageSrc } from '@/lib/utils/articleMedia';
 
 type ReaderImageProps = Omit<ImageProps, 'src' | 'alt'> & {
   src?: string | null;
@@ -18,7 +19,7 @@ export default function ReaderImage({
   onError,
   ...props
 }: ReaderImageProps) {
-  const primarySrc = typeof src === 'string' && src.trim() ? src.trim() : fallbackSrc;
+  const primarySrc = resolveArticleImageSrc(src, fallbackSrc);
   const [resolvedSrc, setResolvedSrc] = useState(primarySrc);
 
   useEffect(() => {

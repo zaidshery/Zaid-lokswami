@@ -567,6 +567,8 @@ export default function ArticleDetailPage() {
     const shareUrl = buildArticleWhatsAppShareUrl({
       title: article.title,
       articleUrl,
+      summary: article.summary,
+      category: article.category,
     });
 
     window.open(shareUrl, '_blank', 'noopener,noreferrer');
