@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ARTICLE_IMAGE_FALLBACK_SRC,
   buildArticleImageVariantUrl,
   isLegacyCloudinaryImageUrl,
   resolveArticleImageSrc,
@@ -13,11 +12,11 @@ describe('article media helpers', () => {
     expect(isLegacyCloudinaryImageUrl('https://lokswami-storage-2026.sgp1.cdn.digitaloceanspaces.com/lokswami/image.jpg')).toBe(false);
   });
 
-  it('uses the local placeholder instead of requesting legacy Cloudinary URLs', () => {
+  it('keeps legacy Cloudinary URLs available for old published article thumbnails', () => {
     const legacyUrl = 'https://res.cloudinary.com/demo/image/upload/sample.jpg';
 
-    expect(resolveArticleImageSrc(legacyUrl)).toBe(ARTICLE_IMAGE_FALLBACK_SRC);
-    expect(buildArticleImageVariantUrl(legacyUrl, 'thumb')).toBe(ARTICLE_IMAGE_FALLBACK_SRC);
+    expect(resolveArticleImageSrc(legacyUrl)).toBe(legacyUrl);
+    expect(buildArticleImageVariantUrl(legacyUrl, 'thumb')).toBe(legacyUrl);
   });
 
   it('keeps DigitalOcean article images unchanged', () => {

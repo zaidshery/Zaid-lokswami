@@ -2,7 +2,10 @@
 
 import Image, { type ImageProps } from 'next/image';
 import { useEffect, useState } from 'react';
-import { resolveArticleImageSrc } from '@/lib/utils/articleMedia';
+import {
+  isLegacyCloudinaryImageUrl,
+  resolveArticleImageSrc,
+} from '@/lib/utils/articleMedia';
 
 type ReaderImageProps = Omit<ImageProps, 'src' | 'alt'> & {
   src?: string | null;
@@ -21,6 +24,7 @@ export default function ReaderImage({
 }: ReaderImageProps) {
   const primarySrc = resolveArticleImageSrc(src, fallbackSrc);
   const [resolvedSrc, setResolvedSrc] = useState(primarySrc);
+  const shouldBypassNextOptimizer = isLegacyCloudinaryImageUrl(resolvedSrc);
 
   useEffect(() => {
     setResolvedSrc(primarySrc);
@@ -31,6 +35,7 @@ export default function ReaderImage({
       {...props}
       src={resolvedSrc}
       alt={alt}
+      unoptimized={props.unoptimized || shouldBypassNextOptimizer}
       onError={(event) => {
         if (resolvedSrc !== fallbackSrc) {
           setResolvedSrc(fallbackSrc);

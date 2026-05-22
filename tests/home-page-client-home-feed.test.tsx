@@ -81,6 +81,7 @@ vi.mock('@/lib/content/liveStories', () => ({
 
 vi.mock('@/lib/utils/articleMedia', () => ({
   buildArticleImageVariantUrl: (value: string) => value,
+  isLegacyCloudinaryImageUrl: () => false,
   resolveArticleImageSrc: (value: string) => value,
 }));
 

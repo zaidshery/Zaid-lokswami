@@ -1,6 +1,7 @@
 // Article media utilities for DigitalOcean Spaces URLs.
-// Legacy Cloudinary image URLs are intentionally not requested in the reader.
-// All new media is stored on DigitalOcean Spaces CDN.
+// New durable media belongs on DigitalOcean Spaces. Legacy Cloudinary URLs may
+// still exist in old published articles and should render until those records
+// are migrated.
 
 export type ArticleImageVariant =
   | 'hero'
@@ -30,7 +31,7 @@ export function resolveArticleImageSrc(
   fallbackSrc = ARTICLE_IMAGE_FALLBACK_SRC
 ) {
   const normalized = String(value || '').trim();
-  if (!normalized || isLegacyCloudinaryImageUrl(normalized)) {
+  if (!normalized) {
     return fallbackSrc;
   }
 
