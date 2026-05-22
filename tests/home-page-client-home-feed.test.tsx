@@ -81,6 +81,7 @@ vi.mock('@/lib/content/liveStories', () => ({
 
 vi.mock('@/lib/utils/articleMedia', () => ({
   buildArticleImageVariantUrl: (value: string) => value,
+  resolveArticleImageSrc: (value: string) => value,
 }));
 
 vi.mock('@/components/ui/HeroCarousel', () => ({
