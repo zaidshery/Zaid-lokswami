@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildArticleSharePath,
   buildArticleWhatsAppShareText,
   buildEpaperIssueShareText,
   buildEpaperSharePath,
@@ -24,13 +25,16 @@ describe('article and e-paper share helpers', () => {
   });
 
   it('keeps e-paper share paths short and issue-focused', () => {
+    expect(buildArticleSharePath({ id: 'article-1', slug: 'clean-story-slug' })).toBe(
+      '/a/clean-story-slug'
+    );
     expect(
       buildEpaperSharePath({
         paperId: 'epaper-1',
         page: 6,
         story: 'front-page-story',
       })
-    ).toBe('/main/epaper?paper=epaper-1&page=6&story=front-page-story');
+    ).toBe('/e/epaper-1?p=6&s=front-page-story');
   });
 
   it('builds e-paper issue and story share text with clear CTAs', () => {
@@ -38,18 +42,18 @@ describe('article and e-paper share helpers', () => {
       title: 'Lokswami - Indore Edition',
       cityLabel: 'Indore',
       dateLabel: '22/05/26',
-      issueUrl: 'https://lokswami.com/main/epaper?paper=epaper-1&page=1',
+      issueUrl: 'https://lokswami.com/e/epaper-1?p=1',
     });
     const storyText = buildEpaperStoryShareText({
       title: 'Mapped story headline',
       paperTitle: 'Lokswami - Indore Edition',
       excerpt: 'A short readable excerpt from the e-paper story.',
       page: 3,
-      storyUrl: 'https://lokswami.com/main/epaper?paper=epaper-1&page=3&story=story-1',
+      storyUrl: 'https://lokswami.com/e/epaper-1?p=3&s=story-1',
     });
 
-    expect(issueText).toContain('Open e-paper: https://lokswami.com/main/epaper?paper=epaper-1&page=1');
+    expect(issueText).toContain('Open e-paper: https://lokswami.com/e/epaper-1?p=1');
     expect(storyText).toContain('Lokswami - Indore Edition | Page 3');
-    expect(storyText).toContain('Read in e-paper: https://lokswami.com/main/epaper?paper=epaper-1&page=3&story=story-1');
+    expect(storyText).toContain('Read in e-paper: https://lokswami.com/e/epaper-1?p=3&s=story-1');
   });
 });

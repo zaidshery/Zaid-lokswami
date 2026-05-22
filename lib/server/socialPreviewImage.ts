@@ -35,6 +35,20 @@ function normalizeText(value: string) {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+function normalizeSvgText(value: string, fallback: string) {
+  const normalized = normalizeText(value)
+    .normalize('NFKD')
+    .replace(/[\u2010-\u2015]/g, '-')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/\u2026/g, '...');
+  const ascii = normalized.replace(/[^\x20-\x7E]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  if (!ascii) return fallback;
+  if (ascii.length < Math.min(8, normalized.length * 0.55)) return fallback;
+  return ascii;
+}
+
 function wrapText(value: string, maxChars: number, maxLines: number) {
   const words = normalizeText(value).split(' ').filter(Boolean);
   const lines: string[] = [];
@@ -137,8 +151,14 @@ function logoSvg(x: number, y: number) {
 }
 
 export async function buildArticleSocialPreview(input: ArticlePreviewInput) {
-  const titleLines = wrapText(input.title || COMPANY_INFO.name, 24, 3);
-  const descriptionLines = wrapText(input.description || COMPANY_INFO.tagline.en, 34, 3);
+  const safeTitle = normalizeSvgText(input.title, 'Lokswami Top Story');
+  const safeDescription = normalizeSvgText(
+    input.description,
+    'Read the latest verified news update on Lokswami.'
+  );
+  const safeLabel = normalizeSvgText(input.label || 'NEWS', 'NEWS');
+  const titleLines = wrapText(safeTitle || COMPANY_INFO.name, 24, 3);
+  const descriptionLines = wrapText(safeDescription || COMPANY_INFO.tagline.en, 34, 3);
   const image = await buildContainedImage({
     imageUrl: input.imageUrl,
     fallbackPath: '/lokswami-share-preview.png',
@@ -152,8 +172,8 @@ export async function buildArticleSocialPreview(input: ArticlePreviewInput) {
       <rect x="64" y="64" width="674" height="502" rx="18" fill="#09090b"/>
       <rect x="764" y="40" width="396" height="550" fill="#171417"/>
       <circle cx="1108" cy="72" r="210" fill="rgba(220,38,38,0.18)"/>
-      <rect x="800" y="86" width="${Math.max(126, Math.min(260, normalizeText(input.label || 'NEWS').length * 13 + 34))}" height="38" rx="19" fill="#dc2626"/>
-      <text x="818" y="111" fill="#ffffff" font-size="18" font-weight="800">${escapeXml(normalizeText(input.label || 'NEWS').toUpperCase().slice(0, 22))}</text>
+      <rect x="800" y="86" width="${Math.max(126, Math.min(260, normalizeText(safeLabel).length * 13 + 34))}" height="38" rx="19" fill="#dc2626"/>
+      <text x="818" y="111" fill="#ffffff" font-size="18" font-weight="800">${escapeXml(normalizeText(safeLabel).toUpperCase().slice(0, 22))}</text>
       ${textLinesSvg(titleLines, 800, 184, 42, 50)}
       ${descriptionLines
         .map(
@@ -178,7 +198,15 @@ export async function buildArticleSocialPreview(input: ArticlePreviewInput) {
 }
 
 export async function buildEpaperSocialPreview(input: EpaperPreviewInput) {
-  const titleLines = wrapText(input.title || 'Lokswami E-Paper', 23, 2);
+  const safeCityLabel = normalizeSvgText(input.cityLabel, 'Digital Edition');
+  const safeDateLabel = normalizeSvgText(input.dateLabel, 'Latest edition');
+  const safeTitle = normalizeSvgText(
+    input.title,
+    safeCityLabel === 'Digital Edition'
+      ? 'Lokswami Digital E-Paper'
+      : `Lokswami ${safeCityLabel} E-Paper`
+  );
+  const titleLines = wrapText(safeTitle || 'Lokswami E-Paper', 23, 2);
   const cover = await buildContainedImage({
     imageUrl: input.imageUrl,
     fallbackPath: '/placeholders/epaper-3x4.svg',
@@ -196,7 +224,7 @@ export async function buildEpaperSocialPreview(input: EpaperPreviewInput) {
       <rect x="540" y="94" width="174" height="38" rx="19" fill="#dc2626"/>
       <text x="558" y="119" fill="#ffffff" font-size="18" font-weight="800">LATEST E-PAPER</text>
       ${textLinesSvg(titleLines, 540, 210, 54, 62)}
-      <text x="540" y="366" fill="#ffffff" font-size="30" font-weight="800">${escapeXml(input.cityLabel)} | ${escapeXml(input.dateLabel)}</text>
+      <text x="540" y="366" fill="#ffffff" font-size="30" font-weight="800">${escapeXml(safeCityLabel)} | ${escapeXml(safeDateLabel)}</text>
       <text x="540" y="414" fill="#d4d4d8" font-size="24" font-weight="500">Read the full Lokswami digital newspaper edition online.</text>
       <rect x="540" y="454" width="438" height="40" rx="20" fill="#ffffff"/>
       <text x="562" y="480" fill="#18181b" font-size="18" font-weight="900">OPEN E-PAPER ONLINE</text>

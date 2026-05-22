@@ -6,10 +6,10 @@ import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Newspaper } from 'lucide-react';
 import type { Article } from '@/lib/mock/data';
 import {
+  buildArticleSharePath,
   buildArticleWhatsAppShareUrl,
   toAbsoluteShareUrl,
 } from '@/lib/utils/articleShare';
-import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 
 interface ArticleMetaRowProps {
   article: Pick<Article, 'id' | 'title' | 'views'> & {
@@ -59,7 +59,7 @@ export default function ArticleMetaRow({
     if (typeof window === 'undefined') return;
 
     const resolvedPath =
-      sharePath ?? buildArticlePublicPath({ id: article.id, slug: article.slug });
+      sharePath ?? buildArticleSharePath({ id: article.id, slug: article.slug });
     const articleUrl = toAbsoluteShareUrl(resolvedPath, window.location.origin);
     const shareUrl = buildArticleWhatsAppShareUrl({
       title: article.title,

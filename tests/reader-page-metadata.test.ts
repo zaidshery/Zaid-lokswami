@@ -67,6 +67,23 @@ describe('reader page metadata', () => {
     );
   });
 
+  it('builds clean e-paper issue metadata without duplicating the edition title', () => {
+    const metadata = buildEpaperPageMetadata({
+      city: 'indore',
+      publishDate: '2026-05-22',
+      paperId: 'paper-1',
+      issueTitle: 'Indore Edition - Lokswami E-paper - 22/05/2026',
+      issueCityName: 'Indore',
+    });
+
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        title: 'Lokswami Indore E-Paper - 22 May 2026',
+        description: expect.stringContaining('22 May 2026 Indore Lokswami e-paper'),
+      })
+    );
+  });
+
   it('marks unknown category slugs as noindex while keeping known categories indexable', () => {
     const known = buildCategoryPageMetadata('politics');
     const unknown = buildCategoryPageMetadata('custom-desk');

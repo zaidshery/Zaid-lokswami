@@ -17,13 +17,16 @@ export async function GET(request: Request) {
     citySlug: city,
     publishDate: date,
   });
-  const title = issue?.title || 'Lokswami E-Paper';
   const cityLabel = issue?.cityName || city || 'Digital Edition';
   const dateLabel = issue?.publishDate
     ? formatUiDate(issue.publishDate, issue.publishDate)
     : date
       ? formatUiDate(date, date)
       : 'Latest edition';
+  const title =
+    cityLabel && cityLabel !== 'Digital Edition'
+      ? `Lokswami ${cityLabel} E-Paper`
+      : 'Lokswami Digital E-Paper';
   const imageUrl = issue?.thumbnailPath
     ? toAbsoluteArticleUrl(issue.thumbnailPath, siteUrl)
     : toAbsoluteArticleUrl('/placeholders/epaper-3x4.svg', siteUrl);

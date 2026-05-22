@@ -64,6 +64,12 @@ function formatMetadataDate(value: string) {
   }).format(date);
 }
 
+function buildEpaperIssueTitle(cityName: string, formattedDate: string) {
+  const location = cityName ? `${cityName} ` : '';
+  const date = formattedDate ? ` - ${formattedDate}` : '';
+  return `Lokswami ${location}E-Paper${date}`;
+}
+
 function buildMetadata(input: MetadataInput): Metadata {
   const siteUrl = resolveSiteUrl();
   const canonical = toAbsoluteUrl(input.path, siteUrl);
@@ -164,7 +170,7 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
     'Read the Lokswami e-paper online with archive filters, mapped stories, downloadable daily editions, and city-wise access.';
 
   if (input.issueTitle && cityName && formattedDate) {
-    title = `${input.issueTitle} - ${cityName} E-Paper for ${formattedDate}`;
+    title = buildEpaperIssueTitle(cityName, formattedDate);
     description = `Read the ${formattedDate} ${cityName} Lokswami e-paper edition online with the full digital newspaper thumbnail and archive access.`;
   } else if (cityName && formattedDate) {
     title = `${cityName} E-Paper for ${formattedDate}`;

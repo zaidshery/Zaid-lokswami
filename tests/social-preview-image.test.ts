@@ -28,4 +28,22 @@ describe('social preview image renderer', () => {
     expectPngBuffer(articleImage);
     expectPngBuffer(epaperImage);
   });
+
+  it('renders fallback-safe preview PNGs for Hindi social text', async () => {
+    const articleImage = await buildArticleSocialPreview({
+      title: 'चुनाव नतीजे RESULT 2026 LIVE',
+      description: 'लोकस्वामी पर देखें लाइव नतीजे और ताजा अपडेट',
+      imageUrl: '/lokswami-share-preview.png',
+      label: 'राष्ट्रीय',
+    });
+    const epaperImage = await buildEpaperSocialPreview({
+      title: 'इंदौर संस्करण लोकस्वामी ई-पेपर',
+      cityLabel: 'Indore',
+      dateLabel: '22/05/26',
+      imageUrl: '/placeholders/epaper-3x4.svg',
+    });
+
+    expectPngBuffer(articleImage);
+    expectPngBuffer(epaperImage);
+  });
 });

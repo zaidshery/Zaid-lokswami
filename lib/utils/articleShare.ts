@@ -32,6 +32,11 @@ export type BuildEpaperSharePathInput = {
   story?: string;
 };
 
+export type BuildArticleSharePathInput = {
+  id?: string;
+  slug?: string;
+};
+
 function cleanUrl(value: string) {
   return value.trim();
 }
@@ -115,20 +120,28 @@ export function buildArticleWhatsAppShareUrl(input: BuildArticleWhatsAppShareInp
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
+export function buildArticleSharePath({ id, slug }: BuildArticleSharePathInput) {
+  const token = cleanShareLine(slug) || cleanShareLine(id);
+  return token ? `/a/${encodeURIComponent(token)}` : '/main';
+}
+
 export function buildEpaperSharePath({ paperId, page, story }: BuildEpaperSharePathInput) {
-  const params = new URLSearchParams();
   const cleanPaperId = cleanShareLine(paperId);
   const pageNumber = Number.parseInt(String(page ?? ''), 10);
   const storyToken = cleanShareLine(story);
 
-  if (cleanPaperId) params.set('paper', cleanPaperId);
+  if (!cleanPaperId) return '/main/epaper';
+
+  const params = new URLSearchParams();
   if (Number.isFinite(pageNumber) && pageNumber > 0) {
-    params.set('page', String(Math.floor(pageNumber)));
+    params.set('p', String(Math.floor(pageNumber)));
   }
-  if (storyToken) params.set('story', storyToken);
+  if (storyToken) params.set('s', storyToken);
 
   const query = params.toString();
-  return query ? `/main/epaper?${query}` : '/main/epaper';
+  return query
+    ? `/e/${encodeURIComponent(cleanPaperId)}?${query}`
+    : `/e/${encodeURIComponent(cleanPaperId)}`;
 }
 
 export function buildEpaperIssueShareText({

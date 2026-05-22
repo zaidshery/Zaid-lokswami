@@ -14,13 +14,13 @@ import {
 import type { Article } from '@/lib/mock/data';
 import { useAppStore } from '@/lib/store/appStore';
 import {
+  buildArticleSharePath,
   buildArticleWhatsAppShareUrl,
   toAbsoluteShareUrl,
 } from '@/lib/utils/articleShare';
 import {
   buildArticleImageVariantUrl,
 } from '@/lib/utils/articleMedia';
-import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import { formatUiDate } from '@/lib/utils/dateFormat';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import {
@@ -562,7 +562,7 @@ export default function ArticleDetailPage() {
   const handleWhatsAppShare = () => {
     if (typeof window === 'undefined' || !article) return;
 
-    const articlePath = buildArticlePublicPath({ id: article.id, slug: article.slug });
+    const articlePath = buildArticleSharePath({ id: article.id, slug: article.slug });
     const articleUrl = toAbsoluteShareUrl(articlePath, window.location.origin);
     const shareUrl = buildArticleWhatsAppShareUrl({
       title: article.title,
