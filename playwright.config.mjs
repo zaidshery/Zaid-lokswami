@@ -1,4 +1,4 @@
-export default {
+const config = {
   testDir: './tests/e2e',
   timeout: 60_000,
   fullyParallel: false,
@@ -17,3 +17,4 @@ export default {
       },
 };
 
+export default config;

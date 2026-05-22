@@ -102,7 +102,7 @@ export default function Header() {
                 onClick={toggleLanguage}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
-                className="cnp-motion inline-flex h-8 shrink-0 items-center rounded-xl border border-zinc-200/80 bg-white px-1 py-1 text-[9px] font-semibold text-zinc-900 shadow-sm hover:border-orange-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-500 sm:h-10 sm:px-1.5 sm:text-xs"
+                className="cnp-motion reader-touch-button reader-focus-ring inline-flex h-10 shrink-0 items-center rounded-xl border border-zinc-200/80 bg-white px-1 py-1 text-[9px] font-semibold text-zinc-900 shadow-sm hover:border-orange-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-500 sm:px-1.5 sm:text-xs"
                 aria-label={language === 'hi' ? 'Switch to English' : 'Switch to Hindi'}
               >
                 <span className="attention-pulsate-bck-slow inline-flex items-center">
@@ -137,7 +137,7 @@ export default function Header() {
               >
                 <Link
                   href="/main/epaper"
-                  className="group cnp-motion relative inline-flex h-8 shrink-0 items-center gap-1 overflow-hidden whitespace-nowrap rounded-xl border border-orange-300/70 bg-gradient-to-r from-orange-50 via-white to-red-50 px-1.5 text-[9px] font-bold text-zinc-900 shadow-[0_8px_18px_rgba(249,115,22,0.22)] hover:shadow-[0_11px_24px_rgba(239,68,68,0.24)] dark:border-orange-500/35 dark:bg-gradient-to-r dark:from-zinc-800 dark:via-zinc-900 dark:to-zinc-800 dark:text-zinc-50 dark:shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-10 sm:gap-1.5 sm:px-3 sm:text-xs"
+                  className="group cnp-motion reader-touch-link reader-focus-ring relative inline-flex h-10 shrink-0 items-center gap-1 overflow-hidden whitespace-nowrap rounded-xl border border-orange-300/70 bg-gradient-to-r from-orange-50 via-white to-red-50 px-1.5 text-[9px] font-bold text-zinc-900 shadow-[0_8px_18px_rgba(249,115,22,0.22)] hover:shadow-[0_11px_24px_rgba(239,68,68,0.24)] dark:border-orange-500/35 dark:bg-gradient-to-r dark:from-zinc-800 dark:via-zinc-900 dark:to-zinc-800 dark:text-zinc-50 dark:shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:gap-1.5 sm:px-3 sm:text-xs"
                   aria-label={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
                 >
                   <span
@@ -262,7 +262,7 @@ export default function Header() {
                 onClick={toggleTheme}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                className="cnp-motion inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-zinc-200/80 bg-white text-zinc-800 shadow-sm hover:border-amber-300 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 sm:h-10 sm:w-10"
+                className="cnp-motion reader-touch-button reader-focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200/80 bg-white text-zinc-800 shadow-sm hover:border-amber-300 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800"
                 aria-label="Toggle theme"
               >
                 <span className="attention-pulsate-bck-slow inline-flex">
@@ -275,7 +275,7 @@ export default function Header() {
                 onClick={toggleMobileMenu}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                className="cnp-motion inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200/80 bg-white text-zinc-800 shadow-sm hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 sm:h-10 sm:w-10 lg:hidden"
+                className="cnp-motion reader-touch-button reader-focus-ring inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200/80 bg-white text-zinc-800 shadow-sm hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 lg:hidden"
                 aria-label={language === 'hi' ? '\u092e\u0947\u0928\u0942' : 'Menu'}
                 aria-controls="mobile-drawer"
                 aria-expanded={isMobileMenuOpen}
@@ -288,7 +288,7 @@ export default function Header() {
       </div>
 
       <div className="border-t border-zinc-200/80 dark:border-zinc-800">
-        <div className="scrollbar-hide flex h-9 items-center overflow-x-auto touch-pan-x px-1.5 sm:px-4 md:h-10 md:px-8 lg:justify-center">
+        <div className="scrollbar-hide reader-scroll-x flex min-h-11 items-center overflow-x-auto touch-pan-x px-1.5 sm:px-4 md:min-h-12 md:px-8 lg:justify-center" data-swipe-ignore="true">
           <DesktopNav className="min-w-max py-0" />
         </div>
       </div>

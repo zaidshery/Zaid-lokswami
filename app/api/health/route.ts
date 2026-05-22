@@ -1,26 +1,32 @@
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/db/mongoose';
+import {
+  getMongoAvailabilitySnapshot,
+  isMongoAvailable,
+} from '@/lib/db/mongoAvailability';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  try {
-    await connectDB();
+  const dbConnected = await isMongoAvailable({
+    label: 'health check',
+    timeoutMs: 1500,
+    unavailableTtlMs: 5000,
+  });
 
+  if (dbConnected) {
     return NextResponse.json({
       status: 'ok',
       db: 'connected',
     });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : String(error);
-
-    return NextResponse.json(
-      {
-        status: 'error',
-        message,
-      },
-      { status: 500 }
-    );
   }
+
+  const snapshot = getMongoAvailabilitySnapshot();
+  return NextResponse.json(
+    {
+      status: 'error',
+      db: 'unavailable',
+      message: snapshot.reason || 'MongoDB is unavailable.',
+    },
+    { status: 503 }
+  );
 }

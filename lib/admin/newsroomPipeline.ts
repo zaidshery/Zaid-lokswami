@@ -12,7 +12,6 @@ import {
 import { listAllStoredArticles } from '@/lib/storage/articlesFile';
 import { listStoredSocialPosts } from '@/lib/storage/socialPostsFile';
 import { listAllStoredStories } from '@/lib/storage/storiesFile';
-import { resolveArticleWorkflow } from '@/lib/workflow/article';
 import { resolveStoryWorkflow } from '@/lib/workflow/story';
 
 type PipelineStorySource = {

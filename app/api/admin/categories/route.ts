@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/db/mongoose';
 import Category from '@/lib/models/Category';
 import fs from 'fs/promises';
 import path from 'path';
-import { getAdminSession, getAdminSessionFromReq } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
+import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 
 type CategoryRecord = {
   _id?: string;
@@ -62,14 +62,7 @@ function buildFileCategory(defaultCategory: Omit<CategoryRecord, '_id'>): Catego
 
 async function shouldUseFileStore() {
   if (!process.env.MONGODB_URI) return true;
-
-  try {
-    await connectDB();
-    return false;
-  } catch (error) {
-    console.error('MongoDB unavailable for categories route, using file store.', error);
-    return true;
-  }
+  return !(await isMongoAvailable({ label: 'admin categories route' }));
 }
 
 export async function GET(req: NextRequest) {

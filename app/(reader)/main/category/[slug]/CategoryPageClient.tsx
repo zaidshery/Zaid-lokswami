@@ -88,6 +88,13 @@ export default function CategoryPageClient({
   }, [initialArticles]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(max-width: 639px)').matches) {
+      setViewMode('list');
+    }
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     const load = async () => {
@@ -166,7 +173,8 @@ export default function CategoryPageClient({
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'latest' | 'popular')}
-            className="min-w-[124px] rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red focus:outline-none sm:min-w-[140px]"
+            className="reader-focus-ring min-h-11 min-w-[124px] rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red sm:min-w-[140px]"
+            data-swipe-ignore="true"
           >
             <option value="latest">
               {language === 'hi' ? '\u0924\u093e\u091c\u093c\u093e' : 'Latest'}
@@ -178,10 +186,10 @@ export default function CategoryPageClient({
             </option>
           </select>
 
-          <div className="flex shrink-0 items-center rounded-lg border border-lokswami-border bg-lokswami-surface">
+          <div className="flex shrink-0 items-center rounded-lg border border-lokswami-border bg-lokswami-surface" data-swipe-ignore="true">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 ${
+              className={`reader-touch-button reader-focus-ring inline-flex h-11 w-11 items-center justify-center rounded-l-lg ${
                 viewMode === 'grid'
                   ? 'text-lokswami-red'
                   : 'text-lokswami-text-secondary hover:text-lokswami-white'
@@ -192,7 +200,7 @@ export default function CategoryPageClient({
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 ${
+              className={`reader-touch-button reader-focus-ring inline-flex h-11 w-11 items-center justify-center rounded-r-lg ${
                 viewMode === 'list'
                   ? 'text-lokswami-red'
                   : 'text-lokswami-text-secondary hover:text-lokswami-white'
@@ -239,7 +247,7 @@ export default function CategoryPageClient({
                 Math.min(current + CATEGORY_LOAD_MORE_STEP, sortedArticles.length)
               )
             }
-            className="rounded-full border border-lokswami-border bg-lokswami-surface px-8 py-3 text-lokswami-text-secondary transition-colors hover:border-lokswami-red hover:text-lokswami-white"
+            className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-lokswami-border bg-lokswami-surface px-8 py-3 text-lokswami-text-secondary transition-colors hover:border-lokswami-red hover:text-lokswami-white sm:w-auto"
           >
             {language === 'hi'
               ? '\u0914\u0930 \u0916\u092c\u0930\u0947\u0902 \u0932\u094b\u0921 \u0915\u0930\u0947\u0902'

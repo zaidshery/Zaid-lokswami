@@ -1,6 +1,15 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
+type GeminiTestResponse = {
+  error?: { message?: string };
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+  }>;
+};
+
 // Load env from .env.hostinger to simulate production
 dotenv.config({ path: path.resolve(process.cwd(), '.env.hostinger') });
 
@@ -33,7 +42,7 @@ async function testGemini() {
       })
     });
 
-    const data = await response.json() as any;
+    const data = (await response.json()) as GeminiTestResponse;
 
     if (!response.ok) {
       throw new Error(`Gemini API Error: ${data.error?.message || response.statusText}`);

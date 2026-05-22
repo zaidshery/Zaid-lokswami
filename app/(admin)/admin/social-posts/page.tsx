@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Loader2, RefreshCw, Share2 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { canViewPage } from '@/lib/auth/permissions';
-import { isAdminRole, type AdminRole } from '@/lib/auth/roles';
+import { isAdminRole } from '@/lib/auth/roles';
 
 type SocialPost = {
   _id: string;
@@ -82,7 +82,7 @@ export default function SocialPostsPage() {
   const [busyId, setBusyId] = useState('');
   const [automationMeta, setAutomationMeta] = useState<AutomationMeta | null>(null);
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
@@ -113,12 +113,12 @@ export default function SocialPostsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [platformFilter, statusFilter]);
 
   useEffect(() => {
     if (!canAccess) return;
     void fetchPosts();
-  }, [canAccess, platformFilter, statusFilter]);
+  }, [canAccess, fetchPosts]);
 
   const filteredPosts = useMemo(() => posts, [posts]);
 

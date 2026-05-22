@@ -30,7 +30,6 @@ import {
   CmsCollectionMetricCard,
   CmsCollectionMetricGrid,
   CmsCollectionPage,
-  CMS_COLLECTION_EMPTY_STATE_CLASS as EMPTY_STATE_CLASS,
   CMS_COLLECTION_FILTER_INPUT_CLASS as FILTER_INPUT_CLASS,
   CMS_COLLECTION_META_CHIP_CLASS as META_CHIP_CLASS,
   CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
@@ -38,6 +37,7 @@ import {
   CMS_COLLECTION_SECONDARY_BUTTON_CLASS as SECONDARY_BUTTON_CLASS,
   CMS_COLLECTION_SOFT_CARD_CLASS as SOFT_CARD_CLASS,
 } from '@/components/admin/CmsCollectionLayout';
+import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 
 type WorkflowActor = {
   id?: string;
@@ -406,7 +406,7 @@ export default function VideosManagementPage() {
                 <div className="flex flex-col gap-4 md:flex-row">
                   <div className="relative h-36 w-full overflow-hidden rounded-[22px] bg-zinc-100 dark:bg-zinc-900 md:h-40 md:w-60 md:shrink-0">
                     {video.thumbnail ? (
-                      <img
+                      <AdminMediaImage
                         src={video.thumbnail}
                         alt={video.title}
                         className="h-full w-full object-cover"

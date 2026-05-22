@@ -5,7 +5,7 @@ import Article from '@/lib/models/Article';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import User from '@/lib/models/User';
-import { getAdminSession, getAdminSessionFromReq } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import {
   createEmptyCopyEditorMeta,
   createEmptyReporterMeta,

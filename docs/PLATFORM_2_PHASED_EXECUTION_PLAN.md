@@ -1,6 +1,6 @@
 # Lokswami Platform 2 Phased Execution Plan
 
-Last reviewed: 2026-05-12
+Last reviewed: 2026-05-22
 
 This is the step-by-step implementation tracker for the Platform 2 docs. The
 rule is to finish one stable phase at a time, verify it, then move forward.
@@ -9,7 +9,7 @@ rule is to finish one stable phase at a time, verify it, then move forward.
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Architecture docs | Verified in current worktree | Platform shape, API-first decision, scaling direction, CMS plan, and media roadmap are documented. Commit is still pending. |
+| Architecture docs | Verified in current worktree | Platform shape, API-first decision, scaling direction, CMS plan, and media roadmap are documented. Current publish readiness is tracked by the latest validation run. |
 | API v1 public foundation | Verified in current worktree | First `/api/v1/public` routes exist for home feed, articles, article detail, latest, categories, cities, search, videos, stories, shorts, e-papers, breaking, and health. Full tests and production build pass. |
 | Reader migration to v1 | Verified in current worktree | Homepage, latest, category, videos, and e-paper surfaces use shared request-origin and v1 API contracts for the first migration slice. |
 | API utilities | In progress | Shared cache, response, error, validation, OpenAPI, public article, and home-feed helpers exist in the current worktree. |
@@ -45,8 +45,8 @@ Current verification:
 
 - 2026-05-12: `cmd /c npm run typecheck` passed.
 - 2026-05-12: `cmd /c npm test -- tests/api-foundation-utils.test.ts tests/api/public-home-feed-route.test.ts tests/api/public-v1-articles-routes.test.ts tests/home-feed-mapper.test.ts tests/public-articles-service.test.ts tests/public-home-feed-service.test.ts tests/public-articles-client.test.ts tests/home-page-client-home-feed.test.tsx tests/latest-feed-client-v1.test.tsx tests/category-page-client-v1.test.tsx` passed with 10 test files and 15 tests.
-- Remaining Phase 0 action: commit docs and API foundation code when the current
-  worktree is ready to publish.
+- 2026-05-22: docs folder was rechecked before publishing the current reader,
+  indexing, media, and e-paper updates.
 
 ## Phase 1: Public API v1 Completion
 

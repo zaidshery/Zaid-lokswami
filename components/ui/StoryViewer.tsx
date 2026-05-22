@@ -674,7 +674,7 @@ export default function StoryViewer({
                     <button
                       type="button"
                       onClick={onClose}
-                      className="rounded-full border border-white/40 bg-black/35 p-2 text-white transition hover:bg-black/55"
+                      className="reader-touch-button inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white transition hover:bg-black/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
                       aria-label="Close story viewer"
                     >
                       <X className="h-4 w-4" />
@@ -697,7 +697,7 @@ export default function StoryViewer({
                         <button
                           type="button"
                           onClick={() => setIsMuted((prev) => !prev)}
-                          className="rounded-full border border-white/40 bg-black/35 p-2 text-white transition hover:bg-black/55"
+                          className="reader-touch-button inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white transition hover:bg-black/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
                           aria-label={isMuted ? 'Unmute' : 'Mute'}
                         >
                           {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -706,7 +706,7 @@ export default function StoryViewer({
                       <button
                         type="button"
                         onClick={() => setIsPaused((prev) => !prev)}
-                        className="rounded-full border border-white/40 bg-black/35 p-2 text-white transition hover:bg-black/55"
+                        className="reader-touch-button inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white transition hover:bg-black/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
                         aria-label={isPaused ? 'Resume story' : 'Pause story'}
                       >
                         {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
@@ -714,7 +714,7 @@ export default function StoryViewer({
                       <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-full border border-white/40 bg-black/35 p-2 text-white transition hover:bg-black/55"
+                        className="reader-touch-button inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white transition hover:bg-black/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
                         aria-label="Close story viewer"
                       >
                         <X className="h-4 w-4" />
@@ -779,7 +779,7 @@ export default function StoryViewer({
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={onClose}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"
+                          className="reader-touch-link inline-flex min-h-11 items-center gap-2 rounded-full border border-white/40 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
                         >
                           {ctaLabel}
                           <ExternalLink className="h-4 w-4" />
@@ -788,7 +788,7 @@ export default function StoryViewer({
                         <Link
                           href={storyHref}
                           onClick={onClose}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"
+                          className="reader-touch-link inline-flex min-h-11 items-center gap-2 rounded-full border border-white/40 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
                         >
                           {ctaLabel}
                           <ExternalLink className="h-4 w-4" />
@@ -806,7 +806,7 @@ export default function StoryViewer({
                   <button
                     type="button"
                     onClick={onShare}
-                    className="rounded-2xl border border-white/20 bg-black/35 p-2.5 text-white shadow-[0_10px_28px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:bg-black/50 sm:p-3 md:p-3.5"
+                    className="reader-touch-button inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-black/35 text-white shadow-[0_10px_28px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:bg-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 sm:h-12 sm:w-12"
                     aria-label="Share story"
                   >
                     <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -815,7 +815,7 @@ export default function StoryViewer({
                     type="button"
                     onClick={toggleMuted}
                     disabled={!canMuteStory}
-                    className="rounded-2xl border border-white/20 bg-black/35 p-2.5 text-white shadow-[0_10px_28px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:bg-black/50 disabled:cursor-not-allowed disabled:opacity-50 sm:p-3 md:p-3.5"
+                    className="reader-touch-button inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-black/35 text-white shadow-[0_10px_28px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:bg-black/50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 sm:h-12 sm:w-12"
                     aria-label={isMuted ? 'Unmute video' : 'Mute video'}
                   >
                     {isMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:w-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:w-5" />}

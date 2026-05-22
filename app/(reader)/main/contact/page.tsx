@@ -212,13 +212,11 @@ export default function ContactPage() {
   const [hasTrackedStart, setHasTrackedStart] = useState(false);
 
   const contactAddress = useMemo(
-    () =>
-      `${COMPANY_INFO.address.street}, ${COMPANY_INFO.address.road}, ${COMPANY_INFO.address.city}, ${COMPANY_INFO.address.state}`,
+    () => COMPANY_INFO.address.displayAddress,
     []
   );
   const mapsUrl = useMemo(
-    () =>
-      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(COMPANY_INFO.address.fullAddress)}`,
+    () => COMPANY_INFO.address.mapUrl,
     []
   );
 
@@ -688,12 +686,20 @@ export default function ContactPage() {
               <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
               <div>
                 <p className="font-semibold">{t.officeLabel}</p>
-                <p className="mt-1 text-zinc-600 dark:text-zinc-400">{contactAddress}</p>
                 <a
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-500 dark:text-orange-400 dark:hover:text-orange-300"
+                  className="reader-touch-link reader-focus-ring mt-1 inline-flex min-h-10 max-w-full items-start gap-1 rounded-xl py-1 text-left text-zinc-600 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
+                >
+                  <span>{contactAddress}</span>
+                  <ExternalLink className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                </a>
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="reader-touch-link reader-focus-ring mt-2 inline-flex min-h-10 items-center gap-1 rounded-xl py-1 text-xs font-semibold text-orange-600 hover:text-orange-500 dark:text-orange-400 dark:hover:text-orange-300"
                 >
                   {t.openMapLabel}
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -706,10 +712,10 @@ export default function ContactPage() {
               <div>
                 <p className="font-semibold">{t.phoneCardLabel}</p>
                 <a
-                  href={`tel:${COMPANY_INFO.contact.phone}`}
-                  className="mt-1 inline-block text-zinc-600 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
+                  href={COMPANY_INFO.contact.phoneHref}
+                  className="reader-touch-link reader-focus-ring mt-1 inline-flex min-h-10 items-center rounded-xl py-1 text-zinc-600 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
                 >
-                  {COMPANY_INFO.contact.phone}
+                  {COMPANY_INFO.contact.phoneDisplay}
                 </a>
               </div>
             </div>
@@ -720,7 +726,7 @@ export default function ContactPage() {
                 <p className="font-semibold">{t.emailCardLabel}</p>
                 <a
                   href={`mailto:${COMPANY_INFO.contact.email}`}
-                  className="mt-1 inline-block break-all text-zinc-600 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
+                  className="reader-touch-link reader-focus-ring mt-1 inline-flex min-h-10 items-center rounded-xl py-1 break-all text-zinc-600 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
                 >
                   {COMPANY_INFO.contact.email}
                 </a>
@@ -750,15 +756,15 @@ export default function ContactPage() {
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <a
-                  href={`tel:${COMPANY_INFO.contact.phone}`}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-500 dark:hover:text-orange-300"
+                  href={COMPANY_INFO.contact.phoneHref}
+                  className="reader-touch-link reader-focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-500 dark:hover:text-orange-300"
                 >
                   <Phone className="h-3.5 w-3.5" />
                   {t.callNowLabel}
                 </a>
                 <a
                   href={`mailto:${COMPANY_INFO.contact.email}`}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-500 dark:hover:text-orange-300"
+                  className="reader-touch-link reader-focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-500 dark:hover:text-orange-300"
                 >
                   <Mail className="h-3.5 w-3.5" />
                   {t.emailNowLabel}
@@ -768,7 +774,7 @@ export default function ContactPage() {
                 href={COMPANY_INFO.owner.whatsapp}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-500 dark:hover:text-orange-300"
+                className="reader-touch-link reader-focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-500 dark:hover:text-orange-300"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
                 {t.whatsappLabel}

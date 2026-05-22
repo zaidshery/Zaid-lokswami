@@ -57,7 +57,7 @@ export async function getAdminSessionFromReq(req: NextRequest): Promise<AdminSes
     cookies: Object.fromEntries(
       req.cookies.getAll().map((c) => [c.name, c.value])
     ),
-  } as any;
+  } as unknown as Parameters<typeof getToken>[0]['req'];
 
   const token = await getToken({ 
     req: minimalReq, 

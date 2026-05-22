@@ -18,6 +18,10 @@ type MetadataInput = {
 type EpaperMetadataInput = {
   city: string;
   publishDate: string;
+  paperId?: string;
+  issueTitle?: string;
+  issueCityName?: string;
+  image?: string;
 };
 
 function formatTitle(title: string) {
@@ -139,10 +143,15 @@ export function buildVideosPageMetadata() {
 
 export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
   const cityName =
-    EPAPER_CITY_OPTIONS.find((item) => item.slug === input.city)?.name || '';
+    input.issueCityName ||
+    EPAPER_CITY_OPTIONS.find((item) => item.slug === input.city)?.name ||
+    '';
   const formattedDate = input.publishDate ? formatMetadataDate(input.publishDate) : '';
   const query = new URLSearchParams();
 
+  if (input.paperId?.trim()) {
+    query.set('paper', input.paperId.trim());
+  }
   if (input.city && input.city !== 'all') {
     query.set('city', input.city);
   }
@@ -154,7 +163,10 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
   let description =
     'Read the Lokswami e-paper online with archive filters, mapped stories, downloadable daily editions, and city-wise access.';
 
-  if (cityName && formattedDate) {
+  if (input.issueTitle && cityName && formattedDate) {
+    title = `${input.issueTitle} - ${cityName} E-Paper for ${formattedDate}`;
+    description = `Read the ${formattedDate} ${cityName} Lokswami e-paper edition online with the full digital newspaper thumbnail and archive access.`;
+  } else if (cityName && formattedDate) {
     title = `${cityName} E-Paper for ${formattedDate}`;
     description = `Read the ${formattedDate} ${cityName} Lokswami e-paper edition online with archive access, mapped stories, and downloadable pages.`;
   } else if (cityName) {
@@ -171,6 +183,7 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
     title,
     description,
     path,
+    image: input.image,
     keywords: [
       'lokswami epaper',
       'hindi epaper',

@@ -206,7 +206,7 @@ export default function AiChatSheet({
 
   const panelClassName =
     viewportMode === 'mobile'
-      ? `pointer-events-auto fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.65rem)] z-[61] flex flex-col overflow-hidden rounded-[1.55rem] border backdrop-blur ${panelSurfaceClassName}`
+      ? `pointer-events-auto fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] bottom-[calc(var(--reader-bottom-nav-space)+0.65rem)] z-[61] flex flex-col overflow-hidden rounded-[1.55rem] border backdrop-blur ${panelSurfaceClassName}`
       : viewportMode === 'tablet'
         ? `pointer-events-auto fixed bottom-24 right-4 z-[61] flex h-[min(76vh,43rem)] max-h-[calc(100vh-7rem)] w-[min(400px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[1.8rem] border backdrop-blur ${panelSurfaceClassName}`
         : `pointer-events-auto fixed bottom-8 right-6 z-[61] flex h-[min(620px,calc(100vh-4rem))] max-h-[calc(100vh-4rem)] w-[min(455px,calc(100vw-3rem))] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-[1.9rem] border backdrop-blur ${panelSurfaceClassName}`;

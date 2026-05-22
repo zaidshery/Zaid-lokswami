@@ -19,20 +19,25 @@ export const COMPANY_INFO = {
 
   // Office Address
   address: {
-    street: '302, Gravity Tower',
+    street: 'Gravity Tower, 302',
     road: 'Race Course Road',
-    area: 'Janjjirwala Square',
+    area: 'Janjeerwala Chouraha',
     city: 'Indore',
     state: 'Madhya Pradesh',
+    postalCode: '452001',
     country: 'India',
-    fullAddress: '302, Gravity Tower, Race Course Road, Janjjirwala Square, Indore, Madhya Pradesh, India',
+    fullAddress: 'Gravity Tower, 302, Race Course Road, Janjeerwala Chouraha, Indore, Madhya Pradesh 452001, India',
+    displayAddress: 'Gravity Tower, 302, Race Course Road, Janjeerwala Chouraha, Indore, Madhya Pradesh 452001',
+    mapUrl: 'https://www.google.com/maps/place/Lokswami/@22.7039173,75.8295211,14z/data=!4m6!3m5!1s0x397c49e8f1fd452b:0xfbf31f92fbd8966c!8m2!3d22.7258335!4d75.8813679!16s%2Fg%2F11nblwdm7j?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D',
   },
 
   // Contact Details
   contact: {
     email: 'support@lokswami.com',
-    phone: '+917312552109',
-    phone2: '+917312552109',
+    phone: '+916262677377',
+    phoneDisplay: '+91-6262677377',
+    phoneHref: 'tel:+916262677377',
+    phone2: '+916262677377',
   },
 
   // Owner & Management

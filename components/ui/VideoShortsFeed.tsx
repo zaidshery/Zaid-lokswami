@@ -339,8 +339,8 @@ export default function VideoShortsFeed({
   const viewportHeightClass = immersiveMode
     ? IMMERSIVE_VIEWPORT_HEIGHT_CLASS
     : VIEWPORT_HEIGHT_CLASS;
-  const actionPillPositionClass = 'right-3 md:right-6 bottom-[92px] md:bottom-[120px]';
-  const settingsPanelPositionClass = 'right-[60px] md:right-[84px] bottom-[92px] md:bottom-[120px]';
+  const actionPillPositionClass = 'right-3 md:right-6 bottom-[calc(var(--reader-bottom-nav-space)+1.75rem)] md:bottom-[120px]';
+  const settingsPanelPositionClass = 'right-[64px] md:right-[84px] bottom-[calc(var(--reader-bottom-nav-space)+1.75rem)] md:bottom-[120px]';
   const shellClass = immersiveMode
     ? 'h-vh-dvh w-full'
     : 'mx-auto w-full max-w-none lg:max-w-[480px]';
@@ -348,7 +348,7 @@ export default function VideoShortsFeed({
     ? `scrollbar-hide ${viewportHeightClass} w-full snap-y snap-mandatory overflow-y-auto overscroll-y-contain rounded-none border-0 bg-black shadow-none touch-pan-y`
     : `scrollbar-hide ${viewportHeightClass} snap-y snap-mandatory overflow-y-auto overscroll-y-contain rounded-none border-0 bg-zinc-950 shadow-none lg:rounded-[28px] lg:border lg:border-zinc-800 lg:shadow-[0_34px_80px_rgba(0,0,0,0.55)]`;
   const actionIconButtonClass =
-    'inline-flex h-10 w-10 items-center justify-center text-white/90 opacity-80 transition-opacity duration-200 hover:opacity-100 active:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black md:h-12 md:w-12';
+    'reader-touch-button inline-flex h-11 w-11 items-center justify-center rounded-xl text-white/90 opacity-90 transition-opacity duration-200 hover:opacity-100 active:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black md:h-12 md:w-12';
   const settingsRowClass =
     'flex h-12 w-full items-center justify-between rounded-xl px-3 text-left transition-colors hover:bg-white/5 active:bg-white/10 md:h-14 md:px-4';
 
@@ -847,7 +847,7 @@ export default function VideoShortsFeed({
                   {video.category}
                 </div>
 
-                <div className="absolute bottom-0 left-0 right-0 hidden px-4 pt-4 pb-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] md:block md:px-5 md:pt-5 md:pb-[calc(4rem+env(safe-area-inset-bottom)+0.85rem)] xl:p-5">
+                  <div className="absolute bottom-0 left-0 right-0 hidden px-4 pt-4 pb-[calc(var(--reader-bottom-nav-space)+0.75rem)] md:block md:px-5 md:pt-5 md:pb-[calc(var(--reader-bottom-nav-space)+0.85rem)] xl:p-5">
                   <div className="max-w-[85%]">
                     <h2 className="line-clamp-3 text-xl font-black leading-tight text-white md:text-2xl">
                       {video.title}
@@ -871,7 +871,7 @@ export default function VideoShortsFeed({
 
                     <Link
                       href={readHref}
-                      className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-red-300 transition-colors hover:text-red-200"
+                      className="reader-touch-link reader-focus-ring mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-sm font-semibold text-red-300 transition-colors hover:text-red-200"
                     >
                       {language === 'hi' ? '\u092a\u0942\u0930\u0940 \u0916\u092c\u0930' : 'Read Story'}
                       <ArrowUpRight className="h-4 w-4" />
@@ -1174,7 +1174,7 @@ export default function VideoShortsFeed({
         ) : null}
 
         {immersiveMode && activeVideo && settings.captions ? (
-          <div className="pointer-events-none absolute bottom-16 left-0 right-0 z-20 px-4 pb-[env(safe-area-inset-bottom)] md:bottom-20 md:px-8">
+          <div className="pointer-events-none absolute bottom-[calc(var(--reader-bottom-nav-space)+0.55rem)] left-0 right-0 z-20 px-4 pb-[env(safe-area-inset-bottom)] md:bottom-20 md:px-8">
             <div className="overflow-hidden whitespace-nowrap pr-20 md:pr-24">
               <p className="truncate whitespace-nowrap overflow-hidden text-sm font-medium text-white md:text-base lg:text-lg">
                 {activeVideo.title}

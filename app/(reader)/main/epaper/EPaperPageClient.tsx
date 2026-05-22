@@ -332,7 +332,7 @@ const EPAPER_LAST_PAGE_STORAGE_KEY = 'lokswami_epaper_last_page_v1';
 const EPAPER_ZOOM_HINT_STORAGE_KEY = 'lokswami_epaper_zoom_hint_seen_v1';
 const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v1';
 const MIN_PREVIEW_ZOOM = 1;
-const MAX_PREVIEW_ZOOM = 2.2;
+const MAX_PREVIEW_ZOOM = 3;
 const PREVIEW_ZOOM_STEP = 0.2;
 const PREVIEW_DOUBLE_TAP_ZOOM = 2;
 const MIN_ARTICLE_IMAGE_ZOOM = 1;
@@ -814,6 +814,7 @@ export default function EPaperPageClient({
 
   const [pendingPaperId, setPendingPaperId] = useState('');
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const previewTouchSurfaceRef = useRef<HTMLDivElement | null>(null);
   const loadMoreLockRef = useRef(false);
   const mobileArticleActionMenuRef = useRef<HTMLDetailsElement | null>(null);
   const articleActionMenuRef = useRef<HTMLDetailsElement | null>(null);
@@ -1946,13 +1947,13 @@ export default function EPaperPageClient({
     );
   };
 
-  const togglePreviewZoom = () => {
+  const togglePreviewZoom = useCallback(() => {
     setPreviewZoom((current) =>
       current > MIN_PREVIEW_ZOOM + 0.05
         ? MIN_PREVIEW_ZOOM
         : Math.min(MAX_PREVIEW_ZOOM, PREVIEW_DOUBLE_TAP_ZOOM)
     );
-  };
+  }, []);
 
   const onArticleImageTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
     if (event.touches.length !== 2) return;
@@ -2050,7 +2051,7 @@ export default function EPaperPageClient({
     };
   };
 
-  const onPreviewTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+  const onPreviewTouchStart = useCallback((event: TouchEvent) => {
     if (!isCoarsePointer || activeArticle) return;
 
     if (event.touches.length === 2) {
@@ -2074,9 +2075,9 @@ export default function EPaperPageClient({
       startY: touch.clientY,
       tracking: previewZoom <= MIN_PREVIEW_ZOOM + 0.01,
     };
-  };
+  }, [activeArticle, isCoarsePointer, previewZoom]);
 
-  const onPreviewTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+  const onPreviewTouchMove = useCallback((event: TouchEvent) => {
     if (!isCoarsePointer || activeArticle) return;
 
     if (event.touches.length === 2) {
@@ -2112,9 +2113,9 @@ export default function EPaperPageClient({
 
       setPreviewZoom(nextZoom);
     }
-  };
+  }, [activeArticle, isCoarsePointer, previewZoom]);
 
-  const onPreviewTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+  const onPreviewTouchEnd = useCallback((event: TouchEvent) => {
     if (previewPinchStateRef.current.isPinching) {
       if (event.touches.length < 2) {
         previewPinchStateRef.current = {
@@ -2203,9 +2204,9 @@ export default function EPaperPageClient({
     }
 
     goToRelativePage(-1);
-  };
+  }, [goToRelativePage, previewZoom, togglePreviewZoom]);
 
-  const onPreviewTouchCancel = () => {
+  const onPreviewTouchCancel = useCallback(() => {
     previewPinchStateRef.current = {
       startDistance: 0,
       startZoom: previewZoom,
@@ -2217,7 +2218,33 @@ export default function EPaperPageClient({
       lastTapY: 0,
     };
     pageSwipeStateRef.current.tracking = false;
-  };
+  }, [previewZoom]);
+
+  useEffect(() => {
+    const surface = previewTouchSurfaceRef.current;
+    if (!surface || !activePaper || !isCoarsePointer) return;
+
+    const listenerOptions: AddEventListenerOptions = { passive: false };
+
+    surface.addEventListener('touchstart', onPreviewTouchStart, listenerOptions);
+    surface.addEventListener('touchmove', onPreviewTouchMove, listenerOptions);
+    surface.addEventListener('touchend', onPreviewTouchEnd, listenerOptions);
+    surface.addEventListener('touchcancel', onPreviewTouchCancel, listenerOptions);
+
+    return () => {
+      surface.removeEventListener('touchstart', onPreviewTouchStart, listenerOptions);
+      surface.removeEventListener('touchmove', onPreviewTouchMove, listenerOptions);
+      surface.removeEventListener('touchend', onPreviewTouchEnd, listenerOptions);
+      surface.removeEventListener('touchcancel', onPreviewTouchCancel, listenerOptions);
+    };
+  }, [
+    activePaper,
+    isCoarsePointer,
+    onPreviewTouchCancel,
+    onPreviewTouchEnd,
+    onPreviewTouchMove,
+    onPreviewTouchStart,
+  ]);
 
   useEffect(() => {
     if (!activePaper || !isCoarsePointer) return;
@@ -2325,7 +2352,7 @@ export default function EPaperPageClient({
                 value={selectedCity}
                 onChange={(event) => setSelectedCity(event.target.value as EPaperCityFilter)}
                 aria-label={t.city}
-                className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:h-11 sm:text-sm"
+                className="reader-focus-ring h-12 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:h-11 sm:text-sm"
               >
                 <option value="all">{t.allCities}</option>
                 {EPAPER_CITY_OPTIONS.map((city) => (
@@ -2342,7 +2369,7 @@ export default function EPaperPageClient({
               onClear={() => setSelectedPublishDate('')}
               clearLabel={t.clearDate}
               ariaLabel={t.publishDate}
-              className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:h-11 sm:text-sm"
+              className="reader-focus-ring h-12 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:h-11 sm:text-sm"
             />
           </div>
         </div>
@@ -2393,16 +2420,16 @@ export default function EPaperPageClient({
                       key={`saved-paper-${paper.paperId}`}
                       type="button"
                       onClick={() => handleOpenSavedPaper(paper)}
-                      className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-3 text-left transition hover:border-primary-300 hover:bg-primary-50/50 dark:border-zinc-700 dark:bg-zinc-950/70 dark:hover:border-primary-700 dark:hover:bg-primary-950/20"
+                      className="reader-touch-button reader-focus-ring flex min-h-24 items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-3 text-left transition hover:border-primary-300 hover:bg-primary-50/50 dark:border-zinc-700 dark:bg-zinc-950/70 dark:hover:border-primary-700 dark:hover:bg-primary-950/20"
                     >
-                      <div className="relative h-20 w-16 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                      <div className="relative h-20 w-16 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-900">
                         {paper.thumbnailPath ? (
                           <Image
                             src={paper.thumbnailPath}
                             alt={paper.title}
                             fill
                             unoptimized
-                            className="object-cover"
+                            className="object-contain p-1"
                             sizes="64px"
                           />
                         ) : null}
@@ -2447,7 +2474,7 @@ export default function EPaperPageClient({
                       key={`saved-story-${story.storyId}`}
                       type="button"
                       onClick={() => handleOpenSavedStory(story)}
-                      className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-3 text-left transition hover:border-primary-300 hover:bg-primary-50/60 dark:border-zinc-700 dark:bg-zinc-950/70 dark:hover:border-primary-700 dark:hover:bg-primary-950/20"
+                      className="reader-touch-button reader-focus-ring flex min-h-16 items-start gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-3 text-left transition hover:border-primary-300 hover:bg-primary-50/60 dark:border-zinc-700 dark:bg-zinc-950/70 dark:hover:border-primary-700 dark:hover:bg-primary-950/20"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="line-clamp-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -2490,9 +2517,9 @@ export default function EPaperPageClient({
                   key={paper._id}
                   type="button"
                   onClick={() => void openPaper(paper._id)}
-                  className="cnp-card cnp-card-hover min-w-0 overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/70 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900"
+                  className="cnp-card cnp-card-hover reader-touch-button reader-focus-ring min-w-0 overflow-hidden text-left"
                 >
-                  <div className="aspect-[3/4] overflow-hidden bg-gray-100 dark:bg-zinc-800 sm:aspect-[4/5]">
+                  <div className="aspect-[3/4] overflow-hidden bg-gray-100 dark:bg-zinc-900 sm:aspect-[4/5]">
                     {paper.thumbnailPath ? (
                       <div className="relative h-full w-full">
                         <Image
@@ -2500,7 +2527,7 @@ export default function EPaperPageClient({
                           alt={paper.title}
                           fill
                           unoptimized
-                          className="object-cover"
+                          className="object-contain p-2"
                           sizes="(max-width: 767px) 50vw, (max-width: 1279px) 33vw, 25vw"
                         />
                       </div>
@@ -2529,7 +2556,7 @@ export default function EPaperPageClient({
                     void loadMorePapers();
                   }}
                   disabled={isLoadingMore}
-                  className="rounded-full border border-zinc-300 bg-white px-8 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-red-700/70 dark:hover:bg-zinc-800 dark:hover:text-red-300"
+                  className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-8 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-red-700/70 dark:hover:bg-zinc-800 dark:hover:text-red-300 sm:w-auto"
                 >
                   {isLoadingMore ? 'Loading...' : t.loadMore}
                 </button>
@@ -2542,16 +2569,16 @@ export default function EPaperPageClient({
       </section>
 
       {activePaper ? (
-        <div className="fixed inset-0 z-[95] bg-black/88 p-0 backdrop-blur-sm sm:bg-black/75 sm:p-4">
-          <div className="mx-auto flex h-full w-full max-w-[1480px] flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:h-[calc(100dvh-2rem)] sm:rounded-2xl">
-            <div className="border-b border-gray-200 bg-white/95 px-2.5 py-1.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:px-4 sm:py-2.5">
+        <div className="fixed inset-0 z-[95] bg-black/88 p-0 backdrop-blur-sm sm:bg-black/75 sm:p-4" data-swipe-ignore="true">
+          <div className="mx-auto flex h-[100dvh] w-full max-w-[1480px] flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:h-[calc(100dvh-2rem)] sm:rounded-2xl">
+            <div className="border-b border-gray-200 bg-white/95 px-2.5 pb-1.5 pt-[calc(env(safe-area-inset-top)+0.375rem)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:px-4 sm:py-2.5">
               <div className="sm:hidden">
                 <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem] gap-1">
                   <button
                     type="button"
                     onClick={handlePdfDownload}
                     disabled={!pdfUrlForOpen}
-                    className="inline-flex h-8 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-white px-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-white px-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     <Download className="h-3 w-3" />
                     <span>PDF</span>
@@ -2563,7 +2590,7 @@ export default function EPaperPageClient({
                       void shareActivePaperOnWhatsApp();
                     }}
                     aria-label={t.shareWhatsApp}
-                    className="inline-flex h-8 items-center justify-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                    className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
                   >
                     <Share2 className="h-3 w-3" />
                     <span>{t.shareWhatsApp}</span>
@@ -2576,7 +2603,7 @@ export default function EPaperPageClient({
                       setActiveArticle(null);
                     }}
                     aria-label={t.close}
-                    className="inline-flex h-8 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    className="reader-touch-button reader-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -2809,14 +2836,14 @@ export default function EPaperPageClient({
                   type="button"
                   onClick={() => setIsMobilePageStripVisible((current) => !current)}
                   aria-expanded={isMobilePageStripVisible}
-                  className="inline-flex h-7 items-center rounded-full border border-gray-300 px-2.5 text-[10px] font-semibold text-gray-700 transition hover:bg-gray-100 sm:hidden dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center rounded-full border border-gray-300 px-3 text-[10px] font-semibold text-gray-700 transition hover:bg-gray-100 sm:hidden dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
-                  {t.pagesTab}
+                  {isMobilePageStripVisible ? t.hidePagesRail : t.showPagesRail}
                 </button>
               </div>
 
               <div className={`${isMobilePageStripVisible ? 'block' : 'hidden'} sm:block`}>
-                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden reader-scroll-x" data-reader-scroll="x" data-swipe-ignore="true">
                   {pageSummaries.map((page) => {
                     const isCurrentPage = page.pageNumber === activePage;
                     const isCompanionPage =
@@ -2827,7 +2854,7 @@ export default function EPaperPageClient({
                         key={`strip-${page.pageNumber}`}
                         type="button"
                         onClick={() => handlePageStripPageSelect(page.pageNumber)}
-                        className={`group min-w-[68px] max-w-[68px] shrink-0 overflow-hidden rounded-xl border text-left transition sm:min-w-[88px] sm:max-w-[88px] md:min-w-[96px] md:max-w-[96px] ${
+                        className={`reader-touch-button reader-focus-ring group min-w-[80px] max-w-[80px] shrink-0 overflow-hidden rounded-xl border text-left transition sm:min-w-[88px] sm:max-w-[88px] md:min-w-[96px] md:max-w-[96px] ${
                           isCurrentPage
                             ? 'border-primary-500 bg-primary-50 shadow-sm dark:border-primary-400 dark:bg-primary-950/30'
                             : isCompanionPage
@@ -2842,8 +2869,8 @@ export default function EPaperPageClient({
                               alt={`${t.page} ${page.pageNumber}`}
                               fill
                               unoptimized
-                              className="object-cover"
-                              sizes="(max-width: 640px) 68px, 96px"
+                              className="object-contain p-1"
+                              sizes="(max-width: 640px) 80px, 96px"
                             />
                         ) : (
                           <div className="flex h-full items-center justify-center px-2 text-center text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
@@ -2914,7 +2941,11 @@ export default function EPaperPageClient({
                 </aside>
               ) : null}
 
-              <div className={`relative min-w-0 overflow-auto overscroll-contain bg-gradient-to-b from-zinc-100 via-white to-zinc-100 p-1 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 ${readerStageBorderClassName}`}>
+              <div
+                ref={previewTouchSurfaceRef}
+                className={`relative min-w-0 overflow-auto overscroll-contain bg-gradient-to-b from-zinc-100 via-white to-zinc-100 p-1 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 ${readerStageBorderClassName}`}
+                style={{ touchAction: 'pan-x pan-y' }}
+              >
                 {loadingFallback ? (
                   <div className="flex h-full min-h-48 items-center justify-center">
                     <Loader2 className="h-7 w-7 animate-spin text-primary-600" />
@@ -2927,31 +2958,7 @@ export default function EPaperPageClient({
                   <div className="mx-auto flex min-h-full w-full max-w-[1340px] items-start justify-center">
                     <div
                       className={`relative w-full ${readerStageWidthClassName}`}
-                      onTouchStart={onPreviewTouchStart}
-                      onTouchMove={onPreviewTouchMove}
-                      onTouchEnd={onPreviewTouchEnd}
-                      onTouchCancel={onPreviewTouchCancel}
                     >
-                      <button
-                        type="button"
-                        onClick={() => goToRelativePage(-1)}
-                        aria-label={t.previous}
-                        disabled={!canGoPreviousPage}
-                        className="absolute left-0.5 top-1/2 z-20 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-30 sm:-left-4 sm:h-12 sm:w-12 xl:-left-6"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => goToRelativePage(1)}
-                        aria-label={t.next}
-                        disabled={!canGoNextPage}
-                        className="absolute right-0.5 top-1/2 z-20 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70 disabled:pointer-events-none disabled:opacity-30 sm:-right-4 sm:h-12 sm:w-12 xl:-right-6"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-
                       <div
                         className={`mx-auto grid items-start gap-4 ${shouldShowSpreadMode ? 'xl:grid-cols-2' : 'grid-cols-1'}`}
                       >
@@ -3197,13 +3204,80 @@ export default function EPaperPageClient({
                 </aside>
               ) : null}
             </div>
+
+            <div
+              className="border-t border-gray-200 bg-white/95 px-2.5 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 sm:hidden"
+              data-reader-scroll="x"
+              data-swipe-ignore="true"
+            >
+              <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] gap-2">
+                <button
+                  type="button"
+                  onClick={() => goToRelativePage(-1)}
+                  aria-label={t.previous}
+                  disabled={!canGoPreviousPage}
+                  className="reader-touch-button reader-focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+
+                <select
+                  value={activePage}
+                  onChange={(event) => {
+                    const nextPage = Number.parseInt(event.target.value, 10);
+                    if (Number.isFinite(nextPage)) {
+                      navigateToPage(nextPage);
+                    }
+                  }}
+                  aria-label={t.quickJump}
+                  className="reader-touch-button reader-focus-ring h-11 min-w-0 rounded-xl border border-gray-300 bg-white px-3 text-center text-sm font-black text-gray-900 outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                >
+                  {pageSummaries.map((page) => (
+                    <option key={`mobile-jump-${page.pageNumber}`} value={page.pageNumber}>
+                      {t.page} {page.pageNumber} / {maxReaderPage}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => goToRelativePage(1)}
+                  aria-label={t.next}
+                  disabled={!canGoNextPage}
+                  className="reader-touch-button reader-focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+
+              {pageArticles.length ? (
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 reader-scroll-x" data-reader-scroll="x">
+                  {pageArticles.map((article, index) => (
+                    <button
+                      key={`mobile-page-story-${article._id}`}
+                      type="button"
+                      onClick={() => setActiveArticle(article)}
+                      className="reader-touch-button reader-focus-ring min-h-11 min-w-[13rem] max-w-[15rem] shrink-0 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-left transition hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/35 dark:hover:bg-primary-900/40"
+                    >
+                      <span className="block text-[10px] font-black uppercase tracking-wide text-primary-700 dark:text-primary-300">
+                        {t.story} {index + 1}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs font-semibold text-gray-900 dark:text-zinc-100">
+                        {article.title || `${t.story} ${index + 1}`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}
 
       {activeArticle ? (
         <div
-          className="fixed inset-0 z-[100] bg-black/65 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] bg-black/65 p-0 sm:p-4"
+          data-swipe-ignore="true"
           onClick={(event) => {
             if (event.target !== event.currentTarget) return;
             setActiveArticle(null);
@@ -3213,11 +3287,11 @@ export default function EPaperPageClient({
             role="dialog"
             aria-modal="true"
             aria-label={activeArticle.title || t.story}
-            className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+            className="mx-auto flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-none border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 sm:h-full sm:rounded-2xl"
           >
             <h3 className="sr-only">{activeArticle.title}</h3>
 
-            <div className="border-b border-gray-200 px-3 py-2.5 dark:border-zinc-800 sm:px-4 sm:py-3">
+            <div className="border-b border-gray-200 px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] dark:border-zinc-800 sm:px-4 sm:py-3">
               <div className="sm:hidden">
                 <div className="flex flex-col gap-2.5">
                   <div className="flex items-center justify-between gap-2">
@@ -3226,7 +3300,7 @@ export default function EPaperPageClient({
                         <button
                           type="button"
                           onClick={() => setArticleReaderMode('story')}
-                          className={`inline-flex h-7 items-center gap-1 rounded-full px-3 text-xs font-semibold transition ${
+                          className={`reader-touch-button reader-focus-ring inline-flex min-h-9 items-center gap-1 rounded-full px-3 text-xs font-semibold transition ${
                             articleReaderMode === 'story'
                               ? 'bg-primary-600 text-white'
                               : 'text-gray-700 hover:bg-gray-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
@@ -3239,7 +3313,7 @@ export default function EPaperPageClient({
                           type="button"
                           onClick={() => setArticleReaderMode('text')}
                           disabled={!hasReadableArticleText}
-                          className={`inline-flex h-7 items-center gap-1 rounded-full px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`reader-touch-button reader-focus-ring inline-flex min-h-9 items-center gap-1 rounded-full px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                             articleReaderMode === 'text'
                               ? 'bg-primary-600 text-white'
                               : 'text-gray-700 hover:bg-gray-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
@@ -3254,7 +3328,7 @@ export default function EPaperPageClient({
                     <button
                       type="button"
                       onClick={() => setActiveArticle(null)}
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      className="reader-touch-button reader-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -3271,7 +3345,7 @@ export default function EPaperPageClient({
                         void handleArticleListen();
                       }}
                       disabled={!shouldShowStoryReaderStopAction && !canListenToActiveArticle}
-                      className={`inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`reader-touch-button reader-focus-ring inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                         shouldShowStoryReaderStopAction
                           ? 'border-zinc-300 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
                           : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30'
@@ -3294,7 +3368,7 @@ export default function EPaperPageClient({
                     </button>
 
                     <details ref={mobileArticleActionMenuRef} className="relative">
-                      <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 [&::-webkit-details-marker]:hidden">
+                      <summary className="reader-touch-button reader-focus-ring flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 [&::-webkit-details-marker]:hidden">
                         <MoreHorizontal className="h-3.5 w-3.5" />
                         <span>{t.moreActions}</span>
                       </summary>
@@ -3308,7 +3382,7 @@ export default function EPaperPageClient({
                               handleStorySaveToggle();
                             }}
                             disabled={isSavingStory}
-                            className={`inline-flex h-10 items-center justify-start gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            className={`reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                               isActiveArticleSaved
                                 ? 'border-primary-300 bg-primary-600 text-white hover:bg-primary-700 dark:border-primary-500 dark:bg-primary-500 dark:hover:bg-primary-400'
                                 : 'border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40'
@@ -3328,7 +3402,7 @@ export default function EPaperPageClient({
                               closeArticleActionMenu();
                               void shareActiveArticleOnWhatsApp();
                             }}
-                            className="inline-flex h-10 items-center justify-start gap-2 rounded-xl border border-emerald-300 bg-white px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border border-emerald-300 bg-white px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
                           >
                             <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#25D366] text-white">
                               <WhatsAppIcon className="h-3.5 w-3.5" />
@@ -3342,7 +3416,7 @@ export default function EPaperPageClient({
                               closeArticleActionMenu();
                               void shareActiveArticle();
                             }}
-                            className="inline-flex h-10 items-center justify-start gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
+                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
                           >
                             <Share2 className="h-4 w-4" />
                             <span>{t.shareStory}</span>
@@ -3363,7 +3437,7 @@ export default function EPaperPageClient({
                                     )
                                   }
                                   disabled={articleTextScale <= 0.9}
-                                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-zinc-50 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                  className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-zinc-50 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                                 >
                                   <Minus className="h-4 w-4" />
                                   <span>A-</span>
@@ -3376,7 +3450,7 @@ export default function EPaperPageClient({
                                     )
                                   }
                                   disabled={articleTextScale >= 1.4}
-                                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-zinc-50 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                  className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-zinc-50 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                                 >
                                   <Plus className="h-4 w-4" />
                                   <span>A+</span>
@@ -3392,7 +3466,7 @@ export default function EPaperPageClient({
                               handleStoryTextDownload();
                             }}
                             disabled={!hasReadableArticleText}
-                            className="inline-flex h-10 items-center justify-start gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
                           >
                             <Download className="h-4 w-4" />
                             <span>{t.downloadText}</span>
@@ -3405,7 +3479,7 @@ export default function EPaperPageClient({
                               handleStoryPrint();
                             }}
                             disabled={!hasReadableArticleText && !activeArticleHasContent}
-                            className="inline-flex h-10 items-center justify-start gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
                           >
                             <Printer className="h-4 w-4" />
                             <span>{t.printStory}</span>
@@ -3693,7 +3767,7 @@ export default function EPaperPageClient({
             </div>
 
             <div className="flex-1 overflow-auto bg-white dark:bg-zinc-900">
-              <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4 md:p-5">
+              <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:p-4 md:p-5">
                 <div className="hidden flex-wrap items-center gap-2 sm:flex">
                   <span
                     className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
@@ -3769,7 +3843,7 @@ export default function EPaperPageClient({
                           <button
                             type="button"
                             onClick={() => setArticleReaderMode('text')}
-                            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
+                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40 sm:w-auto"
                           >
                             <Type className="h-4 w-4" />
                             <span>{t.openTextStory}</span>
@@ -3846,7 +3920,7 @@ export default function EPaperPageClient({
                       <button
                         type="button"
                         onClick={() => setArticleReaderMode('story')}
-                        className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        className="reader-touch-button reader-focus-ring mt-6 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:w-auto"
                       >
                         <Newspaper className="h-4 w-4" />
                         <span>{t.openVisualStory}</span>

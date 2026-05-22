@@ -18,8 +18,9 @@ export type ArticleImageVariant =
  */
 export function buildArticleImageVariantUrl(
   value: string,
-  _variant: ArticleImageVariant
+  variant: ArticleImageVariant
 ) {
+  void variant;
   return value.trim();
 }
 

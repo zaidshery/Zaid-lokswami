@@ -81,7 +81,7 @@ export const NEWS_CATEGORIES: NewsCategory[] = [
     nameEn: 'Tech',
     icon: '\ud83d\udcbb',
     color: '#06B6D4',
-    aliases: ['tech', 'technology', TECH_HI, TECHNOLOGY_HI],
+    aliases: ['tech', 'technology', 'tech news', TECH_HI, TECHNOLOGY_HI],
   },
   {
     id: 'business',

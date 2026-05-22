@@ -200,15 +200,20 @@ export default function AboutPage() {
         <div className="mt-4 grid gap-3 lg:grid-cols-3">
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{t.addressLabel}</p>
-            <p className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-              {COMPANY_INFO.address.street}, {COMPANY_INFO.address.road}, {COMPANY_INFO.address.city}, {COMPANY_INFO.address.state}
-            </p>
+            <a
+              href={COMPANY_INFO.address.mapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block text-sm font-medium text-zinc-800 hover:text-orange-600 dark:text-zinc-200 dark:hover:text-orange-400"
+            >
+              {COMPANY_INFO.address.displayAddress}
+            </a>
           </div>
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{t.phoneLabel}</p>
-            <a href={`tel:${COMPANY_INFO.contact.phone}`} className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-zinc-800 hover:text-orange-600 dark:text-zinc-200 dark:hover:text-orange-400">
+            <a href={COMPANY_INFO.contact.phoneHref} className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-zinc-800 hover:text-orange-600 dark:text-zinc-200 dark:hover:text-orange-400">
               <Phone className="h-4 w-4 text-orange-500" />
-              {COMPANY_INFO.contact.phone}
+              {COMPANY_INFO.contact.phoneDisplay}
             </a>
           </div>
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">

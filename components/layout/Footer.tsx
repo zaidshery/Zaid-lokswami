@@ -156,7 +156,7 @@ function FooterSection({
   return (
     <div>
       <details className="group rounded-2xl border border-zinc-200/80 px-3 py-0 dark:border-zinc-800 md:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3">
+        <summary className="reader-touch-button reader-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 py-3">
           <span className="text-[1.08rem] font-semibold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50">
             {title}
           </span>
@@ -168,7 +168,7 @@ function FooterSection({
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="inline-flex items-center gap-2 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
+                  className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
                 >
                   <ChevronRight className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
                   {language === 'hi' ? item.hi : item.en}
@@ -188,7 +188,7 @@ function FooterSection({
             <li key={item.href}>
               <Link
                 href={item.href}
-                className="inline-flex items-center gap-2 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400 md:text-[15px]"
+                className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400 md:text-[15px]"
               >
                 <ChevronRight className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
                 {language === 'hi' ? item.hi : item.en}
@@ -244,7 +244,7 @@ export default function Footer() {
                     href={social.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`footer-social-float footer-social-bulb group/social relative inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border bg-white/95 transition-all duration-300 will-change-transform active:[transform:perspective(700px)_rotateX(4deg)_translateY(1px)] dark:bg-zinc-900/75 md:[transform:translateZ(0)] md:hover:[transform:perspective(900px)_rotateX(10deg)_rotateY(-10deg)_translateY(-3px)] ${brandStyle.hover}`}
+                    className={`footer-social-float footer-social-bulb reader-touch-link reader-focus-ring group/social relative inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border bg-white/95 transition-all duration-300 will-change-transform active:[transform:perspective(700px)_rotateX(4deg)_translateY(1px)] dark:bg-zinc-900/75 md:[transform:translateZ(0)] md:hover:[transform:perspective(900px)_rotateX(10deg)_rotateY(-10deg)_translateY(-3px)] ${brandStyle.hover}`}
                     style={
                       {
                         animationDelay: `${index * 140}ms`,
@@ -297,7 +297,7 @@ export default function Footer() {
 
           <div>
             <details className="group rounded-2xl border border-zinc-200/80 px-3 py-0 dark:border-zinc-800 md:hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3">
+              <summary className="reader-touch-button reader-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 py-3">
                 <span className="text-[1.08rem] font-semibold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50">
                   {language === 'hi' ? '\u0938\u0902\u092a\u0930\u094d\u0915 \u0915\u0930\u0947\u0902' : 'Contact Us'}
                 </span>
@@ -306,23 +306,29 @@ export default function Footer() {
 
               <div className="border-t border-zinc-200 py-3 dark:border-zinc-800">
                 <ul className="space-y-2.5 text-zinc-600 dark:text-zinc-400">
-                  <li className="flex items-start gap-3">
+                  <li className="flex items-start gap-3 rounded-xl">
                     <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                    <span className="max-w-[26rem] text-[13px] leading-6">
-                      {COMPANY_INFO.address.street}, {COMPANY_INFO.address.road}, {COMPANY_INFO.address.city}, {COMPANY_INFO.address.state}
-                    </span>
+                    <a
+                      href={COMPANY_INFO.address.mapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="reader-touch-link reader-focus-ring -mt-2 max-w-[26rem] rounded-xl px-1 py-2 text-[13px] leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400"
+                      aria-label={language === 'hi' ? '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0932\u094b\u0915\u0947\u0936\u0928 Google Maps \u092e\u0947\u0902 \u0916\u094b\u0932\u0947\u0902' : 'Open Lokswami location in Google Maps'}
+                    >
+                      {COMPANY_INFO.address.displayAddress}
+                    </a>
                   </li>
 
                   <li className="flex items-center gap-3">
                     <Phone className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                    <a href={`tel:${COMPANY_INFO.contact.phone}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400">
-                      {COMPANY_INFO.contact.phone}
+                    <a href={COMPANY_INFO.contact.phoneHref} className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center rounded-xl px-1 text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400">
+                      {COMPANY_INFO.contact.phoneDisplay}
                     </a>
                   </li>
 
                   <li className="flex items-center gap-3">
                     <Mail className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                    <a href={`mailto:${COMPANY_INFO.contact.email}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400">
+                    <a href={`mailto:${COMPANY_INFO.contact.email}`} className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center rounded-xl px-1 text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400">
                       {COMPANY_INFO.contact.email}
                     </a>
                   </li>
@@ -335,13 +341,13 @@ export default function Footer() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                      className="reader-touch-button reader-focus-ring min-h-11 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                     >
                       Android
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                      className="reader-touch-button reader-focus-ring min-h-11 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                     >
                       iOS
                     </button>
@@ -358,21 +364,27 @@ export default function Footer() {
               <ul className="space-y-2.5 text-zinc-600 dark:text-zinc-400">
                 <li className="flex items-start gap-3">
                   <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                  <span className="max-w-[26rem] text-[13px] leading-6 md:text-[14px]">
-                    {COMPANY_INFO.address.street}, {COMPANY_INFO.address.road}, {COMPANY_INFO.address.city}, {COMPANY_INFO.address.state}
-                  </span>
+                  <a
+                    href={COMPANY_INFO.address.mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="reader-touch-link reader-focus-ring -mt-2 max-w-[26rem] rounded-xl px-1 py-2 text-[13px] leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[14px]"
+                    aria-label={language === 'hi' ? '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0932\u094b\u0915\u0947\u0936\u0928 Google Maps \u092e\u0947\u0902 \u0916\u094b\u0932\u0947\u0902' : 'Open Lokswami location in Google Maps'}
+                  >
+                    {COMPANY_INFO.address.displayAddress}
+                  </a>
                 </li>
 
                 <li className="flex items-center gap-3">
                   <Phone className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                  <a href={`tel:${COMPANY_INFO.contact.phone}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[15px]">
-                    {COMPANY_INFO.contact.phone}
+                  <a href={COMPANY_INFO.contact.phoneHref} className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center rounded-xl px-1 text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[15px]">
+                    {COMPANY_INFO.contact.phoneDisplay}
                   </a>
                 </li>
 
                 <li className="flex items-center gap-3">
                   <Mail className="h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
-                  <a href={`mailto:${COMPANY_INFO.contact.email}`} className="text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[15px]">
+                  <a href={`mailto:${COMPANY_INFO.contact.email}`} className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center rounded-xl px-1 text-[14px] font-medium leading-6 text-zinc-700 hover:text-orange-600 dark:text-zinc-300 dark:hover:text-orange-400 md:text-[15px]">
                     {COMPANY_INFO.contact.email}
                   </a>
                 </li>
@@ -385,13 +397,13 @@ export default function Footer() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 md:text-[15px]"
+                    className="reader-touch-button reader-focus-ring min-h-11 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 md:text-[15px]"
                   >
                     Android
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 md:text-[15px]"
+                    className="reader-touch-button reader-focus-ring min-h-11 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-[14px] font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 md:text-[15px]"
                   >
                     iOS
                   </button>
@@ -416,7 +428,7 @@ export default function Footer() {
                   href="https://github.com/zaidshery"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-medium text-zinc-700 underline decoration-zinc-300 underline-offset-4 transition hover:text-orange-600 hover:decoration-orange-400 dark:text-zinc-200 dark:decoration-zinc-600 dark:hover:text-orange-400 dark:hover:decoration-orange-400"
+                  className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center rounded-lg font-medium text-zinc-700 underline decoration-zinc-300 underline-offset-4 transition hover:text-orange-600 hover:decoration-orange-400 dark:text-zinc-200 dark:decoration-zinc-600 dark:hover:text-orange-400 dark:hover:decoration-orange-400"
                 >
                   Zaid Shery
                 </a>
@@ -428,7 +440,7 @@ export default function Footer() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="text-[14px] leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400 md:text-[15px]"
+                  className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center rounded-lg text-[14px] leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400 md:text-[15px]"
                 >
                   {language === 'hi' ? item.hi : item.en}
                 </Link>

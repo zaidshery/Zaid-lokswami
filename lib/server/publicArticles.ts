@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import connectDB from '@/lib/db/mongoose';
+import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 import {
   NEWS_CATEGORY_DEFINITIONS,
@@ -357,15 +357,7 @@ function buildListResult(
 }
 
 async function resolveSource(): Promise<PublicArticleSource> {
-  if (!process.env.MONGODB_URI) return 'file';
-
-  try {
-    await connectDB();
-    return 'mongo';
-  } catch (error) {
-    console.error('MongoDB unavailable for public articles, using file store.', error);
-    return 'file';
-  }
+  return (await isMongoAvailable({ label: 'public articles' })) ? 'mongo' : 'file';
 }
 
 function escapeRegExp(value: string) {

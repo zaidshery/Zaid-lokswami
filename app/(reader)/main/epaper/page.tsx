@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { buildEpaperPageMetadata } from '@/lib/seo/readerPageMetadata';
+import { getPublicEpaperForMetadata } from '@/lib/server/publicEpaperMetadata';
 import { resolveRequestOrigin } from '@/lib/server/requestOrigin';
 import { parseUiDateInput } from '@/lib/utils/dateFormat';
 import {
@@ -53,10 +54,33 @@ function resolveInitialFilters(params: Record<string, string | string[] | undefi
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const resolvedParams = searchParams ? await searchParams : {};
   const filters = resolveInitialFilters(resolvedParams);
+  const paperId = toSingleString(resolvedParams.paper).trim();
+  const shouldResolveIssue = Boolean(paperId || filters.city !== 'all' || filters.date);
+  const issue = shouldResolveIssue
+    ? await getPublicEpaperForMetadata({
+        id: paperId,
+        citySlug: filters.city === 'all' ? '' : filters.city,
+        publishDate: filters.date,
+      })
+    : null;
+  const ogParams = new URLSearchParams();
+  if (issue?.id || paperId) {
+    ogParams.set('paper', issue?.id || paperId);
+  }
+  if (issue?.citySlug || filters.city !== 'all') {
+    ogParams.set('city', issue?.citySlug || filters.city);
+  }
+  if (issue?.publishDate || filters.date) {
+    ogParams.set('date', issue?.publishDate || filters.date);
+  }
 
   return buildEpaperPageMetadata({
-    city: filters.city,
-    publishDate: filters.date,
+    city: issue?.citySlug || filters.city,
+    publishDate: issue?.publishDate || filters.date,
+    paperId: issue?.id || paperId,
+    issueTitle: issue?.title,
+    issueCityName: issue?.cityName,
+    image: `/api/og/epaper${ogParams.size ? `?${ogParams.toString()}` : ''}`,
   });
 }
 

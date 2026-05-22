@@ -24,6 +24,7 @@ import {
   CmsEditorMain,
   CmsEditorSidebar,
 } from '@/components/admin/CmsEditorLayout';
+import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 
 const categories = NEWS_CATEGORIES.map((category) => category.nameEn);
 const THUMBNAIL_MAX_SIZE = 10 * 1024 * 1024;
@@ -491,7 +492,7 @@ export default function CreateVideoPage() {
                         </p>
                       </div>
                     ) : (
-                      <img
+                      <AdminMediaImage
                         src={thumbnailPreview || formData.thumbnail}
                         alt="Thumbnail preview"
                         className="h-48 w-full object-cover"

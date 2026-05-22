@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, CalendarDays, Newspaper } from 'lucide-react';
 import type { CSSProperties, PointerEvent } from 'react';
+import ReaderImage from './ReaderImage';
 
 type DesktopHeroEpaperCardProps = {
   href: string;
@@ -69,10 +69,11 @@ export default function DesktopHeroEpaperCard({
             <div className="pointer-events-none absolute inset-x-2 top-1 aspect-[3/4] rounded-[1rem] border border-zinc-300/60 bg-zinc-900/10 -rotate-[4deg] dark:border-white/8 dark:bg-black/20" />
             <div className="relative rounded-[1.35rem] border border-zinc-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(255,255,255,0.68))] p-1.5 shadow-[0_16px_28px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] dark:shadow-[0_18px_34px_rgba(0,0,0,0.22)]">
               <div className="relative aspect-[3/4] overflow-hidden rounded-[1rem] bg-[#f6f1e8]">
-                <Image
+                <ReaderImage
                   src={thumbnailSrc}
                   alt={thumbnailAlt}
                   fill
+                  fallbackSrc="/placeholders/epaper-3x4.svg"
                   className="object-contain p-1 transition-transform duration-500 group-hover:scale-[1.02]"
                   sizes="136px"
                   priority

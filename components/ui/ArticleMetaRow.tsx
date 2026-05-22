@@ -24,6 +24,7 @@ interface ArticleMetaRowProps {
   showEpaperButton?: boolean;
   sharePath?: string;
   readHref?: string;
+  actionLayout?: 'wrap' | 'three-columns';
 }
 
 export default function ArticleMetaRow({
@@ -40,6 +41,7 @@ export default function ArticleMetaRow({
   showEpaperButton = false,
   sharePath,
   readHref,
+  actionLayout = 'wrap',
 }: ArticleMetaRowProps) {
   const router = useRouter();
   void timeText;
@@ -77,14 +79,18 @@ export default function ArticleMetaRow({
     ? 'border-emerald-200/55 bg-emerald-500/18 text-emerald-100 hover:bg-emerald-500/28'
     : 'border-emerald-300/85 bg-white text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-700/75 dark:bg-zinc-900 dark:text-emerald-300 dark:hover:bg-emerald-900/30';
   const ctaSize = compact
-    ? 'h-5 px-1.5 text-[8.5px] sm:h-6 sm:px-2 sm:text-[9px]'
-    : 'h-8 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs';
+    ? actionLayout === 'three-columns'
+      ? 'min-h-10 min-w-0 px-1 text-[8.5px] sm:px-2 sm:text-[9px]'
+      : 'min-h-9 px-2 text-[9px] sm:min-h-10 sm:px-2.5 sm:text-[10px]'
+    : 'min-h-11 px-2.5 text-[10px] sm:px-3 sm:text-xs';
   const iconSize = compact ? 'h-3 w-3' : 'h-3.5 w-3.5';
-  const actionWrap = compact
-    ? 'ml-auto flex max-w-full flex-wrap items-center justify-end gap-1'
-    : 'ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5';
+  const actionWrap = actionLayout === 'three-columns'
+    ? 'grid w-full grid-cols-3 gap-1.5'
+    : compact
+      ? 'ml-auto flex max-w-full flex-wrap items-center justify-end gap-1'
+      : 'ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5';
   const ctaBase =
-    'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border font-semibold leading-none transition-colors shadow-sm active:scale-[0.98]';
+    `reader-touch-button reader-focus-ring inline-flex min-w-0 items-center justify-center ${actionLayout === 'three-columns' ? 'gap-1 overflow-hidden' : 'gap-1.5'} whitespace-nowrap rounded-full border font-semibold leading-none transition-colors shadow-sm active:scale-[0.98]`;
 
   return (
     <div
@@ -97,9 +103,10 @@ export default function ArticleMetaRow({
             onClick={openEpaper}
             aria-label={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
             className={`${ctaBase} ${ctaSize} attention-pulsate-bck ${epaperTone}`}
+            data-reader-action="true"
           >
             <Newspaper className={iconSize} />
-            <span>
+            <span className="min-w-0 truncate">
               {language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
             </span>
           </button>
@@ -111,6 +118,7 @@ export default function ArticleMetaRow({
             onClick={shareOnWhatsApp}
             aria-label={language === 'hi' ? '\u0935\u094d\u0939\u093e\u091f\u094d\u0938\u090f\u092a \u092a\u0930 \u0936\u0947\u092f\u0930 \u0915\u0930\u0947\u0902' : 'Share on WhatsApp'}
             className={`${ctaBase} ${ctaSize} ${whatsappTone}`}
+            data-reader-action="true"
           >
             <span className={`${iconSize} flex items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm`}>
               <svg viewBox="0 0 24 24" className={`${compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} fill-current`} aria-hidden="true">
@@ -118,7 +126,7 @@ export default function ArticleMetaRow({
               </svg>
             </span>
             {showWhatsAppText ? (
-              <span>
+              <span className="min-w-0 truncate">
                 WhatsApp
               </span>
             ) : null}
@@ -131,13 +139,18 @@ export default function ArticleMetaRow({
               href={readHref}
               className={`${ctaBase} ${ctaSize} ${readTone}`}
               onClick={(event) => event.stopPropagation()}
+              data-reader-action="true"
             >
-              {language === 'hi' ? '\u092a\u0942\u0930\u0940 \u0916\u092c\u0930' : 'Read Story'}
+              <span className="min-w-0 truncate">
+                {language === 'hi' ? '\u092a\u0942\u0930\u0940 \u0916\u092c\u0930' : 'Read Story'}
+              </span>
               <ArrowUpRight className={iconSize} />
             </Link>
           ) : (
-            <span className={`${ctaBase} ${ctaSize} ${readTone}`}>
-              {language === 'hi' ? '\u092a\u0942\u0930\u0940 \u0916\u092c\u0930' : 'Read Story'}
+            <span className={`${ctaBase} ${ctaSize} ${readTone}`} data-reader-action="true">
+              <span className="min-w-0 truncate">
+                {language === 'hi' ? '\u092a\u0942\u0930\u0940 \u0916\u092c\u0930' : 'Read Story'}
+              </span>
               <ArrowUpRight className={iconSize} />
             </span>
           )

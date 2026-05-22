@@ -18,6 +18,7 @@ import {
   type PermissionUser,
 } from '@/lib/auth/permissions';
 import { isAdminRole, isReporterDeskRole } from '@/lib/auth/roles';
+import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 
 interface MediaItem {
   _id: string;
@@ -46,9 +47,6 @@ const EMPTY_STATE_CLASS =
 
 const META_CHIP_CLASS =
   'admin-shell-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]';
-
-const INPUT_CLASS =
-  'w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-4 py-3 text-sm text-[color:var(--admin-shell-text)] outline-none transition-colors placeholder:text-[color:var(--admin-shell-text-muted)] focus:border-red-400/40';
 
 const SECONDARY_BUTTON_CLASS =
   'admin-shell-toolbar-btn inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60';
@@ -459,9 +457,7 @@ export default function MediaLibrary() {
                 <div className="relative overflow-hidden rounded-[22px] bg-zinc-100 dark:bg-zinc-900">
                   <div className="aspect-[4/3]">
                     {isImage ? (
-                      // Media URLs can be arbitrary external/blob sources in admin.
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.url} alt={item.filename} className="h-full w-full object-cover" />
+                      <AdminMediaImage src={item.url} alt={item.filename} className="h-full w-full object-cover" />
                     ) : (
                       <div className="flex h-full items-center justify-center">
                         {isVideo ? (

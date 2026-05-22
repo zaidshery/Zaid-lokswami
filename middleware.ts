@@ -7,7 +7,6 @@ import { resolveRouteGuardDecision } from '@/lib/auth/routeGuards';
 import { getLoginLimiter } from '@/lib/security/getRateLimiter';
 import { getIpRateLimitKey } from '@/lib/security/ipUtils';
 import { logApiRequestFromMiddleware } from '@/lib/security/requestLogger';
-import { isAdminRole } from '@/lib/auth/roles';
 
 async function getSessionToken(request: NextRequest) {
   const secret = getJwtSecretOrNull();

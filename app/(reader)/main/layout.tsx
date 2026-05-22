@@ -77,10 +77,10 @@ export default function MainLayout({
         <main
           className={
             isImmersiveVideoMode
-              ? 'pb-0 pt-0'
-              : isReaderImmersiveMode
                 ? 'pb-0 pt-0'
-                : 'pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.5rem)] pt-[8rem] sm:pt-[8.5rem] md:pt-[9rem] xl:pb-4'
+                : isReaderImmersiveMode
+                  ? 'pb-0 pt-0'
+                : 'reader-bottom-safe-pad pt-[8rem] sm:pt-[8.5rem] md:pt-[9rem] xl:pb-4'
           }
         >
           {!isImmersiveVideoMode && !isReaderImmersiveMode ? <SigninRoleBanner /> : null}

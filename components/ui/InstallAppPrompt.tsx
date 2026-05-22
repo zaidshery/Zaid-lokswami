@@ -158,10 +158,10 @@ export default function InstallAppPrompt() {
   const canPresentInstallPrompt = installPlatform === 'ios' || Boolean(deferredPrompt);
   const canReuseActiveSurface = popupState.activeSurface === 'install-app';
   const promptOffsetClassName = isReaderRoute
-    ? 'bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.85rem)] xl:bottom-5'
+    ? 'bottom-[var(--reader-floating-button-bottom)] xl:bottom-5'
     : 'bottom-3 sm:bottom-4';
   const promptMaxHeightClassName = isReaderRoute
-    ? 'max-h-[calc(100dvh-var(--bottom-nav-height)-env(safe-area-inset-bottom)-1.5rem)] md:max-h-[34rem] xl:max-h-[28rem]'
+    ? 'max-h-[var(--reader-bottom-sheet-max-height)] md:max-h-[34rem] xl:max-h-[28rem]'
     : 'max-h-[calc(100dvh-0.75rem)] sm:max-h-[34rem] xl:max-h-[28rem]';
   const autoPromptStateRef = useRef({
     canPresentInstallPrompt,
@@ -543,7 +543,7 @@ export default function InstallAppPrompt() {
             <button
               type="button"
               onClick={dismissPrompt}
-              className="absolute right-0 top-0 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/80 bg-white/80 text-zinc-600 shadow-sm backdrop-blur transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10 sm:h-10 sm:w-10"
+              className="reader-touch-button reader-focus-ring absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/80 bg-white/80 text-zinc-600 shadow-sm backdrop-blur transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
               aria-label="Dismiss install prompt"
             >
               <X className="h-4 w-4" />
@@ -608,7 +608,7 @@ export default function InstallAppPrompt() {
             <button
               type="button"
               onClick={dismissPrompt}
-              className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-zinc-300/90 bg-white/85 px-4 text-[13px] font-semibold text-zinc-700 transition hover:bg-white dark:border-zinc-700 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/[0.06] sm:text-sm md:w-auto md:min-w-[9rem]"
+              className="reader-touch-button reader-focus-ring inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-zinc-300/90 bg-white/85 px-4 text-[13px] font-semibold text-zinc-700 transition hover:bg-white dark:border-zinc-700 dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:bg-white/[0.06] sm:text-sm md:w-auto md:min-w-[9rem]"
             >
               {copy.dismiss}
             </button>
@@ -617,7 +617,7 @@ export default function InstallAppPrompt() {
                 type="button"
                 onClick={() => void installApp()}
                 disabled={isInstalling}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#b3171d_0%,#e72129_100%)] px-4 text-[13px] font-semibold text-white shadow-[0_14px_28px_rgba(199,29,36,0.24)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm md:flex-1"
+                className="reader-touch-button reader-focus-ring inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#b3171d_0%,#e72129_100%)] px-4 text-[13px] font-semibold text-white shadow-[0_14px_28px_rgba(199,29,36,0.24)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm md:flex-1"
               >
                 <Download className="h-4 w-4" />
                 <span className="truncate">{isInstalling ? copy.installing : copy.install}</span>

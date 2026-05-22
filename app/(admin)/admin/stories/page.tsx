@@ -34,13 +34,13 @@ import {
   CmsCollectionMetricCard,
   CmsCollectionMetricGrid,
   CmsCollectionPage,
-  CMS_COLLECTION_EMPTY_STATE_CLASS as EMPTY_STATE_CLASS,
   CMS_COLLECTION_FILTER_INPUT_CLASS as FILTER_INPUT_CLASS,
   CMS_COLLECTION_META_CHIP_CLASS as META_CHIP_CLASS,
   CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
   CMS_COLLECTION_PRIMARY_BUTTON_CLASS as PRIMARY_BUTTON_CLASS,
   CMS_COLLECTION_SECONDARY_BUTTON_CLASS as SECONDARY_BUTTON_CLASS,
 } from '@/components/admin/CmsCollectionLayout';
+import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 
 type WorkflowActor = {
   id?: string;
@@ -570,7 +570,7 @@ export default function StoriesManagementPage() {
                 <div className="flex flex-col gap-4 md:flex-row">
                   <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-[18px] bg-zinc-100 dark:bg-zinc-900 sm:h-44 sm:w-28 sm:rounded-[22px] md:h-48 md:w-32">
                     {story.thumbnail ? (
-                      <img
+                      <AdminMediaImage
                         src={story.thumbnail}
                         alt={story.title}
                         className="h-full w-full object-cover"

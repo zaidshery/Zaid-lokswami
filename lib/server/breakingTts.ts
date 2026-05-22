@@ -78,11 +78,6 @@ function sanitizePathSegment(segment: string) {
   return cleaned;
 }
 
-function safeArticleSegment(articleId: string) {
-  const normalized = articleId.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-  return sanitizePathSegment(normalized) || crypto.createHash('sha1').update(articleId).digest('hex');
-}
-
 function isInsideBaseDir(baseDir: string, absolutePath: string) {
   const relative = path.relative(baseDir, absolutePath);
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
@@ -348,7 +343,6 @@ export function resolveReusableBreakingTts(article: unknown): BreakingTtsMetadat
   const normalized = normalizeBreakingArticle(article);
   if (!normalized?.breakingTts) return null;
 
-  const expected = buildBreakingTtsExpectation(normalized);
   const metadata = normalized.breakingTts;
 
   if (!metadata.audioUrl) {
@@ -390,8 +384,9 @@ export async function saveBreakingTtsMetadata(input: {
  */
 export async function ensureBreakingTtsForArticle(
   article: unknown,
-  _options?: { forceRegenerate?: boolean }
+  options?: { forceRegenerate?: boolean }
 ): Promise<BreakingTtsMetadata | null> {
+  void options;
   // Without Gemini synthesis, we can only return what is already stored.
   // The admin must upload breaking audio manually.
   return resolveReusableBreakingTts(article);

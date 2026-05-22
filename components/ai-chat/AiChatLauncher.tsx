@@ -93,7 +93,7 @@ export default function AiChatLauncher() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.26, ease: 'easeOut' }}
-            className={`fixed bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+4.3rem)] right-2 z-50 w-[calc(100vw-1rem)] max-w-[23.5rem] overflow-hidden rounded-[1.4rem] border backdrop-blur xl:bottom-[7.2rem] xl:right-6 xl:max-w-[27rem] ${previewSurfaceClassName}`}
+            className={`fixed bottom-[var(--reader-floating-panel-bottom)] right-2 z-50 w-[calc(100vw-1rem)] max-w-[23.5rem] overflow-hidden rounded-[1.4rem] border backdrop-blur xl:bottom-[7.2rem] xl:right-6 xl:max-w-[27rem] ${previewSurfaceClassName}`}
           >
             <span className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-red-500/70 to-transparent" />
             <span className="pointer-events-none absolute -left-16 bottom-6 h-24 w-24 rounded-full bg-red-500/12 blur-2xl" />
@@ -108,7 +108,7 @@ export default function AiChatLauncher() {
                     ? 'AI \u092a\u094d\u0930\u0940\u0935\u094d\u092f\u0942 \u092c\u0902\u0926 \u0915\u0930\u0947\u0902'
                     : 'Close AI preview'
                 }
-                className={`absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                className={`reader-touch-button reader-focus-ring absolute right-2 top-2 inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
                   isLight
                     ? 'border-zinc-300 bg-white text-zinc-600 hover:border-red-300 hover:text-red-700'
                     : 'border-zinc-700 bg-zinc-950/90 text-zinc-300 hover:border-red-500/45 hover:text-red-200'
@@ -140,7 +140,7 @@ export default function AiChatLauncher() {
               <button
                 type="button"
                 onClick={() => handleOpenWithDraft()}
-                className={`mt-3 flex w-full items-center justify-between rounded-full border px-4 py-2.5 text-left text-sm transition ${
+                className={`reader-touch-button reader-focus-ring mt-3 flex min-h-12 w-full items-center justify-between rounded-full border px-4 py-2.5 text-left text-sm transition ${
                   isLight
                     ? 'border-zinc-300 bg-white text-zinc-500 hover:border-red-400'
                     : 'border-zinc-700 bg-zinc-950/90 text-zinc-400 hover:border-red-500/45'
@@ -162,7 +162,7 @@ export default function AiChatLauncher() {
         aria-label={sheetOpen ? 'Close Lokswami AI Assistant' : 'Open Lokswami AI Assistant'}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className={`fixed bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom)+0.9rem)] right-4 z-[51] inline-flex items-center justify-center gap-2 overflow-hidden transition-transform xl:bottom-8 xl:right-6 ${floatingButtonClassName}`}
+        className={`reader-touch-button reader-focus-ring fixed bottom-[var(--reader-floating-button-bottom)] right-4 z-[51] inline-flex items-center justify-center gap-2 overflow-hidden transition-transform xl:bottom-8 xl:right-6 ${floatingButtonClassName}`}
       >
         {sheetOpen ? (
           <X className="h-5 w-5" />

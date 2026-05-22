@@ -181,23 +181,24 @@ export default function LatestFeedClient({
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'latest' | 'popular')}
-            className="min-w-[124px] rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red focus:outline-none sm:min-w-[140px]"
+            className="reader-focus-ring min-h-11 min-w-[124px] rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red sm:min-w-[140px]"
+            data-swipe-ignore="true"
           >
             <option value="latest">{t.latest}</option>
             <option value="popular">{t.popular}</option>
           </select>
 
-          <div className="flex shrink-0 items-center rounded-lg border border-lokswami-border bg-lokswami-surface">
+          <div className="flex shrink-0 items-center rounded-lg border border-lokswami-border bg-lokswami-surface" data-swipe-ignore="true">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 ${viewMode === 'grid' ? 'text-lokswami-red' : 'text-lokswami-text-secondary hover:text-lokswami-white'}`}
+              className={`reader-touch-button reader-focus-ring inline-flex h-11 w-11 items-center justify-center rounded-l-lg ${viewMode === 'grid' ? 'text-lokswami-red' : 'text-lokswami-text-secondary hover:text-lokswami-white'}`}
               aria-label="Grid view"
             >
               <Grid3X3 className="h-5 w-5" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 ${viewMode === 'list' ? 'text-lokswami-red' : 'text-lokswami-text-secondary hover:text-lokswami-white'}`}
+              className={`reader-touch-button reader-focus-ring inline-flex h-11 w-11 items-center justify-center rounded-r-lg ${viewMode === 'list' ? 'text-lokswami-red' : 'text-lokswami-text-secondary hover:text-lokswami-white'}`}
               aria-label="List view"
             >
               <List className="h-5 w-5" />
@@ -238,7 +239,7 @@ export default function LatestFeedClient({
             type="button"
             onClick={handleLoadMore}
             disabled={isLoadingMore}
-            className="rounded-full border border-lokswami-border bg-lokswami-surface px-8 py-3 text-lokswami-text-secondary transition-colors hover:border-lokswami-red hover:text-lokswami-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-lokswami-border bg-lokswami-surface px-8 py-3 text-lokswami-text-secondary transition-colors hover:border-lokswami-red hover:text-lokswami-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {isLoadingMore ? t.loadingMore : t.loadMore}
           </button>

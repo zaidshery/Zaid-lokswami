@@ -10,17 +10,13 @@ import {
   sortBreakingNewsItems,
   type BreakingNewsItem,
 } from '@/lib/types/breaking';
-import {
-  buildTtsAudioSource,
-  fetchTtsStatus,
-} from '@/lib/ai/ttsClient';
+import { fetchTtsStatus } from '@/lib/ai/ttsClient';
 
 const BREAKING_LIMIT = 10;
 const POLL_INTERVAL_MS = 90_000;
 const SILENT_ROTATION_MS = 4_000;
 const SPOKEN_HEADLINE_PAUSE_MS = 800;
 const TTS_FAILURE_HOLD_MS = 3_000;
-const TTS_PREP_TIMEOUT_MS = 8_000;
 const TRANSITION_MS = 350;
 
 type UseBreakingNewsControllerOptions = {
@@ -59,15 +55,6 @@ function buildFallbackItems() {
       )
       .filter((item): item is BreakingNewsItem => Boolean(item))
   );
-}
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
-  return await Promise.race([
-    promise,
-    new Promise<never>((_, reject) => {
-      window.setTimeout(() => reject(new Error('TTS preparation timed out.')), timeoutMs);
-    }),
-  ]);
 }
 
 export function useBreakingNewsController({
@@ -322,7 +309,7 @@ export function useBreakingNewsController({
   );
 
   const prepareHeadlineAudio = useCallback(
-    async (item: BreakingNewsItem, token: number): Promise<PreparedHeadlineAudio | null> => {
+    async (item: BreakingNewsItem): Promise<PreparedHeadlineAudio | null> => {
       const spokenText = buildSpokenBreakingHeadline(item);
       if (!spokenText) return null;
       const cacheKey = buildPreparedAudioCacheKey(item);
@@ -346,7 +333,7 @@ export function useBreakingNewsController({
       // Auto-synthesis is decommissioned — manual audio upload required for spoken headlines.
       return null;
     },
-    [buildPreparedAudioCacheKey, preferredLanguage, primePreparedAudio, rememberPreparedAudio]
+    [buildPreparedAudioCacheKey, primePreparedAudio, rememberPreparedAudio]
   );
 
   const waitForPreparedAudio = useCallback(
@@ -479,7 +466,7 @@ export function useBreakingNewsController({
       let currentItem = activeQueue[workingIndex];
       let preparedCurrent = await waitForPreparedAudio(
         currentItem,
-        prepareHeadlineAudio(currentItem, token),
+        prepareHeadlineAudio(currentItem),
         token
       );
 
@@ -500,9 +487,9 @@ export function useBreakingNewsController({
         const nextItem = nextQueue[nextIndex];
         const nextPreparedPromise =
           nextItem && nextItem.id !== currentItem.id
-            ? prepareHeadlineAudio(nextItem, token)
+            ? prepareHeadlineAudio(nextItem)
             : nextItem
-              ? prepareHeadlineAudio(nextItem, token)
+              ? prepareHeadlineAudio(nextItem)
               : Promise.resolve<PreparedHeadlineAudio | null>(null);
 
         commitVisibleHeadline(workingIndex, {
@@ -676,16 +663,15 @@ export function useBreakingNewsController({
   useEffect(() => {
     if (ttsAvailable !== true || !queue.length) return;
 
-    const token = cancelTokenRef.current;
     const activeItem = queue[currentIndex] || queue[0];
     const nextItem = queue.length > 1 ? queue[(currentIndex + 1) % queue.length] : null;
 
     if (activeItem) {
-      void prepareHeadlineAudio(activeItem, token);
+      void prepareHeadlineAudio(activeItem);
     }
 
     if (nextItem && nextItem.id !== activeItem?.id) {
-      void prepareHeadlineAudio(nextItem, token);
+      void prepareHeadlineAudio(nextItem);
     }
   }, [currentIndex, prepareHeadlineAudio, queue, ttsAvailable]);
 

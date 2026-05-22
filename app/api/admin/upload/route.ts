@@ -121,6 +121,22 @@ function canUseUploadPurpose(role: string | null | undefined, purpose: UploadPur
   return purpose === 'image' || purpose === 'story-thumbnail';
 }
 
+function isRetriableBodyReadError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /disturbed|locked|already read|body/i.test(message);
+}
+
+async function readUploadFormData(req: NextRequest) {
+  try {
+    return await req.formData();
+  } catch (error) {
+    if (!isRetriableBodyReadError(error) || typeof req.clone !== 'function') {
+      throw error;
+    }
+
+    return req.clone().formData();
+  }
+}
 
 
 export async function POST(req: NextRequest) {
@@ -129,7 +145,7 @@ export async function POST(req: NextRequest) {
     // This is the most reliable way to avoid "Response body object should not be disturbed or locked" in Next.js 15
     let formData: FormData;
     try {
-      formData = await req.formData();
+      formData = await readUploadFormData(req);
     } catch (error) {
       console.error('Failed to read upload form data:', error);
       return NextResponse.json(
@@ -192,11 +208,14 @@ export async function POST(req: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    const name = error instanceof Error ? error.name : 'Error';
     console.error('CRITICAL: Upload handler failed:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
+      message,
+      stack,
+      name
     });
     return NextResponse.json(
       { success: false, error: 'Failed to upload file' },

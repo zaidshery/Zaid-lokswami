@@ -660,7 +660,7 @@ export default function ArticleDetailPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl pb-12">
+    <div className="mx-auto w-full max-w-4xl pb-[calc(var(--reader-bottom-nav-space)+5rem)] sm:pb-12">
       <div className="pointer-events-none fixed left-0 right-0 top-0 z-50 h-1 bg-transparent">
         <div
           className="h-full bg-gradient-to-r from-orange-500 via-orange-600 to-red-600 transition-[width] duration-150 ease-out"
@@ -717,7 +717,7 @@ export default function ArticleDetailPage() {
                 type="button"
                 onClick={() => void handleBookmarkToggle()}
                 disabled={!canSaveArticle || isSavingBookmark}
-                className={`inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-full border px-2 text-[10px] font-semibold leading-none transition sm:h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal ${
+                className={`reader-touch-button reader-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-full border px-2.5 text-[10px] font-semibold leading-none transition sm:min-h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal ${
                   isBookmarked
                     ? 'border-orange-400 bg-orange-600 text-white hover:bg-orange-700 dark:border-orange-500 dark:bg-orange-500 dark:hover:bg-orange-400'
                     : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-500/45 dark:bg-orange-500/12 dark:text-orange-300 dark:hover:bg-orange-500/20'
@@ -740,7 +740,7 @@ export default function ArticleDetailPage() {
               <button
                 type="button"
                 onClick={handleWhatsAppShare}
-                className="inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 text-[10px] font-semibold leading-none text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-700/75 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/45 sm:h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal"
+                className="reader-touch-button reader-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 text-[10px] font-semibold leading-none text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-700/75 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/45 sm:min-h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal"
                 aria-label={language === 'hi' ? '\u0935\u094d\u0939\u093e\u091f\u094d\u0938\u090f\u092a \u0936\u0947\u092f\u0930' : 'Share on WhatsApp'}
               >
                 <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 text-white max-[420px]:hidden sm:h-4 sm:w-4">
@@ -753,7 +753,7 @@ export default function ArticleDetailPage() {
 
               <Link
                 href="/main/epaper"
-                className="attention-pulsate-bck inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-full border border-orange-300 bg-orange-50 px-2 text-[10px] font-semibold leading-none text-orange-700 transition hover:bg-orange-100 dark:border-orange-500/45 dark:bg-orange-500/12 dark:text-orange-300 dark:hover:bg-orange-500/20 sm:h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal"
+                className="attention-pulsate-bck reader-touch-link reader-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-full border border-orange-300 bg-orange-50 px-2.5 text-[10px] font-semibold leading-none text-orange-700 transition hover:bg-orange-100 dark:border-orange-500/45 dark:bg-orange-500/12 dark:text-orange-300 dark:hover:bg-orange-500/20 sm:min-h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal"
                 aria-label={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
               >
                 <Newspaper className="h-3.5 w-3.5 max-[420px]:hidden sm:h-4 sm:w-4" />
@@ -826,7 +826,7 @@ export default function ArticleDetailPage() {
                   onClick={() => void handleListen()}
                   disabled={isPreparingListen || !canPrepareListen}
                   title={listenButtonTitle}
-                  className={`inline-flex h-7 items-center justify-center gap-1 rounded-full border px-2 text-[10px] font-bold leading-none transition disabled:opacity-60 sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs ${
+                  className={`reader-touch-button reader-focus-ring inline-flex min-h-10 items-center justify-center gap-1 rounded-full border px-2.5 text-[10px] font-bold leading-none transition disabled:opacity-60 sm:min-h-8 sm:gap-1.5 sm:px-3 sm:text-xs ${
                     canUsePreparedListenAudio
                       ? 'border-emerald-300 bg-emerald-100 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-200 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
                       : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
@@ -840,7 +840,7 @@ export default function ArticleDetailPage() {
                   type="button"
                   onClick={() => stopListening()}
                   disabled={!isPlayingAudio && !isPreparingListen}
-                  className="inline-flex h-7 items-center justify-center gap-1 rounded-full border border-zinc-300 bg-white px-2 text-[10px] font-bold leading-none text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs"
+                  className="reader-touch-button reader-focus-ring inline-flex min-h-10 items-center justify-center gap-1 rounded-full border border-zinc-300 bg-white px-2.5 text-[10px] font-bold leading-none text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:min-h-8 sm:gap-1.5 sm:px-3 sm:text-xs"
                 >
                   <PauseCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                   {language === 'hi' ? '\u0930\u094b\u0915\u0947\u0902' : 'Stop'}
@@ -850,7 +850,7 @@ export default function ArticleDetailPage() {
                   type="button"
                   onClick={() => void handleGenerateSummary()}
                   disabled={isGeneratingSummary}
-                  className="inline-flex h-7 items-center justify-center gap-1 rounded-full border border-red-200 bg-white px-2 text-[10px] font-bold leading-none text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/70 dark:bg-zinc-950 dark:text-red-300 dark:hover:bg-red-950/30 sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs"
+                  className="reader-touch-button reader-focus-ring inline-flex min-h-10 items-center justify-center gap-1 rounded-full border border-red-200 bg-white px-2.5 text-[10px] font-bold leading-none text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/70 dark:bg-zinc-950 dark:text-red-300 dark:hover:bg-red-950/30 sm:min-h-8 sm:gap-1.5 sm:px-3 sm:text-xs"
                 >
                   {isGeneratingSummary ? <Loader2 className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5" /> : <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
                   {language === 'hi' ? '\u0938\u093e\u0930\u093e\u0902\u0936' : 'Summary'}
@@ -905,7 +905,7 @@ export default function ArticleDetailPage() {
                     Math.min(current + RELATED_STORIES_LOAD_STEP, relatedArticles.length)
                   )
                 }
-                className="rounded-full border border-zinc-300 bg-white px-6 py-2 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:px-8 sm:py-3 sm:text-sm"
+                className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-6 py-3 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:w-auto sm:px-8 sm:text-sm"
               >
                 {language === 'hi' ? '\u0914\u0930 \u0916\u092c\u0930\u0947\u0902 \u0932\u094b\u0921 \u0915\u0930\u0947\u0902' : 'Load More Stories'}
               </button>
@@ -913,6 +913,64 @@ export default function ArticleDetailPage() {
           ) : null}
         </section>
       ) : null}
+
+      <div className="fixed bottom-[calc(var(--reader-bottom-nav-space)+0.45rem)] left-3 right-[5.25rem] z-40 sm:hidden" data-swipe-ignore="true">
+        <div className="grid grid-cols-4 gap-1.5 rounded-2xl border border-zinc-200/90 bg-white/95 p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.2)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+          <button
+            type="button"
+            onClick={() => void handleBookmarkToggle()}
+            disabled={!canSaveArticle || isSavingBookmark}
+            aria-pressed={isBookmarked}
+            aria-label={isBookmarked ? 'Remove bookmark' : 'Save article'}
+            className={`reader-touch-button reader-focus-ring flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-bold leading-none disabled:cursor-not-allowed disabled:opacity-60 ${
+              isBookmarked
+                ? 'bg-orange-600 text-white'
+                : 'bg-orange-50 text-orange-700 dark:bg-orange-500/12 dark:text-orange-300'
+            }`}
+          >
+            {isSavingBookmark ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Bookmark className={`h-4 w-4 ${isBookmarked ? 'fill-current' : ''}`} />
+            )}
+            <span className="truncate">{isBookmarked ? 'Saved' : 'Save'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleWhatsAppShare}
+            aria-label={language === 'hi' ? '\u0935\u094d\u0939\u093e\u091f\u094d\u0938\u090f\u092a \u0936\u0947\u092f\u0930' : 'Share on WhatsApp'}
+            className="reader-touch-button reader-focus-ring flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-50 text-[10px] font-bold leading-none text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+          >
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white">
+              <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-current" aria-hidden="true">
+                <path d="M12 2a10 10 0 0 0-8.68 14.95L2 22l5.2-1.36A10 10 0 1 0 12 2Zm0 18.17a8.15 8.15 0 0 1-4.15-1.13l-.3-.18-3.09.8.82-3.01-.2-.31A8.18 8.18 0 1 1 12 20.17Zm4.48-5.86c-.24-.12-1.4-.7-1.62-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.91-1.17-.7-.63-1.18-1.4-1.32-1.64-.14-.24-.02-.37.1-.49.1-.1.24-.26.36-.39.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.79-.2-.47-.4-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.33.98 2.49c.12.16 1.7 2.61 4.11 3.66.58.25 1.03.4 1.38.52.58.18 1.1.16 1.52.1.46-.07 1.4-.57 1.6-1.12.2-.55.2-1.02.14-1.12-.06-.1-.22-.16-.46-.28Z" />
+              </svg>
+            </span>
+            <span className="truncate">WhatsApp</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleListen()}
+            disabled={isPreparingListen || !canPrepareListen}
+            aria-label={listenButtonTitle}
+            className="reader-touch-button reader-focus-ring flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-100 text-[10px] font-bold leading-none text-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-900/35 dark:text-emerald-200"
+          >
+            {isPreparingListen ? <Loader2 className="h-4 w-4 animate-spin" /> : <Volume2 className="h-4 w-4" />}
+            <span className="truncate">{language === 'hi' ? '\u0938\u0941\u0928\u0947\u0902' : 'Listen'}</span>
+          </button>
+
+          <Link
+            href="/main/epaper"
+            aria-label={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
+            className="reader-touch-link reader-focus-ring flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-orange-50 text-[10px] font-bold leading-none text-orange-700 dark:bg-orange-500/12 dark:text-orange-300"
+          >
+            <Newspaper className="h-4 w-4" />
+            <span className="truncate">{language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}</span>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

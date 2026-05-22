@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { publicJsonCacheHeaders } from '@/lib/api/cache';
-import connectDB from '@/lib/db/mongoose';
+import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 import EPaper from '@/lib/models/EPaper';
 import {
   getCityNameFromSlug,
@@ -145,15 +145,7 @@ function mapFileItem(raw: Record<string, unknown>): PublicEPaperItem | null {
 }
 
 async function shouldUseFileStore() {
-  if (!process.env.MONGODB_URI) return true;
-
-  try {
-    await connectDB();
-    return false;
-  } catch (error) {
-    console.error('MongoDB unavailable for public e-papers latest route, using file store.', error);
-    return true;
-  }
+  return !(await isMongoAvailable({ label: 'public e-papers latest route' }));
 }
 
 export async function GET(req: NextRequest) {

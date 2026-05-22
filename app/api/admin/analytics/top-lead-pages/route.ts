@@ -5,6 +5,12 @@ import ContactMessage from '@/lib/models/ContactMessage';
 import AdvertiseInquiry from '@/lib/models/AdvertiseInquiry';
 import Article from '@/lib/models/Article';
 
+type LeadArticleSummary = {
+  _id: { toString(): string };
+  title?: string;
+  status?: string;
+};
+
 export async function GET(req: NextRequest) {
   try {
     const user = await getAdminSessionFromReq(req);
@@ -62,7 +68,7 @@ export async function GET(req: NextRequest) {
     const articles = (await Article.find(
         { _id: { $in: articleIds } },
         { title: 1, _id: 1, status: 1 }
-    ).lean()) as unknown as Array<{ _id: any, title: string, status: string }>;
+    ).lean()) as unknown as LeadArticleSummary[];
 
     const articlesMap = new Map(articles.map(a => [a._id.toString(), a]));
 
@@ -75,8 +81,8 @@ export async function GET(req: NextRequest) {
             url: item.url,
             score: item.score,
             articleId,
-            title: articleData ? articleData.title : 'Unknown Article',
-            status: articleData ? articleData.status : 'unknown'
+            title: articleData?.title || 'Unknown Article',
+            status: articleData?.status || 'unknown'
         };
     });
 

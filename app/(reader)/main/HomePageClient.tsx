@@ -1,23 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   TrendingUp,
   ArrowRight,
   Flame,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpRight,
-  Newspaper,
 } from 'lucide-react';
 import HeroCarousel from '@/components/ui/HeroCarousel';
 import StoriesRail from '@/components/ui/StoriesRail';
 import NewsCard from '@/components/ui/NewsCard';
 import DesktopHeroEpaperCard from '@/components/ui/DesktopHeroEpaperCard';
 import NewsPoll from '@/components/ui/NewsPoll';
+import ReaderImage from '@/components/ui/ReaderImage';
 import { articles as mockArticles, type Article } from '@/lib/mock/data';
 import { categoryMatches, fetchMergedLiveArticles } from '@/lib/content/liveArticles';
 import {
@@ -30,12 +26,16 @@ import {
   type HomePageEpaperPreview,
   type HomePageFeedState,
 } from '@/lib/content/homeFeed';
-import { NEWS_CATEGORY_DEFINITIONS, resolveNewsCategory } from '@/lib/constants/newsCategories';
-import { useAppStore } from '@/lib/store/appStore';
 import {
-  buildArticleWhatsAppShareUrl,
-  toAbsoluteShareUrl,
-} from '@/lib/utils/articleShare';
+  fetchPublicArticlesPage,
+  mapPublicArticlesToUiArticles,
+} from '@/lib/content/publicArticles';
+import {
+  getNewsCategoryHref,
+  NEWS_CATEGORY_DEFINITIONS,
+  resolveNewsCategory,
+} from '@/lib/constants/newsCategories';
+import { useAppStore } from '@/lib/store/appStore';
 import {
   buildArticleImageVariantUrl,
 } from '@/lib/utils/articleMedia';
@@ -78,8 +78,15 @@ function getLocalDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function getPublishedTimestamp(article: Article) {
+  const parsed = new Date(article.publishedAt).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 const HOME_LATEST_INITIAL_COUNT = 8;
 const HOME_LATEST_PAGE_STEP = 8;
+const CATEGORY_INITIAL_STORIES_COUNT = 4;
+const CATEGORY_STORIES_PAGE_STEP = 4;
 const HI_EPAPER_CITY_LABELS: Record<string, string> = {
   indore: '\u0907\u0902\u0926\u094c\u0930',
   ujjain: '\u0909\u091c\u094d\u091c\u0948\u0928',
@@ -121,7 +128,6 @@ async function fetchLatestEpaperPreview(): Promise<HomePageEpaperPreview | null>
 export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const { language } = useAppStore();
   const topStoriesVariant: 'editorial' | 'modern' = 'editorial';
-  const categoryScrollerRef = useRef<HTMLDivElement | null>(null);
   const [feedArticles, setFeedArticles] = useState<Article[]>(
     () => initialHomeFeed?.articles.length ? initialHomeFeed.articles : mockArticles
   );
@@ -137,6 +143,8 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const [visibleLatestNewsCount, setVisibleLatestNewsCount] = useState(
     HOME_LATEST_INITIAL_COUNT
   );
+  const [visibleCategoryStoryCounts, setVisibleCategoryStoryCounts] = useState<Record<string, number>>({});
+  const [categoryArticlesBySlug, setCategoryArticlesBySlug] = useState<Record<string, Article[]>>({});
   const heroArticles = feedArticles.slice(0, 5);
   const trendingArticles = feedArticles.filter((article) => article.isTrending);
   const spotlightTablet = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 3);
@@ -145,6 +153,13 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const hasMoreLatestNews = visibleLatestNewsCount < latestNews.length;
   const featuredSidebar: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 5);
   const desktopHeroSidebarStories: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 2);
+  const latestPublishedArticles = useMemo(
+    () =>
+      [...feedArticles].sort(
+        (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
+      ),
+    [feedArticles]
+  );
   const visualStories = useMemo(
     () =>
       cmsStories.length
@@ -152,50 +167,23 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
         : buildVisualStoriesFromArticles(feedArticles, 10),
     [cmsStories, feedArticles]
   );
-  const categoryPanels = useMemo(() => {
-    const panelSlugs = ['regional', 'national', 'international', 'technology', 'business'];
-    return panelSlugs.map((slug) => {
+  const categorySections = useMemo(() => {
+    return NEWS_CATEGORY_DEFINITIONS.map((definition) => {
+      const slug = definition.slug;
       const category = resolveNewsCategory(slug);
-      const items = feedArticles
-        .filter((article) => categoryMatches(article.category, slug, NEWS_CATEGORY_DEFINITIONS))
-        .slice(0, 4);
+      const fetchedItems = categoryArticlesBySlug[slug] || [];
+      const feedItems = latestPublishedArticles
+        .filter((article) => categoryMatches(article.category, slug, NEWS_CATEGORY_DEFINITIONS));
+      const items = (fetchedItems.length ? fetchedItems : feedItems).slice(0, 24);
+
       return {
         slug,
         category,
         items,
-        lead: items[0] || null,
-        rest: items.slice(1, 4),
         accent: category?.color || '#F97316',
       };
     });
-  }, [feedArticles]);
-
-  const scrollCategoryStrip = (direction: 'prev' | 'next') => {
-    const node = categoryScrollerRef.current;
-    if (!node) return;
-    const delta = Math.max(260, Math.floor(node.clientWidth * 0.88));
-    node.scrollBy({
-      left: direction === 'next' ? delta : -delta,
-      behavior: 'smooth',
-    });
-  };
-
-  const openArticleOnWhatsApp = (article: Article | null, fallbackPath: string) => {
-    if (typeof window === 'undefined') return;
-
-    const origin = window.location.origin;
-    const articlePath = article?.id
-      ? buildArticlePublicPath({ id: article.id, slug: article.slug })
-      : fallbackPath;
-    const articleUrl = toAbsoluteShareUrl(articlePath, origin);
-    const title = article?.title?.trim() || (language === 'hi' ? '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0916\u092c\u0930' : 'Lokswami story');
-    const shareUrl = buildArticleWhatsAppShareUrl({
-      title,
-      articleUrl,
-    });
-
-    window.open(shareUrl, '_blank', 'noopener,noreferrer');
-  };
+  }, [categoryArticlesBySlug, latestPublishedArticles]);
 
   useEffect(() => {
     let active = true;
@@ -253,6 +241,42 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
 
   useEffect(() => {
     setVisibleLatestNewsCount(HOME_LATEST_INITIAL_COUNT);
+  }, [feedArticles.length]);
+
+  useEffect(() => {
+    setVisibleCategoryStoryCounts({});
+  }, [feedArticles]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCategoryStories = async () => {
+      const entries = await Promise.all(
+        NEWS_CATEGORY_DEFINITIONS.map(async (definition) => {
+          const page = await fetchPublicArticlesPage({
+            category: definition.slug,
+            limit: 24,
+          });
+          const articles = page
+            ? mapPublicArticlesToUiArticles(page.items).sort(
+                (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
+              )
+            : [];
+
+          return [definition.slug, articles] as const;
+        })
+      );
+
+      if (!active) return;
+
+      setCategoryArticlesBySlug(Object.fromEntries(entries));
+    };
+
+    void loadCategoryStories();
+
+    return () => {
+      active = false;
+    };
   }, [feedArticles.length]);
 
   const epaperHref = (() => {
@@ -373,12 +397,12 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
                   className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 p-3 dark:from-zinc-900 dark:to-zinc-900/70"
                 >
                   <div className="flex h-full items-center gap-2.5">
-                    <div className="relative h-[74px] w-[112px] flex-none overflow-hidden rounded-xl">
-                      <Image
+                    <div className="relative h-[74px] w-[112px] flex-none overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-950">
+                      <ReaderImage
                         src={buildArticleImageVariantUrl(article.image, 'thumb')}
                         alt={article.title}
                         fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
                         sizes="(max-width: 1023px) 112px, 112px"
                         priority
                       />
@@ -431,12 +455,12 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
                   className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 px-3 py-2 dark:from-zinc-900 dark:to-zinc-900/70"
                 >
                   <div className="flex h-full items-center gap-3">
-                    <div className="relative h-[72px] w-[108px] flex-none overflow-hidden rounded-lg">
-                      <Image
+                    <div className="relative h-[72px] w-[108px] flex-none overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-950">
+                      <ReaderImage
                         src={buildArticleImageVariantUrl(article.image, 'thumb')}
                         alt={article.title}
                         fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
                         sizes="108px"
                         priority
                       />
@@ -480,7 +504,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
             </h2>
             <Link
               href="/main/latest"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-600 transition-colors hover:text-orange-500 sm:text-sm"
+              className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-1 rounded-full px-2 text-[11px] font-semibold text-orange-600 transition-colors hover:text-orange-500 sm:text-sm"
             >
               View All <ArrowRight className="w-4 h-4" />
             </Link>
@@ -506,7 +530,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
                     Math.min(current + HOME_LATEST_PAGE_STEP, latestNews.length)
                   )
                 }
-                className="rounded-full border border-zinc-300 bg-white px-6 py-2 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:px-8 sm:py-3 sm:text-sm"
+                className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-6 py-3 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:w-auto sm:px-8 sm:text-sm"
               >
                 Load More Stories
               </button>
@@ -523,7 +547,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
 
             <div className="space-y-2.5">
               {featuredSidebar.map((article, index) => (
-                <div key={article.id} className={index >= 2 ? 'hidden md:block' : ''}>
+                <div key={article.id}>
                   <NewsCard article={article} variant="compact" index={index} />
                 </div>
               ))}
@@ -533,134 +557,95 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
           <NewsPoll />
         </aside>
       </div>
-      <section className="relative mt-[var(--section-gap)] cnp-surface overflow-hidden px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">
-        <div className="pointer-events-none absolute -top-16 -right-8 h-32 w-32 rounded-full bg-orange-200/45 blur-3xl dark:bg-orange-900/20" />
-        <div className="pointer-events-none absolute -bottom-16 -left-8 h-28 w-28 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-900/20" />
-
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => scrollCategoryStrip('prev')}
-            aria-label="Scroll previous categories"
-            className="absolute left-1 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-300/90 bg-white/95 text-zinc-700 shadow-sm transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-200 dark:hover:bg-zinc-800 md:inline-flex"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => scrollCategoryStrip('next')}
-            aria-label="Scroll next categories"
-            className="absolute right-1 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-300/90 bg-white/95 text-zinc-700 shadow-sm transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-200 dark:hover:bg-zinc-800 md:inline-flex"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-
-          <div
-            ref={categoryScrollerRef}
-            className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-1.5 md:px-2"
-          >
-          {categoryPanels.map((panel) => {
-            const categoryLabel = panel.category
-              ? (language === 'hi' ? panel.category.name : panel.category.nameEn)
-              : panel.slug;
-            const cardStyle: CSSProperties = {
-              borderColor: hexToRgba(panel.accent, 0.25),
-              boxShadow: `0 10px 35px -28px ${hexToRgba(panel.accent, 0.65)}`,
+      {categorySections.length ? (
+        <section className="relative mt-[var(--section-gap)] space-y-4 sm:space-y-5">
+          {categorySections.map((section) => {
+            const categoryLabel = section.category
+              ? (language === 'hi' ? section.category.name : section.category.nameEn)
+              : section.slug;
+            const visibleCount =
+              visibleCategoryStoryCounts[section.slug] || CATEGORY_INITIAL_STORIES_COUNT;
+            const visibleArticles = section.items.slice(0, visibleCount);
+            const hasMoreStories = visibleCount < section.items.length;
+            const categoryHref = getNewsCategoryHref(section.slug);
+            const headerStyle: CSSProperties = {
+              borderColor: hexToRgba(section.accent, 0.28),
+              boxShadow: `0 18px 55px -44px ${hexToRgba(section.accent, 0.75)}`,
             };
-            const badgeStyle: CSSProperties = {
-              backgroundColor: hexToRgba(panel.accent, 0.14),
-              color: panel.accent,
+            const accentStyle: CSSProperties = {
+              backgroundColor: section.accent,
             };
-            const supportText =
-              panel.lead?.summary?.trim() ||
-              panel.rest[0]?.title ||
-              (language === 'hi'
-                ? '\u0905\u0927\u093f\u0915 \u0915\u0939\u093e\u0928\u093f\u092f\u093e\u0902 \u092a\u0922\u093c\u0947\u0902'
-                : 'Read more stories in this category');
-            const leadArticle = panel.lead || panel.rest[0] || null;
-            const readHref = leadArticle
-              ? buildArticlePublicPath({ id: leadArticle.id, slug: leadArticle.slug })
-              : `/main/category/${panel.slug}`;
 
             return (
-              <article
-                key={panel.slug}
-                style={cardStyle}
-                className="group flex min-h-[312px] w-[82%] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border bg-zinc-100 transition-transform duration-300 hover:-translate-y-0.5 sm:min-h-[344px] sm:w-[60%] lg:w-[42%] xl:w-[28%] dark:bg-zinc-900"
+              <div
+                key={section.slug}
+                style={headerStyle}
+                className="cnp-surface overflow-hidden border px-3 py-4 sm:px-5 sm:py-5 md:px-6"
               >
-                {panel.lead ? (
-                  <Link href={buildArticlePublicPath({ id: panel.lead.id, slug: panel.lead.slug })} className="block">
-                    <div className="relative aspect-[16/10] overflow-hidden border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800">
-                      <Image
-                        src={buildArticleImageVariantUrl(panel.lead.image, 'card')}
-                        alt={panel.lead.title}
-                        fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                        sizes="(max-width: 639px) 100vw, (max-width: 1279px) 50vw, 33vw"
-                      />
-                      <span
-                        style={badgeStyle}
-                        className="absolute left-2.5 top-2.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide backdrop-blur-sm"
-                      >
-                        {categoryLabel}
-                      </span>
-                    </div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-3 dark:border-zinc-800 sm:mb-4 sm:pb-4">
+                  <div className="min-w-0">
+                    <h2 className="flex items-center gap-2 text-[1.05rem] font-black tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
+                      <span style={accentStyle} className="h-5 w-1 rounded-full sm:h-6 sm:w-1.5" />
+                      <span className="truncate">{categoryLabel}</span>
+                    </h2>
+                    <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">
+                      {language === 'hi'
+                        ? '\u0938\u092c\u0938\u0947 \u0928\u0908 \u092a\u094d\u0930\u0915\u093e\u0936\u093f\u0924 \u0916\u092c\u0930\u0947\u0902'
+                        : 'Top latest published stories'}
+                    </p>
+                  </div>
+                  <Link
+                    href={categoryHref}
+                    className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-1 rounded-full border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-800 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:text-sm"
+                  >
+                    {language === 'hi' ? '\u0936\u094d\u0930\u0947\u0923\u0940 \u0926\u0947\u0916\u0947\u0902' : 'View Category'}
+                    <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
+                </div>
+
+                {visibleArticles.length ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {visibleArticles.map((article, index) => (
+                      <NewsCard
+                        key={article.id}
+                        article={article}
+                        size="sm"
+                        index={index}
+                      />
+                    ))}
+                  </div>
                 ) : (
-                  <div className="flex aspect-[16/10] items-center justify-center border-b border-dashed border-zinc-300 bg-zinc-100 text-xs font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 sm:text-sm">
-                    {language === 'hi' ? '\u0905\u092d\u0940 \u0915\u094b\u0908 \u0939\u0947\u0921\u0932\u093e\u0907\u0928 \u0928\u0939\u0940\u0902' : 'No headline yet'}
+                  <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center text-sm font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-400">
+                    {language === 'hi'
+                      ? '\u0907\u0938 \u0936\u094d\u0930\u0947\u0923\u0940 \u092e\u0947\u0902 \u0905\u092d\u0940 \u0915\u094b\u0908 \u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948.'
+                      : 'No latest stories are published in this category yet.'}
                   </div>
                 )}
 
-                <div className="flex min-h-[146px] flex-1 flex-col bg-white/95 px-3 py-3 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:min-h-[168px] sm:px-4 sm:py-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
-                    {categoryLabel}
-                  </p>
-                  <p className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-[1.2rem] sm:text-sm sm:leading-5">
-                    {panel.lead?.title || (language === 'hi' ? '\u0924\u093e\u091c\u093c\u093e \u0905\u092a\u0921\u0947\u091f' : 'Latest update')}
-                  </p>
-                  <p className="mt-1.5 line-clamp-2 text-xs leading-[1.1rem] text-zinc-600 dark:text-zinc-300 sm:text-sm sm:leading-5">
-                    {supportText}
-                  </p>
-
-                  <div className="mt-auto grid grid-cols-3 gap-1.5 pt-3">
-                    <Link
-                      href="/main/epaper"
-                      className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-full border border-zinc-300 bg-zinc-100 px-2 text-[10px] font-semibold text-zinc-700 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-zinc-700 dark:bg-zinc-900/65 dark:text-zinc-100 dark:hover:border-orange-500/50 dark:hover:bg-orange-900/20 dark:hover:text-orange-300 sm:h-9 sm:px-2.5 sm:text-[11px]"
-                    >
-                      <Newspaper className="h-3.5 w-3.5 text-orange-500 dark:text-orange-400" />
-                      <span>{language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}</span>
-                    </Link>
-
+                {hasMoreStories ? (
+                  <div className="flex justify-center pt-4 sm:pt-5">
                     <button
                       type="button"
-                      onClick={() => openArticleOnWhatsApp(leadArticle, readHref)}
-                      className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-full border border-zinc-300 bg-zinc-100 px-2 text-[10px] font-semibold text-zinc-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-900/65 dark:text-zinc-100 dark:hover:border-emerald-500/50 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-300 sm:h-9 sm:px-2.5 sm:text-[11px]"
+                      onClick={() =>
+                        setVisibleCategoryStoryCounts((current) => ({
+                          ...current,
+                          [section.slug]: Math.min(
+                            visibleCount + CATEGORY_STORIES_PAGE_STEP,
+                            section.items.length
+                          ),
+                        }))
+                      }
+                      className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-6 py-3 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:w-auto sm:px-8 sm:text-sm"
                     >
-                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white">
-                        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-current" aria-hidden="true">
-                          <path d="M12 2a10 10 0 0 0-8.68 14.95L2 22l5.2-1.36A10 10 0 1 0 12 2Zm0 18.17a8.15 8.15 0 0 1-4.15-1.13l-.3-.18-3.09.8.82-3.01-.2-.31A8.18 8.18 0 1 1 12 20.17Zm4.48-5.86c-.24-.12-1.4-.7-1.62-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.91-1.17-.7-.63-1.18-1.4-1.32-1.64-.14-.24-.02-.37.1-.49.1-.1.24-.26.36-.39.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.79-.2-.47-.4-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.33.98 2.49c.12.16 1.7 2.61 4.11 3.66.58.25 1.03.4 1.38.52.58.18 1.1.16 1.52.1.46-.07 1.4-.57 1.6-1.12.2-.55.2-1.02.14-1.12-.06-.1-.22-.16-.46-.28Z" />
-                        </svg>
-                      </span>
-                      <span className="whitespace-nowrap">WhatsApp</span>
+                      Load more Stories
                     </button>
-
-                    <Link
-                      href={readHref}
-                      className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-full border border-zinc-300 bg-zinc-100 px-2 text-[10px] font-semibold text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-900/65 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/75 sm:h-9 sm:px-2.5 sm:text-[11px]"
-                    >
-                      <span>{language === 'hi' ? '\u092a\u0942\u0930\u0940 \u0916\u092c\u0930' : 'Read Story'}</span>
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                    </Link>
                   </div>
-                </div>
-              </article>
+                ) : null}
+              </div>
             );
           })}
-          </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }

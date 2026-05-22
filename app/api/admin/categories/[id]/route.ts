@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/db/mongoose';
 import Category from '@/lib/models/Category';
 import fs from 'fs/promises';
 import path from 'path';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
+import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 
 type CategoryRecord = {
   _id?: string;
@@ -15,19 +15,12 @@ type CategoryRecord = {
 
 async function shouldUseFileStore() {
   if (!process.env.MONGODB_URI) return true;
-
-  try {
-    await connectDB();
-    return false;
-  } catch (error) {
-    console.error('MongoDB unavailable for categories id route, using file store.', error);
-    return true;
-  }
+  return !(await isMongoAvailable({ label: 'admin categories delete route' }));
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    const user = await getAdminSession();
+    const user = await getAdminSessionFromReq(req);
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
     // allow file-backed fallback when no DB configured

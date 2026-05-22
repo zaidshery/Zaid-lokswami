@@ -225,8 +225,8 @@ export default function SmartEngagementPopup() {
   if (!isVisible) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[120] flex items-end justify-center bg-black/35 p-3 sm:items-center sm:p-5">
-      <div className="pointer-events-auto w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 sm:p-5">
+    <div className="pointer-events-none fixed inset-0 z-[120] flex items-end justify-center bg-black/35 p-3 pb-[calc(var(--reader-bottom-nav-space)+0.75rem)] sm:items-center sm:p-5">
+      <div className="pointer-events-auto max-h-[var(--reader-bottom-sheet-max-height)] w-full max-w-xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 sm:max-h-[calc(100dvh-2.5rem)] sm:p-5">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
             <div className="inline-flex items-center gap-1 rounded-full border border-primary-300 bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700 dark:border-primary-700/50 dark:bg-primary-500/12 dark:text-primary-300">
@@ -241,7 +241,7 @@ export default function SmartEngagementPopup() {
           <button
             type="button"
             onClick={() => closePopup('dismiss')}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="reader-touch-button reader-focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             aria-label="Dismiss"
           >
             <X className="h-4 w-4" />
@@ -288,7 +288,7 @@ export default function SmartEngagementPopup() {
                   key={option.value}
                   type="button"
                   onClick={() => toggleInterest(option.value)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`reader-touch-button reader-focus-ring min-h-10 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                     active
                       ? 'border-primary-400 bg-primary-50 text-primary-700 dark:border-primary-700/60 dark:bg-primary-500/15 dark:text-primary-300'
                       : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600'
@@ -322,7 +322,7 @@ export default function SmartEngagementPopup() {
             type="button"
             onClick={() => void submit()}
             disabled={isSubmitting}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary-600 px-4 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-65"
+            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary-600 px-4 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-65"
           >
             {isSubmitting ? <BellRing className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-4 w-4" />}
             {isSubmitting ? t.loading : t.submit}
@@ -330,7 +330,7 @@ export default function SmartEngagementPopup() {
           <button
             type="button"
             onClick={() => closePopup('dismiss')}
-            className="inline-flex h-10 items-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             {t.dismiss}
           </button>

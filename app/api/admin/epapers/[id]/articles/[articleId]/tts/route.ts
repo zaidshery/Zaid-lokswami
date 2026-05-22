@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
-import { getAdminSession } from '@/lib/auth/admin';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import {
@@ -106,7 +106,7 @@ async function loadStorySource(paperId: string, storyId: string) {
 
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -180,9 +180,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
 }
 
 // POST: Auto-synthesis removed. Audio must be uploaded manually.
-export async function POST(req: NextRequest, _context: RouteContext) {
+export async function POST(req: NextRequest) {
   try {
-    const admin = await getAdminSession();
+    const admin = await getAdminSessionFromReq(req);
     if (!admin) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

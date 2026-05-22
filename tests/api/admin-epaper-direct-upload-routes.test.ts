@@ -65,6 +65,9 @@ function createJsonRequest(body: Record<string, unknown>) {
 describe('e-paper direct upload admin routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getAdminSessionFromReqMock.mockImplementation((...args) =>
+      getAdminSessionMock(...args)
+    );
     parseEpaperAssetSizeMock.mockImplementation((value: unknown) => Number(value || 0));
     validateEpaperAssetSelectionMock.mockReturnValue(null);
     connectDBMock.mockResolvedValue(undefined);

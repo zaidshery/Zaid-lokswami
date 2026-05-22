@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const listArticlesForSitemapMock = vi.fn();
 const listNewsArticlesForSitemapMock = vi.fn();
+const listEPapersForSitemapMock = vi.fn();
 const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
 vi.mock('@/lib/content/serverArticles', () => ({
@@ -11,11 +12,16 @@ vi.mock('@/lib/content/serverArticles', () => ({
     `/main/article/${encodeURIComponent(article.slug || article.id)}`,
 }));
 
+vi.mock('@/lib/content/publicSitemap', () => ({
+  listEPapersForSitemap: listEPapersForSitemapMock,
+}));
+
 describe('metadata routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listArticlesForSitemapMock.mockResolvedValue([]);
     listNewsArticlesForSitemapMock.mockResolvedValue([]);
+    listEPapersForSitemapMock.mockResolvedValue([]);
     process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com/';
   });
 
@@ -36,6 +42,7 @@ describe('metadata routes', () => {
         {
           userAgent: '*',
           allow: '/',
+          disallow: ['/admin', '/api', '/main/account', '/main/preferences', '/main/saved'],
         },
       ],
       sitemap: ['https://lokswami.com/sitemap.xml', 'https://lokswami.com/news-sitemap.xml'],
@@ -51,11 +58,20 @@ describe('metadata routes', () => {
         updatedAt: '2026-03-27T05:00:00.000Z',
       },
     ]);
+    listEPapersForSitemapMock.mockResolvedValue([
+      {
+        id: 'epaper-1',
+        citySlug: 'indore',
+        publishDate: '2026-05-21',
+        updatedAt: '2026-05-21T08:30:00.000Z',
+      },
+    ]);
 
     const { default: sitemap } = await import('@/app/sitemap');
     const entries = await sitemap();
 
-    expect(listArticlesForSitemapMock).toHaveBeenCalledWith(500);
+    expect(listArticlesForSitemapMock).toHaveBeenCalledWith(5000);
+    expect(listEPapersForSitemapMock).toHaveBeenCalledWith(1000);
     expect(entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -73,6 +89,22 @@ describe('metadata routes', () => {
           changeFrequency: 'weekly',
           priority: 0.8,
           lastModified: new Date('2026-03-27T05:00:00.000Z'),
+        }),
+        expect.objectContaining({
+          url: 'https://lokswami.com/main/category/politics',
+          changeFrequency: 'daily',
+          priority: 0.85,
+        }),
+        expect.objectContaining({
+          url: 'https://lokswami.com/main/epaper?city=indore',
+          changeFrequency: 'daily',
+          priority: 0.65,
+        }),
+        expect.objectContaining({
+          url: 'https://lokswami.com/main/epaper?paper=epaper-1&city=indore&date=2026-05-21',
+          changeFrequency: 'weekly',
+          priority: 0.7,
+          lastModified: new Date('2026-05-21T08:30:00.000Z'),
         }),
       ])
     );

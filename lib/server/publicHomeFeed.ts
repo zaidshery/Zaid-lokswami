@@ -1,4 +1,4 @@
-import connectDB from '@/lib/db/mongoose';
+import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 import { normalizeStoryMediaAssets } from '@/lib/content/storyMedia';
 import { getCitySlugFromName } from '@/lib/constants/epaperCities';
@@ -377,15 +377,7 @@ function buildEpaperHref(citySlug: string, publishDate: string) {
 }
 
 async function resolveSource(): Promise<PublicHomeFeedSource> {
-  if (!process.env.MONGODB_URI) return 'file';
-
-  try {
-    await connectDB();
-    return 'mongo';
-  } catch (error) {
-    console.error('MongoDB unavailable for public home feed, using file store.', error);
-    return 'file';
-  }
+  return (await isMongoAvailable({ label: 'public home feed' })) ? 'mongo' : 'file';
 }
 
 async function loadMongoFeed(limits: Required<PublicHomeFeedLimits>) {

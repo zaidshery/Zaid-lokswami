@@ -67,8 +67,9 @@ export async function POST(req: NextRequest) {
       url: `/elections/${stateId}.jpg?t=${Date.now()}`,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[election-upload] Unexpected error:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

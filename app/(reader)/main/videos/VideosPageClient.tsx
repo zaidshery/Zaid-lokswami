@@ -419,10 +419,10 @@ export default function VideosPageClient({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-swipe-ignore="true">
           <button
             onClick={() => setViewMode('feed')}
-            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+            className={`reader-touch-button reader-focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
               viewMode === 'feed'
                 ? 'bg-red-600 text-white'
                 : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
@@ -434,7 +434,7 @@ export default function VideosPageClient({
 
           <button
             onClick={() => setViewMode('shorts')}
-            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+            className={`reader-touch-button reader-focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
               viewMode === 'shorts'
                 ? 'bg-red-600 text-white'
                 : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
@@ -446,7 +446,7 @@ export default function VideosPageClient({
 
           <button
             onClick={() => setActiveFilter('latest')}
-            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+            className={`reader-touch-button reader-focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
               activeFilter === 'latest'
                 ? 'bg-red-600 text-white'
                 : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
@@ -458,7 +458,7 @@ export default function VideosPageClient({
 
           <button
             onClick={() => setActiveFilter('trending')}
-            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+            className={`reader-touch-button reader-focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
               activeFilter === 'trending'
                 ? 'bg-red-600 text-white'
                 : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
@@ -470,12 +470,12 @@ export default function VideosPageClient({
         </div>
           </div>
 
-          <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1">
+          <div className="scrollbar-hide reader-scroll-x flex gap-2 overflow-x-auto pb-1" data-reader-scroll="x" data-swipe-ignore="true">
             {categoryOptions.map((category) => (
               <button
                 key={category.id}
                 onClick={() => setActiveCategory(category.id)}
-                className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                className={`reader-touch-button reader-focus-ring min-h-11 flex-shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                   activeCategory === category.id
                     ? 'bg-red-600 text-white'
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
@@ -509,10 +509,10 @@ export default function VideosPageClient({
             </div>
           </div>
 
-          <div className="mt-3 scrollbar-hide flex gap-2 overflow-x-auto pb-0.5">
+          <div className="mt-3 scrollbar-hide reader-scroll-x flex gap-2 overflow-x-auto pb-0.5" data-reader-scroll="x" data-swipe-ignore="true">
             <button
               onClick={() => setActiveFilter('latest')}
-              className={`flex-shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+              className={`reader-touch-button reader-focus-ring min-h-10 flex-shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
                 activeFilter === 'latest'
                   ? 'border-red-500 bg-red-500 text-white'
                   : 'border-zinc-700 bg-zinc-900 text-zinc-200'
@@ -523,7 +523,7 @@ export default function VideosPageClient({
 
             <button
               onClick={() => setActiveFilter('trending')}
-              className={`flex-shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+              className={`reader-touch-button reader-focus-ring min-h-10 flex-shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
                 activeFilter === 'trending'
                   ? 'border-red-500 bg-red-500 text-white'
                   : 'border-zinc-700 bg-zinc-900 text-zinc-200'
@@ -536,7 +536,7 @@ export default function VideosPageClient({
               <button
                 key={category.id}
                 onClick={() => setActiveCategory(category.id)}
-                className={`flex-shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                className={`reader-touch-button reader-focus-ring min-h-10 flex-shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
                   activeCategory === category.id
                     ? 'border-white bg-white text-zinc-900'
                     : 'border-zinc-700 bg-zinc-900 text-zinc-200'
@@ -612,10 +612,11 @@ export default function VideosPageClient({
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               className="group relative aspect-video cursor-pointer overflow-hidden rounded-2xl"
+              data-reader-card="true"
             >
               <Link
                 href={`/main/search?q=${encodeURIComponent(featuredVideo.title)}`}
-                className="absolute inset-0 z-10"
+                className="reader-touch-link reader-focus-ring absolute inset-0 z-10"
                 aria-label={featuredVideo.title}
               />
 
@@ -683,11 +684,12 @@ export default function VideosPageClient({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04 }}
                 className="group"
+                data-reader-card="true"
               >
                 <div className="relative aspect-video overflow-hidden rounded-xl">
                   <Link
                     href={`/main/search?q=${encodeURIComponent(video.title)}`}
-                    className="absolute inset-0 z-10"
+                    className="reader-touch-link reader-focus-ring absolute inset-0 z-10"
                     aria-label={video.title}
                   />
                   <Image
@@ -716,7 +718,7 @@ export default function VideosPageClient({
                 </div>
 
                 <div className="mt-3">
-                  <Link href={`/main/search?q=${encodeURIComponent(video.title)}`} className="block">
+                  <Link href={`/main/search?q=${encodeURIComponent(video.title)}`} className="reader-touch-link reader-focus-ring block rounded-lg">
                     <h3 className="line-clamp-2 text-sm font-semibold text-zinc-900 transition-colors group-hover:text-red-600 dark:text-zinc-100 dark:group-hover:text-red-400">
                       {video.title}
                     </h3>
@@ -756,7 +758,7 @@ export default function VideosPageClient({
                 void loadMoreVideos();
               }}
               disabled={isLoadingMore}
-              className="rounded-full border border-zinc-300 bg-white px-8 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-red-700/70 dark:hover:bg-zinc-800 dark:hover:text-red-300"
+              className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-8 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-red-700/70 dark:hover:bg-zinc-800 dark:hover:text-red-300 sm:w-auto"
             >
               {isLoadingMore
                 ? language === 'hi'

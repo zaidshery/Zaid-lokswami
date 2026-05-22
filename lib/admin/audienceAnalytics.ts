@@ -523,7 +523,14 @@ function buildCampaignBreakdown(events: AudienceEventRecord[]) {
   }
 
   return Array.from(campaignMap.values())
-    .map(({ sessionsSet: _sessionsSet, ...row }) => row)
+    .map((value) => ({
+      label: value.label,
+      campaign: value.campaign,
+      source: value.source,
+      medium: value.medium,
+      events: value.events,
+      sessions: value.sessions,
+    }))
     .sort((left, right) => right.events - left.events)
     .slice(0, 8);
 }

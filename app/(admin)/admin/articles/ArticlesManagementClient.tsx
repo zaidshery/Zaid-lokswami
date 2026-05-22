@@ -7,7 +7,6 @@ import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
-  CheckCircle2,
   Edit,
   FileText,
   Link2,
@@ -32,7 +31,6 @@ import {
   CmsCollectionHero,
   CmsCollectionPage,
   CMS_COLLECTION_DANGER_BUTTON_CLASS as DANGER_BUTTON_CLASS,
-  CMS_COLLECTION_EMPTY_STATE_CLASS as EMPTY_STATE_CLASS,
   CMS_COLLECTION_FILTER_INPUT_CLASS as FILTER_INPUT_CLASS,
   CMS_COLLECTION_METRIC_CARD_CLASS as METRIC_CARD_CLASS,
   CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,

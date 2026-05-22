@@ -43,6 +43,7 @@ import {
   CmsEditorMain,
   CmsEditorSidebar,
 } from '@/components/admin/CmsEditorLayout';
+import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 
 interface StoryFormData {
   title: string;
@@ -79,10 +80,6 @@ const THUMBNAIL_INPUT_ID = 'story-thumbnail-upload-input';
 const VIDEO_INPUT_ID = 'story-video-upload-input';
 const STORY_IMAGE_ACCEPT = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
 const STORY_VIDEO_ACCEPT = 'video/mp4,.mp4';
-
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(' ');
-}
 
 function truncateMediaLabel(value: string, maxLength = 16) {
   const trimmed = value.trim();
@@ -134,7 +131,7 @@ function StoryMediaTile({
         title={label}
       >
         {asset.kind === 'image' ? (
-          <img
+          <AdminMediaImage
             src={asset.url}
             alt={label}
             className="h-full w-full object-cover"
@@ -1423,7 +1420,7 @@ export default function CreateStoryPage() {
 
                   {previewThumbnail ? (
                     <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white">
-                      <img
+                      <AdminMediaImage
                         src={previewThumbnail}
                         alt="Story thumbnail preview"
                         className="h-44 w-full object-cover"
@@ -1549,7 +1546,7 @@ export default function CreateStoryPage() {
 
             <div className="overflow-hidden rounded-2xl bg-gray-950">
               {previewAsset.asset.kind === 'image' ? (
-                <img
+                <AdminMediaImage
                   src={previewAsset.asset.url}
                   alt={getMediaAssetLabel(previewAsset.asset)}
                   className="max-h-[75vh] w-full object-contain"

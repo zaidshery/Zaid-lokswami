@@ -6,7 +6,6 @@ import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
   buildArticlePublicPath,
   buildNewsArticleJsonLd,
-  toAbsoluteArticleUrl,
 } from '@/lib/seo/articleSeo';
 
 const fallbackSiteUrl = 'http://localhost:3000';
@@ -39,11 +38,7 @@ export async function generateMetadata(context: LayoutContext): Promise<Metadata
   const canonical =
     article.seo.canonicalUrl ||
     `${siteUrl}${buildArticlePublicPath({ id: article.id, slug: article.slug })}`;
-  const ogImageRaw = resolveArticleOgImageUrl({
-    ogImage: article.seo.ogImage,
-    image: article.image,
-  });
-  const ogImage = ogImageRaw ? toAbsoluteArticleUrl(ogImageRaw, siteUrl) : '';
+  const ogImage = `${siteUrl}/api/og/article/${encodeURIComponent(article.slug || article.id)}`;
 
   return {
     title,

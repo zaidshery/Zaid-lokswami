@@ -9,6 +9,7 @@ const verifyStoryVideoUploadMock = vi.fn();
 
 vi.mock('@/lib/auth/admin', () => ({
   getAdminSession: getAdminSessionMock,
+  getAdminSessionFromReq: getAdminSessionMock,
 }));
 
 vi.mock('@/lib/storage/storyVideoUpload', () => ({

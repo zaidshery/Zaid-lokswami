@@ -18,7 +18,7 @@ interface MobileSwipeTabsProps {
 
 const MOBILE_MEDIA_QUERY = '(max-width: 768px)';
 const SWIPE_IGNORE_SELECTOR =
-  'input, textarea, select, button, a, [data-swipe-ignore="true"]';
+  'input, textarea, select, button, a, summary, details, video, iframe, [role="dialog"], [data-swipe-ignore="true"], [data-reader-card="true"], [data-reader-action="true"], [data-reader-scroll="x"]';
 
 function normalizePath(path: string): string {
   if (!path) return '/';

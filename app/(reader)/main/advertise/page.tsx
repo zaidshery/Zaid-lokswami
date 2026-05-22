@@ -101,8 +101,8 @@ export default function AdvertisePage() {
           <a href={`mailto:${COMPANY_INFO.contact.email}?subject=Advertising%20Enquiry`} className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 text-sm font-medium text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:text-orange-400">
             {COMPANY_INFO.contact.email}
           </a>
-          <a href={`tel:${COMPANY_INFO.contact.phone}`} className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 text-sm font-medium text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:text-orange-400">
-            {COMPANY_INFO.contact.phone}
+          <a href={COMPANY_INFO.contact.phoneHref} className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 text-sm font-medium text-zinc-800 transition hover:border-orange-400 hover:text-orange-600 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:text-orange-400">
+            {COMPANY_INFO.contact.phoneDisplay}
           </a>
         </div>
 

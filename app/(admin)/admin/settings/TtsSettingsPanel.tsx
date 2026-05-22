@@ -55,10 +55,6 @@ type PrewarmResponse = {
   error?: string;
 };
 
-function cx(...classes: Array<string | undefined | false>) {
-  return classes.filter(Boolean).join(' ');
-}
-
 const PANEL_CLASS =
   'rounded-[32px] border border-zinc-200/80 bg-white/92 p-8 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.38)] dark:border-white/10 dark:bg-zinc-950/60';
 

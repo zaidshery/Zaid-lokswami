@@ -31,6 +31,7 @@ import {
   CmsEditorMain,
   CmsEditorSidebar,
 } from '@/components/admin/CmsEditorLayout';
+import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
 import { CmsWorkflowPriorityBadge, CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
 
@@ -762,7 +763,7 @@ export default function EditVideoPage() {
                     </p>
                   </div>
                 ) : (
-                  <img
+                  <AdminMediaImage
                     src={previewThumbnail}
                     alt="Thumbnail preview"
                     className="h-48 w-full object-cover"

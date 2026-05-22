@@ -210,7 +210,7 @@ export default function SearchClient() {
         </h1>
       </div>
 
-      <form onSubmit={handleSearch} className="relative">
+      <form onSubmit={handleSearch} className="relative" data-swipe-ignore="true">
         <div className="flex items-center overflow-hidden rounded-xl border border-lokswami-border bg-lokswami-surface transition-colors focus-within:border-lokswami-red">
           <Search className="ml-4 h-5 w-5 text-lokswami-text-muted" />
           <input
@@ -218,13 +218,13 @@ export default function SearchClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={language === 'hi' ? 'Khabar khoje...' : 'Search news...'}
-            className="flex-1 bg-transparent px-4 py-4 text-lokswami-white placeholder:text-lokswami-text-muted focus:outline-none"
+            className="min-h-12 flex-1 bg-transparent px-4 py-3.5 text-lokswami-white placeholder:text-lokswami-text-muted focus:outline-none"
           />
           {query ? (
             <button
               type="button"
               onClick={() => setQuery('')}
-              className="p-2 text-lokswami-text-muted hover:text-lokswami-white"
+              className="reader-touch-button reader-focus-ring inline-flex h-12 w-12 items-center justify-center text-lokswami-text-muted hover:text-lokswami-white"
               aria-label="Clear query"
             >
               <X className="h-5 w-5" />
@@ -232,7 +232,7 @@ export default function SearchClient() {
           ) : null}
           <button
             type="submit"
-            className="bg-lokswami-red px-6 py-4 font-medium text-white transition-colors hover:bg-lokswami-red/90"
+            className="reader-touch-button reader-focus-ring min-h-12 bg-lokswami-red px-5 font-medium text-white transition-colors hover:bg-lokswami-red/90 sm:px-6"
           >
             {language === 'hi' ? 'Khoje' : 'Search'}
           </button>
@@ -240,7 +240,7 @@ export default function SearchClient() {
       </form>
 
       {query ? (
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3" data-swipe-ignore="true">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-lokswami-text-muted" />
             <select
@@ -250,7 +250,7 @@ export default function SearchClient() {
                 setSelectedCategory(next);
                 void performSearch(query, sourceArticles, next, sortBy);
               }}
-              className="rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red focus:outline-none"
+              className="reader-focus-ring min-h-11 rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red"
             >
               {categoryOptions.map((option) => (
                 <option key={option.slug} value={option.slug}>
@@ -268,7 +268,7 @@ export default function SearchClient() {
                 setSortBy(next);
                 void performSearch(query, sourceArticles, selectedCategory, next);
               }}
-              className="rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red focus:outline-none"
+              className="reader-focus-ring min-h-11 rounded-lg border border-lokswami-border bg-lokswami-surface px-3 py-2 text-sm text-lokswami-white focus:border-lokswami-red"
             >
               <option value="relevance">{language === 'hi' ? 'Prasangikta' : 'Relevance'}</option>
               <option value="latest">{language === 'hi' ? 'Taaza' : 'Latest'}</option>
@@ -308,7 +308,7 @@ export default function SearchClient() {
           </div>
 
           {searchResults.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {searchResults.map((article, index) => (
                 <NewsCard key={article.id} article={article} index={index} />
               ))}
@@ -342,7 +342,7 @@ export default function SearchClient() {
                     setQuery(term);
                     void performSearch(term, sourceArticles, selectedCategory, sortBy);
                   }}
-                  className="rounded-full bg-lokswami-surface px-4 py-2 text-sm text-lokswami-text-secondary transition-colors hover:bg-lokswami-red hover:text-lokswami-white"
+                  className="reader-touch-button reader-focus-ring min-h-11 rounded-full bg-lokswami-surface px-4 py-2 text-sm text-lokswami-text-secondary transition-colors hover:bg-lokswami-red hover:text-lokswami-white"
                 >
                   {term}
                 </button>
@@ -363,7 +363,7 @@ export default function SearchClient() {
                     setQuery(term);
                     void performSearch(term, sourceArticles, selectedCategory, sortBy);
                   }}
-                  className="flex w-full items-center justify-between rounded-lg bg-lokswami-surface p-3 text-left transition-colors hover:bg-lokswami-black"
+                  className="reader-touch-button reader-focus-ring flex min-h-12 w-full items-center justify-between rounded-lg bg-lokswami-surface p-3 text-left transition-colors hover:bg-lokswami-black"
                 >
                   <span className="text-lokswami-text-secondary">{term}</span>
                   <Clock className="h-4 w-4 text-lokswami-text-muted" />

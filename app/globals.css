@@ -9,6 +9,11 @@
     --nav-height: 4rem;
     --nav-height-mobile: 3.5rem;
     --bottom-nav-height: 4rem;
+    --reader-bottom-nav-space: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+    --reader-floating-button-bottom: calc(var(--reader-bottom-nav-space) + 0.85rem);
+    --reader-floating-panel-bottom: calc(var(--reader-bottom-nav-space) + 4.3rem);
+    --reader-floating-toast-bottom: calc(var(--reader-bottom-nav-space) + 1rem);
+    --reader-bottom-sheet-max-height: calc(100dvh - var(--reader-bottom-nav-space) - 1.5rem);
     --space-1: 0.25rem;
     --space-2: 0.5rem;
     --space-3: 0.75rem;
@@ -60,6 +65,7 @@
     @apply bg-white-gray dark:bg-raisin-black text-raisin-black dark:text-gainsboro antialiased overflow-x-hidden transition-colors duration-500;
     font-family: var(--font-devanagari), var(--font-latin), 'Noto Sans Devanagari', 'Inter', system-ui, sans-serif;
     text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: rgba(220, 38, 38, 0.18);
   }
   
   /* Professional dark mode - enterprise grade */
@@ -102,15 +108,74 @@
     display: none;
   }
   
-  /* Hide native scrollbars globally (visual only) */
+  /* Native page scrollbar styled like a slim desktop reading rail. */
   html, body, main, #__next {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: auto;
+    scrollbar-color: #737373 #18181b;
+    scrollbar-width: thin;
   }
+
   html::-webkit-scrollbar, body::-webkit-scrollbar, main::-webkit-scrollbar, #__next::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
-    width: 0;
-    height: 0;
+    width: 16px;
+    height: 16px;
+  }
+
+  html::-webkit-scrollbar-track,
+  body::-webkit-scrollbar-track,
+  main::-webkit-scrollbar-track,
+  #__next::-webkit-scrollbar-track {
+    background: #18181b;
+  }
+
+  html::-webkit-scrollbar-thumb,
+  body::-webkit-scrollbar-thumb,
+  main::-webkit-scrollbar-thumb,
+  #__next::-webkit-scrollbar-thumb {
+    min-height: 64px;
+    border: 4px solid #18181b;
+    border-radius: 999px;
+    background: #777777;
+  }
+
+  html::-webkit-scrollbar-thumb:hover,
+  body::-webkit-scrollbar-thumb:hover,
+  main::-webkit-scrollbar-thumb:hover,
+  #__next::-webkit-scrollbar-thumb:hover {
+    background: #8a8a8a;
+  }
+
+  html::-webkit-scrollbar-button:single-button,
+  body::-webkit-scrollbar-button:single-button,
+  main::-webkit-scrollbar-button:single-button,
+  #__next::-webkit-scrollbar-button:single-button {
+    display: block;
+    width: 16px;
+    height: 18px;
+    background-color: #18181b;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 8px 8px;
+  }
+
+  html::-webkit-scrollbar-button:single-button:vertical:decrement,
+  body::-webkit-scrollbar-button:single-button:vertical:decrement,
+  main::-webkit-scrollbar-button:single-button:vertical:decrement,
+  #__next::-webkit-scrollbar-button:single-button:vertical:decrement {
+    background-image: url("data:image/svg+xml,%3Csvg width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 2 7 6H1z' fill='%236b7280'/%3E%3C/svg%3E");
+  }
+
+  html::-webkit-scrollbar-button:single-button:vertical:increment,
+  body::-webkit-scrollbar-button:single-button:vertical:increment,
+  main::-webkit-scrollbar-button:single-button:vertical:increment,
+  #__next::-webkit-scrollbar-button:single-button:vertical:increment {
+    background-image: url("data:image/svg+xml,%3Csvg width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 6 1 2h6z' fill='%236b7280'/%3E%3C/svg%3E");
+  }
+
+  html::-webkit-scrollbar-corner,
+  body::-webkit-scrollbar-corner,
+  main::-webkit-scrollbar-corner,
+  #__next::-webkit-scrollbar-corner {
+    background: #18181b;
   }
 
   /* Prevent horizontal scroll */
@@ -126,6 +191,38 @@
 }
 
 @layer components {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+
+  .touch-target-compact {
+    min-height: 40px;
+    min-width: 40px;
+    touch-action: manipulation;
+  }
+
+  .reader-touch-link,
+  .reader-touch-button {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(220, 38, 38, 0.18);
+  }
+
+  .reader-focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-red-400 dark:focus-visible:ring-offset-zinc-950;
+  }
+
+  .reader-scroll-x {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 0.75rem;
+  }
+
+  .reader-bottom-safe-pad {
+    padding-bottom: calc(var(--reader-bottom-nav-space) + 0.75rem);
+  }
+
   .cnp-surface {
     @apply border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900;
     border-radius: var(--r-xl);
@@ -172,6 +269,13 @@
       background-color var(--dur-fast) var(--ease-standard),
       border-color var(--dur-fast) var(--ease-standard);
     transform: translate3d(0, 0, 0);
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .cnp-card-hover:hover {
+      transform: translate3d(0, 0, 0);
+      box-shadow: var(--shadow-soft);
+    }
   }
 
   .ui-3d .cnp-surface,

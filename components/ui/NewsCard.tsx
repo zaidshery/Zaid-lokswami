@@ -2,7 +2,6 @@
 
 import { type MouseEvent, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Share2, Bookmark, TrendingUp } from 'lucide-react';
@@ -11,6 +10,7 @@ import type { Article } from '@/lib/mock/data';
 import { buildArticleImageVariantUrl } from '@/lib/utils/articleMedia';
 import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import ArticleMetaRow from './ArticleMetaRow';
+import ReaderImage from './ReaderImage';
 
 interface NewsCardProps {
   article: Article;
@@ -35,6 +35,8 @@ export default function NewsCard({ article, variant = 'default', size = 'default
   const horizontalImage = buildArticleImageVariantUrl(article.image, 'thumb');
   const featuredImage = buildArticleImageVariantUrl(article.image, 'featured');
   const defaultCardImage = buildArticleImageVariantUrl(article.image, 'card');
+  const articleImageClassName =
+    'object-cover object-center transition-transform duration-500 group-hover:scale-105';
 
   useEffect(() => {
     setIsHydrated(true);
@@ -165,14 +167,14 @@ export default function NewsCard({ article, variant = 'default', size = 'default
 
   if (variant === 'horizontal') {
     return (
-      <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover overflow-hidden p-0">
-        <Link href={articleHref} className="flex gap-2.5 rounded-xl p-3 transition-all duration-300 hover:bg-gray-100 dark:hover:bg-gray-800 sm:gap-4 sm:p-4">
-          <div className="relative h-[72px] w-[88px] flex-shrink-0 overflow-hidden rounded-lg sm:h-24 sm:w-28 md:h-28 md:w-36">
-            <Image
+      <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover overflow-hidden p-0" data-reader-card="true">
+        <Link href={articleHref} className="reader-touch-link reader-focus-ring flex gap-2.5 rounded-xl p-3 transition-all duration-300 hover:bg-gray-100 dark:hover:bg-gray-800 sm:gap-4 sm:p-4">
+          <div className="relative h-[72px] w-[88px] flex-shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-950 sm:h-24 sm:w-28 md:h-28 md:w-36">
+            <ReaderImage
               src={horizontalImage}
               alt={article.title}
               fill
-              className="object-cover image-hover-zoom"
+              className={articleImageClassName}
               sizes="(max-width: 639px) 96px, (max-width: 767px) 112px, 144px"
             />
             {article.isBreaking ? (
@@ -204,36 +206,47 @@ export default function NewsCard({ article, variant = 'default', size = 'default
   }
 
   if (variant === 'compact') {
-    const trendingColors = ['bg-orange-600 dark:bg-orange-500', 'bg-orange-700 dark:bg-orange-600', 'bg-gray-800 dark:bg-gray-700', 'bg-gray-700 dark:bg-gray-600', 'bg-gray-600 dark:bg-gray-500'];
-    const bgColor = trendingColors[index % trendingColors.length];
-
     return (
-      <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover overflow-hidden p-0">
-        <Link href={articleHref} className="flex items-start gap-3 rounded-xl p-3.5 transition-all duration-300 sm:gap-4 sm:p-4">
-          <div className={`${bgColor} flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-base font-black text-white shadow-lg transition-transform group-hover:scale-110 sm:h-10 sm:w-10 sm:text-lg`}>
-            {index + 1}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="line-clamp-1 text-[0.95rem] font-semibold leading-snug transition-colors group-hover:text-orange-600 dark:group-hover:text-orange-400 sm:line-clamp-2 sm:card-title">{article.title}</h3>
-            <p className="mt-1 line-clamp-1 text-[11px] leading-snug text-gray-600 dark:text-gray-400 sm:hidden">
-              {article.summary}
-            </p>
-            <div className="mt-1.5 inline-flex sm:mt-2">
-              <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-[11px] font-medium text-orange-600 dark:bg-orange-950/30 dark:text-orange-400 sm:px-2 sm:text-xs">
-                {article.category}
-              </span>
+      <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover overflow-hidden p-0" data-reader-card="true">
+        <Link href={articleHref} className="reader-touch-link reader-focus-ring block rounded-xl p-3.5 transition-all duration-300 sm:p-4">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="relative h-[64px] w-[82px] flex-shrink-0 overflow-hidden rounded-xl bg-zinc-100 shadow-sm dark:bg-zinc-800 sm:h-[72px] sm:w-[96px]">
+              <ReaderImage
+                src={horizontalImage}
+                alt={article.title}
+                fill
+                className={articleImageClassName}
+                sizes="(max-width: 639px) 82px, 96px"
+              />
+              {article.isBreaking ? (
+                <span className="absolute left-1.5 top-1.5 rounded-full bg-orange-600 px-1.5 py-0.5 text-[9px] font-bold leading-none text-white dark:bg-orange-500">
+                  {language === 'hi' ? '\u0932\u093e\u0907\u0935' : 'LIVE'}
+                </span>
+              ) : null}
             </div>
-            <ArticleMetaRow
-              article={article}
-              timeText={renderTime(article.publishedAt)}
-              language={language}
-              className="mt-1.5 sm:mt-2.5"
-              compact
-              withBorder
-              showWhatsAppButton
-              showEpaperButton
-            />
+            <div className="min-w-0 flex-1">
+              <h3 className="line-clamp-1 text-[0.95rem] font-semibold leading-snug transition-colors group-hover:text-orange-600 dark:group-hover:text-orange-400 sm:line-clamp-2 sm:card-title">{article.title}</h3>
+              <p className="mt-1 line-clamp-1 text-[11px] leading-snug text-gray-600 dark:text-gray-400 sm:hidden">
+                {article.summary}
+              </p>
+              <div className="mt-1.5 inline-flex sm:mt-2">
+                <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-[11px] font-medium text-orange-600 dark:bg-orange-950/30 dark:text-orange-400 sm:px-2 sm:text-xs">
+                  {article.category}
+                </span>
+              </div>
+            </div>
           </div>
+          <ArticleMetaRow
+            article={article}
+            timeText={renderTime(article.publishedAt)}
+            language={language}
+            className="mt-2.5 sm:mt-3"
+            compact
+            withBorder
+            showWhatsAppButton
+            showEpaperButton
+            actionLayout="three-columns"
+          />
         </Link>
       </motion.article>
     );
@@ -241,14 +254,14 @@ export default function NewsCard({ article, variant = 'default', size = 'default
 
   if (variant === 'featured') {
     return (
-      <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group relative card-hover">
-        <Link href={articleHref} className="block">
-          <div className="relative aspect-[4/3] overflow-hidden rounded-lg md:rounded-xl">
-            <Image
+      <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group relative card-hover" data-reader-card="true">
+        <Link href={articleHref} className="reader-touch-link reader-focus-ring block">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-zinc-950 md:rounded-xl">
+            <ReaderImage
               src={featuredImage}
               alt={article.title}
               fill
-              className="object-cover image-hover-zoom"
+              className={articleImageClassName}
               sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 33vw"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/5 group-hover:from-black group-hover:via-black/50" />
@@ -281,14 +294,14 @@ export default function NewsCard({ article, variant = 'default', size = 'default
   }
 
   return (
-    <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover overflow-hidden p-0">
-      <Link href={articleHref} className="flex h-full flex-col">
-        <div className={`relative overflow-hidden ${isSmall ? 'aspect-[16/9]' : 'aspect-[16/10]'}`}>
-          <Image
+    <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover overflow-hidden p-0" data-reader-card="true">
+      <Link href={articleHref} className="reader-touch-link reader-focus-ring flex h-full flex-col">
+        <div className={`relative overflow-hidden bg-zinc-100 dark:bg-zinc-950 ${isSmall ? 'aspect-[16/9]' : 'aspect-[16/10]'}`}>
+          <ReaderImage
             src={defaultCardImage}
             alt={article.title}
             fill
-            className="object-cover image-hover-zoom"
+            className={articleImageClassName}
             sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 420px"
           />
 
@@ -307,18 +320,20 @@ export default function NewsCard({ article, variant = 'default', size = 'default
 
           <div className={`absolute hidden gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100 md:flex ${isSmall ? 'bottom-2.5 right-2.5' : 'bottom-3 right-3'}`}>
             <button
-              className={`flex items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-lg transition-all hover:bg-orange-600 hover:text-white hover:shadow-orange-600/30 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-orange-500 dark:hover:shadow-orange-500/20 ${isSmall ? 'h-8 w-8' : 'h-9 w-9'}`}
+              className={`reader-touch-button reader-focus-ring flex items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-lg transition-all hover:bg-orange-600 hover:text-white hover:shadow-orange-600/30 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-orange-500 dark:hover:shadow-orange-500/20 ${isSmall ? 'h-10 w-10' : 'h-11 w-11'}`}
               onClick={(e) => e.preventDefault()}
               aria-label="Share"
+              data-reader-action="true"
             >
               <Share2 className={isSmall ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
             </button>
             <button
-              className={`flex items-center justify-center rounded-full shadow-lg transition-all ${isBookmarked ? 'bg-orange-600 text-white hover:bg-orange-700 hover:shadow-orange-600/30 dark:bg-orange-500 dark:hover:bg-orange-500 dark:hover:shadow-orange-500/20' : 'bg-white/90 text-gray-900 hover:bg-orange-600 hover:text-white hover:shadow-orange-600/30 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-orange-500 dark:hover:shadow-orange-500/20'} ${isSmall ? 'h-8 w-8' : 'h-9 w-9'} ${!canSaveArticle || isSavingBookmark ? 'cursor-not-allowed opacity-60' : ''}`}
+              className={`reader-touch-button reader-focus-ring flex items-center justify-center rounded-full shadow-lg transition-all ${isBookmarked ? 'bg-orange-600 text-white hover:bg-orange-700 hover:shadow-orange-600/30 dark:bg-orange-500 dark:hover:bg-orange-500 dark:hover:shadow-orange-500/20' : 'bg-white/90 text-gray-900 hover:bg-orange-600 hover:text-white hover:shadow-orange-600/30 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-orange-500 dark:hover:shadow-orange-500/20'} ${isSmall ? 'h-10 w-10' : 'h-11 w-11'} ${!canSaveArticle || isSavingBookmark ? 'cursor-not-allowed opacity-60' : ''}`}
               onClick={handleBookmarkClick}
               disabled={!canSaveArticle || isSavingBookmark}
               aria-pressed={isBookmarked}
               aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+              data-reader-action="true"
               title={
                 !canSaveArticle
                   ? language === 'hi'

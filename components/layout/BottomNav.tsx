@@ -62,7 +62,7 @@ export default function BottomNav({
       aria-label="Bottom Navigation"
       className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur xl:hidden ${shellTone}`}
     >
-      <div className="mx-auto grid h-16 w-full max-w-2xl grid-cols-6 items-center gap-x-1 px-2 pb-safe sm:gap-x-2 sm:px-3">
+      <div className="mx-auto grid min-h-[var(--bottom-nav-height)] w-full max-w-2xl grid-cols-6 items-center gap-x-1 px-2 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1 sm:gap-x-2 sm:px-3">
         {navItems.map((item) => {
           const Icon = item.icon;
           const label = item.isAccount
@@ -82,7 +82,7 @@ export default function BottomNav({
                 key="menu"
                 onClick={onMenuClick}
                 whileTap={{ scale: 0.96 }}
-                className={`cnp-motion relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-1.5 ${
+                className={`cnp-motion reader-touch-button reader-focus-ring touch-target-compact relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 ${
                   isMenuOpen
                     ? `bg-red-500/15 ${activeTone}`
                     : inactiveTone
@@ -93,7 +93,7 @@ export default function BottomNav({
                 type="button"
               >
                 <Icon size={22} strokeWidth={2} />
-                <span className="text-[11px] font-semibold leading-none">{label}</span>
+                <span className="text-[10px] font-semibold leading-none min-[380px]:text-[11px]">{label}</span>
               </motion.button>
             );
           }
@@ -107,7 +107,7 @@ export default function BottomNav({
                 whileTap={{ scale: 0.96 }}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={accountLabel}
-                className="relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-1.5"
+                className="reader-touch-button reader-focus-ring touch-target-compact relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5"
               >
                 {isActive ? (
                   <motion.div
@@ -146,7 +146,7 @@ export default function BottomNav({
                   )}
                 </span>
                 <span
-                  className={`cnp-motion relative z-10 text-[11px] font-semibold leading-none ${
+                  className={`cnp-motion relative z-10 text-[10px] font-semibold leading-none min-[380px]:text-[11px] ${
                     isActive ? activeTone : inactiveTone
                   }`}
                 >
@@ -161,7 +161,7 @@ export default function BottomNav({
               key={item.href}
               href={href}
               aria-current={isActive ? 'page' : undefined}
-              className="relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-1.5"
+              className="reader-touch-link reader-focus-ring touch-target-compact relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5"
             >
               {isActive ? (
                 <motion.div
@@ -177,7 +177,7 @@ export default function BottomNav({
                 className={`cnp-motion relative z-10 ${isActive ? activeTone : inactiveTone}`}
               />
               <span
-                className={`cnp-motion relative z-10 text-[11px] font-semibold leading-none ${
+                className={`cnp-motion relative z-10 text-[10px] font-semibold leading-none min-[380px]:text-[11px] ${
                   isActive ? activeTone : inactiveTone
                 }`}
               >

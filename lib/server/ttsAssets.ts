@@ -39,6 +39,24 @@ type EpaperStoryListenSource = {
   contentHtml?: string;
 };
 
+type EnsureTtsAssetOptions = {
+  sourceType: TtsSourceType;
+  sourceId: string;
+  sourceParentId?: string;
+  variant: TtsVariant;
+  title?: string;
+  text: string;
+  forceRegenerate?: boolean;
+  actor?: TtsActorContext;
+  metadata?: Record<string, unknown>;
+};
+
+type EnsureTtsAssetResult = {
+  asset: { status?: string; audioUrl?: string } | null;
+  reused: boolean;
+  error: string;
+};
+
 // ---------------------------------------------------------------------------
 // Text utilities (exported — used by routes and other server modules)
 // ---------------------------------------------------------------------------
@@ -387,11 +405,13 @@ export async function getTtsConfig() {
   return new TtsConfig({ key: 'default' });
 }
 
-export async function processQueuedTtsAssets(_options?: { limit?: number }) {
+export async function processQueuedTtsAssets(options?: { limit?: number }) {
+  void options;
   return { processed: 0, errors: 0, message: 'TTS Auto-Synthesis is decommissioned.' };
 }
 
-export async function ensureTtsAsset(_options: any) {
+export async function ensureTtsAsset(options: EnsureTtsAssetOptions): Promise<EnsureTtsAssetResult> {
+  void options;
   return {
     asset: null,
     reused: false,

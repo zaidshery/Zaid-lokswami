@@ -1,7 +1,6 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 import Link from 'next/link';
 import { type MouseEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,7 +8,9 @@ import { Share2, Bookmark, ArrowUpRight } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import type { Article } from '@/lib/mock/data';
 import { buildArticleImageVariantUrl } from '@/lib/utils/articleMedia';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import ArticleMetaRow from './ArticleMetaRow';
+import ReaderImage from './ReaderImage';
 
 interface HeroCardProps {
   article: Article;
@@ -27,7 +28,7 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
   const [isSavingBookmark, setIsSavingBookmark] = useState(false);
   const isSignedIn = Boolean(currentUser);
   const isSavedInProfile = Array.isArray(savedArticleIds) && savedArticleIds.includes(article.id);
-  const articleHref = `/main/article/${encodeURIComponent(article.id)}`;
+  const articleHref = buildArticlePublicPath({ id: article.id, slug: article.slug });
   const canSaveArticle = /^[a-fA-F0-9]{24}$/.test(article.id);
   const heroImage = buildArticleImageVariantUrl(article.image, 'hero');
 
@@ -149,10 +150,11 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
   return (
     <article
       className="relative h-full group"
+      data-reader-card="true"
     >
-      <Link href={articleHref} className="block h-full md:flex md:flex-col">
+      <Link href={articleHref} className="reader-touch-link reader-focus-ring block h-full md:flex md:flex-col">
         <div
-          className={`relative overflow-hidden ${
+          className={`relative overflow-hidden bg-zinc-100 dark:bg-zinc-950 ${
             variant === 'editorial'
               ? 'h-[clamp(156px,25vh,210px)] min-[420px]:h-[clamp(172px,27vh,226px)] sm:h-[clamp(210px,30vh,265px)] md:flex-1 md:min-h-0 md:aspect-auto rounded-t-2xl rounded-b-none ring-1 ring-zinc-200/70 shadow-lg shadow-zinc-300/25 dark:ring-zinc-800 dark:shadow-black/30'
               : 'aspect-[16/9] md:h-[62%] md:aspect-auto rounded-2xl card-hover'
@@ -162,11 +164,11 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
             className="absolute inset-0 transition-transform duration-700 ease-out will-change-transform"
             style={{ transform: `translate3d(${parallax.x}px, ${parallax.y}px, 0) scale(1)` }}
           >
-            <Image
+            <ReaderImage
               src={heroImage}
               alt={article.title}
               fill
-              className="object-cover image-hover-zoom"
+              className="object-cover object-center image-hover-zoom"
               sizes="(max-width: 767px) 100vw, (max-width: 1279px) 66vw, 900px"
               priority
             />
@@ -203,8 +205,9 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
-                className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white hover:bg-lokswami-red transition-all shadow-lg hover:shadow-lokswami-red/50"
+                className="reader-touch-button reader-focus-ring w-11 h-11 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white hover:bg-lokswami-red transition-all shadow-lg hover:shadow-lokswami-red/50"
                 aria-label="Share"
+                data-reader-action="true"
               >
                 <Share2 className="w-5 h-5" />
               </motion.button>
@@ -212,13 +215,14 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleBookmarkClick}
-                className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-lg ${isBookmarked
+                className={`reader-touch-button reader-focus-ring w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-lg ${isBookmarked
                     ? 'bg-lokswami-red text-white hover:bg-red-700 hover:shadow-lokswami-red/50'
                     : 'bg-black/60 text-white hover:bg-lokswami-red hover:shadow-lokswami-red/50'
                   } ${!canSaveArticle || isSavingBookmark ? 'cursor-not-allowed opacity-60' : ''}`}
                 disabled={!canSaveArticle || isSavingBookmark}
                 aria-pressed={isBookmarked}
                 aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+                data-reader-action="true"
                 title={
                   !canSaveArticle
                     ? language === 'hi'

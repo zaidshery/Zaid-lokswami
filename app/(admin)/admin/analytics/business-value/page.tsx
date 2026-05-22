@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { BarChart3, Users, Briefcase, ChevronRight, Activity, MousePointerClick } from 'lucide-react';
+import { BarChart3, ChevronRight, MousePointerClick } from 'lucide-react';
 import Link from 'next/link';
 
 interface ValueScore {
@@ -142,7 +142,7 @@ export default function BusinessValueDashboard() {
               {topPages.length === 0 ? (
                  <p className="text-sm text-[color:var(--admin-shell-text-muted)]">No article leads recorded in this period.</p>
               ) : (
-                topPages.map((page, i) => (
+                topPages.map((page) => (
                   <div key={page.url} className="group relative flex items-center justify-between gap-4 rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface-muted)] p-3 transition-colors hover:border-[color:var(--admin-shell-border-strong)]">
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-bold text-[color:var(--admin-shell-text)]">

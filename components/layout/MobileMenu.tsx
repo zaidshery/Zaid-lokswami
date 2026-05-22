@@ -154,7 +154,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                 </span>
                 <button
                   onClick={onClose}
-                  className="cnp-motion -mr-1 rounded-lg border border-zinc-200 p-2 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  className="cnp-motion reader-touch-button reader-focus-ring -mr-1 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
                   aria-label={language === 'hi' ? '\u092e\u0947\u0928\u0942 \u092c\u0902\u0926 \u0915\u0930\u0947\u0902' : 'Close menu'}
                 >
                   <X size={20} />
@@ -171,7 +171,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                       key={category.id}
                       href={getNewsCategoryHref(category.slug)}
                       onClick={onClose}
-                      className="cnp-motion group flex items-center justify-between rounded-xl bg-white px-2.5 py-2 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:bg-zinc-950 dark:hover:bg-zinc-800"
+                      className="cnp-motion reader-touch-link reader-focus-ring group flex min-h-12 items-center justify-between rounded-xl bg-white px-2.5 py-2.5 hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-800"
                     >
                       <div className="flex items-center gap-3">
                         <span
@@ -203,7 +203,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                       key={page.href}
                       href={page.href}
                       onClick={onClose}
-                      className="cnp-motion flex items-center justify-between rounded-xl bg-white px-2.5 py-2 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:bg-zinc-950 dark:hover:bg-zinc-800"
+                      className="cnp-motion reader-touch-link reader-focus-ring flex min-h-12 items-center justify-between rounded-xl bg-white px-2.5 py-2.5 hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-800"
                     >
                       <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                         {language === 'hi' ? page.name : page.nameEn}
@@ -231,7 +231,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label={social.label}
-                        className="footer-social-float footer-social-bulb group/social relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border bg-white/95 transition-all duration-300 dark:bg-zinc-900/75"
+                        className="footer-social-float footer-social-bulb reader-touch-link reader-focus-ring group/social relative inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border bg-white/95 transition-all duration-300 dark:bg-zinc-900/75"
                         style={
                           {
                             animationDelay: `${index * 140}ms`,

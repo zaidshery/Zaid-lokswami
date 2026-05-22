@@ -62,6 +62,7 @@ import {
   CmsEditorMain,
   CmsEditorSidebar,
 } from '@/components/admin/CmsEditorLayout';
+import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
 import { CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
 import ArticleEditorStudio, {
@@ -246,7 +247,7 @@ function StoryMediaTile({
         title={label}
       >
         {asset.kind === 'image' ? (
-          <img
+          <AdminMediaImage
             src={asset.url}
             alt={label}
             className="h-full w-full object-cover"
@@ -3034,7 +3035,7 @@ export default function EditStoryPage() {
 
             <div className="overflow-hidden rounded-2xl bg-gray-950">
               {previewAsset.asset.kind === 'image' ? (
-                <img
+                <AdminMediaImage
                   src={previewAsset.asset.url}
                   alt={getMediaAssetLabel(previewAsset.asset)}
                   className="max-h-[75vh] w-full object-contain"
