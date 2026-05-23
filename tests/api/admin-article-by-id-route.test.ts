@@ -8,6 +8,7 @@ const updateStoredArticleMock = vi.fn();
 const deleteStoredArticleMock = vi.fn();
 const connectDBMock = vi.fn();
 const recordArticleActivityMock = vi.fn();
+const resolveReusableBreakingTtsMock = vi.fn();
 
 vi.mock('@/lib/auth/admin', () => ({
   getAdminSession: getAdminSessionMock,
@@ -58,6 +59,7 @@ vi.mock('@/lib/storage/articlesFile', () => ({
 vi.mock('@/lib/server/breakingTts', () => ({
   deleteStoredBreakingAudio: vi.fn(),
   ensureBreakingTtsForArticle: vi.fn(),
+  resolveReusableBreakingTts: resolveReusableBreakingTtsMock,
 }));
 
 vi.mock('@/lib/server/articleActivity', () => ({
@@ -89,6 +91,7 @@ describe('/api/admin/articles/[id] route', () => {
     vi.clearAllMocks();
     delete process.env.MONGODB_URI;
     listAllStoredArticlesMock.mockResolvedValue([]);
+    resolveReusableBreakingTtsMock.mockReturnValue(null);
   });
 
   it('prevents reporters from opening article detail through the API', async () => {
@@ -239,6 +242,49 @@ describe('/api/admin/articles/[id] route', () => {
         toStatus: 'published',
       })
     );
+  });
+
+  it('blocks publishing breaking articles without ready manual breaking audio', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk',
+      role: 'admin',
+    });
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      title: 'Breaking article',
+      summary: 'Ready summary',
+      content: 'Ready content',
+      image: 'https://cdn.example.com/image.jpg',
+      category: 'General',
+      author: 'Desk',
+      isBreaking: true,
+      breakingTts: null,
+      workflow: {
+        status: 'approved',
+        priority: 'normal',
+        createdBy: {
+          id: 'admin-1',
+          name: 'Desk',
+          email: 'desk@example.com',
+          role: 'admin',
+        },
+      },
+    });
+
+    const { PATCH } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await PATCH(createJsonRequest('PATCH', { action: 'publish' }), {
+      params: Promise.resolve({ id: 'article-1' }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload).toEqual({
+      success: false,
+      error: 'Upload breaking news audio before publishing this breaking article.',
+    });
+    expect(updateStoredArticleMock).not.toHaveBeenCalled();
   });
 
   it('records the old slug when replacing an article slug', async () => {

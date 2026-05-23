@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
       if (!article.isBreaking) {
         return NextResponse.json(
-          { success: false, error: 'Only breaking articles can generate voice cache.' },
+          { success: false, error: 'Only breaking articles can use breaking audio.' },
           { status: 400 }
         );
       }
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       const breakingTts = await ensureBreakingTtsForArticle(article, { forceRegenerate });
       if (!breakingTts) {
         return NextResponse.json(
-          { success: false, error: 'Unable to generate breaking voice cache right now.' },
+          { success: false, error: 'Upload manual breaking audio before refreshing status.' },
           { status: 502 }
         );
       }
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
     if (!article.isBreaking) {
       return NextResponse.json(
-        { success: false, error: 'Only breaking articles can generate voice cache.' },
+        { success: false, error: 'Only breaking articles can use breaking audio.' },
         { status: 400 }
       );
     }
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
     if (!breakingTts) {
       return NextResponse.json(
-        { success: false, error: 'Unable to generate breaking voice cache right now.' },
+        { success: false, error: 'Upload manual breaking audio before refreshing status.' },
         { status: 502 }
       );
     }
@@ -161,9 +161,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
       },
     });
   } catch (error) {
-    console.error('Failed to regenerate breaking TTS cache:', error);
+    console.error('Failed to refresh breaking TTS cache:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to regenerate breaking voice cache' },
+      { success: false, error: 'Failed to refresh breaking audio status' },
       { status: 500 }
     );
   }

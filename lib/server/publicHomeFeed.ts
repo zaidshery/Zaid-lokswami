@@ -242,6 +242,7 @@ function mapBreakingItem(raw: unknown): PublicHomeFeedBreakingItem | null {
   const reusableTts = resolveReusableBreakingTts({
     _id: article.id,
     title: article.title,
+    reporterMeta: input.reporterMeta,
     category: article.category,
     isBreaking: true,
     breakingTts: input.breakingTts,
@@ -390,7 +391,7 @@ async function loadMongoFeed(limits: Required<PublicHomeFeedLimits>) {
   const [articleDocs, storyDocs, videoDocs, shortDocs, epaperDocs] = await Promise.all([
     Article.find({})
       .select(
-        '_id slug title summary image category author publishedAt updatedAt views isBreaking isTrending workflow breakingTts'
+        '_id slug title summary image category author publishedAt updatedAt views isBreaking isTrending workflow reporterMeta breakingTts'
       )
       .sort({ publishedAt: -1, _id: -1 })
       .limit(articleLimit)

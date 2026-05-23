@@ -201,7 +201,8 @@ function matchesListFilters(
 
 function buildInitialWorkflow(
   intent: CreateIntent,
-  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
+  options?: { deferPublish?: boolean }
 ) {
   const actor = toWorkflowActorRef(user);
   const now = new Date();
@@ -220,6 +221,17 @@ function buildInitialWorkflow(
       priority: 'normal' as const,
       createdBy: actor,
       submittedAt: now,
+    };
+  }
+
+  if (intent === 'publish' && options?.deferPublish) {
+    return {
+      status: 'approved' as const,
+      priority: 'normal' as const,
+      createdBy: actor,
+      submittedAt: now,
+      reviewedBy: actor,
+      approvedAt: now,
     };
   }
 
@@ -494,9 +506,13 @@ export async function POST(req: NextRequest) {
     }
 
     const intent = normalizeCreateIntent((body as Record<string, unknown>)?.intent);
+    const bodyRecord = body as Record<string, unknown>;
     const input = normalizeArticleInput(body);
+    const breakingAudioUploadPending = Boolean(bodyRecord.breakingAudioUploadPending);
     const validationError = validateArticleInput(input);
-    const workflow = buildInitialWorkflow(intent, user);
+    const workflow = buildInitialWorkflow(intent, user, {
+      deferPublish: intent === 'publish' && input.isBreaking && breakingAudioUploadPending,
+    });
     const useFileStore = await shouldUseFileStore();
 
     if (
@@ -517,6 +533,16 @@ export async function POST(req: NextRequest) {
           error: 'You do not have permission to publish articles directly.',
         },
         { status: 403 }
+      );
+    }
+
+    if (intent === 'publish' && input.isBreaking && !breakingAudioUploadPending) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Upload breaking news audio before publishing this breaking article.',
+        },
+        { status: 400 }
       );
     }
 
@@ -597,8 +623,18 @@ export async function POST(req: NextRequest) {
         sourceStoryTitle,
         workflow: {
           ...workflow,
-          submittedAt: workflow.submittedAt?.toISOString() || null,
-          publishedAt: workflow.publishedAt?.toISOString() || null,
+          submittedAt:
+            'submittedAt' in workflow && workflow.submittedAt
+              ? workflow.submittedAt.toISOString()
+              : null,
+          approvedAt:
+            'approvedAt' in workflow && workflow.approvedAt
+              ? workflow.approvedAt.toISOString()
+              : null,
+          publishedAt:
+            'publishedAt' in workflow && workflow.publishedAt
+              ? workflow.publishedAt.toISOString()
+              : null,
         },
       });
       try {

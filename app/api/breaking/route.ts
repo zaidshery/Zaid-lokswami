@@ -17,6 +17,7 @@ const BREAKING_CACHE_HEADERS = publicJsonCacheHeaders({
 type BreakingItem = {
   id: string;
   title: string;
+  city?: string;
   category?: string;
   createdAt?: string;
   href: string;
@@ -56,11 +57,24 @@ function normalizeBreakingItem(source: unknown): BreakingItem | null {
   }
 
   const category = String(input.category || '').trim();
+  const reporterMeta =
+    input.reporterMeta && typeof input.reporterMeta === 'object'
+      ? (input.reporterMeta as Record<string, unknown>)
+      : null;
+  const city = String(
+    input.city ||
+      input.cityName ||
+      input.locationTag ||
+      reporterMeta?.locationTag ||
+      ''
+  ).trim();
   const views =
     typeof input.views === 'number' ? input.views : Number.parseInt(String(input.views ?? 0), 10);
   const reusableTts = resolveReusableBreakingTts({
     _id: id,
     title,
+    city,
+    reporterMeta: input.reporterMeta,
     category,
     isBreaking: true,
     breakingTts: input.breakingTts,
@@ -69,6 +83,7 @@ function normalizeBreakingItem(source: unknown): BreakingItem | null {
   return {
     id,
     title,
+    city: city || undefined,
     category: category || undefined,
     createdAt: normalizeTimestamp(input.publishedAt || input.createdAt),
     href: buildArticlePublicPath({ id, slug: String(input.slug || '') }),
@@ -106,7 +121,7 @@ async function shouldUseFileStore() {
 
 async function listFromMongo(limit: number) {
   const docs = await Article.find({ isBreaking: true })
-    .select('_id slug title category publishedAt views breakingTts')
+    .select('_id slug title category publishedAt views reporterMeta breakingTts')
     .sort({ publishedAt: -1, _id: -1 })
     .limit(limit)
     .lean();

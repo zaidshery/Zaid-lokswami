@@ -28,6 +28,7 @@ import {
 import {
   deleteStoredBreakingAudio,
   ensureBreakingTtsForArticle,
+  resolveReusableBreakingTts,
 } from '@/lib/server/breakingTts';
 import {
   deleteStoredArticle,
@@ -124,6 +125,9 @@ type WorkflowActionBody = {
   comment?: string;
 };
 
+const BREAKING_AUDIO_REQUIRED_ERROR =
+  'Upload breaking news audio before publishing this breaking article.';
+
 function buildArticlePermissionRecord(article: {
   author?: unknown;
   workflow?: unknown;
@@ -143,6 +147,19 @@ function buildArticlePermissionRecord(article: {
     legacyAuthorName: typeof article.author === 'string' ? article.author : '',
     workflow,
   };
+}
+
+function toPlainArticleRecord(article: unknown) {
+  if (article && typeof article === 'object' && typeof (article as { toObject?: unknown }).toObject === 'function') {
+    return (article as { toObject: () => unknown }).toObject();
+  }
+  return article;
+}
+
+function isBreakingArticleMissingAudio(article: unknown) {
+  const source = toPlainArticleRecord(article);
+  if (!source || typeof source !== 'object') return false;
+  return Boolean((source as Record<string, unknown>).isBreaking) && !resolveReusableBreakingTts(source);
 }
 
 function resolveArticleResponse(
@@ -889,6 +906,13 @@ export async function PATCH(
             rejectionReason: actionBody.rejectionReason,
           });
 
+          if (toStatus === 'published' && isBreakingArticleMissingAudio(currentArticle)) {
+            return NextResponse.json(
+              { success: false, error: BREAKING_AUDIO_REQUIRED_ERROR },
+              { status: 400 }
+            );
+          }
+
           const article = await updateStoredArticle(
             id,
             {
@@ -1008,6 +1032,13 @@ export async function PATCH(
           comment: actionBody.comment,
           rejectionReason: actionBody.rejectionReason,
         });
+
+        if (toStatus === 'published' && isBreakingArticleMissingAudio(current)) {
+          return NextResponse.json(
+            { success: false, error: BREAKING_AUDIO_REQUIRED_ERROR },
+            { status: 400 }
+          );
+        }
 
         const article = await Article.findByIdAndUpdate(
           id,
@@ -1154,6 +1185,13 @@ export async function PATCH(
             } else {
               article.breakingTts = breakingTts;
             }
+          } else if (article.breakingTts) {
+            const synced = await updateStoredArticle(
+              id,
+              { breakingTts: null },
+              { skipRevision: true }
+            );
+            article.breakingTts = synced?.breakingTts ?? null;
           }
         }
       } catch (ttsError) {
@@ -1263,6 +1301,9 @@ export async function PATCH(
             ...breakingTts,
             generatedAt: new Date(breakingTts.generatedAt),
           };
+          await article.save();
+        } else if (article.breakingTts) {
+          article.breakingTts = null;
           await article.save();
         }
       }
@@ -1401,6 +1442,13 @@ export async function PUT(
             } else {
               article.breakingTts = breakingTts;
             }
+          } else if (article.breakingTts) {
+            const synced = await updateStoredArticle(
+              id,
+              { breakingTts: null },
+              { skipRevision: true }
+            );
+            article.breakingTts = synced?.breakingTts ?? null;
           }
         }
       } catch (ttsError) {
@@ -1507,6 +1555,9 @@ export async function PUT(
             ...breakingTts,
             generatedAt: new Date(breakingTts.generatedAt),
           };
+          await article.save();
+        } else if (article.breakingTts) {
+          article.breakingTts = null;
           await article.save();
         }
       }

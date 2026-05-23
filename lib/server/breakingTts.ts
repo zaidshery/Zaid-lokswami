@@ -32,6 +32,9 @@ type BreakingArticleLike = {
   id: string;
   title: string;
   city?: string;
+  reporterMeta?: {
+    locationTag?: string;
+  } | null;
   isBreaking: boolean;
   breakingTts: BreakingTtsMetadata | null;
 };
@@ -201,6 +204,25 @@ function hasStoredBreakingAudioAsset(assetPath: string) {
   return true;
 }
 
+function readTrimmedString(source: Record<string, unknown>, key: string) {
+  const value = source[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function resolveBreakingArticleLocation(source: Record<string, unknown>) {
+  const direct =
+    readTrimmedString(source, 'city') ||
+    readTrimmedString(source, 'cityName') ||
+    readTrimmedString(source, 'locationTag');
+  if (direct) return direct;
+
+  const reporterMeta =
+    source.reporterMeta && typeof source.reporterMeta === 'object'
+      ? (source.reporterMeta as Record<string, unknown>)
+      : null;
+  return reporterMeta ? readTrimmedString(reporterMeta, 'locationTag') : '';
+}
+
 function normalizeBreakingArticle(source: unknown): BreakingArticleLike | null {
   if (!source || typeof source !== 'object') return null;
   const item = source as Record<string, unknown>;
@@ -212,7 +234,15 @@ function normalizeBreakingArticle(source: unknown): BreakingArticleLike | null {
   return {
     id,
     title,
-    city: typeof item.city === 'string' ? item.city.trim() || undefined : undefined,
+    city: resolveBreakingArticleLocation(item) || undefined,
+    reporterMeta:
+      item.reporterMeta && typeof item.reporterMeta === 'object'
+        ? {
+            locationTag:
+              readTrimmedString(item.reporterMeta as Record<string, unknown>, 'locationTag') ||
+              undefined,
+          }
+        : null,
     isBreaking: Boolean(item.isBreaking),
     breakingTts: normalizeBreakingTtsMetadata(item.breakingTts),
   };
@@ -222,7 +252,7 @@ function normalizeBreakingArticle(source: unknown): BreakingArticleLike | null {
 // Breaking TTS text hash (language detection only — no Gemini)
 // ---------------------------------------------------------------------------
 
-function buildBreakingTtsExpectation(article: Pick<BreakingArticleLike, 'title' | 'city'>) {
+export function buildBreakingTtsExpectation(article: Pick<BreakingArticleLike, 'title' | 'city'>) {
   const spokenText = buildBreakingHeadlineTtsText({
     title: article.title,
     city: article.city,
@@ -244,6 +274,12 @@ function buildBreakingTtsExpectation(article: Pick<BreakingArticleLike, 'title' 
     textHash,
     mimeType: 'audio/wav',
   };
+}
+
+export function buildBreakingTtsRecordingScript(source: unknown) {
+  const normalized = normalizeBreakingArticle(source);
+  if (!normalized) return '';
+  return buildBreakingTtsExpectation(normalized).spokenText;
 }
 
 function toBreakingLanguageCode(value: string) {
@@ -337,13 +373,18 @@ export async function deleteStoredBreakingAudio(assetPath: string) {
  * Returns the metadata if the stored audio file still exists, otherwise null.
  *
  * Note: Auto-synthesis via Gemini has been removed. Breaking audio must be
- * uploaded manually or regenerated via the article breaking-tts admin endpoint.
+ * uploaded manually through the breaking TTS direct-upload endpoint.
  */
 export function resolveReusableBreakingTts(article: unknown): BreakingTtsMetadata | null {
   const normalized = normalizeBreakingArticle(article);
   if (!normalized?.breakingTts) return null;
 
   const metadata = normalized.breakingTts;
+  const expected = buildBreakingTtsExpectation(normalized);
+
+  if (!expected.spokenText || metadata.textHash !== expected.textHash) {
+    return null;
+  }
 
   if (!metadata.audioUrl) {
     return null;
@@ -361,11 +402,15 @@ export function resolveReusableBreakingTts(article: unknown): BreakingTtsMetadat
  * Used when an admin uploads a breaking audio file directly.
  */
 export async function saveBreakingTtsMetadata(input: {
-  articleId: string;
+  title: string;
+  city?: string;
   audioUrl: string;
   mimeType?: string;
 }): Promise<BreakingTtsMetadata> {
-  const expected = buildBreakingTtsExpectation({ title: input.articleId });
+  const expected = buildBreakingTtsExpectation({
+    title: input.title,
+    city: input.city,
+  });
   return {
     audioUrl: input.audioUrl,
     textHash: expected.textHash,

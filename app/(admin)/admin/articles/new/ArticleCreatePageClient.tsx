@@ -7,9 +7,12 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import {
   ArrowLeft,
+  FileAudio,
   Link2,
   Loader2,
   Upload,
+  Volume2,
+  X,
   AlertCircle,
   CheckCircle,
   Image as ImageIcon,
@@ -33,6 +36,9 @@ import {
   getArticleImageHints,
   prepareArticleImageFile,
 } from '@/lib/utils/articleImageUpload';
+import { uploadArticleTtsAudioDirect } from '@/lib/utils/articleTtsUploadClient';
+import { uploadBreakingTtsAudioDirect } from '@/lib/utils/breakingTtsUploadClient';
+import { buildSpokenBreakingHeadline } from '@/lib/types/breaking';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
   buildArticleGooglePreview,
@@ -45,6 +51,17 @@ import {
 const DEFAULT_CATEGORIES = NEWS_CATEGORIES.map((category) => category.nameEn);
 const DRAFT_STORAGE_KEY = 'lokswami:article-draft:new';
 const AUTOSAVE_INTERVAL_MS = 15000;
+const ARTICLE_AUDIO_ACCEPT = '.mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4';
+const ARTICLE_AUDIO_MAX_BYTES = 50 * 1024 * 1024;
+const ARTICLE_AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a']);
+const ARTICLE_AUDIO_CONTENT_TYPES = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/mp4',
+  'audio/x-m4a',
+]);
 
 type ArticleFormState = {
   title: string;
@@ -137,6 +154,52 @@ function isValidAbsoluteHttpUrl(value: string) {
   }
 }
 
+function formatArticleAudioSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function getArticleAudioExtension(fileName: string) {
+  const segments = fileName.trim().toLowerCase().split('.');
+  return segments.length > 1 ? segments.pop() || '' : '';
+}
+
+function validateArticleAudioFile(file: File | null, label = 'Article') {
+  if (!file) return '';
+
+  const extension = getArticleAudioExtension(file.name);
+  const type = file.type.trim().toLowerCase();
+  if (!ARTICLE_AUDIO_EXTENSIONS.has(extension)) {
+    return `${label} audio must be MP3, WAV, or M4A.`;
+  }
+  if (type && !ARTICLE_AUDIO_CONTENT_TYPES.has(type) && !type.startsWith('audio/')) {
+    return `${label} audio must be MP3, WAV, or M4A.`;
+  }
+  if (!Number.isFinite(file.size) || file.size <= 0) {
+    return 'File size is invalid.';
+  }
+  if (file.size > ARTICLE_AUDIO_MAX_BYTES) {
+    return `${label} audio must be 50MB or smaller.`;
+  }
+
+  return '';
+}
+
+function createArticleAudioPreviewUrl(file: File) {
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    return '';
+  }
+
+  return URL.createObjectURL(file);
+}
+
+function resolveCreatedArticleId(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return '';
+  const source = payload as Record<string, unknown>;
+  return String(source._id || source.id || '').trim();
+}
+
 export default function UploadArticle() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -145,6 +208,14 @@ export default function UploadArticle() {
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState('');
+  const [articleAudioFile, setArticleAudioFile] = useState<File | null>(null);
+  const [articleAudioPreviewUrl, setArticleAudioPreviewUrl] = useState('');
+  const [articleAudioValidationError, setArticleAudioValidationError] = useState('');
+  const [isUploadingArticleAudio, setIsUploadingArticleAudio] = useState(false);
+  const [breakingAudioFile, setBreakingAudioFile] = useState<File | null>(null);
+  const [breakingAudioPreviewUrl, setBreakingAudioPreviewUrl] = useState('');
+  const [breakingAudioValidationError, setBreakingAudioValidationError] = useState('');
+  const [isUploadingBreakingAudio, setIsUploadingBreakingAudio] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
@@ -178,6 +249,22 @@ export default function UploadArticle() {
   const successMessage = canPublishImmediately
     ? 'Article published successfully! Redirecting...'
     : 'Article submitted for review! Redirecting...';
+  const submitBusy = isLoading || isLoadingImage || isUploadingArticleAudio || isUploadingBreakingAudio;
+  const submitBusyLabel = isUploadingBreakingAudio
+    ? 'Uploading breaking audio...'
+    : isUploadingArticleAudio
+      ? 'Uploading audio...'
+      : `${submitVerb}...`;
+
+  const breakingRecordingScript = useMemo(
+    () =>
+      buildSpokenBreakingHeadline({
+        id: 'breaking-preview',
+        title: formData.title.trim() || 'Untitled breaking headline',
+        ...(formData.locationTag.trim() ? { city: formData.locationTag.trim() } : {}),
+      }),
+    [formData.locationTag, formData.title]
+  );
 
   const persistDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -283,6 +370,22 @@ export default function UploadArticle() {
     const id = window.setInterval(persistDraft, AUTOSAVE_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [draftReady, persistDraft]);
+
+  useEffect(() => {
+    return () => {
+      if (articleAudioPreviewUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(articleAudioPreviewUrl);
+      }
+    };
+  }, [articleAudioPreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (breakingAudioPreviewUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(breakingAudioPreviewUrl);
+      }
+    };
+  }, [breakingAudioPreviewUrl]);
 
   useEffect(() => {
     if (!draftReady || typeof window === 'undefined') return;
@@ -530,6 +633,44 @@ export default function UploadArticle() {
     }
   };
 
+  const handleArticleAudioChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    event.currentTarget.value = '';
+    setError('');
+
+    if (!file) return;
+
+    const validationError = validateArticleAudioFile(file);
+    setArticleAudioFile(file);
+    setArticleAudioValidationError(validationError);
+    setArticleAudioPreviewUrl(validationError ? '' : createArticleAudioPreviewUrl(file));
+  };
+
+  const clearArticleAudioFile = () => {
+    setArticleAudioFile(null);
+    setArticleAudioValidationError('');
+    setArticleAudioPreviewUrl('');
+  };
+
+  const handleBreakingAudioChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    event.currentTarget.value = '';
+    setError('');
+
+    if (!file) return;
+
+    const validationError = validateArticleAudioFile(file, 'Breaking');
+    setBreakingAudioFile(file);
+    setBreakingAudioValidationError(validationError);
+    setBreakingAudioPreviewUrl(validationError ? '' : createArticleAudioPreviewUrl(file));
+  };
+
+  const clearBreakingAudioFile = () => {
+    setBreakingAudioFile(null);
+    setBreakingAudioValidationError('');
+    setBreakingAudioPreviewUrl('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -539,6 +680,32 @@ export default function UploadArticle() {
     try {
       if (!formData.title || !formData.summary || !formData.content || !formData.author || !imagePreview) {
         setError('Please fill in all required fields');
+        setIsLoading(false);
+        return;
+      }
+
+      const audioValidationError = validateArticleAudioFile(articleAudioFile);
+      if (audioValidationError || articleAudioValidationError) {
+        const nextError = audioValidationError || articleAudioValidationError;
+        setArticleAudioValidationError(nextError);
+        setError(nextError);
+        setIsLoading(false);
+        return;
+      }
+
+      const breakingAudioRequired = canPublishImmediately && formData.isBreaking;
+      const breakingValidationError = validateArticleAudioFile(breakingAudioFile, 'Breaking');
+      if (breakingAudioRequired && !breakingAudioFile) {
+        const nextError = 'Upload breaking news audio before publishing this breaking article.';
+        setBreakingAudioValidationError(nextError);
+        setError(nextError);
+        setIsLoading(false);
+        return;
+      }
+      if (breakingValidationError || breakingAudioValidationError) {
+        const nextError = breakingValidationError || breakingAudioValidationError;
+        setBreakingAudioValidationError(nextError);
+        setError(nextError);
         setIsLoading(false);
         return;
       }
@@ -592,6 +759,7 @@ export default function UploadArticle() {
         },
         body: JSON.stringify({
           intent: canPublishImmediately ? 'publish' : 'submit',
+          breakingAudioUploadPending: breakingAudioRequired && Boolean(breakingAudioFile),
           title: formData.title,
           slug: formData.seoSlug,
           summary: formData.summary,
@@ -633,24 +801,129 @@ export default function UploadArticle() {
         return;
       }
 
-      setSuccess(successMessage);
+      const createdArticleId = resolveCreatedArticleId(data.data);
+      let audioUploadWarning = '';
+      if (breakingAudioFile) {
+        if (!createdArticleId) {
+          audioUploadWarning =
+            'Article was created, but breaking audio could not be uploaded because the new article ID was missing.';
+        } else {
+          setIsUploadingBreakingAudio(true);
+          try {
+            await uploadBreakingTtsAudioDirect({
+              articleId: createdArticleId,
+              file: breakingAudioFile,
+              authHeaders: getAuthHeader(),
+            });
+
+            if (breakingAudioRequired) {
+              const publishResponse = await fetch(
+                `/api/admin/articles/${encodeURIComponent(createdArticleId)}`,
+                {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeader(),
+                  },
+                  body: JSON.stringify({ action: 'publish' }),
+                }
+              );
+              const publishPayload = (await publishResponse.json().catch(() => ({}))) as {
+                success?: boolean;
+                error?: string;
+              };
+              if (!publishResponse.ok || !publishPayload.success) {
+                throw new Error(publishPayload.error || 'Breaking article audio was uploaded, but publishing failed.');
+              }
+            }
+          } catch (audioError) {
+            audioUploadWarning =
+              audioError instanceof Error
+                ? `Article was created, but breaking audio upload failed: ${audioError.message}`
+                : 'Article was created, but breaking audio upload failed.';
+          } finally {
+            setIsUploadingBreakingAudio(false);
+          }
+        }
+      }
+
+      if (articleAudioFile) {
+        if (!createdArticleId) {
+          audioUploadWarning =
+            'Article was created, but listen audio could not be uploaded because the new article ID was missing.';
+        } else {
+          setIsUploadingArticleAudio(true);
+          try {
+            await uploadArticleTtsAudioDirect({
+              articleId: createdArticleId,
+              file: articleAudioFile,
+              authHeaders: getAuthHeader(),
+            });
+          } catch (audioError) {
+            audioUploadWarning =
+              audioError instanceof Error
+                ? `Article was created, but listen audio upload failed: ${audioError.message}`
+                : 'Article was created, but listen audio upload failed.';
+          } finally {
+            setIsUploadingArticleAudio(false);
+          }
+        }
+      }
+
       const fallbackCategory = categories.includes(EMPTY_FORM.category)
         ? EMPTY_FORM.category
         : categories[0] || EMPTY_FORM.category;
       setFormData({ ...EMPTY_FORM, category: fallbackCategory });
       setImageFile(null);
       setImagePreview('');
+      clearArticleAudioFile();
+      clearBreakingAudioFile();
       setContentMode('write');
       setIsSeoSlugTouched(false);
       clearDraft();
 
+      if (audioUploadWarning) {
+        setSuccess(
+          canPublishImmediately
+            ? 'Article saved successfully. Redirecting to the editor to retry audio upload...'
+            : 'Article submitted successfully. Redirecting to the editor to retry audio upload...'
+        );
+        setError(audioUploadWarning);
+        setTimeout(() => {
+          router.push(
+            createdArticleId
+              ? `/admin/articles/${encodeURIComponent(createdArticleId)}/edit`
+              : '/admin/articles'
+          );
+        }, 2500);
+        return;
+      }
+
+      setSuccess(
+        breakingAudioFile
+          ? canPublishImmediately
+            ? 'Article published successfully with breaking audio! Redirecting...'
+            : 'Article submitted successfully with staged breaking audio! Redirecting...'
+          : articleAudioFile
+          ? canPublishImmediately
+            ? 'Article published successfully with listen audio! Redirecting...'
+            : 'Article submitted successfully with listen audio! Redirecting...'
+          : successMessage
+      );
+
       setTimeout(() => {
         router.push('/admin/articles');
       }, 2000);
-    } catch {
-      setError('Failed to publish article. Please try again.');
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Failed to publish article. Please try again.'
+      );
     } finally {
       setIsLoading(false);
+      setIsUploadingArticleAudio(false);
+      setIsUploadingBreakingAudio(false);
     }
   };
 
@@ -1089,6 +1362,95 @@ export default function UploadArticle() {
                 </div>
               </details>
 
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-white p-2 text-spanish-red shadow-sm">
+                    <Volume2 className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-900">Article Listen Audio</p>
+                      <span className="rounded-full border border-spanish-red/30 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-spanish-red dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-100">
+                        Optional
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-gray-600">
+                      Upload MP3, WAV, or M4A audio. It will attach after the article is created.
+                    </p>
+                  </div>
+                </div>
+
+                {articleAudioFile ? (
+                  <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+                    <div className="flex items-start gap-3">
+                      <FileAudio className="mt-0.5 h-4 w-4 flex-shrink-0 text-spanish-red" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                          {articleAudioFile.name}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {formatArticleAudioSize(articleAudioFile.size)}
+                          {articleAudioValidationError
+                            ? ' | Needs replacement'
+                            : ' | Ready to attach after article creation'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearArticleAudioFile}
+                        className="rounded-md border border-gray-200 p-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+                        aria-label="Remove article listen audio"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {articleAudioPreviewUrl ? (
+                      <audio
+                        controls
+                        preload="metadata"
+                        src={articleAudioPreviewUrl}
+                        className="mt-3 w-full"
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {articleAudioValidationError ? (
+                  <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                    {articleAudioValidationError}
+                  </p>
+                ) : null}
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <label
+                    className={`inline-flex items-center gap-2 rounded-md border border-spanish-red bg-white px-3 py-2 text-xs font-semibold text-spanish-red transition-colors hover:bg-red-50 ${
+                      submitBusy ? 'pointer-events-none cursor-not-allowed opacity-60' : 'cursor-pointer'
+                    }`}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {articleAudioFile ? 'Replace Audio' : 'Upload Audio'}
+                    <input
+                      type="file"
+                      accept={ARTICLE_AUDIO_ACCEPT}
+                      disabled={submitBusy}
+                      onChange={handleArticleAudioChange}
+                      className="sr-only"
+                    />
+                  </label>
+                  {articleAudioFile ? (
+                    <button
+                      type="button"
+                      onClick={clearArticleAudioFile}
+                      disabled={submitBusy}
+                      className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <X className="h-4 w-4" />
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
               <details className="rounded-xl border border-gray-200 bg-gray-50">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
                   SEO Settings
@@ -1326,9 +1688,105 @@ export default function UploadArticle() {
                   <span className="text-sm text-gray-700">Mark as Breaking News</span>
                 </label>
                 {formData.isBreaking ? (
-                  <p className="text-xs text-gray-600">
-                    Breaking articles generate reusable voice cache automatically after publish.
-                  </p>
+                  <div className="space-y-3 rounded-lg border border-red-200 bg-white p-3 dark:border-red-500/30 dark:bg-zinc-900">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-lg bg-red-50 p-2 text-spanish-red dark:bg-red-500/15 dark:text-red-100">
+                        <Volume2 className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            Breaking News Audio
+                          </p>
+                          <span className="rounded-full border border-spanish-red/30 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-spanish-red dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-100">
+                            Required before publish
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">
+                          Record the script below exactly, then upload the MP3, WAV, or M4A file.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        Recording Script
+                      </p>
+                      <div className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-6 text-gray-900 dark:border-gray-700 dark:bg-zinc-950 dark:text-gray-100">
+                        {breakingRecordingScript}
+                      </div>
+                    </div>
+
+                    {breakingAudioFile ? (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-zinc-950">
+                        <div className="flex items-start gap-3">
+                          <FileAudio className="mt-0.5 h-4 w-4 flex-shrink-0 text-spanish-red" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              {breakingAudioFile.name}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {formatArticleAudioSize(breakingAudioFile.size)}
+                              {breakingAudioValidationError
+                                ? ' | Needs replacement'
+                                : ' | Ready to attach after article creation'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={clearBreakingAudioFile}
+                            className="rounded-md border border-gray-200 p-1.5 text-gray-500 transition-colors hover:bg-white hover:text-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-900 dark:hover:text-white"
+                            aria-label="Remove breaking news audio"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {breakingAudioPreviewUrl ? (
+                          <audio
+                            controls
+                            preload="metadata"
+                            src={breakingAudioPreviewUrl}
+                            className="mt-3 w-full"
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {breakingAudioValidationError ? (
+                      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-100">
+                        {breakingAudioValidationError}
+                      </p>
+                    ) : null}
+
+                    <div className="flex flex-wrap gap-2">
+                      <label
+                        className={`inline-flex items-center gap-2 rounded-md border border-spanish-red bg-white px-3 py-2 text-xs font-semibold text-spanish-red transition-colors hover:bg-red-50 dark:bg-transparent dark:text-red-100 dark:hover:bg-red-500/15 ${
+                          submitBusy ? 'pointer-events-none cursor-not-allowed opacity-60' : 'cursor-pointer'
+                        }`}
+                      >
+                        <Upload className="h-4 w-4" />
+                        {breakingAudioFile ? 'Replace Breaking Audio' : 'Upload Breaking Audio'}
+                        <input
+                          type="file"
+                          accept={ARTICLE_AUDIO_ACCEPT}
+                          disabled={submitBusy}
+                          onChange={handleBreakingAudioChange}
+                          className="sr-only"
+                        />
+                      </label>
+                      {breakingAudioFile ? (
+                        <button
+                          type="button"
+                          onClick={clearBreakingAudioFile}
+                          disabled={submitBusy}
+                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-transparent dark:text-gray-200 dark:hover:bg-zinc-900"
+                        >
+                          <X className="h-4 w-4" />
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                 ) : null}
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
@@ -1371,16 +1829,15 @@ export default function UploadArticle() {
                   <button
                     type="submit"
                     disabled={
-                      isLoading ||
-                      isLoadingImage ||
+                      submitBusy ||
                       Boolean(sourceStory?.linkedArticleId)
                     }
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red py-3 text-white font-medium transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isLoading || isLoadingImage ? (
+                    {submitBusy ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        {submitVerb}...
+                        {submitBusyLabel}
                       </>
                     ) : (
                       <>
@@ -1429,16 +1886,15 @@ export default function UploadArticle() {
                   <button
                     type="submit"
                     disabled={
-                      isLoading ||
-                      isLoadingImage ||
+                      submitBusy ||
                       Boolean(sourceStory?.linkedArticleId)
                     }
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red py-3 text-white font-medium transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isLoading || isLoadingImage ? (
+                    {submitBusy ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        {submitVerb}...
+                        {submitBusyLabel}
                       </>
                     ) : (
                       <>

@@ -7,10 +7,10 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import {
   ArrowLeft,
-  RefreshCw,
   Upload,
   AlertCircle,
   CheckCircle,
+  FileAudio,
   Image as ImageIcon,
   Loader,
   Volume2,
@@ -46,10 +46,15 @@ import {
   type AdminRole,
 } from '@/lib/auth/roles';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
-import { normalizeBreakingTtsMetadata, type BreakingTtsMetadata } from '@/lib/types/breaking';
+import {
+  buildSpokenBreakingHeadline,
+  normalizeBreakingTtsMetadata,
+  type BreakingTtsMetadata,
+} from '@/lib/types/breaking';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
 import { buildDefaultArticlePermalink } from '@/lib/utils/articleEditorTemplates';
 import { uploadArticleTtsAudioDirect } from '@/lib/utils/articleTtsUploadClient';
+import { uploadBreakingTtsAudioDirect } from '@/lib/utils/breakingTtsUploadClient';
 import {
   ARTICLE_IMAGE_UPLOAD_GUIDE,
   getArticleImageHints,
@@ -74,6 +79,7 @@ const DEFAULT_CATEGORIES = NEWS_CATEGORIES.map((category) => category.nameEn);
 const AUTOSAVE_INTERVAL_MS = 15000;
 const DRAFT_STORAGE_PREFIX = 'lokswami:article-draft:edit:';
 const WORKFLOW_PRIORITIES: WorkflowPriority[] = ['low', 'normal', 'high', 'urgent'];
+const MANUAL_AUDIO_ACCEPT = '.mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4';
 
 const STATUS_TO_ACTION: Partial<Record<WorkflowStatus, ContentTransitionAction>> = {
   submitted: 'submit',
@@ -175,11 +181,6 @@ type ArticleCopyEditorMeta = {
   imageOptimizationStatus?: ArticleFormState['imageOptimizationStatus'];
   copyEditorNotes?: string;
   returnForChangesReason?: string;
-};
-
-type BreakingTtsResponse = {
-  ready?: boolean;
-  breakingTts?: BreakingTtsMetadata | null;
 };
 
 type ManagedTtsAsset = {
@@ -336,6 +337,17 @@ function formatBreakingTtsTimestamp(value: string | undefined) {
 
 function buildArticleListenSignature(input: Pick<ArticleFormState, 'title' | 'summary' | 'content'>) {
   return [input.title.trim(), input.summary.trim(), input.content.trim()].join('\n::\n');
+}
+
+function buildBreakingRecordingScriptFromForm(
+  input: Pick<ArticleFormState, 'title' | 'locationTag'>,
+  id = 'breaking-preview'
+) {
+  return buildSpokenBreakingHeadline({
+    id,
+    title: input.title.trim() || 'Untitled breaking headline',
+    ...(input.locationTag.trim() ? { city: input.locationTag.trim() } : {}),
+  });
 }
 
 function buildSavedFormSnapshot(formData: ArticleFormState, imagePreview: string) {
@@ -568,7 +580,8 @@ export default function EditArticle() {
   const [restoringRevisionId, setRestoringRevisionId] = useState('');
   const [imageQualityNote, setImageQualityNote] = useState('');
   const [breakingTtsInfo, setBreakingTtsInfo] = useState<BreakingTtsMetadata | null>(null);
-  const [isRegeneratingBreakingTts, setIsRegeneratingBreakingTts] = useState(false);
+  const [isUploadingBreakingTts, setIsUploadingBreakingTts] = useState(false);
+  const [savedBreakingRecordingScript, setSavedBreakingRecordingScript] = useState('');
   const [articleTtsInfo, setArticleTtsInfo] = useState<ManagedTtsAsset | null>(null);
   const [articleTtsEligible, setArticleTtsEligible] = useState(false);
   const [articleTtsReady, setArticleTtsReady] = useState(false);
@@ -591,6 +604,12 @@ export default function EditArticle() {
   const currentArticleListenSignature = useMemo(
     () => buildArticleListenSignature(formData),
     [formData]
+  );
+
+  const currentBreakingRecordingScript = useMemo(
+    () =>
+      buildBreakingRecordingScriptFromForm(formData, articleId || 'breaking-preview'),
+    [articleId, formData.locationTag, formData.title]
   );
 
   const currentFormSnapshot = useMemo(
@@ -686,6 +705,8 @@ export default function EditArticle() {
     : breakingTtsInfo?.audioUrl
       ? 'ready'
       : 'missing';
+  const breakingTtsNeedsSave =
+    formData.isBreaking && currentBreakingRecordingScript !== savedBreakingRecordingScript;
   const articleTtsNeedsSave = currentArticleListenSignature !== savedArticleListenSignature;
   const articleTtsStatus = !articleTtsEligible
     ? 'disabled'
@@ -973,6 +994,7 @@ export default function EditArticle() {
       setDraftRestored(restored);
       setBreakingTtsInfo(normalizeBreakingTtsMetadata(article.breakingTts));
       setSavedArticleListenSignature(buildArticleListenSignature(baseForm));
+      setSavedBreakingRecordingScript(buildBreakingRecordingScriptFromForm(baseForm, articleId));
       setSavedFormSnapshot(buildSavedFormSnapshot(baseForm, article.image || ''));
       setWorkflow(nextWorkflow);
       setWorkflowPriority(nextWorkflow.priority);
@@ -1270,6 +1292,7 @@ export default function EditArticle() {
       setContentMode('write');
       setBreakingTtsInfo(normalizeBreakingTtsMetadata(article.breakingTts));
       setSavedArticleListenSignature(buildArticleListenSignature(restoredForm));
+      setSavedBreakingRecordingScript(buildBreakingRecordingScriptFromForm(restoredForm, articleId));
       setSavedFormSnapshot(buildSavedFormSnapshot(restoredForm, article.image || ''));
       setWorkflow(restoredWorkflow);
       setWorkflowPriority(restoredWorkflow.priority);
@@ -1290,40 +1313,45 @@ export default function EditArticle() {
     }
   };
 
-  const handleRegenerateBreakingTts = async () => {
-    if (!articleId) return;
+  const handleUploadBreakingTts = async (file: File | null) => {
+    if (!articleId || !file) return;
 
-    setIsRegeneratingBreakingTts(true);
+    if (!formData.isBreaking) {
+      setError('Mark this article as breaking news before uploading breaking audio.');
+      return;
+    }
+
+    if (breakingTtsNeedsSave) {
+      setError('Save the headline or location changes before uploading breaking audio.');
+      return;
+    }
+
+    setIsUploadingBreakingTts(true);
     setError('');
     setSuccess('');
 
     try {
-      const response = await fetch(
-        `/api/admin/articles/${encodeURIComponent(articleId)}/breaking-tts?force=1`,
-        {
-          method: 'POST',
-          headers: {
-            ...getAuthHeader(),
-          },
-        }
-      );
-      const data = (await response.json().catch(() => ({}))) as {
-        success?: boolean;
-        error?: string;
-        data?: BreakingTtsResponse;
-      };
-
-      if (!response.ok || !data.success || !data.data?.breakingTts) {
-        setError(data.error || 'Failed to regenerate breaking voice cache');
-        return;
+      const uploaded = await uploadBreakingTtsAudioDirect({
+        articleId,
+        file,
+        authHeaders: getAuthHeader(),
+      });
+      const breakingTts = normalizeBreakingTtsMetadata(uploaded.breakingTts);
+      if (!breakingTts) {
+        throw new Error('Breaking audio uploaded, but the ready metadata was not returned.');
       }
 
-      setBreakingTtsInfo(normalizeBreakingTtsMetadata(data.data.breakingTts));
-      setSuccess('Breaking voice cache regenerated successfully.');
-    } catch {
-      setError('Failed to regenerate breaking voice cache. Please try again.');
+      setBreakingTtsInfo(breakingTts);
+      setSavedBreakingRecordingScript(currentBreakingRecordingScript);
+      setSuccess('Manual breaking news audio uploaded successfully.');
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Failed to upload breaking news audio. Please try again.'
+      );
     } finally {
-      setIsRegeneratingBreakingTts(false);
+      setIsUploadingBreakingTts(false);
     }
   };
 
@@ -1507,6 +1535,15 @@ export default function EditArticle() {
 
     if (action === 'schedule' && !workflowScheduledFor.trim()) {
       setError('Choose a publish time before scheduling this article.');
+      return;
+    }
+
+    if (action === 'publish' && formData.isBreaking && (!breakingTtsInfo?.audioUrl || breakingTtsNeedsSave)) {
+      setError(
+        breakingTtsNeedsSave
+          ? 'Save the headline or location changes and upload matching breaking audio before publishing.'
+          : 'Upload breaking news audio before publishing this breaking article.'
+      );
       return;
     }
 
@@ -2530,6 +2567,104 @@ export default function EditArticle() {
                     />
                     <span className="text-sm text-gray-700">Mark as Breaking News</span>
                   </label>
+                  {formData.isBreaking ? (
+                    <div className="space-y-3 rounded-lg border border-red-200 bg-white p-3 dark:border-red-500/30 dark:bg-zinc-900">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-lg bg-red-50 p-2 text-spanish-red dark:bg-red-500/15 dark:text-red-100">
+                          <Volume2 className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              Breaking News Audio
+                            </p>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                                breakingTtsStatus === 'ready'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : breakingTtsNeedsSave
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {breakingTtsStatus === 'ready' && !breakingTtsNeedsSave
+                                ? 'Ready'
+                                : breakingTtsNeedsSave
+                                  ? 'Save changes'
+                                  : 'Required before publish'}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">
+                            {breakingTtsNeedsSave
+                              ? 'Save the changed headline or location before replacing the audio.'
+                              : 'Record the script below exactly, then upload the matching audio file.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Recording Script
+                        </p>
+                        <div className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-6 text-gray-900 dark:border-gray-700 dark:bg-zinc-950 dark:text-gray-100">
+                          {currentBreakingRecordingScript}
+                        </div>
+                      </div>
+
+                      {breakingTtsInfo?.audioUrl ? (
+                        <div className="space-y-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-zinc-950">
+                          <div className="flex items-center gap-2">
+                            <FileAudio className="h-4 w-4 text-spanish-red" />
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                              Saved breaking audio
+                            </p>
+                          </div>
+                          <audio controls preload="metadata" src={breakingTtsInfo.audioUrl} className="w-full" />
+                          <a
+                            href={breakingTtsInfo.audioUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block truncate text-xs text-spanish-red hover:underline"
+                          >
+                            {breakingTtsInfo.audioUrl}
+                          </a>
+                          {breakingTtsInfo.generatedAt ? (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Uploaded: {formatBreakingTtsTimestamp(breakingTtsInfo.generatedAt)}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      <div className="flex flex-wrap gap-2">
+                        <label
+                          className={`inline-flex items-center gap-2 rounded-md border border-spanish-red bg-white px-3 py-2 text-xs font-semibold text-spanish-red hover:bg-red-50 dark:bg-transparent dark:text-red-100 dark:hover:bg-red-500/15 ${
+                            breakingTtsNeedsSave || isUploadingBreakingTts
+                              ? 'pointer-events-none cursor-not-allowed opacity-50'
+                              : 'cursor-pointer'
+                          }`}
+                        >
+                          {isUploadingBreakingTts ? (
+                            <Loader className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Upload className="h-4 w-4" />
+                          )}
+                          {breakingTtsInfo?.audioUrl ? 'Replace Breaking Audio' : 'Upload Breaking Audio'}
+                          <input
+                            type="file"
+                            accept={MANUAL_AUDIO_ACCEPT}
+                            disabled={breakingTtsNeedsSave || isUploadingBreakingTts}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] || null;
+                              event.currentTarget.value = '';
+                              void handleUploadBreakingTts(file);
+                            }}
+                            className="sr-only"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : null}
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
@@ -2549,60 +2684,6 @@ export default function EditArticle() {
                   <p>Published: {workflow.publishedAt ? formatDraftTimestamp(workflow.publishedAt) : 'Not published'}</p>
                   <p>Updated: {formData.majorUpdateNote ? formData.majorUpdateNote : 'No major update note'}</p>
                 </div>
-
-                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Volume2 className="h-4 w-4 text-spanish-red" />
-                    <p className="text-sm font-semibold text-gray-900">Breaking Voice Cache</p>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-700">
-                    {breakingTtsStatus === 'disabled'
-                      ? 'Voice cache is off until this article is saved as breaking news.'
-                      : breakingTtsStatus === 'ready'
-                        ? 'Cached voice is ready and will be reused by readers.'
-                        : 'No reusable voice cache is ready yet for this breaking article.'}
-                  </p>
-                  {breakingTtsInfo?.generatedAt ? (
-                    <p className="mt-1 text-xs text-gray-500">
-                      Last generated: {formatBreakingTtsTimestamp(breakingTtsInfo.generatedAt)}
-                    </p>
-                  ) : null}
-                  {breakingTtsInfo?.voice || breakingTtsInfo?.model ? (
-                    <p className="mt-1 text-xs text-gray-500">
-                      {[breakingTtsInfo.voice, breakingTtsInfo.model].filter(Boolean).join(' | ')}
-                    </p>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRegenerateBreakingTts}
-                  disabled={!formData.isBreaking || isRegeneratingBreakingTts}
-                  className="inline-flex items-center gap-2 rounded-md border border-spanish-red bg-white px-3 py-2 text-xs font-semibold text-spanish-red hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isRegeneratingBreakingTts ? (
-                    <Loader className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  {breakingTtsInfo?.audioUrl ? 'Regenerate Voice' : 'Generate Voice'}
-                </button>
-              </div>
-              {breakingTtsInfo?.audioUrl ? (
-                <div className="rounded-md border border-gray-200 bg-white px-3 py-2">
-                  <p className="text-xs font-medium text-gray-700">Cached audio</p>
-                  <a
-                    href={breakingTtsInfo.audioUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 block truncate text-xs text-spanish-red hover:underline"
-                  >
-                    {breakingTtsInfo.audioUrl}
-                  </a>
-                </div>
-              ) : null}
-            </div>
 
             <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2676,7 +2757,7 @@ export default function EditArticle() {
                   {articleTtsInfo?.audioUrl ? 'Replace Audio' : 'Upload Audio'}
                   <input
                     type="file"
-                    accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4"
+                    accept={MANUAL_AUDIO_ACCEPT}
                     disabled={
                       articleTtsNeedsSave ||
                       !articleTtsEligible ||
