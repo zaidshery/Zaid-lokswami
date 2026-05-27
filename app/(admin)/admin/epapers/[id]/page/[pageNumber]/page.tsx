@@ -11,7 +11,19 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ArrowLeft, Loader2, Plus, RefreshCw, Save, Sparkles, Trash2, UploadCloud, Volume2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Save,
+  Sparkles,
+  Trash2,
+  UploadCloud,
+  Volume2,
+} from 'lucide-react';
 import { CmsWorkflowPriorityBadge, CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import type {
@@ -25,6 +37,10 @@ import {
   buildEpaperPageQualitySignal,
   getEpaperPageQualityTone,
 } from '@/lib/utils/epaperQualitySignals';
+import {
+  buildEpaperSuggestionQuality,
+  type EpaperSuggestionWarning,
+} from '@/lib/utils/epaperSuggestionQuality';
 import { uploadEpaperAssetDirect } from '@/lib/utils/epaperDirectUploadClient';
 
 type EpaperResponse = {
@@ -42,10 +58,15 @@ type ArticlesResponse = {
 type DrawPoint = { x: number; y: number };
 type Hotspot = { x: number; y: number; w: number; h: number };
 type HotspotSuggestion = {
+  id: string;
   title: string;
   excerpt: string;
   contentHtml: string;
   hotspot: Hotspot;
+  confidence: number;
+  warnings: EpaperSuggestionWarning[];
+  selected: boolean;
+  ignored: boolean;
 };
 
 type DraftArticleInput = {
@@ -170,6 +191,12 @@ function toHtmlParagraph(text: string) {
   return `<p>${escaped.replace(/\n/g, '<br/>')}</p>`;
 }
 
+function toContentHtmlInput(text: string) {
+  const value = String(text || '').trim();
+  if (!value) return '';
+  return /<[a-z][\s\S]*>/i.test(value) ? value : toHtmlParagraph(value);
+}
+
 function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
@@ -219,6 +246,26 @@ function pageReviewTone(status: string | null | undefined) {
     default:
       return 'bg-amber-100 text-amber-700';
   }
+}
+
+function confidenceTone(confidence: number) {
+  if (confidence >= 80) return 'bg-emerald-100 text-emerald-700';
+  if (confidence >= 60) return 'bg-amber-100 text-amber-700';
+  return 'bg-red-100 text-red-700';
+}
+
+function warningTone(warning: EpaperSuggestionWarning) {
+  return warning.severity === 'blocking'
+    ? 'border-red-200 bg-red-50 text-red-700'
+    : 'border-amber-200 bg-amber-50 text-amber-700';
+}
+
+function hasBlockingSuggestionWarning(suggestion: HotspotSuggestion) {
+  return suggestion.warnings.some((warning) => warning.severity === 'blocking');
+}
+
+function canCreateSuggestionDraft(suggestion: HotspotSuggestion) {
+  return suggestion.selected && !suggestion.ignored && !hasBlockingSuggestionWarning(suggestion);
 }
 
 export default function EPaperPageHotspotEditor() {
@@ -277,6 +324,40 @@ export default function EPaperPageHotspotEditor() {
       }),
     [articles, pageImageMeta, pageNumber]
   );
+  const activeSuggestionCount = useMemo(
+    () => suggestions.filter((suggestion) => !suggestion.ignored).length,
+    [suggestions]
+  );
+  const selectedSuggestionCount = useMemo(
+    () => suggestions.filter((suggestion) => canCreateSuggestionDraft(suggestion)).length,
+    [suggestions]
+  );
+  const unresolvedSuggestionWarningCount = useMemo(
+    () =>
+      suggestions.filter(
+        (suggestion) => !suggestion.ignored && suggestion.warnings.length > 0
+      ).length,
+    [suggestions]
+  );
+  const pageReadyBlockers = useMemo(() => {
+    const blockers: string[] = [];
+    if (!articles.length) blockers.push('map at least one story');
+    if (unreadableArticleCount > 0) {
+      blockers.push(
+        `${unreadableArticleCount} mapped stor${
+          unreadableArticleCount === 1 ? 'y needs' : 'ies need'
+        } readable text`
+      );
+    }
+    if (activeSuggestionCount > 0) {
+      blockers.push(
+        `${activeSuggestionCount} OCR suggestion${
+          activeSuggestionCount === 1 ? ' is' : 's are'
+        } still unresolved`
+      );
+    }
+    return blockers;
+  }, [activeSuggestionCount, articles.length, unreadableArticleCount]);
 
   useEffect(() => {
     setPageReviewStatus(pageImageMeta?.reviewStatus || 'pending');
@@ -448,7 +529,7 @@ export default function EPaperPageHotspotEditor() {
         pageNumber,
         title: payload.title.trim(),
         excerpt: payload.excerpt || '',
-        contentHtml: payload.contentHtml || '',
+        contentHtml: toContentHtmlInput(payload.contentHtml || ''),
         coverImagePath: (payload.coverImagePath || '').trim(),
         hotspot: toFixedHotspot(payload.hotspot),
       }),
@@ -494,6 +575,77 @@ export default function EPaperPageHotspotEditor() {
     }
   };
 
+  const loadSuggestionAsDraft = (suggestion: HotspotSuggestion) => {
+    setDraftHotspot(suggestion.hotspot);
+    setDraftInput({
+      title: suggestion.title,
+      excerpt: suggestion.excerpt,
+      contentHtml: suggestion.contentHtml,
+      coverImagePath: '',
+    });
+  };
+
+  const toggleSuggestionSelection = (id: string) => {
+    setSuggestions((current) =>
+      current.map((suggestion) => {
+        if (suggestion.id !== id) return suggestion;
+        if (suggestion.ignored || hasBlockingSuggestionWarning(suggestion)) return suggestion;
+        return {
+          ...suggestion,
+          selected: !suggestion.selected,
+        };
+      })
+    );
+  };
+
+  const toggleSuggestionIgnored = (id: string) => {
+    setSuggestions((current) =>
+      current.map((suggestion) => {
+        if (suggestion.id !== id) return suggestion;
+        const ignored = !suggestion.ignored;
+        return {
+          ...suggestion,
+          ignored,
+          selected: ignored ? false : suggestion.selected,
+        };
+      })
+    );
+  };
+
+  const updateSuggestionField = (
+    id: string,
+    key: 'title' | 'excerpt' | 'contentHtml',
+    value: string
+  ) => {
+    setSuggestions((current) =>
+      current.map((suggestion) => {
+        if (suggestion.id !== id) return suggestion;
+
+        const updated = {
+          ...suggestion,
+          [key]: value,
+        };
+        const quality = buildEpaperSuggestionQuality({
+          title: updated.title,
+          excerpt: updated.excerpt,
+          contentHtml: updated.contentHtml,
+          hotspot: updated.hotspot,
+          existingStories: articles,
+        });
+
+        return {
+          ...updated,
+          confidence: quality.confidence,
+          warnings: quality.warnings,
+          selected:
+            !updated.ignored &&
+            updated.selected &&
+            quality.warnings.every((warning) => warning.severity !== 'blocking'),
+        };
+      })
+    );
+  };
+
   const runAutoDetect = async () => {
     if (!pageImagePath) {
       setError('Page image is required for auto-detection');
@@ -524,34 +676,43 @@ export default function EPaperPageHotspotEditor() {
         const h = hRaw > 1 ? hRaw / 100 : hRaw;
         const safeTitle = String(candidate.title || '').trim() || `Story ${index + 1}`;
         const sourceText = String(candidate.text || '').trim();
+        const excerpt = sourceText.slice(0, 240);
+        const contentHtml = sourceText;
+        const nextHotspot = toFixedHotspot({
+          x: Number.isFinite(x) ? x : 0,
+          y: Number.isFinite(y) ? y : 0,
+          w: Number.isFinite(w) ? w : 0.1,
+          h: Number.isFinite(h) ? h : 0.1,
+        });
+        const quality = buildEpaperSuggestionQuality({
+          title: safeTitle,
+          excerpt,
+          contentHtml,
+          hotspot: nextHotspot,
+          existingStories: articles,
+        });
 
         return {
+          id: `ocr-${Date.now()}-${index + 1}`,
           title: safeTitle,
-          excerpt: sourceText.slice(0, 240),
-          contentHtml: sourceText ? toHtmlParagraph(sourceText) : '',
-          hotspot: toFixedHotspot({
-            x: Number.isFinite(x) ? x : 0,
-            y: Number.isFinite(y) ? y : 0,
-            w: Number.isFinite(w) ? w : 0.1,
-            h: Number.isFinite(h) ? h : 0.1,
-          }),
+          excerpt,
+          contentHtml,
+          hotspot: nextHotspot,
+          confidence: quality.confidence,
+          warnings: quality.warnings,
+          selected: quality.shouldSelect,
+          ignored: false,
         };
       });
 
       setSuggestions(mapped);
       if (mapped[0]) {
-        setDraftHotspot(mapped[0].hotspot);
-        setDraftInput({
-          title: mapped[0].title,
-          excerpt: mapped[0].excerpt,
-          contentHtml: mapped[0].contentHtml,
-          coverImagePath: '',
-        });
+        loadSuggestionAsDraft(mapped[0]);
       }
       const engineLabel = detection.engine === 'local' ? 'local free OCR' : 'server OCR fallback';
       setNotice(
         mapped.length > 0
-          ? `Detected ${mapped.length} hotspot suggestions using ${engineLabel}.`
+          ? `Detected ${mapped.length} hotspot suggestions using ${engineLabel}. ${mapped.filter((item) => item.selected).length} ready for draft creation.`
           : `No hotspot suggestions found using ${engineLabel}.`
       );
     } catch (err: unknown) {
@@ -562,9 +723,13 @@ export default function EPaperPageHotspotEditor() {
     }
   };
 
-  const createAllSuggestions = async () => {
-    if (suggestions.length === 0) {
-      setError('No suggestions to create');
+  const createSelectedSuggestions = async () => {
+    const selectedSuggestions = suggestions.filter((suggestion) =>
+      canCreateSuggestionDraft(suggestion)
+    );
+
+    if (selectedSuggestions.length === 0) {
+      setError('Select at least one clean OCR suggestion before creating drafts');
       return;
     }
 
@@ -574,8 +739,9 @@ export default function EPaperPageHotspotEditor() {
 
     let successCount = 0;
     const failures: string[] = [];
-    for (let index = 0; index < suggestions.length; index += 1) {
-      const suggestion = suggestions[index];
+    const successfulIds: string[] = [];
+    for (let index = 0; index < selectedSuggestions.length; index += 1) {
+      const suggestion = selectedSuggestions[index];
       try {
         await createArticleRequest({
           title: suggestion.title,
@@ -584,14 +750,17 @@ export default function EPaperPageHotspotEditor() {
           hotspot: suggestion.hotspot,
         });
         successCount += 1;
+        successfulIds.push(suggestion.id);
       } catch (err: unknown) {
         failures.push(toErrorMessage(err, `Suggestion ${index + 1} failed`));
       }
     }
 
     if (successCount > 0) {
-      setNotice(`Created ${successCount} article(s) from suggestions.`);
-      setSuggestions([]);
+      setNotice(`Created ${successCount} draft stor${successCount === 1 ? 'y' : 'ies'} from selected OCR suggestions.`);
+      setSuggestions((current) =>
+        current.filter((suggestion) => !successfulIds.includes(suggestion.id))
+      );
       setDraftHotspot(null);
       await fetchData();
     }
@@ -644,7 +813,7 @@ export default function EPaperPageHotspotEditor() {
         body: JSON.stringify({
           title: article.title.trim(),
           excerpt: article.excerpt || '',
-          contentHtml: article.contentHtml || '',
+          contentHtml: toContentHtmlInput(article.contentHtml || ''),
           coverImagePath: article.coverImagePath || '',
           pageNumber,
           hotspot: toFixedHotspot(article.hotspot),
@@ -665,6 +834,11 @@ export default function EPaperPageHotspotEditor() {
   };
 
   const savePageReview = async () => {
+    if (pageReviewStatus === 'ready' && pageReadyBlockers.length > 0) {
+      setError(`Resolve before marking ready: ${pageReadyBlockers.join('; ')}`);
+      return;
+    }
+
     setSavingPageReview(true);
     setError('');
     setNotice('');
@@ -1072,10 +1246,25 @@ export default function EPaperPageHotspotEditor() {
             <p className="text-xs text-amber-700">
               {unreadableArticleCount} mapped stor{unreadableArticleCount === 1 ? 'y still needs' : 'ies still need'} OCR review.
             </p>
+          ) : activeSuggestionCount > 0 ? (
+            <p className="text-xs text-amber-700">
+              Resolve {activeSuggestionCount} OCR suggestion{activeSuggestionCount === 1 ? '' : 's'} before marking this page ready.
+            </p>
           ) : (
             <p className="text-xs text-emerald-700">All mapped stories on this page have readable text.</p>
           )}
         </div>
+
+        {pageReviewStatus === 'ready' && pageReadyBlockers.length > 0 ? (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <p className="font-semibold">Ready status is blocked until:</p>
+            <ul className="mt-2 space-y-1">
+              {pageReadyBlockers.map((blocker) => (
+                <li key={blocker}>- {blocker}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {pageQuality.issues.length > 0 ? (
           <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -1131,12 +1320,26 @@ export default function EPaperPageHotspotEditor() {
 
             {suggestions.map((suggestion, index) => (
               <div
-                key={`suggestion-${index + 1}`}
-                className="pointer-events-none absolute border-2 border-amber-500 border-dashed bg-amber-500/20"
+                key={suggestion.id}
+                className={`pointer-events-none absolute border-2 border-dashed ${
+                  suggestion.ignored
+                    ? 'border-gray-400 bg-gray-500/10'
+                    : suggestion.selected
+                      ? 'border-emerald-500 bg-emerald-500/20'
+                      : 'border-amber-500 bg-amber-500/20'
+                }`}
                 style={hotspotStyle(suggestion.hotspot)}
                 title={suggestion.title || `Suggestion ${index + 1}`}
               >
-                <span className="absolute -left-px -top-5 rounded-sm bg-amber-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                <span
+                  className={`absolute -left-px -top-5 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold text-white ${
+                    suggestion.ignored
+                      ? 'bg-gray-600'
+                      : suggestion.selected
+                        ? 'bg-emerald-600'
+                        : 'bg-amber-600'
+                  }`}
+                >
                   S{index + 1}
                 </span>
               </div>
@@ -1160,10 +1363,36 @@ export default function EPaperPageHotspotEditor() {
 
         <div className="space-y-4">
           <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-900">Create Article From Drawn Hotspot</h2>
-            <p className="mt-1 text-xs text-gray-600">
-              Draw on image first. The amber box will be used for new article.
-            </p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Smart extraction desk
+                </p>
+                <h2 className="mt-1 text-base font-semibold text-gray-900">Detect Stories</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                  {selectedSuggestionCount} selected
+                </span>
+                {unresolvedSuggestionWarningCount > 0 ? (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                    {unresolvedSuggestionWarningCount} need review
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-2 text-xs font-semibold text-gray-700 sm:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                1. Detect Stories
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                2. Review Suggestions
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                3. Create Selected Drafts
+              </div>
+            </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
@@ -1177,13 +1406,13 @@ export default function EPaperPageHotspotEditor() {
                 ) : (
                   <Sparkles className="h-3.5 w-3.5" />
                 )}
-                {autoDetecting ? 'Detecting...' : 'Auto Detect Hotspots (Free OCR)'}
+                {autoDetecting ? 'Detecting...' : 'Detect Stories'}
               </button>
 
               <button
                 type="button"
-                onClick={() => void createAllSuggestions()}
-                disabled={creatingSuggestions || suggestions.length === 0}
+                onClick={() => void createSelectedSuggestions()}
+                disabled={creatingSuggestions || selectedSuggestionCount === 0}
                 className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {creatingSuggestions ? (
@@ -1191,72 +1420,101 @@ export default function EPaperPageHotspotEditor() {
                 ) : (
                   <Plus className="h-3.5 w-3.5" />
                 )}
-                Create All Suggestions
+                Create Selected Drafts
               </button>
             </div>
 
             {suggestions.length > 0 ? (
-              <p className="mt-2 text-[11px] text-amber-700">
-                {suggestions.length} suggestion(s) ready. Boxes marked as `S1`, `S2`, ...
+              <p className="mt-2 text-[11px] text-gray-600">
+                {suggestions.length} OCR suggestion{suggestions.length === 1 ? '' : 's'} found.
+                Selected green boxes are ready for draft creation.
               </p>
             ) : null}
 
-            <div className="mt-3 space-y-2">
-              <input
-                type="text"
-                value={draftInput.title}
-                onChange={(event) =>
-                  setDraftInput((current) => ({ ...current, title: event.target.value }))
-                }
-                placeholder="Article title"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              />
-              <input
-                type="text"
-                value={draftInput.excerpt}
-                onChange={(event) =>
-                  setDraftInput((current) => ({ ...current, excerpt: event.target.value }))
-                }
-                placeholder="Excerpt (optional)"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              />
-              <input
-                type="text"
-                value={draftInput.coverImagePath}
-                onChange={(event) =>
-                  setDraftInput((current) => ({ ...current, coverImagePath: event.target.value }))
-                }
-                placeholder="Cover image path (optional)"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              />
-              <textarea
-                value={draftInput.contentHtml}
-                onChange={(event) =>
-                  setDraftInput((current) => ({ ...current, contentHtml: event.target.value }))
-                }
-                placeholder="Article HTML content"
-                rows={6}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              />
-            </div>
+            <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Manual Draft</p>
+                  <p className="text-xs text-gray-600">
+                    Use the drawn box or an OCR suggestion, then save as a draft story.
+                  </p>
+                </div>
+                {draftHotspot ? (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                    Box selected
+                  </span>
+                ) : null}
+              </div>
 
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void createArticle()}
-                disabled={creating}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                Create Article
-              </button>
-              <button
-                type="button"
-                onClick={() => setDraftHotspot(null)}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
-              >
-                Clear Drawn Box
-              </button>
+              <div className="space-y-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-gray-600">Headline</span>
+                  <input
+                    type="text"
+                    value={draftInput.title}
+                    onChange={(event) =>
+                      setDraftInput((current) => ({ ...current, title: event.target.value }))
+                    }
+                    placeholder="Headline"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-gray-600">Short summary</span>
+                  <input
+                    type="text"
+                    value={draftInput.excerpt}
+                    onChange={(event) =>
+                      setDraftInput((current) => ({ ...current, excerpt: event.target.value }))
+                    }
+                    placeholder="Short summary"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-gray-600">Crop / cover image path</span>
+                  <input
+                    type="text"
+                    value={draftInput.coverImagePath}
+                    onChange={(event) =>
+                      setDraftInput((current) => ({ ...current, coverImagePath: event.target.value }))
+                    }
+                    placeholder="Crop / cover image path"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-gray-600">Clean Hindi body</span>
+                  <textarea
+                    value={draftInput.contentHtml}
+                    onChange={(event) =>
+                      setDraftInput((current) => ({ ...current, contentHtml: event.target.value }))
+                    }
+                    placeholder="Clean Hindi body"
+                    rows={6}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void createArticle()}
+                  disabled={creating}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  Create Draft Story
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraftHotspot(null)}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                >
+                  Clear Selection
+                </button>
+              </div>
             </div>
 
             {draftHotspot ? (
@@ -1270,28 +1528,133 @@ export default function EPaperPageHotspotEditor() {
             ) : null}
 
             {suggestions.length > 0 ? (
-              <div className="mt-3 space-y-1 rounded-md border border-amber-200 bg-amber-50 p-2">
-                {suggestions.map((suggestion, index) => (
-                  <button
-                    key={`pick-suggestion-${index + 1}`}
-                    type="button"
-                    onClick={() => {
-                      setDraftHotspot(suggestion.hotspot);
-                      setDraftInput({
-                        title: suggestion.title,
-                        excerpt: suggestion.excerpt,
-                        contentHtml: suggestion.contentHtml,
-                        coverImagePath: '',
-                      });
-                    }}
-                    className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-amber-900 hover:bg-amber-100"
-                  >
-                    <span className="truncate pr-2">
-                      S{index + 1}: {suggestion.title}
-                    </span>
-                    <span className="font-semibold">Use</span>
-                  </button>
-                ))}
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-gray-900">Review Suggestions</h3>
+                  <p className="text-xs text-gray-600">
+                    {selectedSuggestionCount} of {suggestions.length} ready for draft creation.
+                  </p>
+                </div>
+
+                {suggestions.map((suggestion, index) => {
+                  const blocked = hasBlockingSuggestionWarning(suggestion);
+                  return (
+                    <article
+                      key={suggestion.id}
+                      className={`rounded-lg border p-3 ${
+                        suggestion.ignored
+                          ? 'border-gray-200 bg-gray-50 opacity-75'
+                          : blocked
+                            ? 'border-red-200 bg-red-50/40'
+                            : suggestion.selected
+                              ? 'border-emerald-200 bg-emerald-50/50'
+                              : 'border-amber-200 bg-amber-50/50'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <label className="flex min-w-0 flex-1 items-start gap-2">
+                          <input
+                            type="checkbox"
+                            checked={suggestion.selected}
+                            disabled={suggestion.ignored || blocked}
+                            onChange={() => toggleSuggestionSelection(suggestion.id)}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-semibold text-gray-500">
+                              S{index + 1}
+                            </span>
+                            <span className="block truncate text-sm font-semibold text-gray-900">
+                              {suggestion.title || 'Untitled OCR suggestion'}
+                            </span>
+                          </span>
+                        </label>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${confidenceTone(
+                              suggestion.confidence
+                            )}`}
+                          >
+                            {suggestion.confidence >= 70 ? (
+                              <CheckCircle2 className="h-3 w-3" />
+                            ) : (
+                              <AlertTriangle className="h-3 w-3" />
+                            )}
+                            {suggestion.confidence}%
+                          </span>
+                          {suggestion.ignored ? (
+                            <span className="rounded-full bg-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-700">
+                              Ignored
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {suggestion.warnings.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {suggestion.warnings.map((warning) => (
+                            <span
+                              key={`${suggestion.id}-${warning.code}`}
+                              className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${warningTone(
+                                warning
+                              )}`}
+                            >
+                              {warning.label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-3 space-y-2">
+                        <input
+                          type="text"
+                          value={suggestion.title}
+                          onChange={(event) =>
+                            updateSuggestionField(suggestion.id, 'title', event.target.value)
+                          }
+                          placeholder="Headline"
+                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-600"
+                        />
+                        <textarea
+                          rows={2}
+                          value={suggestion.excerpt}
+                          onChange={(event) =>
+                            updateSuggestionField(suggestion.id, 'excerpt', event.target.value)
+                          }
+                          placeholder="Short summary"
+                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-600"
+                        />
+                        <textarea
+                          rows={3}
+                          value={suggestion.contentHtml}
+                          onChange={(event) =>
+                            updateSuggestionField(suggestion.id, 'contentHtml', event.target.value)
+                          }
+                          placeholder="Clean Hindi body"
+                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-600"
+                        />
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => loadSuggestionAsDraft(suggestion)}
+                          className="rounded-md border border-primary-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50"
+                        >
+                          Use / Edit Manually
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleSuggestionIgnored(suggestion.id)}
+                          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                        >
+                          {suggestion.ignored ? 'Restore' : 'Ignore'}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             ) : null}
           </section>
@@ -1352,6 +1715,7 @@ export default function EPaperPageHotspotEditor() {
                       onChange={(event) =>
                         updateArticleField(article._id, 'title', event.target.value)
                       }
+                      placeholder="Headline"
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                     />
                     <input
@@ -1360,7 +1724,7 @@ export default function EPaperPageHotspotEditor() {
                       onChange={(event) =>
                         updateArticleField(article._id, 'excerpt', event.target.value)
                       }
-                      placeholder="Excerpt"
+                      placeholder="Short summary"
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                     />
                     <input
@@ -1369,7 +1733,7 @@ export default function EPaperPageHotspotEditor() {
                       onChange={(event) =>
                         updateArticleField(article._id, 'coverImagePath', event.target.value)
                       }
-                      placeholder="Cover image path"
+                      placeholder="Crop / cover image path"
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                     />
                     <textarea
@@ -1378,6 +1742,7 @@ export default function EPaperPageHotspotEditor() {
                       onChange={(event) =>
                         updateArticleField(article._id, 'contentHtml', event.target.value)
                       }
+                      placeholder="Clean Hindi body"
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                     />
                   </div>
