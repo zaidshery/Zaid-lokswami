@@ -25,6 +25,24 @@ interface TextBlock {
   bottom: number;
 }
 
+export type EpaperCropOcrLine = {
+  text: string;
+  left?: number;
+  top?: number;
+  right?: number;
+  bottom?: number;
+  height?: number;
+};
+
+export type EpaperCropTextOcrResult = {
+  plainText: string;
+  title: string;
+  excerpt: string;
+  contentHtml: string;
+  lineCount: number;
+  engine: 'local';
+};
+
 interface TesseractBBox {
   x0?: number;
   y0?: number;
@@ -39,6 +57,7 @@ interface TesseractLine {
 
 interface TesseractData {
   lines?: TesseractLine[];
+  text?: string;
   width?: number;
   height?: number;
 }
@@ -65,6 +84,110 @@ let loadPromise: Promise<TesseractGlobal> | null = null;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function cleanOcrTextLine(value: string) {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function isIsolatedPageNoise(value: string) {
+  const text = value.trim();
+  return /^\d{1,3}$/.test(text) || /^page\s+\d{1,3}$/i.test(text);
+}
+
+function toCropOcrLines(lines: EpaperCropOcrLine[]) {
+  return lines
+    .map((line, index) => {
+      const text = cleanOcrTextLine(String(line.text || ''));
+      if (!text || isIsolatedPageNoise(text)) return null;
+
+      const top = Number(line.top);
+      const left = Number(line.left);
+      const height = Number(line.height);
+      return {
+        text,
+        top: Number.isFinite(top) ? top : index,
+        left: Number.isFinite(left) ? left : 0,
+        height: Number.isFinite(height) && height > 0 ? height : 14,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (!a || !b) return 0;
+      return a.top === b.top ? a.left - b.left : a.top - b.top;
+    }) as Array<{ text: string; top: number; left: number; height: number }>;
+}
+
+function median(values: number[]) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+}
+
+function trimToLength(value: string, maxLength: number) {
+  const text = cleanOcrTextLine(value);
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength).replace(/\s+\S*$/, '').trim() || text.slice(0, maxLength).trim();
+}
+
+function buildExcerpt(value: string) {
+  return trimToLength(value.replace(/\s+/g, ' '), 180);
+}
+
+function pickHeadlineStart(lines: ReturnType<typeof toCropOcrLines>) {
+  if (!lines.length) return -1;
+  if (lines.length === 1) return 0;
+
+  const topLines = lines.slice(0, Math.min(8, lines.length));
+  const medianHeight = Math.max(1, median(lines.map((line) => line.height)));
+  const firstHeight = topLines[0]?.height || medianHeight;
+  const strongest = topLines.reduce(
+    (best, line, index) =>
+      line.height > best.line.height || (line.height === best.line.height && index < best.index)
+        ? { line, index }
+        : best,
+    { line: topLines[0], index: 0 }
+  );
+
+  const isMeaningfullyLarger =
+    strongest.line.height >= medianHeight * 1.2 && strongest.line.height >= firstHeight * 1.12;
+  return isMeaningfullyLarger ? strongest.index : 0;
+}
+
+export function buildEpaperCropTextOcrResult(
+  rawLines: EpaperCropOcrLine[]
+): EpaperCropTextOcrResult {
+  const lines = toCropOcrLines(rawLines);
+  const plainText = lines.map((line) => line.text).join('\n').trim();
+  if (!lines.length || !plainText) {
+    return {
+      plainText: '',
+      title: '',
+      excerpt: '',
+      contentHtml: '',
+      lineCount: 0,
+      engine: 'local',
+    };
+  }
+
+  const headlineStart = pickHeadlineStart(lines);
+  const headlineLine = lines[headlineStart] || lines[0];
+  const title = trimToLength(headlineLine.text, 160);
+  const bodyLines = lines.filter((_, index) => index !== headlineStart).map((line) => line.text);
+  let bodyText = bodyLines.join('\n').trim();
+  if (bodyText.replace(/\s+/g, '').length < 40) {
+    bodyText = plainText;
+  }
+
+  return {
+    plainText,
+    title,
+    excerpt: buildExcerpt(bodyText || plainText),
+    contentHtml: bodyText || plainText,
+    lineCount: lines.length,
+    engine: 'local',
+  };
 }
 
 async function loadTesseract() {
@@ -245,6 +368,61 @@ function blocksToHotspots(blocks: TextBlock[], pageWidth: number, pageHeight: nu
   });
 
   return normalizeArticleHotspots(hotspots);
+}
+
+function buildSyntheticLinesFromText(text: string): LineBox[] {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line, index) => {
+      const cleaned = cleanOcrTextLine(line);
+      if (!cleaned) return null;
+      const top = index * 18;
+      return {
+        text: cleaned,
+        left: 0,
+        top,
+        right: Math.max(1, cleaned.length * 8),
+        bottom: top + 14,
+        height: 14,
+      };
+    })
+    .filter(Boolean) as LineBox[];
+}
+
+export async function recognizeEpaperCropTextLocally(
+  imageSource: string,
+  options?: { language?: string }
+): Promise<EpaperCropTextOcrResult> {
+  const source = imageSource.trim();
+  if (!source) {
+    throw new Error('Crop image is required for text extraction');
+  }
+  if (/\.pdf(\?|#|$)/i.test(source) || source.toLowerCase().startsWith('data:application/pdf')) {
+    throw new Error('Crop OCR requires an image input');
+  }
+
+  const tesseract = await loadTesseract();
+  const preferredLanguage = (options?.language || 'hin+eng').trim() || 'hin+eng';
+
+  let result: TesseractResult;
+  try {
+    result = await tesseract.recognize(source, preferredLanguage, { logger: () => {} });
+  } catch {
+    if (preferredLanguage !== 'eng') {
+      result = await tesseract.recognize(source, 'eng', { logger: () => {} });
+    } else {
+      throw new Error('Local OCR failed to recognize crop image');
+    }
+  }
+
+  const lines = buildLineBoxes(result);
+  const resultLines = lines.length ? lines : buildSyntheticLinesFromText(result?.data?.text || '');
+  const extracted = buildEpaperCropTextOcrResult(resultLines);
+  if (!extracted.lineCount || !extracted.plainText) {
+    throw new Error('Could not read crop text. Paste text manually.');
+  }
+
+  return extracted;
 }
 
 export async function generateArticleHotspotsLocally(

@@ -32,6 +32,10 @@ import type {
   EPaperRecord,
 } from '@/lib/types/epaper';
 import { detectHotspotsFromImageClient } from '@/lib/utils/epaperHotspotDetectionClient';
+import {
+  recognizeEpaperCropTextLocally,
+  type EpaperCropTextOcrResult,
+} from '@/lib/utils/epaperLocalOcrClient';
 import { formatUiDate, formatUiDateTime } from '@/lib/utils/dateFormat';
 import {
   buildEpaperPageQualitySignal,
@@ -57,11 +61,13 @@ type ArticlesResponse = {
 
 type DrawPoint = { x: number; y: number };
 type Hotspot = { x: number; y: number; w: number; h: number };
+type CropPaddingMode = 'tight' | 'normal' | 'loose';
 type HotspotSuggestion = {
   id: string;
   title: string;
   excerpt: string;
   contentHtml: string;
+  coverImagePath: string;
   hotspot: Hotspot;
   confidence: number;
   warnings: EpaperSuggestionWarning[];
@@ -197,6 +203,16 @@ function toContentHtmlInput(text: string) {
   return /<[a-z][\s\S]*>/i.test(value) ? value : toHtmlParagraph(value);
 }
 
+function hasReadableContentInput(value: string) {
+  return Boolean(
+    String(value || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
 function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
@@ -268,6 +284,11 @@ function canCreateSuggestionDraft(suggestion: HotspotSuggestion) {
   return suggestion.selected && !suggestion.ignored && !hasBlockingSuggestionWarning(suggestion);
 }
 
+function canPreviewImagePath(value: string | undefined) {
+  const path = String(value || '').trim();
+  return Boolean(path && (path.startsWith('/') || /^https?:\/\//i.test(path) || /^data:image\//i.test(path)));
+}
+
 export default function EPaperPageHotspotEditor() {
   const params = useParams();
   const epaperId = String(params.id || '');
@@ -286,6 +307,9 @@ export default function EPaperPageHotspotEditor() {
   const [creating, setCreating] = useState(false);
   const [autoDetecting, setAutoDetecting] = useState(false);
   const [creatingSuggestions, setCreatingSuggestions] = useState(false);
+  const [croppingTarget, setCroppingTarget] = useState('');
+  const [cropOcrTarget, setCropOcrTarget] = useState('');
+  const [cropOcrMessages, setCropOcrMessages] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState('');
   const [deletingId, setDeletingId] = useState('');
   const [suggestions, setSuggestions] = useState<HotspotSuggestion[]>([]);
@@ -358,6 +382,12 @@ export default function EPaperPageHotspotEditor() {
     }
     return blockers;
   }, [activeSuggestionCount, articles.length, unreadableArticleCount]);
+  const manualDraftNeedsHeadline = Boolean(draftHotspot) && !draftInput.title.trim();
+  const manualDraftNeedsBody =
+    Boolean(draftHotspot) && !hasReadableContentInput(draftInput.contentHtml);
+  const canCreateManualDraft = Boolean(
+    draftHotspot && draftInput.title.trim() && hasReadableContentInput(draftInput.contentHtml)
+  );
 
   useEffect(() => {
     setPageReviewStatus(pageImageMeta?.reviewStatus || 'pending');
@@ -510,6 +540,7 @@ export default function EPaperPageHotspotEditor() {
       return;
     }
     setDraftHotspot(next);
+    setDraftInput((current) => ({ ...current, coverImagePath: '' }));
   };
 
   const createArticleRequest = async (payload: {
@@ -550,6 +581,10 @@ export default function EPaperPageHotspotEditor() {
       setError('Article title is required');
       return;
     }
+    if (!hasReadableContentInput(draftInput.contentHtml)) {
+      setError('Clean Hindi body is required');
+      return;
+    }
 
     setCreating(true);
     setError('');
@@ -581,8 +616,114 @@ export default function EPaperPageHotspotEditor() {
       title: suggestion.title,
       excerpt: suggestion.excerpt,
       contentHtml: suggestion.contentHtml,
-      coverImagePath: '',
+      coverImagePath: suggestion.coverImagePath,
     });
+  };
+
+  const cropHotspotImage = async (
+    target: string,
+    hotspot: Hotspot | null,
+    title: string,
+    paddingMode: CropPaddingMode,
+    onCrop: (coverImagePath: string) => void
+  ) => {
+    if (!hotspot) {
+      setError('Select a hotspot box before cropping');
+      return;
+    }
+
+    setCroppingTarget(target);
+    setError('');
+    setNotice('');
+
+    try {
+      const response = await fetch(`/api/admin/epapers/${epaperId}/crop-hotspot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          pageNumber,
+          hotspot: toFixedHotspot(hotspot),
+          title,
+          paddingMode,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        coverImagePath?: string;
+        data?: { coverImagePath?: string; width?: number; height?: number };
+      };
+      const coverImagePath = String(payload.coverImagePath || payload.data?.coverImagePath || '').trim();
+      if (!response.ok || !payload.success || !coverImagePath) {
+        throw new Error(payload.error || 'Failed to crop hotspot image');
+      }
+
+      onCrop(coverImagePath);
+      setNotice(
+        `${paddingMode === 'tight' ? 'Tight' : paddingMode === 'normal' ? 'Margin' : 'Loose'} clipping image created. Save the draft/story to keep the new cover path.`
+      );
+    } catch (err: unknown) {
+      setError(toErrorMessage(err, 'Failed to crop hotspot image'));
+    } finally {
+      setCroppingTarget('');
+    }
+  };
+
+  const setCropOcrMessage = (target: string, message: string) => {
+    setCropOcrMessages((current) => ({
+      ...current,
+      [target]: message,
+    }));
+  };
+
+  const clearCropOcrMessage = (target: string) => {
+    setCropOcrMessages((current) => {
+      const next = { ...current };
+      delete next[target];
+      return next;
+    });
+  };
+
+  const extractTextFromCropImage = async (
+    target: string,
+    imagePath: string | undefined,
+    onExtract: (result: EpaperCropTextOcrResult) => void
+  ) => {
+    const source = String(imagePath || '').trim();
+    if (!canPreviewImagePath(source)) {
+      const message = 'Crop image required before text extraction.';
+      setCropOcrMessage(target, message);
+      setError(message);
+      return;
+    }
+
+    setCropOcrTarget(target);
+    setCropOcrMessage(target, 'Extracting...');
+    setError('');
+    setNotice('');
+
+    try {
+      const result = await recognizeEpaperCropTextLocally(source, { language: 'hin+eng' });
+      onExtract(result);
+      const message = 'Text extracted. Review OCR text before creating draft.';
+      setCropOcrMessage(target, message);
+      setNotice(message);
+    } catch (err: unknown) {
+      const message = 'Could not read crop. Paste text manually.';
+      setCropOcrMessage(target, message);
+      setError(toErrorMessage(err, message));
+    } finally {
+      setCropOcrTarget('');
+    }
+  };
+
+  const clearDraftSelection = () => {
+    setDraftHotspot(null);
+    setDraftInput((current) => ({ ...current, coverImagePath: '' }));
+    clearCropOcrMessage('manual');
   };
 
   const toggleSuggestionSelection = (id: string) => {
@@ -697,6 +838,7 @@ export default function EPaperPageHotspotEditor() {
           title: safeTitle,
           excerpt,
           contentHtml,
+          coverImagePath: '',
           hotspot: nextHotspot,
           confidence: quality.confidence,
           warnings: quality.warnings,
@@ -747,6 +889,7 @@ export default function EPaperPageHotspotEditor() {
           title: suggestion.title,
           excerpt: suggestion.excerpt,
           contentHtml: suggestion.contentHtml,
+          coverImagePath: suggestion.coverImagePath,
           hotspot: suggestion.hotspot,
         });
         successCount += 1;
@@ -1446,6 +1589,68 @@ export default function EPaperPageHotspotEditor() {
                 ) : null}
               </div>
 
+              {draftHotspot ? (
+                <div className="sticky top-2 z-10 mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-900">Selected area ready</p>
+                      <p className="mt-1 text-xs text-emerald-800">
+                        This exact area will be cropped. Adjust selection if needed.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearDraftSelection}
+                      className="rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void cropHotspotImage(
+                          'manual:tight',
+                          draftHotspot,
+                          draftInput.title,
+                          'tight',
+                          (coverImagePath) =>
+                            setDraftInput((current) => ({ ...current, coverImagePath }))
+                        )
+                      }
+                      disabled={Boolean(croppingTarget)}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {croppingTarget === 'manual:tight' ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : null}
+                      Crop Tight
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void cropHotspotImage(
+                          'manual:normal',
+                          draftHotspot,
+                          draftInput.title,
+                          'normal',
+                          (coverImagePath) =>
+                            setDraftInput((current) => ({ ...current, coverImagePath }))
+                        )
+                      }
+                      disabled={Boolean(croppingTarget)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {croppingTarget === 'manual:normal' ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : null}
+                      Crop With Margin
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="space-y-2">
                 <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-gray-600">Headline</span>
@@ -1483,6 +1688,105 @@ export default function EPaperPageHotspotEditor() {
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                   />
                 </label>
+                {canPreviewImagePath(draftInput.coverImagePath) ? (
+                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                    <Image
+                      src={draftInput.coverImagePath}
+                      alt="Manual draft clipping preview"
+                      width={420}
+                      height={220}
+                      unoptimized
+                      className="h-auto max-h-48 w-full object-contain"
+                    />
+                    <div className="flex flex-wrap gap-2 border-t border-gray-200 bg-gray-50 p-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNotice('This crop is ready. Create or save the story to keep it.')
+                        }
+                        className="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-700"
+                      >
+                        Use this crop
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void extractTextFromCropImage(
+                            'manual',
+                            draftInput.coverImagePath,
+                            (result) =>
+                              setDraftInput((current) => ({
+                                ...current,
+                                title: result.title || current.title,
+                                excerpt: result.excerpt || current.excerpt,
+                                contentHtml: result.contentHtml || current.contentHtml,
+                              }))
+                          )
+                        }
+                        disabled={Boolean(cropOcrTarget)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {cropOcrTarget === 'manual' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : null}
+                        {cropOcrTarget === 'manual' ? 'Extracting...' : 'Extract Text From Crop'}
+                      </button>
+                      {draftHotspot ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void cropHotspotImage(
+                                'manual:tight',
+                                draftHotspot,
+                                draftInput.title,
+                                'tight',
+                                (coverImagePath) =>
+                                  setDraftInput((current) => ({ ...current, coverImagePath }))
+                              )
+                            }
+                            disabled={Boolean(croppingTarget)}
+                            className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            Try tighter
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void cropHotspotImage(
+                                'manual:normal',
+                                draftHotspot,
+                                draftInput.title,
+                                'normal',
+                                (coverImagePath) =>
+                                  setDraftInput((current) => ({ ...current, coverImagePath }))
+                              )
+                            }
+                            disabled={Boolean(croppingTarget)}
+                            className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            Try with margin
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraftInput((current) => ({ ...current, coverImagePath: '' }));
+                          clearCropOcrMessage('manual');
+                        }}
+                        className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                      >
+                        Clear crop
+                      </button>
+                    </div>
+                    {cropOcrMessages.manual ? (
+                      <p className="border-t border-gray-200 bg-white px-3 py-2 text-[11px] font-semibold text-gray-600">
+                        {cropOcrMessages.manual}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-gray-600">Clean Hindi body</span>
                   <textarea
@@ -1498,10 +1802,17 @@ export default function EPaperPageHotspotEditor() {
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
+                {draftHotspot && (manualDraftNeedsHeadline || manualDraftNeedsBody) ? (
+                  <p className="w-full rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                    {manualDraftNeedsHeadline
+                      ? 'Headline required before creating draft'
+                      : 'Clean Hindi body required before creating draft'}
+                  </p>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void createArticle()}
-                  disabled={creating}
+                  disabled={creating || !canCreateManualDraft}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
@@ -1509,7 +1820,7 @@ export default function EPaperPageHotspotEditor() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDraftHotspot(null)}
+                  onClick={clearDraftSelection}
                   className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
                 >
                   Clear Selection
@@ -1538,6 +1849,7 @@ export default function EPaperPageHotspotEditor() {
 
                 {suggestions.map((suggestion, index) => {
                   const blocked = hasBlockingSuggestionWarning(suggestion);
+                  const suggestionOcrTarget = `suggestion:${suggestion.id}`;
                   return (
                     <article
                       key={suggestion.id}
@@ -1636,7 +1948,175 @@ export default function EPaperPageHotspotEditor() {
                         />
                       </div>
 
+                      {canPreviewImagePath(suggestion.coverImagePath) ? (
+                        <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                          <Image
+                            src={suggestion.coverImagePath}
+                            alt={`Suggestion ${index + 1} clipping preview`}
+                            width={360}
+                            height={180}
+                            unoptimized
+                            className="h-auto max-h-40 w-full object-contain"
+                          />
+                          <div className="flex flex-wrap gap-2 border-t border-gray-200 bg-gray-50 p-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNotice(
+                                  `Suggestion S${index + 1} crop is ready for draft creation.`
+                                )
+                              }
+                              className="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-700"
+                            >
+                              Use this crop
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void extractTextFromCropImage(
+                                  suggestionOcrTarget,
+                                  suggestion.coverImagePath,
+                                  (result) =>
+                                    setSuggestions((current) =>
+                                      current.map((item) =>
+                                        item.id === suggestion.id
+                                          ? {
+                                              ...item,
+                                              title: result.title || item.title,
+                                              excerpt: result.excerpt || item.excerpt,
+                                              contentHtml: result.contentHtml || item.contentHtml,
+                                            }
+                                          : item
+                                      )
+                                    )
+                                )
+                              }
+                              disabled={Boolean(cropOcrTarget)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              {cropOcrTarget === suggestionOcrTarget ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : null}
+                              {cropOcrTarget === suggestionOcrTarget
+                                ? 'Extracting...'
+                                : 'Extract Text From Crop'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void cropHotspotImage(
+                                  `suggestion:${suggestion.id}:tight`,
+                                  suggestion.hotspot,
+                                  suggestion.title,
+                                  'tight',
+                                  (coverImagePath) =>
+                                    setSuggestions((current) =>
+                                      current.map((item) =>
+                                        item.id === suggestion.id ? { ...item, coverImagePath } : item
+                                      )
+                                    )
+                                )
+                              }
+                              disabled={Boolean(croppingTarget)}
+                              className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              Try tighter
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void cropHotspotImage(
+                                  `suggestion:${suggestion.id}:normal`,
+                                  suggestion.hotspot,
+                                  suggestion.title,
+                                  'normal',
+                                  (coverImagePath) =>
+                                    setSuggestions((current) =>
+                                      current.map((item) =>
+                                        item.id === suggestion.id ? { ...item, coverImagePath } : item
+                                      )
+                                    )
+                                )
+                              }
+                              disabled={Boolean(croppingTarget)}
+                              className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              Try with margin
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSuggestions((current) =>
+                                  current.map((item) =>
+                                    item.id === suggestion.id
+                                      ? { ...item, coverImagePath: '' }
+                                      : item
+                                  )
+                                );
+                                clearCropOcrMessage(suggestionOcrTarget);
+                              }}
+                              className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              Clear crop
+                            </button>
+                          </div>
+                          {cropOcrMessages[suggestionOcrTarget] ? (
+                            <p className="border-t border-gray-200 bg-white px-3 py-2 text-[11px] font-semibold text-gray-600">
+                              {cropOcrMessages[suggestionOcrTarget]}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+
                       <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void cropHotspotImage(
+                              `suggestion:${suggestion.id}:tight`,
+                              suggestion.hotspot,
+                              suggestion.title,
+                              'tight',
+                              (coverImagePath) =>
+                                setSuggestions((current) =>
+                                  current.map((item) =>
+                                    item.id === suggestion.id ? { ...item, coverImagePath } : item
+                                  )
+                                )
+                            )
+                          }
+                          disabled={Boolean(croppingTarget)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {croppingTarget === `suggestion:${suggestion.id}:tight` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          Crop Tight
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void cropHotspotImage(
+                              `suggestion:${suggestion.id}:normal`,
+                              suggestion.hotspot,
+                              suggestion.title,
+                              'normal',
+                              (coverImagePath) =>
+                                setSuggestions((current) =>
+                                  current.map((item) =>
+                                    item.id === suggestion.id ? { ...item, coverImagePath } : item
+                                  )
+                                )
+                            )
+                          }
+                          disabled={Boolean(croppingTarget)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {croppingTarget === `suggestion:${suggestion.id}:normal` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          Crop With Margin
+                        </button>
                         <button
                           type="button"
                           onClick={() => loadSuggestionAsDraft(suggestion)}
@@ -1663,6 +2143,7 @@ export default function EPaperPageHotspotEditor() {
             {articles.map((article, index) => {
               const isSaving = savingId === article._id;
               const isDeleting = deletingId === article._id;
+              const articleOcrTarget = `article:${article._id}`;
               const isLoadingTts = Boolean(loadingStoryTtsIds[article._id]);
               const storyTts = storyTtsById[article._id];
               const storyHasReadableText = Boolean(
@@ -1727,15 +2208,162 @@ export default function EPaperPageHotspotEditor() {
                       placeholder="Short summary"
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                     />
-                    <input
-                      type="text"
-                      value={article.coverImagePath || ''}
-                      onChange={(event) =>
-                        updateArticleField(article._id, 'coverImagePath', event.target.value)
-                      }
-                      placeholder="Crop / cover image path"
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    />
+                    <div className="flex flex-col gap-2">
+                      <input
+                        type="text"
+                        value={article.coverImagePath || ''}
+                        onChange={(event) =>
+                          updateArticleField(article._id, 'coverImagePath', event.target.value)
+                        }
+                        placeholder="Crop / cover image path"
+                        className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void cropHotspotImage(
+                              `article:${article._id}:tight`,
+                              article.hotspot,
+                              article.title,
+                              'tight',
+                              (coverImagePath) =>
+                                updateArticleField(article._id, 'coverImagePath', coverImagePath)
+                            )
+                          }
+                          disabled={isSaving || isDeleting || Boolean(croppingTarget)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {croppingTarget === `article:${article._id}:tight` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          Crop Tight
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void cropHotspotImage(
+                              `article:${article._id}:normal`,
+                              article.hotspot,
+                              article.title,
+                              'normal',
+                              (coverImagePath) =>
+                                updateArticleField(article._id, 'coverImagePath', coverImagePath)
+                            )
+                          }
+                          disabled={isSaving || isDeleting || Boolean(croppingTarget)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {croppingTarget === `article:${article._id}:normal` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          Crop With Margin
+                        </button>
+                      </div>
+                    </div>
+                    {canPreviewImagePath(article.coverImagePath) ? (
+                      <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                        <Image
+                          src={String(article.coverImagePath || '')}
+                          alt={`${article.title || 'E-paper story'} clipping preview`}
+                          width={420}
+                          height={220}
+                          unoptimized
+                          className="h-auto max-h-48 w-full object-contain"
+                        />
+                        <div className="flex flex-wrap gap-2 border-t border-gray-200 bg-gray-50 p-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNotice('This crop is ready. Save the story to keep it.')
+                            }
+                            className="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-700"
+                          >
+                            Use this crop
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void extractTextFromCropImage(
+                                articleOcrTarget,
+                                article.coverImagePath,
+                                (result) => {
+                                  updateArticleField(article._id, 'title', result.title || article.title);
+                                  updateArticleField(
+                                    article._id,
+                                    'excerpt',
+                                    result.excerpt || article.excerpt || ''
+                                  );
+                                  updateArticleField(
+                                    article._id,
+                                    'contentHtml',
+                                    result.contentHtml || article.contentHtml || ''
+                                  );
+                                }
+                              )
+                            }
+                            disabled={isSaving || isDeleting || Boolean(cropOcrTarget)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            {cropOcrTarget === articleOcrTarget ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            {cropOcrTarget === articleOcrTarget
+                              ? 'Extracting...'
+                              : 'Extract Text From Crop'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void cropHotspotImage(
+                                `article:${article._id}:tight`,
+                                article.hotspot,
+                                article.title,
+                                'tight',
+                                (coverImagePath) =>
+                                  updateArticleField(article._id, 'coverImagePath', coverImagePath)
+                              )
+                            }
+                            disabled={isSaving || isDeleting || Boolean(croppingTarget)}
+                            className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            Try tighter
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void cropHotspotImage(
+                                `article:${article._id}:normal`,
+                                article.hotspot,
+                                article.title,
+                                'normal',
+                                (coverImagePath) =>
+                                  updateArticleField(article._id, 'coverImagePath', coverImagePath)
+                              )
+                            }
+                            disabled={isSaving || isDeleting || Boolean(croppingTarget)}
+                            className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            Try with margin
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateArticleField(article._id, 'coverImagePath', '');
+                              clearCropOcrMessage(articleOcrTarget);
+                            }}
+                            className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                          >
+                            Clear crop
+                          </button>
+                        </div>
+                        {cropOcrMessages[articleOcrTarget] ? (
+                          <p className="border-t border-gray-200 bg-white px-3 py-2 text-[11px] font-semibold text-gray-600">
+                            {cropOcrMessages[articleOcrTarget]}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <textarea
                       rows={4}
                       value={article.contentHtml || ''}
