@@ -52,7 +52,7 @@ describe('API v1 public article routes', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toContain('s-maxage=60');
+    expect(response.headers.get('cache-control')).toContain('s-maxage=120');
     expect(listPublicArticlesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         limit: 10,

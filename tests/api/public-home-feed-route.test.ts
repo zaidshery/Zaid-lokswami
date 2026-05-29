@@ -41,7 +41,7 @@ describe('GET /api/v1/public/home-feed', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toContain('s-maxage=60');
+    expect(response.headers.get('cache-control')).toContain('s-maxage=120');
     expect(payload).toEqual({
       success: true,
       data: {
