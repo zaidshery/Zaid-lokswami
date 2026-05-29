@@ -29,7 +29,7 @@ export function getLoginLimiter(): RateLimiter {
 
 /**
  * Get or create the public API rate limiter
- * Limits: 100 requests per minute per IP
+ * Limits: 100 requests per minute per route/IP for non-cacheable public APIs
  */
 export function getApiLimiter(): RateLimiter {
   if (!apiLimiter) {

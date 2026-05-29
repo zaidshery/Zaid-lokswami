@@ -11,6 +11,10 @@ import {
   getLoginLimiter,
 } from '@/lib/security/getRateLimiter';
 import { getIpRateLimitKey, getUserRateLimitKey } from '@/lib/security/ipUtils';
+import {
+  getRouteScopedApiLimiterPrefix,
+  isCacheablePublicReadApiRoute,
+} from '@/lib/security/publicApiRateLimitPolicy';
 import { logApiRequestFromMiddleware } from '@/lib/security/requestLogger';
 
 async function getSessionToken(request: NextRequest) {
@@ -133,6 +137,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     const isAdminArea = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
     const isAuthApiRoute = pathname.startsWith('/api/auth/');
     const isHeavyRoute = isHeavyRateLimitedRoute(pathname);
+    const isPublicReadRoute = isCacheablePublicReadApiRoute(request.method, pathname);
 
     if (isApiRequest && !isAdminArea && !isAuthApiRoute) {
       if (isHeavyRoute) {
@@ -150,17 +155,25 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
         }
       }
 
-      const apiLimiter = getApiLimiter();
-      const apiKey = getIpRateLimitKey(request, 'api');
-      const apiResult = apiLimiter.check(apiKey);
+      // Reader pages fan out across several cacheable GET APIs at once. Keep
+      // the app limiter focused on writes and non-cacheable public APIs; use
+      // CDN/WAF rules for bulk public read traffic.
+      if (!isPublicReadRoute && !isHeavyRoute) {
+        const apiLimiter = getApiLimiter();
+        const apiKey = getIpRateLimitKey(
+          request,
+          getRouteScopedApiLimiterPrefix(pathname)
+        );
+        const apiResult = apiLimiter.check(apiKey);
 
-      if (!apiResult.allowed) {
-        const retryAfter = apiResult.retryAfter || 300;
-        return scheduleRequestLog(createRateLimitResponse(
-          'Too many API requests',
-          `Please try again in ${retryAfter} seconds`,
-          retryAfter
-        ));
+        if (!apiResult.allowed) {
+          const retryAfter = apiResult.retryAfter || 300;
+          return scheduleRequestLog(createRateLimitResponse(
+            'Too many API requests',
+            `Please try again in ${retryAfter} seconds`,
+            retryAfter
+          ));
+        }
       }
     }
 
