@@ -3,8 +3,8 @@ import { mediumPublicCache } from '@/lib/api/cache';
 import { GET as getLegacyEPapers } from '@/app/api/epapers/route';
 
 const PUBLIC_EPAPERS_CACHE_HEADERS = mediumPublicCache({
-  sMaxAge: 300,
-  staleWhileRevalidate: 600,
+  sMaxAge: 600,
+  staleWhileRevalidate: 1800,
 });
 
 export async function GET(request: NextRequest) {

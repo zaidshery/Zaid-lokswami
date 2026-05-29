@@ -68,6 +68,7 @@ type HotspotSuggestion = {
   excerpt: string;
   contentHtml: string;
   coverImagePath: string;
+  ocrImageSource?: string;
   hotspot: Hotspot;
   confidence: number;
   warnings: EpaperSuggestionWarning[];
@@ -80,6 +81,29 @@ type DraftArticleInput = {
   excerpt: string;
   contentHtml: string;
   coverImagePath: string;
+  ocrImageSource?: string;
+};
+
+type CropHotspotResult = {
+  coverImagePath: string;
+  ocrImageSource?: string;
+};
+
+type CropOcrReview = {
+  rawText: string;
+  title: string;
+  excerpt: string;
+  contentHtml: string;
+  confidence?: number;
+  warnings: string[];
+  sourceKind: 'cover' | 'preprocessed';
+  lineCount: number;
+};
+
+type CropOcrReviewActions = {
+  onUseHeadline: (value: string) => void;
+  onUseSummary: (value: string) => void;
+  onUseBody: (value: string) => void;
 };
 
 type ManagedTtsAsset = {
@@ -173,6 +197,7 @@ function buildDraftInput(): DraftArticleInput {
     excerpt: '',
     contentHtml: '',
     coverImagePath: '',
+    ocrImageSource: '',
   };
 }
 
@@ -289,6 +314,26 @@ function canPreviewImagePath(value: string | undefined) {
   return Boolean(path && (path.startsWith('/') || /^https?:\/\//i.test(path) || /^data:image\//i.test(path)));
 }
 
+function getOcrReviewTargetFromCropTarget(target: string) {
+  const [scope, id] = target.split(':');
+  if (scope === 'manual') return 'manual';
+  if ((scope === 'suggestion' || scope === 'article') && id) return `${scope}:${id}`;
+  return target;
+}
+
+function buildCropOcrReview(result: EpaperCropTextOcrResult): CropOcrReview {
+  return {
+    rawText: result.plainText || result.contentHtml || '',
+    title: result.title || '',
+    excerpt: result.excerpt || '',
+    contentHtml: result.contentHtml || result.plainText || '',
+    confidence: result.confidence,
+    warnings: result.warnings || [],
+    sourceKind: result.sourceKind || 'cover',
+    lineCount: result.lineCount,
+  };
+}
+
 export default function EPaperPageHotspotEditor() {
   const params = useParams();
   const epaperId = String(params.id || '');
@@ -310,6 +355,8 @@ export default function EPaperPageHotspotEditor() {
   const [croppingTarget, setCroppingTarget] = useState('');
   const [cropOcrTarget, setCropOcrTarget] = useState('');
   const [cropOcrMessages, setCropOcrMessages] = useState<Record<string, string>>({});
+  const [cropOcrReviews, setCropOcrReviews] = useState<Record<string, CropOcrReview>>({});
+  const [articleOcrImageSources, setArticleOcrImageSources] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState('');
   const [deletingId, setDeletingId] = useState('');
   const [suggestions, setSuggestions] = useState<HotspotSuggestion[]>([]);
@@ -496,6 +543,10 @@ export default function EPaperPageHotspotEditor() {
     if (!epaperId) return;
     setSuggestions([]);
     setDraftHotspot(null);
+    setDraftInput(buildDraftInput());
+    setCropOcrMessages({});
+    setCropOcrReviews({});
+    setArticleOcrImageSources({});
     void fetchData();
   }, [epaperId, fetchData]);
 
@@ -518,6 +569,13 @@ export default function EPaperPageHotspotEditor() {
     setDrawStart(point);
     setDrawCurrent(point);
     setDraftHotspot(null);
+    setDraftInput((current) => ({ ...current, coverImagePath: '', ocrImageSource: '' }));
+    clearCropOcrMessage('manual');
+    setCropOcrReviews((current) => {
+      const next = { ...current };
+      delete next.manual;
+      return next;
+    });
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -540,7 +598,13 @@ export default function EPaperPageHotspotEditor() {
       return;
     }
     setDraftHotspot(next);
-    setDraftInput((current) => ({ ...current, coverImagePath: '' }));
+    setDraftInput((current) => ({ ...current, coverImagePath: '', ocrImageSource: '' }));
+    clearCropOcrMessage('manual');
+    setCropOcrReviews((current) => {
+      const updated = { ...current };
+      delete updated.manual;
+      return updated;
+    });
   };
 
   const createArticleRequest = async (payload: {
@@ -617,7 +681,9 @@ export default function EPaperPageHotspotEditor() {
       excerpt: suggestion.excerpt,
       contentHtml: suggestion.contentHtml,
       coverImagePath: suggestion.coverImagePath,
+      ocrImageSource: suggestion.ocrImageSource || '',
     });
+    clearCropOcrReview('manual');
   };
 
   const cropHotspotImage = async (
@@ -625,14 +691,21 @@ export default function EPaperPageHotspotEditor() {
     hotspot: Hotspot | null,
     title: string,
     paddingMode: CropPaddingMode,
-    onCrop: (coverImagePath: string) => void
+    onCrop: (crop: CropHotspotResult) => void
   ) => {
     if (!hotspot) {
       setError('Select a hotspot box before cropping');
       return;
     }
 
+    const reviewTarget = getOcrReviewTargetFromCropTarget(target);
     setCroppingTarget(target);
+    clearCropOcrMessage(reviewTarget);
+    setCropOcrReviews((current) => {
+      const next = { ...current };
+      delete next[reviewTarget];
+      return next;
+    });
     setError('');
     setNotice('');
 
@@ -648,20 +721,29 @@ export default function EPaperPageHotspotEditor() {
           hotspot: toFixedHotspot(hotspot),
           title,
           paddingMode,
+          includeOcrSource: true,
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         success?: boolean;
         error?: string;
         coverImagePath?: string;
-        data?: { coverImagePath?: string; width?: number; height?: number };
+        data?: {
+          coverImagePath?: string;
+          width?: number;
+          height?: number;
+          ocrImageSource?: string;
+        };
       };
       const coverImagePath = String(payload.coverImagePath || payload.data?.coverImagePath || '').trim();
       if (!response.ok || !payload.success || !coverImagePath) {
         throw new Error(payload.error || 'Failed to crop hotspot image');
       }
 
-      onCrop(coverImagePath);
+      onCrop({
+        coverImagePath,
+        ocrImageSource: String(payload.data?.ocrImageSource || '').trim(),
+      });
       setNotice(
         `${paddingMode === 'tight' ? 'Tight' : paddingMode === 'normal' ? 'Margin' : 'Loose'} clipping image created. Save the draft/story to keep the new cover path.`
       );
@@ -687,12 +769,47 @@ export default function EPaperPageHotspotEditor() {
     });
   };
 
+  const clearCropOcrReview = (target: string) => {
+    clearCropOcrMessage(target);
+    setCropOcrReviews((current) => {
+      const next = { ...current };
+      delete next[target];
+      return next;
+    });
+  };
+
+  const updateCropOcrReview = (
+    target: string,
+    updates: Partial<Pick<CropOcrReview, 'rawText' | 'title' | 'excerpt' | 'contentHtml'>>
+  ) => {
+    setCropOcrReviews((current) => {
+      const review = current[target];
+      if (!review) return current;
+      return {
+        ...current,
+        [target]: {
+          ...review,
+          ...updates,
+        },
+      };
+    });
+  };
+
+  const updateArticleCrop = (articleId: string, crop: CropHotspotResult) => {
+    updateArticleField(articleId, 'coverImagePath', crop.coverImagePath);
+    setArticleOcrImageSources((current) => ({
+      ...current,
+      [articleId]: crop.ocrImageSource || '',
+    }));
+    clearCropOcrReview(`article:${articleId}`);
+  };
+
   const extractTextFromCropImage = async (
     target: string,
     imagePath: string | undefined,
-    onExtract: (result: EpaperCropTextOcrResult) => void
+    ocrImageSource?: string
   ) => {
-    const source = String(imagePath || '').trim();
+    const source = String(ocrImageSource || imagePath || '').trim();
     if (!canPreviewImagePath(source)) {
       const message = 'Crop image required before text extraction.';
       setCropOcrMessage(target, message);
@@ -706,13 +823,27 @@ export default function EPaperPageHotspotEditor() {
     setNotice('');
 
     try {
-      const result = await recognizeEpaperCropTextLocally(source, { language: 'hin+eng' });
-      onExtract(result);
-      const message = 'Text extracted. Review OCR text before creating draft.';
+      const sourceKind = ocrImageSource ? 'preprocessed' : 'cover';
+      const result = await recognizeEpaperCropTextLocally(source, {
+        language: 'hin+eng',
+        sourceKind,
+      });
+      const review = buildCropOcrReview(result);
+      setCropOcrReviews((current) => ({
+        ...current,
+        [target]: review,
+      }));
+      const needsReview =
+        review.warnings.length > 0 ||
+        (typeof review.confidence === 'number' && review.confidence < 70);
+      const message = needsReview
+        ? 'OCR draft ready. Needs manual review.'
+        : 'OCR draft ready. Review before applying.';
       setCropOcrMessage(target, message);
       setNotice(message);
     } catch (err: unknown) {
       const message = 'Could not read crop. Paste text manually.';
+      clearCropOcrReview(target);
       setCropOcrMessage(target, message);
       setError(toErrorMessage(err, message));
     } finally {
@@ -722,8 +853,8 @@ export default function EPaperPageHotspotEditor() {
 
   const clearDraftSelection = () => {
     setDraftHotspot(null);
-    setDraftInput((current) => ({ ...current, coverImagePath: '' }));
-    clearCropOcrMessage('manual');
+    setDraftInput((current) => ({ ...current, coverImagePath: '', ocrImageSource: '' }));
+    clearCropOcrReview('manual');
   };
 
   const toggleSuggestionSelection = (id: string) => {
@@ -839,6 +970,7 @@ export default function EPaperPageHotspotEditor() {
           excerpt,
           contentHtml,
           coverImagePath: '',
+          ocrImageSource: '',
           hotspot: nextHotspot,
           confidence: quality.confidence,
           warnings: quality.warnings,
@@ -904,6 +1036,20 @@ export default function EPaperPageHotspotEditor() {
       setSuggestions((current) =>
         current.filter((suggestion) => !successfulIds.includes(suggestion.id))
       );
+      setCropOcrReviews((current) => {
+        const next = { ...current };
+        for (const id of successfulIds) {
+          delete next[`suggestion:${id}`];
+        }
+        return next;
+      });
+      setCropOcrMessages((current) => {
+        const next = { ...current };
+        for (const id of successfulIds) {
+          delete next[`suggestion:${id}`];
+        }
+        return next;
+      });
       setDraftHotspot(null);
       await fetchData();
     }
@@ -1135,11 +1281,139 @@ export default function EPaperPageHotspotEditor() {
         delete next[articleId];
         return next;
       });
+      setArticleOcrImageSources((current) => {
+        const next = { ...current };
+        delete next[articleId];
+        return next;
+      });
+      clearCropOcrReview(`article:${articleId}`);
     } catch (err: unknown) {
       setError(toErrorMessage(err, 'Failed to delete article'));
     } finally {
       setDeletingId('');
     }
+  };
+
+  const renderCropOcrReview = (target: string, actions: CropOcrReviewActions) => {
+    const review = cropOcrReviews[target];
+    if (!review) return null;
+
+    const confidenceLabel =
+      typeof review.confidence === 'number' ? `${review.confidence}% confidence` : null;
+    const needsManualReview =
+      review.warnings.length > 0 ||
+      (typeof review.confidence === 'number' && review.confidence < 70);
+
+    return (
+      <div className="border-t border-gray-200 bg-amber-50/80 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase text-amber-800">OCR Assist Review</p>
+            <p className="mt-1 text-xs text-amber-800">
+              OCR text may contain mistakes. Review before creating draft.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              {review.sourceKind === 'preprocessed' ? 'Preprocessed crop' : 'Cover crop'}
+            </span>
+            {confidenceLabel ? (
+              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                {confidenceLabel}
+              </span>
+            ) : null}
+            {needsManualReview ? (
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                Needs manual review
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {review.warnings.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {review.warnings.map((warning) => (
+              <span
+                key={`${target}-${warning}`}
+                className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+              >
+                {warning}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="mt-3 space-y-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-gray-700">Raw OCR text</span>
+            <textarea
+              rows={5}
+              value={review.rawText}
+              onChange={(event) => updateCropOcrReview(target, { rawText: event.target.value })}
+              className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-primary-600"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-gray-700">Suggested headline</span>
+            <input
+              type="text"
+              value={review.title}
+              onChange={(event) => updateCropOcrReview(target, { title: event.target.value })}
+              className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary-600"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-gray-700">Suggested summary</span>
+            <textarea
+              rows={2}
+              value={review.excerpt}
+              onChange={(event) => updateCropOcrReview(target, { excerpt: event.target.value })}
+              className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary-600"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-gray-700">Suggested body</span>
+            <textarea
+              rows={4}
+              value={review.contentHtml}
+              onChange={(event) => updateCropOcrReview(target, { contentHtml: event.target.value })}
+              className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-primary-600"
+            />
+          </label>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => actions.onUseHeadline(review.title)}
+            className="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-700"
+          >
+            Use as Headline
+          </button>
+          <button
+            type="button"
+            onClick={() => actions.onUseSummary(review.excerpt)}
+            className="rounded-md border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50"
+          >
+            Use as Summary
+          </button>
+          <button
+            type="button"
+            onClick={() => actions.onUseBody(review.contentHtml || review.rawText)}
+            className="rounded-md border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50"
+          >
+            Use as Body
+          </button>
+          <button
+            type="button"
+            onClick={() => clearCropOcrReview(target)}
+            className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -1615,8 +1889,12 @@ export default function EPaperPageHotspotEditor() {
                           draftHotspot,
                           draftInput.title,
                           'tight',
-                          (coverImagePath) =>
-                            setDraftInput((current) => ({ ...current, coverImagePath }))
+                          (crop) =>
+                            setDraftInput((current) => ({
+                              ...current,
+                              coverImagePath: crop.coverImagePath,
+                              ocrImageSource: crop.ocrImageSource || '',
+                            }))
                         )
                       }
                       disabled={Boolean(croppingTarget)}
@@ -1635,8 +1913,12 @@ export default function EPaperPageHotspotEditor() {
                           draftHotspot,
                           draftInput.title,
                           'normal',
-                          (coverImagePath) =>
-                            setDraftInput((current) => ({ ...current, coverImagePath }))
+                          (crop) =>
+                            setDraftInput((current) => ({
+                              ...current,
+                              coverImagePath: crop.coverImagePath,
+                              ocrImageSource: crop.ocrImageSource || '',
+                            }))
                         )
                       }
                       disabled={Boolean(croppingTarget)}
@@ -1681,9 +1963,14 @@ export default function EPaperPageHotspotEditor() {
                   <input
                     type="text"
                     value={draftInput.coverImagePath}
-                    onChange={(event) =>
-                      setDraftInput((current) => ({ ...current, coverImagePath: event.target.value }))
-                    }
+                    onChange={(event) => {
+                      setDraftInput((current) => ({
+                        ...current,
+                        coverImagePath: event.target.value,
+                        ocrImageSource: '',
+                      }));
+                      clearCropOcrReview('manual');
+                    }}
                     placeholder="Crop / cover image path"
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                   />
@@ -1714,13 +2001,7 @@ export default function EPaperPageHotspotEditor() {
                           void extractTextFromCropImage(
                             'manual',
                             draftInput.coverImagePath,
-                            (result) =>
-                              setDraftInput((current) => ({
-                                ...current,
-                                title: result.title || current.title,
-                                excerpt: result.excerpt || current.excerpt,
-                                contentHtml: result.contentHtml || current.contentHtml,
-                              }))
+                            draftInput.ocrImageSource
                           )
                         }
                         disabled={Boolean(cropOcrTarget)}
@@ -1729,7 +2010,7 @@ export default function EPaperPageHotspotEditor() {
                         {cropOcrTarget === 'manual' ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : null}
-                        {cropOcrTarget === 'manual' ? 'Extracting...' : 'Extract Text From Crop'}
+                        {cropOcrTarget === 'manual' ? 'Extracting...' : 'OCR Assist'}
                       </button>
                       {draftHotspot ? (
                         <>
@@ -1741,8 +2022,12 @@ export default function EPaperPageHotspotEditor() {
                                 draftHotspot,
                                 draftInput.title,
                                 'tight',
-                                (coverImagePath) =>
-                                  setDraftInput((current) => ({ ...current, coverImagePath }))
+                                (crop) =>
+                                  setDraftInput((current) => ({
+                                    ...current,
+                                    coverImagePath: crop.coverImagePath,
+                                    ocrImageSource: crop.ocrImageSource || '',
+                                  }))
                               )
                             }
                             disabled={Boolean(croppingTarget)}
@@ -1758,8 +2043,12 @@ export default function EPaperPageHotspotEditor() {
                                 draftHotspot,
                                 draftInput.title,
                                 'normal',
-                                (coverImagePath) =>
-                                  setDraftInput((current) => ({ ...current, coverImagePath }))
+                                (crop) =>
+                                  setDraftInput((current) => ({
+                                    ...current,
+                                    coverImagePath: crop.coverImagePath,
+                                    ocrImageSource: crop.ocrImageSource || '',
+                                  }))
                               )
                             }
                             disabled={Boolean(croppingTarget)}
@@ -1772,8 +2061,12 @@ export default function EPaperPageHotspotEditor() {
                       <button
                         type="button"
                         onClick={() => {
-                          setDraftInput((current) => ({ ...current, coverImagePath: '' }));
-                          clearCropOcrMessage('manual');
+                          setDraftInput((current) => ({
+                            ...current,
+                            coverImagePath: '',
+                            ocrImageSource: '',
+                          }));
+                          clearCropOcrReview('manual');
                         }}
                         className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                       >
@@ -1785,6 +2078,14 @@ export default function EPaperPageHotspotEditor() {
                         {cropOcrMessages.manual}
                       </p>
                     ) : null}
+                    {renderCropOcrReview('manual', {
+                      onUseHeadline: (value) =>
+                        setDraftInput((current) => ({ ...current, title: value })),
+                      onUseSummary: (value) =>
+                        setDraftInput((current) => ({ ...current, excerpt: value })),
+                      onUseBody: (value) =>
+                        setDraftInput((current) => ({ ...current, contentHtml: value })),
+                    })}
                   </div>
                 ) : null}
                 <label className="block">
@@ -1795,8 +2096,8 @@ export default function EPaperPageHotspotEditor() {
                       setDraftInput((current) => ({ ...current, contentHtml: event.target.value }))
                     }
                     placeholder="Clean Hindi body"
-                    rows={6}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                    rows={10}
+                    className="min-h-[220px] w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm leading-6 outline-none focus:border-primary-600"
                   />
                 </label>
               </div>
@@ -1976,19 +2277,7 @@ export default function EPaperPageHotspotEditor() {
                                 void extractTextFromCropImage(
                                   suggestionOcrTarget,
                                   suggestion.coverImagePath,
-                                  (result) =>
-                                    setSuggestions((current) =>
-                                      current.map((item) =>
-                                        item.id === suggestion.id
-                                          ? {
-                                              ...item,
-                                              title: result.title || item.title,
-                                              excerpt: result.excerpt || item.excerpt,
-                                              contentHtml: result.contentHtml || item.contentHtml,
-                                            }
-                                          : item
-                                      )
-                                    )
+                                  suggestion.ocrImageSource
                                 )
                               }
                               disabled={Boolean(cropOcrTarget)}
@@ -1999,7 +2288,7 @@ export default function EPaperPageHotspotEditor() {
                               ) : null}
                               {cropOcrTarget === suggestionOcrTarget
                                 ? 'Extracting...'
-                                : 'Extract Text From Crop'}
+                                : 'OCR Assist'}
                             </button>
                             <button
                               type="button"
@@ -2009,10 +2298,16 @@ export default function EPaperPageHotspotEditor() {
                                   suggestion.hotspot,
                                   suggestion.title,
                                   'tight',
-                                  (coverImagePath) =>
+                                  (crop) =>
                                     setSuggestions((current) =>
                                       current.map((item) =>
-                                        item.id === suggestion.id ? { ...item, coverImagePath } : item
+                                        item.id === suggestion.id
+                                          ? {
+                                              ...item,
+                                              coverImagePath: crop.coverImagePath,
+                                              ocrImageSource: crop.ocrImageSource || '',
+                                            }
+                                          : item
                                       )
                                     )
                                 )
@@ -2030,10 +2325,16 @@ export default function EPaperPageHotspotEditor() {
                                   suggestion.hotspot,
                                   suggestion.title,
                                   'normal',
-                                  (coverImagePath) =>
+                                  (crop) =>
                                     setSuggestions((current) =>
                                       current.map((item) =>
-                                        item.id === suggestion.id ? { ...item, coverImagePath } : item
+                                        item.id === suggestion.id
+                                          ? {
+                                              ...item,
+                                              coverImagePath: crop.coverImagePath,
+                                              ocrImageSource: crop.ocrImageSource || '',
+                                            }
+                                          : item
                                       )
                                     )
                                 )
@@ -2049,11 +2350,11 @@ export default function EPaperPageHotspotEditor() {
                                 setSuggestions((current) =>
                                   current.map((item) =>
                                     item.id === suggestion.id
-                                      ? { ...item, coverImagePath: '' }
+                                      ? { ...item, coverImagePath: '', ocrImageSource: '' }
                                       : item
                                   )
                                 );
-                                clearCropOcrMessage(suggestionOcrTarget);
+                                clearCropOcrReview(suggestionOcrTarget);
                               }}
                               className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                             >
@@ -2065,6 +2366,14 @@ export default function EPaperPageHotspotEditor() {
                               {cropOcrMessages[suggestionOcrTarget]}
                             </p>
                           ) : null}
+                          {renderCropOcrReview(suggestionOcrTarget, {
+                            onUseHeadline: (value) =>
+                              updateSuggestionField(suggestion.id, 'title', value),
+                            onUseSummary: (value) =>
+                              updateSuggestionField(suggestion.id, 'excerpt', value),
+                            onUseBody: (value) =>
+                              updateSuggestionField(suggestion.id, 'contentHtml', value),
+                          })}
                         </div>
                       ) : null}
 
@@ -2077,10 +2386,16 @@ export default function EPaperPageHotspotEditor() {
                               suggestion.hotspot,
                               suggestion.title,
                               'tight',
-                              (coverImagePath) =>
+                              (crop) =>
                                 setSuggestions((current) =>
                                   current.map((item) =>
-                                    item.id === suggestion.id ? { ...item, coverImagePath } : item
+                                    item.id === suggestion.id
+                                      ? {
+                                          ...item,
+                                          coverImagePath: crop.coverImagePath,
+                                          ocrImageSource: crop.ocrImageSource || '',
+                                        }
+                                      : item
                                   )
                                 )
                             )
@@ -2101,10 +2416,16 @@ export default function EPaperPageHotspotEditor() {
                               suggestion.hotspot,
                               suggestion.title,
                               'normal',
-                              (coverImagePath) =>
+                              (crop) =>
                                 setSuggestions((current) =>
                                   current.map((item) =>
-                                    item.id === suggestion.id ? { ...item, coverImagePath } : item
+                                    item.id === suggestion.id
+                                      ? {
+                                          ...item,
+                                          coverImagePath: crop.coverImagePath,
+                                          ocrImageSource: crop.ocrImageSource || '',
+                                        }
+                                      : item
                                   )
                                 )
                             )
@@ -2212,9 +2533,14 @@ export default function EPaperPageHotspotEditor() {
                       <input
                         type="text"
                         value={article.coverImagePath || ''}
-                        onChange={(event) =>
-                          updateArticleField(article._id, 'coverImagePath', event.target.value)
-                        }
+                        onChange={(event) => {
+                          updateArticleField(article._id, 'coverImagePath', event.target.value);
+                          setArticleOcrImageSources((current) => ({
+                            ...current,
+                            [article._id]: '',
+                          }));
+                          clearCropOcrReview(`article:${article._id}`);
+                        }}
                         placeholder="Crop / cover image path"
                         className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                       />
@@ -2227,8 +2553,7 @@ export default function EPaperPageHotspotEditor() {
                               article.hotspot,
                               article.title,
                               'tight',
-                              (coverImagePath) =>
-                                updateArticleField(article._id, 'coverImagePath', coverImagePath)
+                              (crop) => updateArticleCrop(article._id, crop)
                             )
                           }
                           disabled={isSaving || isDeleting || Boolean(croppingTarget)}
@@ -2247,8 +2572,7 @@ export default function EPaperPageHotspotEditor() {
                               article.hotspot,
                               article.title,
                               'normal',
-                              (coverImagePath) =>
-                                updateArticleField(article._id, 'coverImagePath', coverImagePath)
+                              (crop) => updateArticleCrop(article._id, crop)
                             )
                           }
                           disabled={isSaving || isDeleting || Boolean(croppingTarget)}
@@ -2287,19 +2611,7 @@ export default function EPaperPageHotspotEditor() {
                               void extractTextFromCropImage(
                                 articleOcrTarget,
                                 article.coverImagePath,
-                                (result) => {
-                                  updateArticleField(article._id, 'title', result.title || article.title);
-                                  updateArticleField(
-                                    article._id,
-                                    'excerpt',
-                                    result.excerpt || article.excerpt || ''
-                                  );
-                                  updateArticleField(
-                                    article._id,
-                                    'contentHtml',
-                                    result.contentHtml || article.contentHtml || ''
-                                  );
-                                }
+                                articleOcrImageSources[article._id]
                               )
                             }
                             disabled={isSaving || isDeleting || Boolean(cropOcrTarget)}
@@ -2310,7 +2622,7 @@ export default function EPaperPageHotspotEditor() {
                             ) : null}
                             {cropOcrTarget === articleOcrTarget
                               ? 'Extracting...'
-                              : 'Extract Text From Crop'}
+                              : 'OCR Assist'}
                           </button>
                           <button
                             type="button"
@@ -2320,8 +2632,7 @@ export default function EPaperPageHotspotEditor() {
                                 article.hotspot,
                                 article.title,
                                 'tight',
-                                (coverImagePath) =>
-                                  updateArticleField(article._id, 'coverImagePath', coverImagePath)
+                                (crop) => updateArticleCrop(article._id, crop)
                               )
                             }
                             disabled={isSaving || isDeleting || Boolean(croppingTarget)}
@@ -2337,8 +2648,7 @@ export default function EPaperPageHotspotEditor() {
                                 article.hotspot,
                                 article.title,
                                 'normal',
-                                (coverImagePath) =>
-                                  updateArticleField(article._id, 'coverImagePath', coverImagePath)
+                                (crop) => updateArticleCrop(article._id, crop)
                               )
                             }
                             disabled={isSaving || isDeleting || Boolean(croppingTarget)}
@@ -2347,11 +2657,15 @@ export default function EPaperPageHotspotEditor() {
                             Try with margin
                           </button>
                           <button
-                            type="button"
-                            onClick={() => {
-                              updateArticleField(article._id, 'coverImagePath', '');
-                              clearCropOcrMessage(articleOcrTarget);
-                            }}
+                          type="button"
+                          onClick={() => {
+                            updateArticleField(article._id, 'coverImagePath', '');
+                            setArticleOcrImageSources((current) => ({
+                              ...current,
+                              [article._id]: '',
+                            }));
+                            clearCropOcrReview(articleOcrTarget);
+                          }}
                             className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                           >
                             Clear crop
@@ -2362,6 +2676,14 @@ export default function EPaperPageHotspotEditor() {
                             {cropOcrMessages[articleOcrTarget]}
                           </p>
                         ) : null}
+                        {renderCropOcrReview(articleOcrTarget, {
+                          onUseHeadline: (value) =>
+                            updateArticleField(article._id, 'title', value),
+                          onUseSummary: (value) =>
+                            updateArticleField(article._id, 'excerpt', value),
+                          onUseBody: (value) =>
+                            updateArticleField(article._id, 'contentHtml', value),
+                        })}
                       </div>
                     ) : null}
                     <textarea

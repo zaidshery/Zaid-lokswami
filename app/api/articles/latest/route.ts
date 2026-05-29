@@ -214,13 +214,13 @@ export async function GET(req: NextRequest) {
     if (await shouldUseFileStore()) {
       const payload = await listFromFileStore(limit, cursor);
       return NextResponse.json(payload, {
-        headers: publicJsonCacheHeaders({ sMaxAge: 60, staleWhileRevalidate: 300 }),
+        headers: publicJsonCacheHeaders({ sMaxAge: 120, staleWhileRevalidate: 600 }),
       });
     }
 
     const payload = await listFromMongo(limit, cursor);
     return NextResponse.json(payload, {
-      headers: publicJsonCacheHeaders({ sMaxAge: 60, staleWhileRevalidate: 300 }),
+      headers: publicJsonCacheHeaders({ sMaxAge: 120, staleWhileRevalidate: 600 }),
     });
   } catch (error) {
     console.error('Failed to load public latest feed:', error);

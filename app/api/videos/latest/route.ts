@@ -23,8 +23,8 @@ type PublicVideoItem = {
 };
 
 const VIDEOS_CACHE_HEADERS = publicJsonCacheHeaders({
-  sMaxAge: 60,
-  staleWhileRevalidate: 300,
+  sMaxAge: 300,
+  staleWhileRevalidate: 900,
 });
 
 function asObject(value: unknown) {

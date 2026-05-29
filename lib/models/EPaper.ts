@@ -107,6 +107,9 @@ EPaperSchema.index({ productionStatus: 1, publishDate: -1 });
 EPaperSchema.index({ 'productionAssignee.id': 1, productionStatus: 1, updatedAt: -1 });
 // Cursor pagination maps logical editionDate to publishDate in this schema.
 EPaperSchema.index({ publishDate: -1, _id: -1 });
+EPaperSchema.index({ status: 1, citySlug: 1, publishDate: -1, _id: -1 });
+EPaperSchema.index({ status: 1, publishDate: -1, createdAt: -1 });
+EPaperSchema.index({ updatedAt: -1, _id: -1 });
 
 const EPaper =
   (mongoose.models.EPaper as mongoose.Model<IEPaper> | undefined) ||

@@ -8,8 +8,8 @@ type RouteContext = {
 };
 
 const PUBLIC_ARTICLE_DETAIL_CACHE_HEADERS = mediumPublicCache({
-  sMaxAge: 120,
-  staleWhileRevalidate: 600,
+  sMaxAge: 300,
+  staleWhileRevalidate: 1800,
 });
 
 export async function GET(_: Request, context: RouteContext) {

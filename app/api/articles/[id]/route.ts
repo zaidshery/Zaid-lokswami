@@ -12,8 +12,8 @@ type RouteContext = {
 };
 
 const ARTICLE_DETAIL_CACHE_HEADERS = publicJsonCacheHeaders({
-  sMaxAge: 120,
-  staleWhileRevalidate: 600,
+  sMaxAge: 300,
+  staleWhileRevalidate: 1800,
 });
 
 async function shouldUseFileStore() {

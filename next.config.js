@@ -30,6 +30,29 @@ const extraImageHosts = (process.env.NEXT_IMAGE_ALLOWED_HOSTS || '')
   .filter(Boolean);
 const allowedImageHosts = Array.from(new Set([...defaultImageHosts, ...extraImageHosts]));
 
+function cacheControlHeader(value) {
+  return [
+    {
+      key: 'Cache-Control',
+      value,
+    },
+  ];
+}
+
+const immutableAssetCache = cacheControlHeader('public, max-age=31536000, immutable');
+const privateNoStoreCache = cacheControlHeader(
+  'private, no-store, no-cache, max-age=0, must-revalidate'
+);
+const publicPageCache = cacheControlHeader(
+  'public, max-age=0, s-maxage=300, stale-while-revalidate=900'
+);
+const shortPublicPageCache = cacheControlHeader(
+  'public, max-age=0, s-maxage=120, stale-while-revalidate=600'
+);
+const searchPageCache = cacheControlHeader(
+  'public, max-age=0, s-maxage=30, stale-while-revalidate=120'
+);
+
 const nextConfig = {
   distDir: isDevelopment ? '.next-dev' : '.next',
   output: 'standalone',
@@ -57,48 +80,59 @@ const nextConfig = {
     return [
       {
         source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
+        headers: immutableAssetCache,
       },
       {
         source: '/next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
+        headers: immutableAssetCache,
       },
       {
         source: '/__next_static__/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
+        headers: immutableAssetCache,
       },
       {
         source: '/sw.js',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'private, no-store, no-cache, max-age=0, must-revalidate',
-          },
-        ],
+        headers: privateNoStoreCache,
+      },
+      {
+        source: '/',
+        headers: shortPublicPageCache,
       },
       {
         source: '/main',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=0, s-maxage=120, stale-while-revalidate=600',
-          },
-        ],
+        headers: shortPublicPageCache,
+      },
+      {
+        source: '/main/latest/:path*',
+        headers: shortPublicPageCache,
+      },
+      {
+        source: '/main/news/:path*',
+        headers: shortPublicPageCache,
+      },
+      {
+        source: '/main/stories/:path*',
+        headers: shortPublicPageCache,
+      },
+      {
+        source: '/main/category/:path*',
+        headers: publicPageCache,
+      },
+      {
+        source: '/main/article/:path*',
+        headers: publicPageCache,
+      },
+      {
+        source: '/main/epaper/:path*',
+        headers: publicPageCache,
+      },
+      {
+        source: '/main/videos/:path*',
+        headers: publicPageCache,
+      },
+      {
+        source: '/main/search/:path*',
+        headers: searchPageCache,
       },
       {
         // Cache election images for 5 minutes
@@ -112,30 +146,15 @@ const nextConfig = {
       },
       {
         source: '/main/account',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'private, no-store, no-cache, max-age=0, must-revalidate',
-          },
-        ],
+        headers: privateNoStoreCache,
       },
       {
         source: '/main/saved',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'private, no-store, no-cache, max-age=0, must-revalidate',
-          },
-        ],
+        headers: privateNoStoreCache,
       },
       {
         source: '/main/preferences',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'private, no-store, no-cache, max-age=0, must-revalidate',
-          },
-        ],
+        headers: privateNoStoreCache,
       },
       {
         source: '/:path*',

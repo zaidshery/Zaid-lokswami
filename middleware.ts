@@ -4,8 +4,13 @@ import { getToken } from 'next-auth/jwt';
 import { LOKSWAMI_SESSION_COOKIE } from '@/lib/auth/cookies';
 import { getJwtSecretOrNull } from '@/lib/auth/jwtSecret';
 import { resolveRouteGuardDecision } from '@/lib/auth/routeGuards';
-import { getLoginLimiter } from '@/lib/security/getRateLimiter';
-import { getIpRateLimitKey } from '@/lib/security/ipUtils';
+import {
+  getAdminLimiter,
+  getApiLimiter,
+  getHeavyRouteLimiter,
+  getLoginLimiter,
+} from '@/lib/security/getRateLimiter';
+import { getIpRateLimitKey, getUserRateLimitKey } from '@/lib/security/ipUtils';
 import { logApiRequestFromMiddleware } from '@/lib/security/requestLogger';
 
 async function getSessionToken(request: NextRequest) {
@@ -19,6 +24,52 @@ async function getSessionToken(request: NextRequest) {
     secret,
     cookieName: LOKSWAMI_SESSION_COOKIE,
   });
+}
+
+const HEAVY_RATE_LIMIT_ROUTES = [
+  /^\/api\/v1\/public\/search(?:\/|$)/,
+  /^\/api\/ai\/(?:actions|search|suggestions|summary)(?:\/|$)/,
+  /^\/api\/admin\/epapers\/assist(?:\/|$)/,
+  /^\/api\/admin\/epapers\/[^/]+\/(?:crop-hotspot|generate-page-images|ocr|tts)(?:\/|$)/,
+  /^\/api\/admin\/epapers\/[^/]+\/articles\/[^/]+\/tts(?:\/|$)/,
+  /^\/api\/admin\/articles\/[^/]+\/breaking-tts(?:\/|$)/,
+  /^\/api\/admin\/analytics\/briefing-schedules\/[^/]+\/run(?:\/|$)/,
+  /^\/api\/admin\/social-posts\/generate(?:\/|$)/,
+];
+
+type SessionToken = Awaited<ReturnType<typeof getSessionToken>>;
+
+function isHeavyRateLimitedRoute(pathname: string) {
+  return HEAVY_RATE_LIMIT_ROUTES.some((pattern) => pattern.test(pathname));
+}
+
+function createRateLimitResponse(error: string, message: string, retryAfter: number) {
+  return new NextResponse(
+    JSON.stringify({
+      error,
+      message,
+      retryAfter,
+    }),
+    {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'private, no-store, no-cache, max-age=0, must-revalidate',
+        'Retry-After': String(retryAfter),
+      },
+    }
+  );
+}
+
+function getSessionAwareRateLimitKey(
+  request: NextRequest,
+  session: SessionToken,
+  prefix: string
+) {
+  const email = typeof session?.email === 'string' ? session.email.trim() : '';
+  const userId = typeof session?.userId === 'string' ? session.userId.trim() : '';
+  const accountKey = userId || email;
+  return accountKey ? getUserRateLimitKey(accountKey, prefix) : getIpRateLimitKey(request, prefix);
 }
 
 /** Protects admin and signed-in reader routes with the active NextAuth session. */
@@ -71,19 +122,44 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
 
       if (!result.allowed) {
         const retryAfter = result.retryAfter || 900; // 15 minutes default
-        return scheduleRequestLog(new NextResponse(
-          JSON.stringify({
-            error: 'Too many login attempts',
-            message: `Please try again in ${retryAfter} seconds`,
-            retryAfter,
-          }),
-          {
-            status: 429, // Too Many Requests
-            headers: {
-              'Content-Type': 'application/json',
-              'Retry-After': String(retryAfter),
-            },
-          }
+        return scheduleRequestLog(createRateLimitResponse(
+          'Too many login attempts',
+          `Please try again in ${retryAfter} seconds`,
+          retryAfter
+        ));
+      }
+    }
+
+    const isAdminArea = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
+    const isAuthApiRoute = pathname.startsWith('/api/auth/');
+    const isHeavyRoute = isHeavyRateLimitedRoute(pathname);
+
+    if (isApiRequest && !isAdminArea && !isAuthApiRoute) {
+      if (isHeavyRoute) {
+        const heavyLimiter = getHeavyRouteLimiter();
+        const heavyKey = getIpRateLimitKey(request, 'heavy');
+        const heavyResult = heavyLimiter.check(heavyKey);
+
+        if (!heavyResult.allowed) {
+          const retryAfter = heavyResult.retryAfter || 600;
+          return scheduleRequestLog(createRateLimitResponse(
+            'Too many expensive requests',
+            `Please try again in ${retryAfter} seconds`,
+            retryAfter
+          ));
+        }
+      }
+
+      const apiLimiter = getApiLimiter();
+      const apiKey = getIpRateLimitKey(request, 'api');
+      const apiResult = apiLimiter.check(apiKey);
+
+      if (!apiResult.allowed) {
+        const retryAfter = apiResult.retryAfter || 300;
+        return scheduleRequestLog(createRateLimitResponse(
+          'Too many API requests',
+          `Please try again in ${retryAfter} seconds`,
+          retryAfter
         ));
       }
     }
@@ -91,6 +167,36 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     session = await getSessionToken(request);
     const email = typeof session?.email === 'string' ? session.email.trim() : '';
     const userId = typeof session?.userId === 'string' ? session.userId.trim() : '';
+
+    if (isHeavyRoute && isAdminArea) {
+      const heavyLimiter = getHeavyRouteLimiter();
+      const heavyKey = getSessionAwareRateLimitKey(request, session, 'heavy');
+      const heavyResult = heavyLimiter.check(heavyKey);
+
+      if (!heavyResult.allowed) {
+        const retryAfter = heavyResult.retryAfter || 600;
+        return scheduleRequestLog(createRateLimitResponse(
+          'Too many expensive requests',
+          `Please try again in ${retryAfter} seconds`,
+          retryAfter
+        ));
+      }
+    }
+
+    if (isAdminArea) {
+      const adminLimiter = getAdminLimiter();
+      const adminKey = getSessionAwareRateLimitKey(request, session, 'admin');
+      const adminResult = adminLimiter.check(adminKey);
+
+      if (!adminResult.allowed) {
+        const retryAfter = adminResult.retryAfter || 600;
+        return scheduleRequestLog(createRateLimitResponse(
+          'Too many admin requests',
+          `Please try again in ${retryAfter} seconds`,
+          retryAfter
+        ));
+      }
+    }
 
     const decision = resolveRouteGuardDecision({
       pathname,

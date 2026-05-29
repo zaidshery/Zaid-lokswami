@@ -4,8 +4,8 @@ import { apiErrorResponse, apiSuccessResponse } from '@/lib/api/response';
 import { getPublicHomeFeed } from '@/lib/server/publicHomeFeed';
 
 const HOME_FEED_CACHE_HEADERS = shortPublicCache({
-  sMaxAge: 60,
-  staleWhileRevalidate: 300,
+  sMaxAge: 120,
+  staleWhileRevalidate: 600,
 });
 
 export async function GET() {

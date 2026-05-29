@@ -43,6 +43,26 @@ describe('e-paper crop OCR text cleanup', () => {
     expect(result.contentHtml).toContain('रात के समय शहर का नजारा');
   });
 
+  it('skips masthead noise and prefers the quoted Hindi headline', () => {
+    const result = buildEpaperCropTextOcrResult([
+      { text: 'महा/लोकस्वामीपुलिस थाना ;', top: 0, left: 0, height: 24 },
+      { text: '_< सुरक्षा, आत्मनिर्भरता व आत्मविश्वास का संदेश', top: 28, left: 0, height: 16 },
+      { text: 'बेटियों को मिली ‘उम्मीद’ की ताकत', top: 52, left: 0, height: 16 },
+      {
+        text: 'किशनगंज द्वारा आयोजित उम्मीद कार्यक्रम में बालिकाओं से खुलकर संवाद किया।',
+        top: 78,
+        left: 0,
+        height: 14,
+      },
+    ]);
+
+    expect(result.title).toBe('बेटियों को मिली ‘उम्मीद’ की ताकत');
+    expect(result.plainText).not.toContain('लोकस्वामी');
+    expect(result.plainText.split('\n')[0]).toBe('सुरक्षा, आत्मनिर्भरता व आत्मविश्वास का संदेश');
+    expect(result.contentHtml).not.toContain('बेटियों को मिली');
+    expect(result.contentHtml).toContain('किशनगंज द्वारा आयोजित');
+  });
+
   it('falls back to the first readable line when no headline line is larger', () => {
     const result = buildEpaperCropTextOcrResult([
       { text: 'जल्द प्रमाण पत्र के लिए भटक रहे परिजन', top: 0, left: 0, height: 16 },
@@ -76,5 +96,66 @@ describe('e-paper crop OCR text cleanup', () => {
     expect(result.excerpt).toContain('शहर में यातायात व्यवस्था');
     expect(result.excerpt.length).toBeLessThanOrEqual(180);
     expect(result.engine).toBe('local');
+  });
+
+  it('trims noisy punctuation from OCR line edges', () => {
+    const result = buildEpaperCropTextOcrResult([
+      { text: ' _< बेटियों को मिली ताकत ; ', top: 0, left: 0, height: 20 },
+      { text: ' कार्यक्रम में बालिकाओं से संवाद किया गया। ', top: 28, left: 0, height: 14 },
+    ]);
+
+    expect(result.plainText.split('\n')[0]).toBe('बेटियों को मिली ताकत');
+    expect(result.title).toBe('बेटियों को मिली ताकत');
+  });
+
+  it('returns confidence warnings for weak OCR text', () => {
+    const result = buildEpaperCropTextOcrResult(
+      [{ text: 'Indore OCR draft', top: 0, left: 0, height: 12 }],
+      { sourceKind: 'preprocessed' }
+    );
+
+    expect(result.confidence).toBeLessThan(70);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining(['Low line count', 'Hindi script not detected'])
+    );
+    expect(result.sourceKind).toBe('preprocessed');
+  });
+
+  it('drops photo OCR noise and repeated junk before suggesting article text', () => {
+    const result = buildEpaperCropTextOcrResult([
+      { text: 'व आ _—— HF अर', top: 0, left: 0, height: 16 },
+      { text: 'J Fie bay CT g: 4 | # \\ \\ bh', top: 20, left: 0, height: 16 },
+      { text: 'Lo ay लि:, “; Sl er ee |। * —— जि Zl', top: 40, left: 0, height: 16 },
+      { text: 'TT ISR SE NEN AB Se ie De te Co से', top: 60, left: 0, height: 16 },
+      {
+        text:
+          '‘इंदौर। स्वच्छता में देशभर में AER - TRH बना चुके इंदौर में अब पारंपरिक बाजार भी स्मार्ट सफाई मॉडल की ओर कदम बढ़ा रहे हैं।',
+        top: 90,
+        left: 0,
+        height: 14,
+      },
+      {
+        text:
+          'रामनवमी के पावन अवसर पर शहर की चोइथराम फल-सब्जी मंडी में विशेष साफ-सफाई अभियान चलाया गया।',
+        top: 112,
+        left: 0,
+        height: 14,
+      },
+      { text: 'J Fie bay CT g: 4 | # \\ \\ bh', top: 135, left: 0, height: 16 },
+      {
+        text:
+          'रामनवमी के पावन अवसर पर शहर की चोइथराम फल-सब्जी मंडी में विशेष साफ-सफाई अभियान चलाया गया।',
+        top: 160,
+        left: 0,
+        height: 14,
+      },
+    ]);
+
+    expect(result.plainText).not.toContain('J Fie');
+    expect(result.plainText).not.toContain('HF अर');
+    expect(result.title).toContain('इंदौर। स्वच्छता');
+    expect(result.title).not.toContain('AER - TRH');
+    expect(result.contentHtml).toContain('रामनवमी के पावन अवसर');
+    expect(result.contentHtml.match(/रामनवमी/g)?.length).toBe(1);
   });
 });

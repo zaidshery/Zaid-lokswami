@@ -51,6 +51,7 @@ const EPaperArticleSchema = new mongoose.Schema<IEPaperArticle>(
 
 EPaperArticleSchema.index({ epaperId: 1, slug: 1 }, { unique: true });
 EPaperArticleSchema.index({ epaperId: 1, pageNumber: 1 });
+EPaperArticleSchema.index({ epaperId: 1, pageNumber: 1, createdAt: 1 });
 EPaperArticleSchema.index({ 'workflow.status': 1, updatedAt: -1 });
 
 const EPaperArticle =

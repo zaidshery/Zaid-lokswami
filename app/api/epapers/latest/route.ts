@@ -31,8 +31,8 @@ type PublicEPaperItem = {
 };
 
 const EPAPERS_CACHE_HEADERS = publicJsonCacheHeaders({
-  sMaxAge: 300,
-  staleWhileRevalidate: 600,
+  sMaxAge: 600,
+  staleWhileRevalidate: 1800,
 });
 
 function asObject(value: unknown) {

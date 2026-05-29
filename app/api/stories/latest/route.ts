@@ -9,8 +9,8 @@ const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 5;
 const MAX_LIMIT = 100;
 const STORIES_CACHE_HEADERS = publicJsonCacheHeaders({
-  sMaxAge: 60,
-  staleWhileRevalidate: 300,
+  sMaxAge: 300,
+  staleWhileRevalidate: 900,
 });
 
 type PublicStoryItem = {

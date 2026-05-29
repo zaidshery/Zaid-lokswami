@@ -11,6 +11,7 @@ import {
   calculateEpaperHotspotCrop,
   type EpaperHotspotCropPaddingMode,
 } from '@/lib/utils/epaperHotspotCrop';
+import { buildEpaperCropOcrImageSource } from '@/lib/server/epaperOcrPreprocess';
 import {
   formatPublishDateFolder,
   resolveEpaperAssetPath,
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const hotspot = parseHotspot(source.hotspot);
     const title = typeof source.title === 'string' ? source.title : '';
     const paddingMode = parsePaddingMode(source.paddingMode);
+    const includeOcrSource = Boolean(source.includeOcrSource);
 
     if (!pageNumber) {
       return NextResponse.json({ success: false, error: 'pageNumber is required' }, { status: 400 });
@@ -165,6 +167,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
       })
       .webp({ quality: 92 })
       .toBuffer();
+    const ocrImage = includeOcrSource
+      ? await buildEpaperCropOcrImageSource(pageImageBuffer, crop)
+      : null;
 
     const publishDate =
       epaper.publishDate instanceof Date
@@ -200,6 +205,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
         height: crop.height,
         paddingMode,
         crop,
+        ocrImageSource: ocrImage?.dataUrl,
+        ocrImageWidth: ocrImage?.width,
+        ocrImageHeight: ocrImage?.height,
       },
     });
   } catch (error) {

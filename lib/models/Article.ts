@@ -174,8 +174,12 @@ ArticleSchema.index({ 'workflow.assignedTo.id': 1, 'workflow.status': 1, updated
 ArticleSchema.index({ sourceStoryId: 1, updatedAt: -1 });
 // Performance And Scaling Plan — recommended additions:
 ArticleSchema.index({ slug: 1 }, { unique: true, sparse: true });
+ArticleSchema.index({ previousSlugs: 1 });
 ArticleSchema.index({ category: 1, publishedAt: -1 });
 ArticleSchema.index({ isBreaking: 1, publishedAt: -1 });
+ArticleSchema.index({ isTrending: 1, publishedAt: -1 });
+ArticleSchema.index({ 'reporterMeta.locationTag': 1, publishedAt: -1 });
+ArticleSchema.index({ updatedAt: -1, publishedAt: -1, _id: -1 });
 
 export default mongoose.models.Article || mongoose.model('Article', ArticleSchema);
 

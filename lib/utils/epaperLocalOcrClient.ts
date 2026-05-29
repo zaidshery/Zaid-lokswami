@@ -41,6 +41,9 @@ export type EpaperCropTextOcrResult = {
   contentHtml: string;
   lineCount: number;
   engine: 'local';
+  confidence?: number;
+  warnings?: string[];
+  sourceKind?: 'cover' | 'preprocessed';
 };
 
 interface TesseractBBox {
@@ -82,24 +85,41 @@ declare global {
 
 let loadPromise: Promise<TesseractGlobal> | null = null;
 
+const DEVANAGARI_PATTERN = /[\u0900-\u097F]/;
+const LATIN_OR_NUMBER_PATTERN = /[A-Za-z0-9]/;
+const EDGE_OCR_NOISE_PATTERN = /^[\s_<>{}\[\]|\\/:;,.('"`~!@#$%^&*+=?·•-]+|[\s_<>{}\[\]|\\/:;,.('"`~!@#$%^&*+=?·•-]+$/g;
+const STRUCTURAL_NOISE_PATTERN =
+  /(लोकस्वामी|lokswami|ई-?पेपर|e-?paper|edition|संस्करण|अंक|page\s*\d{1,3}|पेज\s*\d{1,3})/i;
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
 function cleanOcrTextLine(value: string) {
-  return value.replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/\s+/g, ' ')
+    .replace(EDGE_OCR_NOISE_PATTERN, '')
+    .replace(/\b[A-Z]{2,}(?:\s*[-–—]\s*[A-Z]{2,})+\b/g, '')
+    .replace(/\s+\)\s+\([^।\n]*[A-Za-z\\|_=<>#][^।\n]*$/g, '')
+    .replace(/\s+([,.;:!?।])/g, '$1')
+    .replace(/([‘“])\s+/g, '$1')
+    .replace(/\s+([’”])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 function isIsolatedPageNoise(value: string) {
   const text = value.trim();
-  return /^\d{1,3}$/.test(text) || /^page\s+\d{1,3}$/i.test(text);
+  if (/^\d{1,3}$/.test(text) || /^page\s+\d{1,3}$/i.test(text)) return true;
+  if (STRUCTURAL_NOISE_PATTERN.test(text) && text.length <= 80) return true;
+  return false;
 }
 
 function toCropOcrLines(lines: EpaperCropOcrLine[]) {
-  return lines
+  const normalized = lines
     .map((line, index) => {
       const text = cleanOcrTextLine(String(line.text || ''));
-      if (!text || isIsolatedPageNoise(text)) return null;
+      if (!text || isIsolatedPageNoise(text) || isLikelyOcrGarbageLine(text)) return null;
 
       const top = Number(line.top);
       const left = Number(line.left);
@@ -116,6 +136,14 @@ function toCropOcrLines(lines: EpaperCropOcrLine[]) {
       if (!a || !b) return 0;
       return a.top === b.top ? a.left - b.left : a.top - b.top;
     }) as Array<{ text: string; top: number; left: number; height: number }>;
+
+  const seen = new Set<string>();
+  return normalized.filter((line) => {
+    const key = line.text.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function median(values: number[]) {
@@ -135,6 +163,107 @@ function buildExcerpt(value: string) {
   return trimToLength(value.replace(/\s+/g, ' '), 180);
 }
 
+function calculateTextNoiseRatio(value: string) {
+  const text = value.replace(/\s+/g, '');
+  if (!text) return 1;
+  const noisy = countMatches(text, /[^A-Za-z0-9\u0900-\u097F,.;:!?।‘’“”'"()-]/g);
+  return noisy / text.length;
+}
+
+function countMatches(value: string, pattern: RegExp) {
+  return value.match(pattern)?.length || 0;
+}
+
+function hasReadableScript(value: string) {
+  return DEVANAGARI_PATTERN.test(value) || LATIN_OR_NUMBER_PATTERN.test(value);
+}
+
+function getLineSignal(value: string) {
+  const text = value.replace(/\s+/g, '');
+  const readableChars = countMatches(text, /[A-Za-z0-9\u0900-\u097F]/g);
+  const devanagariChars = countMatches(text, /[\u0900-\u097F]/g);
+  const latinChars = countMatches(text, /[A-Za-z]/g);
+  const symbolChars = countMatches(text, /[^A-Za-z0-9\u0900-\u097F\s]/g);
+  const tokens = value.split(/\s+/).filter(Boolean);
+  const shortTokens = tokens.filter((token) => token.length <= 2).length;
+  const length = Math.max(1, text.length);
+
+  return {
+    readableRatio: readableChars / length,
+    devanagariChars,
+    latinChars,
+    symbolRatio: symbolChars / length,
+    wordCount: tokens.length,
+    shortTokenRatio: shortTokens / Math.max(1, tokens.length),
+    hasHardNoiseSymbol: /[\\|_=<>#]/.test(value),
+  };
+}
+
+function isLikelyOcrGarbageLine(value: string) {
+  const text = value.trim();
+  if (!text) return true;
+
+  const signal = getLineSignal(text);
+  if (signal.readableRatio < 0.46) return true;
+  if (signal.symbolRatio > 0.36) return true;
+
+  if (signal.devanagariChars === 0) {
+    if (signal.hasHardNoiseSymbol) return true;
+    if (signal.symbolRatio > 0.18) return true;
+    if (signal.latinChars < 10 || signal.wordCount < 2) return true;
+    if (signal.shortTokenRatio > 0.55) return true;
+    return false;
+  }
+
+  if (signal.devanagariChars < 6) {
+    if (signal.hasHardNoiseSymbol) return true;
+    if (signal.latinChars >= signal.devanagariChars) return true;
+    if (signal.symbolRatio > 0.16) return true;
+    if (signal.wordCount <= 3) return true;
+  }
+
+  if (signal.hasHardNoiseSymbol && signal.devanagariChars < 14) return true;
+  if (signal.shortTokenRatio > 0.65 && signal.devanagariChars < 16) return true;
+
+  return false;
+}
+
+function scoreHeadlineCandidate(
+  line: { text: string; height: number },
+  index: number,
+  medianHeight: number
+) {
+  const text = cleanOcrTextLine(line.text);
+  if (!text || !hasReadableScript(text) || isIsolatedPageNoise(text)) return Number.NEGATIVE_INFINITY;
+
+  const readableChars = countMatches(text, /[A-Za-z0-9\u0900-\u097F]/g);
+  const punctuationChars = countMatches(text, /[^A-Za-z0-9\u0900-\u097F\s]/g);
+  const punctuationRatio = punctuationChars / Math.max(1, text.length);
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+
+  let score = Math.max(0, 6 - index * 0.55);
+  score += Math.min(4, (Math.max(1, line.height) / Math.max(1, medianHeight)) * 1.8);
+
+  if (DEVANAGARI_PATTERN.test(text)) score += 4;
+  else score += 1;
+
+  if (text.length >= 18 && text.length <= 110) score += 3;
+  else if (text.length >= 10 && text.length <= 140) score += 1;
+  else if (text.length < 8) score -= 4;
+  else score -= 2;
+
+  if (wordCount >= 3 && wordCount <= 14) score += 2;
+  else if (wordCount <= 1) score -= 3;
+
+  if (/[‘’“”"']/.test(text)) score += 3;
+  if (/[:/\\|]/.test(text)) score -= 3;
+  if (punctuationRatio > 0.24) score -= 5;
+  if (readableChars < Math.max(4, text.length * 0.55)) score -= 4;
+  if (/का संदेश$/.test(text)) score -= 1.5;
+
+  return score;
+}
+
 function pickHeadlineStart(lines: ReturnType<typeof toCropOcrLines>) {
   if (!lines.length) return -1;
   if (lines.length === 1) return 0;
@@ -152,11 +281,65 @@ function pickHeadlineStart(lines: ReturnType<typeof toCropOcrLines>) {
 
   const isMeaningfullyLarger =
     strongest.line.height >= medianHeight * 1.2 && strongest.line.height >= firstHeight * 1.12;
-  return isMeaningfullyLarger ? strongest.index : 0;
+  if (isMeaningfullyLarger) {
+    const strongScore = scoreHeadlineCandidate(strongest.line, strongest.index, medianHeight);
+    if (strongScore > 4) return strongest.index;
+  }
+
+  const best = topLines
+    .map((line, index) => ({
+      index,
+      score: scoreHeadlineCandidate(line, index, medianHeight),
+    }))
+    .sort((a, b) => b.score - a.score)[0];
+
+  return best && Number.isFinite(best.score) && best.score > 4 ? best.index : 0;
+}
+
+function buildOcrConfidence(
+  lines: ReturnType<typeof toCropOcrLines>,
+  plainText: string,
+  title: string
+) {
+  let confidence = 92;
+  const warnings: string[] = [];
+  const noiseRatio = calculateTextNoiseRatio(plainText);
+
+  if (lines.length <= 1) {
+    confidence -= 30;
+    warnings.push('Low line count');
+  } else if (lines.length <= 2) {
+    confidence -= 16;
+    warnings.push('Short OCR text');
+  }
+
+  if (!DEVANAGARI_PATTERN.test(plainText)) {
+    confidence -= 18;
+    warnings.push('Hindi script not detected');
+  }
+
+  if (noiseRatio > 0.22) {
+    confidence -= 18;
+    warnings.push('Noisy OCR text');
+  } else if (noiseRatio > 0.14) {
+    confidence -= 10;
+    warnings.push('Review punctuation noise');
+  }
+
+  if (cleanOcrTextLine(title).length < 10) {
+    confidence -= 10;
+    warnings.push('Headline may be incomplete');
+  }
+
+  return {
+    confidence: Math.max(0, Math.min(100, Math.round(confidence))),
+    warnings,
+  };
 }
 
 export function buildEpaperCropTextOcrResult(
-  rawLines: EpaperCropOcrLine[]
+  rawLines: EpaperCropOcrLine[],
+  options?: { sourceKind?: 'cover' | 'preprocessed' }
 ): EpaperCropTextOcrResult {
   const lines = toCropOcrLines(rawLines);
   const plainText = lines.map((line) => line.text).join('\n').trim();
@@ -168,6 +351,9 @@ export function buildEpaperCropTextOcrResult(
       contentHtml: '',
       lineCount: 0,
       engine: 'local',
+      confidence: 0,
+      warnings: ['No readable OCR text'],
+      sourceKind: options?.sourceKind || 'cover',
     };
   }
 
@@ -179,6 +365,7 @@ export function buildEpaperCropTextOcrResult(
   if (bodyText.replace(/\s+/g, '').length < 40) {
     bodyText = plainText;
   }
+  const quality = buildOcrConfidence(lines, plainText, title);
 
   return {
     plainText,
@@ -187,6 +374,9 @@ export function buildEpaperCropTextOcrResult(
     contentHtml: bodyText || plainText,
     lineCount: lines.length,
     engine: 'local',
+    confidence: quality.confidence,
+    warnings: quality.warnings,
+    sourceKind: options?.sourceKind || 'cover',
   };
 }
 
@@ -391,7 +581,7 @@ function buildSyntheticLinesFromText(text: string): LineBox[] {
 
 export async function recognizeEpaperCropTextLocally(
   imageSource: string,
-  options?: { language?: string }
+  options?: { language?: string; sourceKind?: 'cover' | 'preprocessed' }
 ): Promise<EpaperCropTextOcrResult> {
   const source = imageSource.trim();
   if (!source) {
@@ -417,7 +607,9 @@ export async function recognizeEpaperCropTextLocally(
 
   const lines = buildLineBoxes(result);
   const resultLines = lines.length ? lines : buildSyntheticLinesFromText(result?.data?.text || '');
-  const extracted = buildEpaperCropTextOcrResult(resultLines);
+  const extracted = buildEpaperCropTextOcrResult(resultLines, {
+    sourceKind: options?.sourceKind || 'cover',
+  });
   if (!extracted.lineCount || !extracted.plainText) {
     throw new Error('Could not read crop text. Paste text manually.');
   }

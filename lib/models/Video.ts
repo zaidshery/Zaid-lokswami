@@ -54,5 +54,8 @@ VideoSchema.index({ 'workflow.assignedTo.id': 1, 'workflow.status': 1, updatedAt
 // Performance And Scaling Plan — recommended additions:
 VideoSchema.index({ isPublished: 1, isShort: 1, publishedAt: -1 });
 VideoSchema.index({ isPublished: 1, isShort: 1, createdAt: -1 });
+VideoSchema.index({ isPublished: 1, category: 1, publishedAt: -1 });
+VideoSchema.index({ category: 1, updatedAt: -1, publishedAt: -1 });
+VideoSchema.index({ updatedAt: -1, publishedAt: -1, _id: -1 });
 
 export default mongoose.models.Video || mongoose.model('Video', VideoSchema);

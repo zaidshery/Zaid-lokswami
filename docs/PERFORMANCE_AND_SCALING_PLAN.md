@@ -1,6 +1,6 @@
 # Performance And Scaling Plan
 
-Last reviewed: 2026-05-09
+Last reviewed: 2026-05-29
 
 ## Targets
 
@@ -106,13 +106,20 @@ Already present:
 - Analytics events: event/date and created date.
 - Audit/content activity/TTS assets: operational indexes.
 
-Recommended additions after query review:
+Implemented after query review:
 
 - `articles.slug` unique/sparse once slug migration is clean.
+- `articles.previousSlugs`.
 - `articles.category + publishedAt`.
 - `articles.isBreaking + publishedAt`.
+- `articles.isTrending + publishedAt`.
+- `articles.reporterMeta.locationTag + publishedAt`.
 - `videos.isPublished + isShort + publishedAt/createdAt`.
+- `videos.isPublished + category + publishedAt`.
 - `stories.isPublished + priority + publishedAt`.
+- `stories.isPublished + category + publishedAt`.
+- `epapers.status + citySlug + publishDate`.
+- `epaper_articles.epaperId + pageNumber + createdAt`.
 - `analytics_events.createdAt` retention or rollup plan.
 
 ## Database Query Rules
@@ -162,3 +169,12 @@ Recommended additions after query review:
 5. Notification worker.
 6. Managed live/video provider.
 7. Separate worker deployment if job volume requires it.
+
+## 2026-05-29 Hostinger Scaling Update
+
+- Public page and API cache headers were strengthened for CDN/shared cache.
+- Middleware now rate-limits public APIs, admin routes, and expensive routes.
+- MongoDB public feed/detail indexes were expanded.
+- `npm run load:test:public` was added for staged load testing.
+- See `docs/HOSTINGER_CLOUDFLARE_SCALING_PHASES.md` for dashboard actions and
+  launch checks.

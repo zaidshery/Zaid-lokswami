@@ -5,8 +5,8 @@ import { parseQuery } from '@/lib/api/validation';
 import { listPublicArticles, normalizePublicArticleLimit } from '@/lib/server/publicArticles';
 
 const PUBLIC_ARTICLES_CACHE_HEADERS = shortPublicCache({
-  sMaxAge: 60,
-  staleWhileRevalidate: 300,
+  sMaxAge: 120,
+  staleWhileRevalidate: 600,
 });
 
 function getQueryValue(value: unknown) {

@@ -36,6 +36,7 @@
     "test:spaces": "node scripts/test-digitalocean-spaces.js",
     "test:smoke": "node scripts/smoke-check-deploy.js",
     "test:tts-smoke": "node scripts/test-tts-deploy.js",
+    "load:test:public": "node scripts/load-test-public.js",
     "verify:prod-env": "node scripts/validate-production-env.js",
     "verify:deploy": "node scripts/verify-deploy.js",
     "seed": "node scripts/seed.js",

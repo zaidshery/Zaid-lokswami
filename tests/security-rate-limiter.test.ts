@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import RateLimiter from '@/lib/security/rateLimiter';
+import {
+  destroyAllLimiters,
+  getHeavyRouteLimiter,
+  resetAllLimiters,
+} from '@/lib/security/getRateLimiter';
 
 describe('RateLimiter', () => {
   let limiter: RateLimiter;
@@ -142,5 +147,38 @@ describe('RateLimiter', () => {
   it('should return null for non-existent keys', () => {
     const status = limiter.getStatus('non-existent');
     expect(status).toBe(null);
+  });
+});
+
+describe('shared heavy route limiter', () => {
+  afterEach(() => {
+    destroyAllLimiters();
+  });
+
+  it('should block expensive operations after the configured burst', () => {
+    resetAllLimiters();
+    const heavyLimiter = getHeavyRouteLimiter();
+    const key = 'heavy:user:editor-1';
+
+    for (let index = 0; index < 20; index += 1) {
+      expect(heavyLimiter.check(key).allowed).toBe(true);
+    }
+
+    const blocked = heavyLimiter.check(key);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.isBlocked).toBe(true);
+    expect(blocked.retryAfter).toBeGreaterThan(0);
+  });
+
+  it('should be reset by the global limiter reset helper', () => {
+    const heavyLimiter = getHeavyRouteLimiter();
+    const key = 'heavy:ip:127.0.0.1';
+    heavyLimiter.check(key);
+
+    expect(heavyLimiter.getStatus(key)).not.toBe(null);
+
+    resetAllLimiters();
+
+    expect(heavyLimiter.getStatus(key)).toBe(null);
   });
 });

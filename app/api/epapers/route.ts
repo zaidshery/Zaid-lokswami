@@ -109,7 +109,7 @@ function mapStoredRecord(record: Record<string, unknown>) {
 }
 
 const PUBLIC_EPAPER_CACHE_HEADERS = {
-  'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+  'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1800',
 };
 
 export async function GET(req: NextRequest) {
