@@ -17,8 +17,8 @@ import {
   ChevronRight,
   Download,
   ExternalLink,
+  Instagram,
   Loader2,
-  LayoutGrid,
   MoreHorizontal,
   Minus,
   Newspaper,
@@ -30,6 +30,7 @@ import {
   Share2,
   Volume2,
   X,
+  Youtube,
 } from 'lucide-react';
 import Logo from '@/components/layout/Logo';
 import EPaperDatePicker from '@/components/ui/EPaperDatePicker';
@@ -37,6 +38,7 @@ import EPaperCityPicker from '@/components/ui/EPaperCityPicker';
 import {
   EPAPER_CITY_OPTIONS,
 } from '@/lib/constants/epaperCities';
+import { COMPANY_INFO } from '@/lib/constants/company';
 import { useAppStore } from '@/lib/store/appStore';
 import {
   buildEpaperIssueShareText,
@@ -126,7 +128,7 @@ const COPY = {
     shareWhatsApp: 'Share',
     shareStory: 'Share story',
     whatsApp: 'WhatsApp',
-    pinchToZoom: 'Pinch or double-tap to zoom',
+    pinchToZoom: 'Use two fingers to zoom this page. Drag with one finger after zooming.',
     pageMissingPrefix: 'Page image missing: rendering fallback from PDF for page',
     noPreview: 'No preview available for this page.',
     noArticle: 'No article content available.',
@@ -167,6 +169,15 @@ const COPY = {
     pagesTab: 'Pages',
     contentsTab: 'Contents',
     currentPage: 'Current page',
+    visualAction: 'Visual',
+    fullPageAction: 'Full page',
+    textAction: 'Text',
+    instagramAction: 'Instagram',
+    youtubeAction: 'YouTube',
+    whatsappChannelAction: 'WhatsApp Channel',
+    downloadAction: 'Download',
+    saveAction: 'Save',
+    savedAction: 'Saved',
     moreActions: 'More',
     readerTools: 'Reader tools',
     spreadView: 'Spread view',
@@ -234,7 +245,8 @@ const COPY = {
     shareWhatsApp: '\u0936\u0947\u092f\u0930',
     shareStory: '\u0938\u094d\u091f\u094b\u0930\u0940 \u0936\u0947\u092f\u0930 \u0915\u0930\u0947\u0902',
     whatsApp: 'WhatsApp',
-    pinchToZoom: '\u091a\u0941\u091f\u0915\u0940 \u092f\u093e \u0921\u092c\u0932-\u091f\u0948\u092a \u0938\u0947 \u091c\u0942\u092e \u0915\u0930\u0947\u0902',
+    pinchToZoom:
+      '\u0907\u0938 \u092a\u0947\u091c \u0915\u094b \u0926\u094b \u0909\u0902\u0917\u0932\u093f\u092f\u094b\u0902 \u0938\u0947 \u091c\u093c\u0942\u092e \u0915\u0930\u0947\u0902\u0964 \u091c\u093c\u0942\u092e \u0915\u0947 \u092c\u093e\u0926 \u090f\u0915 \u0909\u0902\u0917\u0932\u0940 \u0938\u0947 \u092a\u0947\u091c \u0916\u093f\u0938\u0915\u093e\u090f\u0902\u0964',
     pageMissingPrefix:
       '\u092a\u0947\u091c \u0907\u092e\u0947\u091c \u092e\u093f\u0938\u093f\u0902\u0917 \u0939\u0948: \u092a\u0947\u091c \u0915\u0947 \u0932\u093f\u090f PDF \u092b\u0949\u0932\u092c\u0948\u0915 \u0930\u0947\u0902\u0921\u0930 \u0939\u094b \u0930\u0939\u093e \u0939\u0948',
     noPreview:
@@ -280,6 +292,15 @@ const COPY = {
     pagesTab: '\u092a\u0947\u091c',
     contentsTab: '\u0938\u093e\u092e\u0917\u094d\u0930\u0940',
     currentPage: '\u0935\u0930\u094d\u0924\u092e\u093e\u0928 \u092a\u0947\u091c',
+    visualAction: '\u0935\u093f\u091c\u0941\u0905\u0932',
+    fullPageAction: '\u092a\u0942\u0930\u093e \u092a\u0947\u091c',
+    textAction: '\u091f\u0947\u0915\u094d\u0938\u094d\u091f',
+    instagramAction: 'Instagram',
+    youtubeAction: 'YouTube',
+    whatsappChannelAction: 'WhatsApp \u091a\u0948\u0928\u0932',
+    downloadAction: '\u0921\u093e\u0909\u0928\u0932\u094b\u0921',
+    saveAction: '\u0938\u0947\u0935',
+    savedAction: '\u0938\u0947\u0935 \u0939\u0948',
     moreActions: '\u0914\u0930 \u0935\u093f\u0915\u0932\u094d\u092a',
     readerTools: '\u0930\u0940\u0921\u0930 \u091f\u0942\u0932\u094d\u0938',
     spreadView: '\u0938\u094d\u092a\u094d\u0930\u0947\u0921 \u0935\u094d\u092f\u0942',
@@ -358,6 +379,15 @@ type ArticlePinchState = {
   isPinching: boolean;
 };
 
+type PreviewPinchState = ArticlePinchState & {
+  focalContentX: number;
+  focalContentY: number;
+  focalViewportX: number;
+  focalViewportY: number;
+  startScrollWidth: number;
+  startScrollHeight: number;
+};
+
 type ArticleTapState = {
   lastTapAt: number;
   lastTapX: number;
@@ -429,6 +459,14 @@ function getTouchDistance(touches: TouchListLike) {
   const dx = first.clientX - second.clientX;
   const dy = first.clientY - second.clientY;
   return Math.hypot(dx, dy);
+}
+
+function getTouchMidpoint(touches: TouchListLike) {
+  if (touches.length < 2) return null;
+  return {
+    clientX: (touches[0].clientX + touches[1].clientX) / 2,
+    clientY: (touches[0].clientY + touches[1].clientY) / 2,
+  };
 }
 
 function toPlainText(html: string) {
@@ -836,7 +874,6 @@ export default function EPaperPageClient({
   const [readerSidebarView, setReaderSidebarView] = useState<ReaderSidebarView>('pages');
   const [readerDisplayMode, setReaderDisplayMode] = useState<'single' | 'spread'>('single');
   const [isDesktopContextRailVisible, setIsDesktopContextRailVisible] = useState(false);
-  const [isMobilePageStripVisible, setIsMobilePageStripVisible] = useState(false);
   const [isOverflowOpen, setIsOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement | null>(null);
 
@@ -870,17 +907,22 @@ export default function EPaperPageClient({
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const previewTouchSurfaceRef = useRef<HTMLDivElement | null>(null);
   const loadMoreLockRef = useRef(false);
-  const mobileArticleActionMenuRef = useRef<HTMLDetailsElement | null>(null);
   const articleActionMenuRef = useRef<HTMLDetailsElement | null>(null);
   const articlePinchStateRef = useRef<ArticlePinchState>({
     startDistance: 0,
     startZoom: 1,
     isPinching: false,
   });
-  const previewPinchStateRef = useRef<ArticlePinchState>({
+  const previewPinchStateRef = useRef<PreviewPinchState>({
     startDistance: 0,
     startZoom: 1,
     isPinching: false,
+    focalContentX: 0,
+    focalContentY: 0,
+    focalViewportX: 0,
+    focalViewportY: 0,
+    startScrollWidth: 0,
+    startScrollHeight: 0,
   });
   const articleTapStateRef = useRef<ArticleTapState>({
     lastTapAt: 0,
@@ -892,7 +934,6 @@ export default function EPaperPageClient({
     lastTapX: 0,
     lastTapY: 0,
   });
-  const wasPreviewZoomedRef = useRef(false);
   const pageSwipeStateRef = useRef<PageSwipeState>({
     startX: 0,
     startY: 0,
@@ -1189,7 +1230,7 @@ export default function EPaperPageClient({
       setPreviewZoom(1);
       setPdfFallbackPreview('');
       setFallbackError('');
-      setIsMobilePageStripVisible(true);
+      setIsOverflowOpen(false);
     } catch (err: unknown) {
       setError(toErrorMessage(err, 'Failed to open e-paper'));
     }
@@ -1231,37 +1272,16 @@ export default function EPaperPageClient({
 
   useEffect(() => {
     if (!activePaper) {
-      setIsMobilePageStripVisible(false);
-      wasPreviewZoomedRef.current = false;
+      setIsOverflowOpen(false);
       return;
     }
     setReaderSidebarView('pages');
     if (isCoarsePointer) {
       setIsDesktopContextRailVisible(true);
-      setIsMobilePageStripVisible(true);
     } else {
       setIsDesktopContextRailVisible(false);
-      setIsMobilePageStripVisible(false);
     }
-    wasPreviewZoomedRef.current = false;
   }, [activePaper, isCoarsePointer]);
-
-  useEffect(() => {
-    const isPreviewZoomed = previewZoom > MIN_PREVIEW_ZOOM + 0.01;
-
-    if (!activePaper || !isCoarsePointer) {
-      wasPreviewZoomedRef.current = false;
-      return;
-    }
-
-    if (isPreviewZoomed && !wasPreviewZoomedRef.current) {
-      setIsMobilePageStripVisible(false);
-    } else if (!isPreviewZoomed && wasPreviewZoomedRef.current) {
-      setIsMobilePageStripVisible(true);
-    }
-
-    wasPreviewZoomedRef.current = isPreviewZoomed;
-  }, [activePaper, isCoarsePointer, previewZoom]);
 
   const activePageImage = useMemo(() => {
     if (!activePaper) return '';
@@ -1307,15 +1327,6 @@ export default function EPaperPageClient({
       });
     },
     [activePaper]
-  );
-  const handlePageStripPageSelect = useCallback(
-    (nextPage: number) => {
-      navigateToPage(nextPage);
-      if (isCoarsePointer) {
-        setIsMobilePageStripVisible(false);
-      }
-    },
-    [isCoarsePointer, navigateToPage]
   );
   const zoomPreviewOut = useCallback(() => {
     setPreviewZoom((current) =>
@@ -1441,6 +1452,7 @@ export default function EPaperPageClient({
   const previewIsDataUrl = previewSrc.startsWith('data:');
   const previewWidth = activePageMeta?.width || 1200;
   const previewHeight = activePageMeta?.height || 1600;
+  const isPreviewZoomed = previewZoom > MIN_PREVIEW_ZOOM + 0.01;
   const maxReaderPage = Math.max(1, Number(activePaper?.pageCount || 1));
   const maxSpreadStartPage = Math.max(1, maxReaderPage - 1);
   const canGoPreviousPage = activePage > 1;
@@ -1467,7 +1479,8 @@ export default function EPaperPageClient({
   // Click-away listener for details / actions overflow dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (overflowRef.current && !overflowRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (overflowRef.current && !overflowRef.current.contains(target)) {
         setIsOverflowOpen(false);
       }
     }
@@ -1820,7 +1833,6 @@ export default function EPaperPageClient({
     }
   }, []);
   const closeArticleActionMenu = useCallback(() => {
-    mobileArticleActionMenuRef.current?.removeAttribute('open');
     articleActionMenuRef.current?.removeAttribute('open');
   }, []);
 
@@ -2230,12 +2242,25 @@ export default function EPaperPageClient({
 
     if (event.touches.length === 2) {
       const distance = getTouchDistance(event.touches);
-      if (!distance) return;
+      const midpoint = getTouchMidpoint(event.touches);
+      const surface = previewTouchSurfaceRef.current;
+      if (!distance || !midpoint || !surface) return;
+
+      event.preventDefault();
+      const surfaceRect = surface.getBoundingClientRect();
+      const focalViewportX = midpoint.clientX - surfaceRect.left;
+      const focalViewportY = midpoint.clientY - surfaceRect.top;
 
       previewPinchStateRef.current = {
         startDistance: distance,
         startZoom: previewZoom,
         isPinching: true,
+        focalContentX: surface.scrollLeft + focalViewportX,
+        focalContentY: surface.scrollTop + focalViewportY,
+        focalViewportX,
+        focalViewportY,
+        startScrollWidth: surface.scrollWidth,
+        startScrollHeight: surface.scrollHeight,
       };
       pageSwipeStateRef.current.tracking = false;
       return;
@@ -2257,12 +2282,24 @@ export default function EPaperPageClient({
     if (event.touches.length === 2) {
       if (!previewPinchStateRef.current.isPinching) {
         const distance = getTouchDistance(event.touches);
-        if (!distance) return;
+        const midpoint = getTouchMidpoint(event.touches);
+        const surface = previewTouchSurfaceRef.current;
+        if (!distance || !midpoint || !surface) return;
+
+        const surfaceRect = surface.getBoundingClientRect();
+        const focalViewportX = midpoint.clientX - surfaceRect.left;
+        const focalViewportY = midpoint.clientY - surfaceRect.top;
 
         previewPinchStateRef.current = {
           startDistance: distance,
           startZoom: previewZoom,
           isPinching: true,
+          focalContentX: surface.scrollLeft + focalViewportX,
+          focalContentY: surface.scrollTop + focalViewportY,
+          focalViewportX,
+          focalViewportY,
+          startScrollWidth: surface.scrollWidth,
+          startScrollHeight: surface.scrollHeight,
         };
       }
 
@@ -2286,6 +2323,25 @@ export default function EPaperPageClient({
       );
 
       setPreviewZoom(nextZoom);
+      const pinchState = previewPinchStateRef.current;
+      window.requestAnimationFrame(() => {
+        const surface = previewTouchSurfaceRef.current;
+        if (!surface || !pinchState.isPinching) return;
+
+        const widthScale =
+          pinchState.startScrollWidth > 0
+            ? surface.scrollWidth / pinchState.startScrollWidth
+            : nextZoom / pinchState.startZoom;
+        const heightScale =
+          pinchState.startScrollHeight > 0
+            ? surface.scrollHeight / pinchState.startScrollHeight
+            : nextZoom / pinchState.startZoom;
+
+        surface.scrollLeft =
+          pinchState.focalContentX * widthScale - pinchState.focalViewportX;
+        surface.scrollTop =
+          pinchState.focalContentY * heightScale - pinchState.focalViewportY;
+      });
     }
   }, [activeArticle, isCoarsePointer, previewZoom]);
 
@@ -2296,6 +2352,12 @@ export default function EPaperPageClient({
           startDistance: 0,
           startZoom: previewZoom,
           isPinching: false,
+          focalContentX: 0,
+          focalContentY: 0,
+          focalViewportX: 0,
+          focalViewportY: 0,
+          startScrollWidth: 0,
+          startScrollHeight: 0,
         };
       }
       previewTapStateRef.current = {
@@ -2385,6 +2447,12 @@ export default function EPaperPageClient({
       startDistance: 0,
       startZoom: previewZoom,
       isPinching: false,
+      focalContentX: 0,
+      focalContentY: 0,
+      focalViewportX: 0,
+      focalViewportY: 0,
+      startScrollWidth: 0,
+      startScrollHeight: 0,
     };
     previewTapStateRef.current = {
       lastTapAt: 0,
@@ -2444,30 +2512,17 @@ export default function EPaperPageClient({
     ? `${activePage}-${spreadCompanionPage.pageNumber} / ${maxReaderPage}`
     : `${activePage} / ${maxReaderPage}`;
   const activePaperStoryCount = activePaper?.articles.length || 0;
-  const previewHeightOffset = isCoarsePointer
-    ? shouldShowSpreadMode
-      ? isMobilePageStripVisible
-        ? 208
-        : 168
-      : isMobilePageStripVisible
-        ? 176
-        : 138
-    : shouldShowSpreadMode
-      ? 290
-      : 250;
   const previewMaxHeight = useMemo(() => {
-    const baseOffset = isMobilePageStripVisible ? 290 : 136;
-    return `calc((100dvh - ${baseOffset}px) * ${previewZoom})`;
-  }, [isMobilePageStripVisible, previewZoom]);
+    return `calc((100dvh - 136px) * ${previewZoom})`;
+  }, [previewZoom]);
   const desktopReaderGridClassName = isDesktopContextRailVisible
     ? 'xl:grid-cols-[minmax(0,1fr)_22rem]'
     : 'grid-cols-1';
   const readerStageBorderClassName = isDesktopContextRailVisible
     ? 'xl:border-r xl:border-gray-200 dark:xl:border-zinc-800'
     : '';
-  const dynamicPaddingClass = isMobilePageStripVisible
-    ? "pt-3 pb-[200px] sm:pt-4 sm:pb-[180px]"
-    : "pt-3 pb-[80px] sm:pt-4 sm:pb-6";
+  const dynamicPaddingClass =
+    "pt-3 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] sm:pt-4 sm:pb-6";
   const readerStageWidthClassName = !isDesktopContextRailVisible
     ? shouldShowSpreadMode
       ? 'max-w-[1360px]'
@@ -2729,7 +2784,7 @@ export default function EPaperPageClient({
             {/* Ambient glows behind newspaper */}
             <div className="pointer-events-none absolute -left-16 -top-16 z-0 h-48 w-48 rounded-full bg-red-500/15 blur-3xl sm:hidden" />
             <div className="relative z-40 w-full shrink-0 sm:border-b sm:border-zinc-200/80 sm:bg-white/95 sm:backdrop-blur-md px-0 pb-0 pt-0 sm:dark:border-zinc-800/80 sm:dark:bg-zinc-900/95 sm:px-4 sm:py-2 sm:shadow-sm bg-transparent dark:bg-transparent">
-              <div className="sm:hidden w-full bg-white/95 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-200 dark:border-white/5 px-2.5 min-[375px]:px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 shadow-md flex items-center justify-between">
+              <div className="relative flex w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-2.5 pb-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] shadow-md backdrop-blur-xl dark:border-white/5 dark:bg-zinc-950/90 min-[375px]:px-4 sm:hidden">
                 {/* Left: Back button */}
                 <button
                   type="button"
@@ -2744,43 +2799,25 @@ export default function EPaperPageClient({
                 </button>
 
                 {/* Center: Brand Logo */}
-                <div className="flex items-center justify-center shrink-0">
+                <div className="pointer-events-none absolute left-1/2 top-1/2 flex shrink-0 -translate-x-1/2 -translate-y-1/2 items-center justify-center">
                   <div className={`${theme === 'dark' ? 'dark' : ''} shrink-0`}>
                     <Logo size="headerCompact" />
                   </div>
                 </div>
 
-                {/* Right: Actions */}
-                <div className="flex items-center gap-1.5 min-[375px]:gap-2">
+                {/* Right: Share action */}
+                <div className="flex items-center">
                   <button
                     type="button"
-                    onClick={() => setIsMobilePageStripVisible((current) => !current)}
-                    className={`reader-touch-button reader-focus-ring flex h-9 items-center gap-1.5 rounded-xl border px-2 min-[375px]:px-3 text-xs font-bold transition ${
-                      isMobilePageStripVisible
-                        ? 'border-red-300 dark:border-red-500/35 bg-red-50 dark:bg-red-600/20 text-red-600 dark:text-red-400'
-                        : 'border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/80 dark:hover:bg-white/10'
-                    }`}
+                    onClick={() => {
+                      void shareActivePaperOnWhatsApp();
+                    }}
+                    aria-label={t.shareWhatsApp}
+                    className="reader-touch-button reader-focus-ring inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-100 px-2.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-200 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                    title={t.shareWhatsApp}
                   >
-                    <LayoutGrid className="h-3.5 w-3.5" />
-                    <span className="hidden min-[380px]:inline">{language === 'hi' ? 'सेक्शन' : 'Sections'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleIssueSaveToggle}
-                    disabled={!activePaperLibraryInput || isSavingIssue}
-                    className={`reader-touch-button reader-focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                      isActivePaperSaved
-                        ? 'border-red-500/30 bg-red-600 text-white'
-                        : 'border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 text-zinc-800 dark:text-white/80 hover:bg-zinc-200 dark:hover:bg-white/10'
-                    }`}
-                    title={isActivePaperSaved ? t.savedIssue : t.saveIssue}
-                  >
-                    {isSavingIssue ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Bookmark className={`h-4 w-4 ${isActivePaperSaved ? 'fill-current' : ''}`} />
-                    )}
+                    <Share2 className="h-4 w-4" />
+                    <span>{t.shareWhatsApp}</span>
                   </button>
                 </div>
               </div>
@@ -3049,80 +3086,17 @@ export default function EPaperPageClient({
               </div>
             ) : null}
 
-            {isMobilePageStripVisible ? (
-              <div 
-                className="absolute bottom-20 left-4 right-4 z-40 rounded-3xl border border-zinc-200 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl p-3.5 shadow-2xl max-w-[calc(100%-2rem)] mx-auto overflow-hidden transition-all duration-350" 
-                data-swipe-ignore="true"
-              >
-                {/* Header info */}
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <span className="text-[10px] font-black tracking-wider text-zinc-700 dark:text-zinc-300 uppercase">
-                    {language === 'hi' ? 'संस्करण के पृष्ठ' : 'Edition Pages'}
-                  </span>
-                  <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
-                    {pageSummaries.length} {language === 'hi' ? 'पृष्ठ' : 'Pages'}
-                  </span>
-                </div>
-
-                {/* Left scroll fade gradient */}
-                <div className="pointer-events-none absolute bottom-3.5 left-3.5 top-11 z-10 w-8 bg-gradient-to-r from-white dark:from-zinc-950/85 to-transparent" />
-                {/* Right scroll fade gradient */}
-                <div className="pointer-events-none absolute bottom-3.5 right-3.5 top-11 z-10 w-8 bg-gradient-to-l from-white dark:from-zinc-950/85 to-transparent" />
-
-                <div className="-mx-1 flex gap-2 overflow-x-auto px-6 pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden reader-scroll-x" data-reader-scroll="x" data-swipe-ignore="true">
-                  {pageSummaries.map((page) => {
-                    const isCurrentPage = page.pageNumber === activePage;
-                    const isCompanionPage =
-                      shouldShowSpreadMode && spreadCompanionPage?.pageNumber === page.pageNumber;
-
-                    return (
-                      <button
-                        key={`strip-${page.pageNumber}`}
-                        type="button"
-                        onClick={() => handlePageStripPageSelect(page.pageNumber)}
-                        className={`reader-touch-button reader-focus-ring group min-w-[84px] max-w-[84px] shrink-0 overflow-hidden rounded-2xl border text-left transition-all duration-300 active:scale-95 ${
-                          isCurrentPage
-                            ? 'border-red-500 bg-red-50 dark:bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.25)] dark:shadow-[0_0_15px_rgba(239,68,68,0.4)] scale-[1.04]'
-                            : isCompanionPage
-                              ? 'border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/20'
-                              : 'border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:border-zinc-300 dark:hover:border-white/10 hover:scale-[1.02]'
-                        }`}
-                      >
-                        <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-zinc-200 dark:from-zinc-900/90 to-zinc-100 dark:to-zinc-800/90">
-                          {page.imagePath ? (
-                            <Image
-                              src={page.imagePath}
-                              alt={`${getPageSectionName(page.pageNumber, language)}`}
-                              fill
-                              unoptimized
-                              className="object-contain p-1.5 transition-transform duration-500 group-hover:scale-105"
-                              sizes="(max-width: 640px) 84px, 96px"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center px-2 text-center text-[10px] font-bold text-zinc-400">
-                              {getPageSectionName(page.pageNumber, language)}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex min-h-[28px] items-center justify-center border-t border-zinc-200 dark:border-white/5 bg-zinc-100 dark:bg-zinc-900 px-1 py-1">
-                          <span className="text-[9px] font-extrabold text-red-500 dark:text-red-400/95 tracking-wide truncate max-w-full px-1">
-                            {getPageSectionName(page.pageNumber, language)}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-
-
             <div className={`grid min-h-0 flex-1 grid-cols-1 ${desktopReaderGridClassName}`}>
               <div
                 ref={previewTouchSurfaceRef}
                 className={`relative min-w-0 overflow-auto overscroll-contain bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white via-zinc-50 to-zinc-100 p-1 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-950 reader-stage-scroll ${readerStageBorderClassName} ${dynamicPaddingClass}`}
-                style={{ touchAction: 'pan-x pan-y', willChange: 'transform', transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden' }}
+                style={{
+                  touchAction: 'pan-x pan-y',
+                  WebkitOverflowScrolling: 'touch',
+                  willChange: 'transform',
+                  transform: 'translate3d(0,0,0)',
+                  backfaceVisibility: 'hidden',
+                }}
               >
                 {loadingFallback ? (
                   <div className="flex h-full min-h-48 items-center justify-center">
@@ -3133,12 +3107,21 @@ export default function EPaperPageClient({
                     {fallbackError}
                   </div>
                 ) : activePageImage || pdfFallbackPreview ? (
-                  <div className="mx-auto flex min-h-full w-full max-w-[1340px] items-center justify-center">
+                  <div
+                    className={`mx-auto flex min-h-full w-full max-w-[1340px] items-center ${
+                      isPreviewZoomed ? 'justify-start' : 'justify-center'
+                    }`}
+                  >
                     <div
-                      className={`relative w-full ${readerStageWidthClassName}`}
-                      style={{ perspective: '1500px' }}
+                      className={`relative shrink-0 ${
+                        isPreviewZoomed ? 'max-w-none' : readerStageWidthClassName
+                      }`}
+                      style={{
+                        perspective: '1500px',
+                        width: `${previewZoom * 100}%`,
+                      }}
                     >
-                      <div 
+                      <div
                         className={`relative mx-auto w-fit max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 ${bookContainerShadowClassName}`}
                         style={{ maxHeight: previewMaxHeight }}
                       >
@@ -3150,7 +3133,7 @@ export default function EPaperPageClient({
                             initial="enter"
                             animate="center"
                             exit="exit"
-                            className="w-fit mx-auto max-w-full"
+                            className="mx-auto w-fit max-w-full"
                             style={{ 
                               transformStyle: 'preserve-3d',
                               backfaceVisibility: 'hidden',
@@ -3187,7 +3170,7 @@ export default function EPaperPageClient({
                                     type="button"
                                     onClick={() => setActiveArticle(article)}
                                     className={`absolute rounded-[2px] outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60 ${
-                                      showHotspotHints
+                                      showHotspotHints && !isCoarsePointer
                                         ? 'epaper-hotspot-glow'
                                         : 'bg-transparent'
                                     }`}
@@ -3258,7 +3241,7 @@ export default function EPaperPageClient({
                                         setActiveArticle(article);
                                       }}
                                       className={`absolute rounded-[2px] outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60 ${
-                                        showHotspotHints
+                                        showHotspotHints && !isCoarsePointer
                                           ? 'epaper-hotspot-glow'
                                           : 'bg-transparent'
                                       }`}
@@ -3294,6 +3277,85 @@ export default function EPaperPageClient({
                     {t.noPreview}
                   </div>
                 )}
+
+                <section
+                  className="mx-auto mt-3 w-full max-w-[1120px] pb-3 sm:hidden"
+                  aria-label={t.pageStrip}
+                  data-swipe-ignore="true"
+                >
+                  <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-lg dark:border-white/10 dark:bg-zinc-950/90">
+                    <div className="mb-2.5 flex items-center justify-between gap-2 px-0.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
+                        {language === 'hi' ? 'संस्करण के पृष्ठ' : 'Edition Pages'}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
+                        {pageSummaries.length} {language === 'hi' ? 'पृष्ठ' : 'Pages'}
+                      </span>
+                    </div>
+
+                    <div
+                      className="flex snap-x snap-mandatory scroll-px-0.5 gap-2.5 overflow-x-auto px-0.5 pb-2 [scrollbar-width:thin] reader-scroll-x"
+                      data-reader-scroll="x"
+                    >
+                      {pageSummaries.map((page) => {
+                        const isCurrentPage = page.pageNumber === activePage;
+                        const isCompanionPage =
+                          shouldShowSpreadMode &&
+                          spreadCompanionPage?.pageNumber === page.pageNumber;
+
+                        return (
+                          <button
+                            key={`mobile-strip-${page.pageNumber}`}
+                            type="button"
+                            onClick={() => {
+                              navigateToPage(page.pageNumber);
+                              window.requestAnimationFrame(() => {
+                                previewTouchSurfaceRef.current?.scrollTo({
+                                  top: 0,
+                                  left: 0,
+                                  behavior: 'smooth',
+                                });
+                              });
+                            }}
+                            className={`reader-touch-button reader-focus-ring group min-w-[88px] max-w-[88px] snap-start shrink-0 overflow-hidden rounded-xl border text-left transition active:scale-95 min-[380px]:min-w-[100px] min-[380px]:max-w-[100px] ${
+                              isCurrentPage
+                                ? 'border-red-500 bg-red-50 shadow-[0_0_18px_rgba(239,68,68,0.2)] dark:bg-red-500/10'
+                                : isCompanionPage
+                                  ? 'border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/20'
+                                  : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-white/10 dark:bg-white/5'
+                            }`}
+                          >
+                            <div className="relative aspect-[3/4] overflow-hidden bg-zinc-100 dark:bg-zinc-900">
+                              {page.imagePath ? (
+                                <Image
+                                  src={page.imagePath}
+                                  alt={getPageSectionName(page.pageNumber, language)}
+                                  fill
+                                  unoptimized
+                                  className="object-contain p-1.5"
+                                  sizes="(max-width: 379px) 88px, 100px"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center px-2 text-center text-[10px] font-semibold text-zinc-400">
+                                  {getPageSectionName(page.pageNumber, language)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex min-h-9 items-center justify-center border-t border-zinc-200 bg-white px-1.5 py-1 dark:border-white/10 dark:bg-zinc-900">
+                              <span className={`truncate text-[10px] font-bold ${
+                                isCurrentPage
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : 'text-zinc-600 dark:text-zinc-300'
+                              }`}>
+                                {getPageSectionName(page.pageNumber, language)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </section>
 
               </div>
 
@@ -3411,102 +3473,56 @@ export default function EPaperPageClient({
               ) : null}
             </div>
 
-            {pageArticles.length ? (
-              <div 
-                className={`absolute ${isMobilePageStripVisible ? 'bottom-[242px]' : 'bottom-20'} left-4 right-4 z-35 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden reader-scroll-x sm:hidden transition-all duration-300`} 
-                data-reader-scroll="x"
-              >
-                {pageArticles.map((article, index) => (
-                  <button
-                    key={`mobile-page-story-${article._id}`}
-                    type="button"
-                    onClick={() => setActiveArticle(article)}
-                    className="reader-touch-button reader-focus-ring min-h-11 min-w-[13rem] max-w-[15rem] shrink-0 rounded-xl border border-zinc-200 dark:border-white/10 bg-white/90 dark:bg-zinc-900/80 backdrop-blur-md px-3 py-2 text-left transition hover:bg-zinc-100 dark:hover:bg-zinc-850"
-                  >
-                    <span className="block text-[10px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
-                      {t.story} {index + 1}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs font-semibold text-zinc-800 dark:text-white/95">
-                      {article.title || `${t.story} ${index + 1}`}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
-            {/* Floating Bottom Tabbar for Mobile (replacing old page-turn footer) */}
+            {/* Floating social bar for mobile */}
             <div 
-              className="absolute bottom-4 left-4 right-4 z-40 rounded-3xl border border-zinc-200 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-2xl p-1.5 shadow-[0_15px_30px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.5)] sm:hidden" 
+              className="absolute bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] left-2 right-2 z-40 rounded-2xl border border-zinc-200 bg-white/95 p-1 shadow-[0_15px_30px_rgba(0,0,0,0.15)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-950/90 dark:shadow-[0_20px_40px_rgba(0,0,0,0.5)] min-[380px]:left-3 min-[380px]:right-3 min-[380px]:p-1.5 sm:hidden"
               data-swipe-ignore="true"
             >
-              <div className="grid grid-cols-5 gap-0.5 min-[360px]:gap-1 text-center w-full">
-                {/* Fit Width */}
-                <button 
-                  type="button" 
-                  onClick={() => setPreviewZoom(1)} 
-                  className={`flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 ${
-                    previewZoom > 1 
-                      ? 'bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-extrabold' 
-                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5'
-                  }`}
+              <div className="grid w-full grid-cols-4 gap-0.5 text-center min-[380px]:gap-1">
+                <a
+                  href={COMPANY_INFO.social.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={t.instagramAction}
+                  className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-zinc-500 transition-all duration-200 hover:bg-pink-50 hover:text-pink-600 active:scale-95 dark:text-zinc-400 dark:hover:bg-pink-500/10 dark:hover:text-pink-400"
                 >
-                  <Plus className="h-[18px] w-[18px]" />
-                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">Fit Width</span>
-                </button>
+                  <Instagram className="h-[18px] w-[18px] shrink-0" />
+                  <span className="max-w-full text-center text-[9px] font-semibold leading-tight min-[380px]:text-[10px]">{t.instagramAction}</span>
+                </a>
 
-                {/* Page View */}
-                <button 
-                  type="button" 
-                  onClick={() => { if (activeArticle) { setArticleReaderMode('story'); } }} 
-                  className={`flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 ${
-                    (!activeArticle || articleReaderMode === 'story') 
-                      ? 'bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-extrabold' 
-                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5'
-                  }`}
+                <a
+                  href={COMPANY_INFO.social.youtube}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={t.youtubeAction}
+                  className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-zinc-500 transition-all duration-200 hover:bg-red-50 hover:text-red-600 active:scale-95 dark:text-zinc-400 dark:hover:bg-red-500/10 dark:hover:text-red-400"
                 >
-                  <Newspaper className="h-[18px] w-[18px]" />
-                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">Page View</span>
-                </button>
+                  <Youtube className="h-[18px] w-[18px] shrink-0" />
+                  <span className="max-w-full text-center text-[9px] font-semibold leading-tight min-[380px]:text-[10px]">{t.youtubeAction}</span>
+                </a>
 
-                {/* Text View */}
-                <button 
-                  type="button" 
-                  onClick={() => { 
-                    if (activeArticle) { 
-                      setArticleReaderMode('text'); 
-                    } else if (pageArticles[0]) { 
-                      setActiveArticle(pageArticles[0]); 
-                      setArticleReaderMode('text'); 
-                    } 
-                  }} 
-                  className={`flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 ${
-                    (activeArticle && articleReaderMode === 'text') 
-                      ? 'bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-extrabold' 
-                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5'
-                  }`}
+                <a
+                  href={COMPANY_INFO.social.whatsapp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={t.whatsappChannelAction}
+                  className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-zinc-500 transition-all duration-200 hover:bg-emerald-50 hover:text-emerald-600 active:scale-95 dark:text-zinc-400 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400"
                 >
-                  <Type className="h-[18px] w-[18px]" />
-                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">Text View</span>
-                </button>
+                  <WhatsAppIcon className="h-[18px] w-[18px] shrink-0" />
+                  <span className="max-w-full text-center text-[8.5px] font-semibold leading-tight min-[380px]:text-[9.5px]">
+                    {t.whatsappChannelAction}
+                  </span>
+                </a>
 
-                {/* Share */}
-                <button 
-                  type="button" 
-                  onClick={() => { void shareActivePaperOnWhatsApp(); }} 
-                  className="flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5"
+                <button
+                  type="button"
+                  onClick={handlePdfDownload}
+                  disabled={!pdfUrlForOpen}
+                  aria-label={t.downloadAction}
+                  className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-zinc-500 transition-all duration-200 hover:bg-zinc-100 hover:text-zinc-850 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
                 >
-                  <Share2 className="h-[18px] w-[18px]" />
-                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">Share</span>
-                </button>
-
-                {/* More */}
-                <button 
-                  type="button" 
-                  onClick={handlePdfDownload} 
-                  className="flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5"
-                >
-                  <Download className="h-[18px] w-[18px]" />
-                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">More</span>
+                  <Download className="h-[18px] w-[18px] shrink-0" />
+                  <span className="max-w-full text-center text-[9px] font-semibold leading-tight min-[380px]:text-[10px]">{t.downloadAction}</span>
                 </button>
               </div>
             </div>
@@ -3527,211 +3543,41 @@ export default function EPaperPageClient({
             role="dialog"
             aria-modal="true"
             aria-label={activeArticle.title || t.story}
-            className="mx-auto flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-none border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 sm:h-full sm:rounded-2xl"
+            className="relative mx-auto flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-none border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 sm:h-full sm:rounded-2xl"
           >
             <h3 className="sr-only">{activeArticle.title}</h3>
 
-            <div className="border-b border-gray-200 px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] dark:border-zinc-800 sm:px-4 sm:py-3">
+            <div className="shrink-0 border-b border-zinc-200 bg-white px-2.5 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.5rem)] shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:border-gray-200 sm:px-4 sm:py-3 dark:sm:border-zinc-800 dark:sm:bg-zinc-900/95">
               <div className="sm:hidden">
-                <div className="flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="inline-flex h-9 max-w-full items-center rounded-full border border-gray-200 bg-white p-1 dark:border-zinc-700 dark:bg-zinc-950">
-                        <button
-                          type="button"
-                          onClick={() => setArticleReaderMode('story')}
-                          className={`reader-touch-button reader-focus-ring inline-flex min-h-9 items-center gap-1 rounded-full px-3 text-xs font-semibold transition ${
-                            articleReaderMode === 'story'
-                              ? 'bg-primary-600 text-white'
-                              : 'text-gray-700 hover:bg-gray-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
-                          }`}
-                        >
-                          <Newspaper className="h-3.5 w-3.5" />
-                          <span>{t.storyMode}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setArticleReaderMode('text')}
-                          disabled={!hasReadableArticleText}
-                          className={`reader-touch-button reader-focus-ring inline-flex min-h-9 items-center gap-1 rounded-full px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                            articleReaderMode === 'text'
-                              ? 'bg-primary-600 text-white'
-                              : 'text-gray-700 hover:bg-gray-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
-                          }`}
-                        >
-                          <Type className="h-3.5 w-3.5" />
-                          <span>{t.textMode}</span>
-                        </button>
+                <div>
+                  <div className="relative flex min-h-11 items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setActiveArticle(null)}
+                      aria-label={t.close}
+                      className="reader-touch-button reader-focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-800 transition hover:bg-zinc-100 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+
+                    <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                      <div className={theme === 'dark' ? 'dark' : ''}>
+                        <Logo size="headerCompact" />
                       </div>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => setActiveArticle(null)}
-                      className="reader-touch-button reader-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2">
-                    <button
-                      type="button"
                       onClick={() => {
-                        if (shouldShowStoryReaderStopAction) {
-                          stopArticleListening();
-                          return;
-                        }
-                        void handleArticleListen();
+                        void shareActiveArticle();
                       }}
-                      disabled={!shouldShowStoryReaderStopAction && !canListenToActiveArticle}
-                      className={`reader-touch-button reader-focus-ring inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                        shouldShowStoryReaderStopAction
-                          ? 'border-zinc-300 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
-                          : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30'
-                      }`}
+                      aria-label={t.shareStory}
+                      className="reader-touch-button reader-focus-ring inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-[11px] font-bold text-zinc-800 transition hover:bg-zinc-100 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                     >
-                      {isPreparingArticleListen ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : shouldShowStoryReaderStopAction ? (
-                        <PauseCircle className="h-3.5 w-3.5" />
-                      ) : (
-                        <Volume2 className="h-3.5 w-3.5" />
-                      )}
-                      <span className="truncate">
-                        {isPreparingArticleListen
-                          ? t.listening
-                          : shouldShowStoryReaderStopAction
-                            ? t.stopListening
-                            : t.listen}
-                      </span>
+                      <Share2 className="h-4 w-4" />
+                      <span>{t.shareWhatsApp}</span>
                     </button>
-
-                    <details ref={mobileArticleActionMenuRef} className="relative">
-                      <summary className="reader-touch-button reader-focus-ring flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 [&::-webkit-details-marker]:hidden">
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                        <span>{t.moreActions}</span>
-                      </summary>
-
-                      <div className="absolute right-0 top-[calc(100%+0.5rem)] z-10 w-64 rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
-                        <div className="grid gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              closeArticleActionMenu();
-                              handleStorySaveToggle();
-                            }}
-                            disabled={isSavingStory}
-                            className={`reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                              isActiveArticleSaved
-                                ? 'border-primary-300 bg-primary-600 text-white hover:bg-primary-700 dark:border-primary-500 dark:bg-primary-500 dark:hover:bg-primary-400'
-                                : 'border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40'
-                            }`}
-                          >
-                            {isSavingStory ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Bookmark className={`h-4 w-4 ${isActiveArticleSaved ? 'fill-current' : ''}`} />
-                            )}
-                            <span>{isActiveArticleSaved ? t.savedStory : t.saveStory}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              closeArticleActionMenu();
-                              void shareActiveArticleOnWhatsApp();
-                            }}
-                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border border-emerald-300 bg-white px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
-                          >
-                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#25D366] text-white">
-                              <WhatsAppIcon className="h-3.5 w-3.5" />
-                            </span>
-                            <span>{t.whatsApp}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              closeArticleActionMenu();
-                              void shareActiveArticle();
-                            }}
-                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
-                          >
-                            <Share2 className="h-4 w-4" />
-                            <span>{t.shareStory}</span>
-                          </button>
-
-                          {articleReaderMode === 'text' ? (
-                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-950">
-                              <div className="flex items-center justify-between gap-3 text-xs font-semibold text-gray-700 dark:text-zinc-200">
-                                <span>{t.textSize}</span>
-                                <span>{Math.round(articleTextScale * 100)}%</span>
-                              </div>
-                              <div className="mt-2 grid grid-cols-2 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setArticleTextScale((current) =>
-                                      Math.max(0.9, Number((current - 0.1).toFixed(2)))
-                                    )
-                                  }
-                                  disabled={articleTextScale <= 0.9}
-                                  className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-zinc-50 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                                >
-                                  <Minus className="h-4 w-4" />
-                                  <span>A-</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setArticleTextScale((current) =>
-                                      Math.min(1.4, Number((current + 0.1).toFixed(2)))
-                                    )
-                                  }
-                                  disabled={articleTextScale >= 1.4}
-                                  className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-zinc-50 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                  <span>A+</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              closeArticleActionMenu();
-                              handleStoryTextDownload();
-                            }}
-                            disabled={!hasReadableArticleText}
-                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                          >
-                            <Download className="h-4 w-4" />
-                            <span>{t.downloadText}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              closeArticleActionMenu();
-                              handleStoryPrint();
-                            }}
-                            disabled={!hasReadableArticleText && !activeArticleHasContent}
-                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-start gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                          >
-                            <Printer className="h-4 w-4" />
-                            <span>{t.printStory}</span>
-                          </button>
-                        </div>
-                      </div>
-                    </details>
                   </div>
-
-                  <p className="px-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-                    {activeArticleTextBadgeLabel} • {t.articleReader}
-                  </p>
                 </div>
               </div>
 
@@ -4006,8 +3852,8 @@ export default function EPaperPageClient({
               </div>
             </div>
 
-            <div className="flex-1 overflow-auto bg-white dark:bg-zinc-900">
-              <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:p-4 md:p-5">
+            <div className="flex-1 scroll-smooth overflow-auto overscroll-contain bg-zinc-50 dark:bg-zinc-950 sm:bg-white sm:dark:bg-zinc-900">
+              <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-2.5 py-3 pb-[calc(env(safe-area-inset-bottom)+6.75rem)] min-[380px]:px-3 sm:gap-4 sm:p-4 md:p-5">
                 <div className="hidden flex-wrap items-center gap-2 sm:flex">
                   <span
                     className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
@@ -4038,7 +3884,7 @@ export default function EPaperPageClient({
                 ) : null}
 
                 {activeArticle.videoUrl ? (
-                  <div className="overflow-hidden rounded-2xl border border-gray-200 bg-black shadow-sm dark:border-zinc-800">
+                  <div className="overflow-hidden rounded-[1.25rem] border border-gray-200 bg-black shadow-sm dark:border-zinc-800 sm:rounded-2xl">
                     <div className="aspect-video w-full">
                       <iframe
                         src={getEmbedUrl(activeArticle.videoUrl)}
@@ -4051,139 +3897,225 @@ export default function EPaperPageClient({
                   </div>
                 ) : null}
 
-                {articleReaderMode === 'story' && activeArticleHasImage ? (
-                  <div
-                    className="overflow-auto rounded-2xl border border-gray-200 bg-zinc-100 shadow-sm dark:border-zinc-800 dark:bg-black"
-                    onTouchStart={onArticleImageTouchStart}
-                    onTouchMove={onArticleImageTouchMove}
-                    onTouchEnd={onArticleImageTouchEnd}
-                    onTouchCancel={onArticleImageTouchEnd}
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.div
+                    key={`article-reader-${articleReaderMode}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: 'easeOut' }}
+                    className="flex flex-col gap-3 sm:gap-4"
                   >
-                    <div
-                      className="mx-auto min-w-full"
-                      style={{
-                        width: `${Math.max(100, Math.round(articleImageZoom * 100))}%`,
-                        touchAction: 'pan-x pan-y',
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={activeArticle.coverImagePath}
-                        alt={activeArticle.title || t.storyImage}
-                        className="block h-auto w-full max-w-none select-none object-contain"
-                        draggable={false}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
-                {articleReaderMode === 'story' ? (
-                  activeArticleHasImage ? (
-                    hasReadableArticleText && activeArticlePreviewText ? (
-                      <div className="mx-auto w-full max-w-3xl rounded-2xl border border-gray-200 bg-white/95 px-4 py-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/75 sm:px-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                              {t.storyPreview}
-                            </p>
-                            <h4 className="mt-1 text-lg font-bold leading-tight text-zinc-900 dark:text-zinc-100 sm:text-xl">
-                              {activeArticle.title || t.story}
-                            </h4>
-                            <p className="mt-3 line-clamp-6 text-sm leading-7 text-zinc-700 dark:text-zinc-300">
-                              {activeArticlePreviewText}
-                            </p>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setArticleReaderMode('text')}
-                            className="reader-touch-button reader-focus-ring inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40 sm:w-auto"
-                          >
-                            <Type className="h-4 w-4" />
-                            <span>{t.openTextStory}</span>
-                          </button>
+                    {articleReaderMode === 'story' && activeArticleHasImage ? (
+                      <div
+                        className="overflow-auto rounded-[1.25rem] border border-zinc-200 bg-zinc-100 shadow-[0_12px_30px_-22px_rgba(0,0,0,0.55)] dark:border-zinc-800 dark:bg-black sm:rounded-2xl"
+                        onTouchStart={onArticleImageTouchStart}
+                        onTouchMove={onArticleImageTouchMove}
+                        onTouchEnd={onArticleImageTouchEnd}
+                        onTouchCancel={onArticleImageTouchEnd}
+                      >
+                        <div
+                          className="mx-auto min-w-full"
+                          style={{
+                            width: `${Math.max(100, Math.round(articleImageZoom * 100))}%`,
+                            touchAction: 'pan-x pan-y',
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={activeArticle.coverImagePath}
+                            alt={activeArticle.title || t.storyImage}
+                            className="block h-auto w-full max-w-none select-none object-contain"
+                            draggable={false}
+                          />
                         </div>
                       </div>
-                    ) : null
-                  ) : (
-                    <>
-                      {activeArticleHasExcerpt ? (
-                        <p className="text-sm font-medium leading-6 text-gray-700 dark:text-zinc-300">
-                          {activeArticle.excerpt}
-                        </p>
-                      ) : null}
+                    ) : null}
 
-                      {activeArticleHasContent ? (
-                        <article
-                          className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-zinc-200 sm:prose-base"
-                          dangerouslySetInnerHTML={{ __html: activeArticle.contentHtml || '' }}
-                        />
-                      ) : null}
+                    {articleReaderMode === 'story' ? (
+                      activeArticleHasImage ? (
+                        hasReadableArticleText && activeArticlePreviewText ? (
+                          <div className="mx-auto w-full max-w-3xl rounded-[1.5rem] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_45px_-32px_rgba(0,0,0,0.6)] dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl sm:px-5">
+                            <div>
+                              <div className="min-w-0">
+                                <p className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700 dark:bg-red-500/10 dark:text-red-300">
+                                  {t.storyPreview}
+                                </p>
+                                <h4 className="mt-3 font-[family:var(--font-devanagari),var(--font-latin),system-ui,sans-serif] text-[1.35rem] font-black leading-[1.28] text-zinc-950 dark:text-zinc-50 sm:text-xl">
+                                  {activeArticle.title || t.story}
+                                </h4>
+                                <p className="mt-3 line-clamp-5 font-[family:var(--font-devanagari),var(--font-latin),system-ui,sans-serif] text-[15px] leading-7 text-zinc-700 dark:text-zinc-300">
+                                  {activeArticlePreviewText}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null
+                      ) : (
+                        <>
+                          {activeArticleHasExcerpt ? (
+                            <p className="text-sm font-medium leading-6 text-gray-700 dark:text-zinc-300">
+                              {activeArticle.excerpt}
+                            </p>
+                          ) : null}
 
-                      {shouldShowNoArticleState ? (
-                        <p className="text-sm text-gray-600 dark:text-zinc-400">{t.noArticle}</p>
-                      ) : null}
-                    </>
-                  )
-                ) : hasReadableArticleText ? (
-                  <div className="mx-auto w-full max-w-3xl rounded-2xl border border-gray-200 bg-white px-4 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 sm:px-6 sm:py-6">
-                    <div className="border-b border-gray-200 pb-4 dark:border-zinc-800">
-                      <h4
-                        className="text-xl font-black leading-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl"
-                        style={{ fontSize: `${1.35 * articleTextScale}rem` }}
-                      >
-                        {activeArticle?.title || t.story}
-                      </h4>
-                      {activeArticleHasExcerpt && activeArticleHasContent ? (
-                        <p
-                          className="mt-3 font-medium leading-8 text-zinc-700 dark:text-zinc-300"
-                          style={{ fontSize: `${1.02 * articleTextScale}rem` }}
-                        >
-                          {activeArticle.excerpt}
-                        </p>
-                      ) : null}
-                    </div>
+                          {activeArticleHasContent ? (
+                            <article
+                              className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-zinc-200 sm:prose-base"
+                              dangerouslySetInnerHTML={{ __html: activeArticle.contentHtml || '' }}
+                            />
+                          ) : null}
 
-                    {activeArticleHasContent ? (
-                      <article
-                        className="prose max-w-none pt-5 text-zinc-800 dark:prose-invert dark:text-zinc-200"
-                        style={{ fontSize: `${1 * articleTextScale}rem`, lineHeight: 1.95 }}
-                        dangerouslySetInnerHTML={{ __html: activeArticle.contentHtml || '' }}
-                      />
-                    ) : activeArticleParagraphs.length ? (
-                      <div
-                        className="space-y-4 pt-5 text-zinc-800 dark:text-zinc-200"
-                        style={{ fontSize: `${1 * articleTextScale}rem`, lineHeight: 1.95 }}
-                      >
-                        {activeArticleParagraphs.map((paragraph, index) => (
-                          <p
-                            key={`reader-paragraph-${index + 1}`}
-                            className="font-[family:var(--font-devanagari),var(--font-latin),system-ui,sans-serif]"
+                          {shouldShowNoArticleState ? (
+                            <p className="text-sm text-gray-600 dark:text-zinc-400">{t.noArticle}</p>
+                          ) : null}
+                        </>
+                      )
+                    ) : hasReadableArticleText ? (
+                      <div className="mx-auto w-full max-w-3xl rounded-[1.5rem] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_45px_-32px_rgba(0,0,0,0.6)] dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl sm:px-6 sm:py-6">
+                        <div className="border-b border-zinc-200 pb-4 dark:border-zinc-800">
+                          <h4
+                            className="font-[family:var(--font-devanagari),var(--font-latin),system-ui,sans-serif] text-xl font-black leading-[1.3] text-zinc-950 dark:text-zinc-50 sm:text-2xl"
+                            style={{ fontSize: `${1.35 * articleTextScale}rem` }}
                           >
-                            {paragraph}
+                            {activeArticle?.title || t.story}
+                          </h4>
+                          {activeArticleHasExcerpt && activeArticleHasContent ? (
+                            <p
+                              className="mt-3 font-[family:var(--font-devanagari),var(--font-latin),system-ui,sans-serif] font-medium leading-8 text-zinc-700 dark:text-zinc-300"
+                              style={{ fontSize: `${1.02 * articleTextScale}rem` }}
+                            >
+                              {activeArticle.excerpt}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {activeArticleHasContent ? (
+                          <article
+                            className="prose max-w-none pt-5 text-zinc-800 dark:prose-invert dark:text-zinc-200"
+                            style={{ fontSize: `${1 * articleTextScale}rem`, lineHeight: 1.95 }}
+                            dangerouslySetInnerHTML={{ __html: activeArticle.contentHtml || '' }}
+                          />
+                        ) : activeArticleParagraphs.length ? (
+                          <div
+                            className="space-y-4 pt-5 text-zinc-800 dark:text-zinc-200"
+                            style={{ fontSize: `${1 * articleTextScale}rem`, lineHeight: 1.95 }}
+                          >
+                            {activeArticleParagraphs.map((paragraph, index) => (
+                              <p
+                                key={`reader-paragraph-${index + 1}`}
+                                className="font-[family:var(--font-devanagari),var(--font-latin),system-ui,sans-serif]"
+                              >
+                                {paragraph}
+                              </p>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="pt-5 text-sm text-zinc-600 dark:text-zinc-400">
+                            {t.noReadableText}
                           </p>
-                        ))}
+                        )}
+
+                        {activeArticleHasImage ? (
+                          <button
+                            type="button"
+                            onClick={() => setArticleReaderMode('story')}
+                            className="reader-touch-button reader-focus-ring mt-6 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:w-auto"
+                          >
+                            <Newspaper className="h-4 w-4" />
+                            <span>{t.openVisualStory}</span>
+                          </button>
+                        ) : null}
                       </div>
                     ) : (
-                      <p className="pt-5 text-sm text-zinc-600 dark:text-zinc-400">
-                        {t.noReadableText}
-                      </p>
+                      <p className="text-sm text-gray-600 dark:text-zinc-400">{t.noReadableText}</p>
                     )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            </div>
 
-                    {activeArticleHasImage ? (
-                      <button
-                        type="button"
-                        onClick={() => setArticleReaderMode('story')}
-                        className="reader-touch-button reader-focus-ring mt-6 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:w-auto"
-                      >
-                        <Newspaper className="h-4 w-4" />
-                        <span>{t.openVisualStory}</span>
-                      </button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-600 dark:text-zinc-400">{t.noReadableText}</p>
-                )}
+            <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] left-2.5 right-2.5 z-20 rounded-2xl border border-zinc-200 bg-white/95 p-1 shadow-[0_18px_45px_rgba(0,0,0,0.16)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/95 dark:shadow-[0_18px_45px_rgba(0,0,0,0.4)] sm:hidden">
+              <div className="grid grid-cols-5 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setArticleReaderMode('story')}
+                  className={`reader-touch-button reader-focus-ring flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-[9px] font-bold transition-all duration-200 ${
+                    articleReaderMode === 'story'
+                      ? 'bg-red-600 text-white shadow-sm'
+                      : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white'
+                  }`}
+                >
+                  <Newspaper className="h-4 w-4 shrink-0" />
+                  <span className="max-w-full truncate">{t.visualAction}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setArticleReaderMode('text')}
+                  disabled={!hasReadableArticleText}
+                  className={`reader-touch-button reader-focus-ring flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-[9px] font-bold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    articleReaderMode === 'text'
+                      ? 'bg-red-600 text-white shadow-sm'
+                      : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white'
+                  }`}
+                >
+                  <Type className="h-4 w-4 shrink-0" />
+                  <span className="max-w-full truncate">{t.textAction}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (shouldShowStoryReaderStopAction) {
+                      stopArticleListening();
+                      return;
+                    }
+                    void handleArticleListen();
+                  }}
+                  disabled={!shouldShowStoryReaderStopAction && !canListenToActiveArticle}
+                  className={`reader-touch-button reader-focus-ring flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-[9px] font-bold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    shouldShowStoryReaderStopAction
+                      ? 'bg-zinc-700 text-white'
+                      : 'text-zinc-500 hover:bg-emerald-50 hover:text-emerald-700 dark:text-zinc-400 dark:hover:bg-emerald-500/15 dark:hover:text-emerald-300'
+                  }`}
+                >
+                  {isPreparingArticleListen ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : shouldShowStoryReaderStopAction ? (
+                    <PauseCircle className="h-4 w-4" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                  <span className="max-w-full truncate">
+                    {isPreparingArticleListen
+                      ? t.listening
+                      : shouldShowStoryReaderStopAction
+                        ? t.stopListening
+                        : t.listen}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleStoryTextDownload}
+                  disabled={!hasReadableArticleText}
+                  className="reader-touch-button reader-focus-ring flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-[9px] font-bold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="max-w-full truncate">{t.downloadAction}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    void shareActiveArticle();
+                  }}
+                  className="reader-touch-button reader-focus-ring flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2 text-[9px] font-bold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white"
+                >
+                  <Share2 className="h-4 w-4" />
+                  <span className="max-w-full truncate">{t.shareWhatsApp}</span>
+                </button>
               </div>
             </div>
           </div>
