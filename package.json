@@ -2,6 +2,9 @@
   "name": "lokswami-v2",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "clean:next": "node scripts/clean-next-artifacts.js",
     "prepare:next:dev": "node scripts/sync-next-env-dist.js .next-dev",
@@ -14,6 +17,7 @@
     "build": "npm run build:next && node scripts/prepare-hostinger.js",
     "build:hostinger": "npm run build",
     "build:next": "next build",
+    "package:hostinger-upload": "node scripts/create-upload-zip.js",
     "rollback:hostinger": "node scripts/rollback-hostinger-release.js",
     "start": "node scripts/start-hostinger.js",
     "start:hostinger": "npm run start",

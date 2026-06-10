@@ -1,27 +1,27 @@
-name: CI/CD for Hostinger
+name: Hostinger Release Package
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 concurrency:
-  group: hostinger-deploy-${{ github.ref }}
+  group: hostinger-package-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  ci:
-    name: Build and validate
+  package:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -29,48 +29,38 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build application
+      - name: Build (CI-safe)
+        run: npm run build:ci
+
+      - name: Validate production env snapshot
+        if: ${{ vars.HOSTINGER_VALIDATE_ENV == 'true' }}
         env:
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'dev-secret' }}
-          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
-          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000' }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI || 'mongodb://127.0.0.1:27017/lokswami' }}
-        run: npm run build
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+          ADMIN_LOGIN_ID: ${{ secrets.ADMIN_LOGIN_ID }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          DIGITALOCEAN_SPACES_ACCESS_KEY: ${{ secrets.DIGITALOCEAN_SPACES_ACCESS_KEY }}
+          DIGITALOCEAN_SPACES_SECRET_KEY: ${{ secrets.DIGITALOCEAN_SPACES_SECRET_KEY }}
+          DIGITALOCEAN_SPACES_BUCKET: ${{ secrets.DIGITALOCEAN_SPACES_BUCKET }}
+          DIGITALOCEAN_SPACES_REGION: ${{ secrets.DIGITALOCEAN_SPACES_REGION }}
+          DIGITALOCEAN_SPACES_CDN_BASE_URL: ${{ secrets.DIGITALOCEAN_SPACES_CDN_BASE_URL }}
+          EPAPER_FORCE_STORAGE: ${{ secrets.EPAPER_FORCE_STORAGE }}
+          EPAPER_STORAGE_UPLOADS_BASE_DIR: ${{ secrets.EPAPER_STORAGE_UPLOADS_BASE_DIR }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+        run: npm run verify:prod-env
 
-  deploy:
-    name: Deploy to Hostinger
-    needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production
+      - name: Create Hostinger upload package
+        run: npm run package:hostinger-upload
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Deploy files to Hostinger via SSH
-        uses: appleboy/scp-action@v0.1.7
+      - name: Upload Hostinger package artifact
+        uses: actions/upload-artifact@v4
         with:
-          host: ${{ secrets.HOSTINGER_HOST }}
-          username: ${{ secrets.HOSTINGER_USERNAME }}
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          source: .
-          target: ${{ secrets.HOSTINGER_APP_PATH }}
-          rm: false
-
-      - name: Install dependencies and restart app on server
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.HOSTINGER_HOST }}
-          username: ${{ secrets.HOSTINGER_USERNAME }}
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          script: |
-            set -e
-            cd "${{ secrets.HOSTINGER_APP_PATH }}"
-            npm ci
-            npm run build
-            if command -v pm2 >/dev/null 2>&1; then
-              pm2 restart lokswami || pm2 start npm --name lokswami -- start
-            else
-              nohup npm start > /tmp/lokswami.log 2>&1 &
-            fi
+          name: lokswami-hostinger-upload
+          path: lokswami-upload.zip
+          if-no-files-found: error
+          retention-days: 7

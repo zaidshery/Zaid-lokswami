@@ -22,6 +22,10 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 source-code.zip
+lokswami-upload.zip
+lokswami-hostinger-upload.zip
+__zip_filelist.txt
+__create_zip.ps1
 
 # OS / Editor
 .DS_Store

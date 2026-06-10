@@ -4,6 +4,9 @@ This project is now prepared for a standard Hostinger Node.js deployment.
 
 This is the only documented production deployment target for the repo. Remove any old non-Hostinger production examples from active environment files and OAuth settings.
 
+For the GitHub + Hostinger auto-deploy path, see `HOSTINGER_CICD_SETUP.md`.
+That document covers the recommended CI/CD model for this repo: GitHub Actions for CI, Hostinger's GitHub integration for automatic production deploys, and the optional upload-package fallback workflow.
+
 Assumption:
 - You are deploying to Hostinger Node hosting or a Hostinger VPS.
 - You are not deploying to PHP-only shared hosting.

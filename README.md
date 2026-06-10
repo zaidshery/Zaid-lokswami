@@ -138,6 +138,8 @@ Readiness currently checks:
 
 Hostinger Node deployment is the supported production path for this repo.
 
+- Use `GitHub Actions` for CI and Hostinger's `Import Git Repository` flow for automatic production deploys from `main`
+- See `HOSTINGER_CICD_SETUP.md` for the exact GitHub + Hostinger setup sequence
 - Set `NEXTAUTH_URL` to your final Hostinger domain
 - Set `NEXT_PUBLIC_SITE_URL` to that same domain
 - Set `NEXT_PUBLIC_GTM_ID` only if you want GTM live in production
@@ -167,6 +169,7 @@ Vercel is also supported for the `zaidshery/Zaid-lokswami` GitHub repo with Git-
 
 ## Project Docs
 
+- `HOSTINGER_CICD_SETUP.md` for GitHub Actions + Hostinger auto-deploy setup
 - `HOSTINGER_DEPLOY.md` for the production deployment flow
 - `VERCEL_CICD_SETUP.md` for GitHub Actions + Vercel CI/CD
 - `DEPLOY_SMOKE_CHECKLIST.md` for the post-deploy verification pass
@@ -181,6 +184,7 @@ npm run build:ci
 npm run build:vercel
 npm run build
 npm run start
+npm run package:hostinger-upload
 npm run lint
 npm run typecheck
 npm run test:smoke -- https://your-domain.com
