@@ -18,18 +18,22 @@ import {
   Download,
   ExternalLink,
   Loader2,
+  LayoutGrid,
   MoreHorizontal,
   Minus,
   Newspaper,
   PauseCircle,
   Plus,
   Printer,
+  Sparkles,
   Type,
   Share2,
   Volume2,
   X,
 } from 'lucide-react';
-import DateInputField from '@/components/ui/DateInputField';
+import Logo from '@/components/layout/Logo';
+import EPaperDatePicker from '@/components/ui/EPaperDatePicker';
+import EPaperCityPicker from '@/components/ui/EPaperCityPicker';
 import {
   EPAPER_CITY_OPTIONS,
 } from '@/lib/constants/epaperCities';
@@ -395,6 +399,29 @@ function clampPage(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function getPageSectionName(pageNumber: number, language: 'en' | 'hi') {
+  if (language === 'hi') {
+    switch (pageNumber) {
+      case 1: return 'मुख्य पृष्ठ';
+      case 2: return 'शहर';
+      case 3: return 'देश-विदेश';
+      case 4: return 'व्यापार';
+      case 5: return 'खेल';
+      case 6: return 'संपादकीय';
+      default: return `पृष्ठ ${pageNumber}`;
+    }
+  }
+  switch (pageNumber) {
+    case 1: return 'Front Page';
+    case 2: return 'City';
+    case 3: return 'Nation';
+    case 4: return 'Business';
+    case 5: return 'Sports';
+    case 6: return 'Editorial';
+    default: return `Page ${pageNumber}`;
+  }
+}
+
 function getTouchDistance(touches: TouchListLike) {
   if (touches.length < 2) return 0;
   const first = touches[0];
@@ -487,6 +514,25 @@ function triggerTextDownload(filename: string, content: string) {
   window.setTimeout(() => {
     window.URL.revokeObjectURL(url);
   }, 0);
+}
+
+function getEmbedUrl(url?: string) {
+  if (!url) return '';
+  const cleaned = url.trim();
+  
+  let regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  let match = cleaned.match(regExp);
+  if (match && match[2].length === 11) {
+    return `https://www.youtube.com/embed/${match[2]}`;
+  }
+  
+  regExp = /^.*youtube.com\/shorts\/([^#\&\?]*).*/;
+  match = cleaned.match(regExp);
+  if (match && match[1]) {
+    return `https://www.youtube.com/embed/${match[1]}`;
+  }
+  
+  return cleaned;
 }
 
 async function readCachedJson<T>(requestPath: string): Promise<T | null> {
@@ -769,6 +815,7 @@ export default function EPaperPageClient({
   initialPublishDate,
 }: EPaperPageClientProps) {
   const language = useAppStore((state) => state.language);
+  const theme = useAppStore((state) => state.theme);
   const setEpaperReaderOpen = useAppStore((state) => state.setEpaperReaderOpen);
   const prefersReducedMotion = useReducedMotion();
   const t = COPY[language];
@@ -788,9 +835,10 @@ export default function EPaperPageClient({
   const [error, setError] = useState('');
   const [readerSidebarView, setReaderSidebarView] = useState<ReaderSidebarView>('pages');
   const [readerDisplayMode, setReaderDisplayMode] = useState<'single' | 'spread'>('single');
-  const [isDesktopPageRailVisible, setIsDesktopPageRailVisible] = useState(true);
-  const [isDesktopContextRailVisible, setIsDesktopContextRailVisible] = useState(true);
-  const [isMobilePageStripVisible, setIsMobilePageStripVisible] = useState(true);
+  const [isDesktopContextRailVisible, setIsDesktopContextRailVisible] = useState(false);
+  const [isMobilePageStripVisible, setIsMobilePageStripVisible] = useState(false);
+  const [isOverflowOpen, setIsOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement | null>(null);
 
   const [activePaper, setActivePaper] = useState<(EPaperRecord & { articles: EPaperArticleRecord[] }) | null>(null);
   const [activePage, setActivePage] = useState(1);
@@ -812,9 +860,11 @@ export default function EPaperPageClient({
   const [loadingFallback, setLoadingFallback] = useState(false);
   const [fallbackError, setFallbackError] = useState('');
   const [previewZoom, setPreviewZoom] = useState(1);
+  const [showHotspotHints, setShowHotspotHints] = useState(true);
   const [articleImageZoom, setArticleImageZoom] = useState(1);
   const [pageTurnDirection, setPageTurnDirection] = useState(0);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const [isWideScreen, setIsWideScreen] = useState(false);
 
   const [pendingPaperId, setPendingPaperId] = useState('');
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -849,6 +899,8 @@ export default function EPaperPageClient({
     tracking: false,
   });
   const articleAudioRef = useRef<HTMLAudioElement | null>(null);
+  const canUseSpreadMode = Boolean(activePaper && activePaper.pageCount > 1);
+  const shouldShowSpreadMode = canUseSpreadMode && readerDisplayMode === 'spread' && isWideScreen;
   const hasArchiveFilters = selectedCity !== 'all' || Boolean(selectedPublishDate);
   const syncSavedLibrary = useCallback(() => {
     setSavedPapers(readSavedEpaperPapers());
@@ -901,6 +953,14 @@ export default function EPaperPageClient({
     if (story) {
       setPendingStorySlug(story);
     }
+
+    if (typeof window !== 'undefined') {
+      if (window.innerWidth >= 768) {
+        setReaderDisplayMode('spread');
+      } else {
+        setReaderDisplayMode('single');
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -942,6 +1002,22 @@ export default function EPaperPageClient({
 
     mediaQuery.addListener(updatePointerMode);
     return () => mediaQuery.removeListener(updatePointerMode);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    const mediaQuery = window.matchMedia('(min-width: 768px)');
+    const updateWidthMode = () => setIsWideScreen(mediaQuery.matches);
+    updateWidthMode();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateWidthMode);
+      return () => mediaQuery.removeEventListener('change', updateWidthMode);
+    }
+
+    mediaQuery.addListener(updateWidthMode);
+    return () => mediaQuery.removeListener(updateWidthMode);
   }, []);
 
   useEffect(() => {
@@ -1160,11 +1236,15 @@ export default function EPaperPageClient({
       return;
     }
     setReaderSidebarView('pages');
-    setIsDesktopPageRailVisible(true);
-    setIsDesktopContextRailVisible(true);
-    setIsMobilePageStripVisible(true);
+    if (isCoarsePointer) {
+      setIsDesktopContextRailVisible(true);
+      setIsMobilePageStripVisible(true);
+    } else {
+      setIsDesktopContextRailVisible(false);
+      setIsMobilePageStripVisible(false);
+    }
     wasPreviewZoomedRef.current = false;
-  }, [activePaper]);
+  }, [activePaper, isCoarsePointer]);
 
   useEffect(() => {
     const isPreviewZoomed = previewZoom > MIN_PREVIEW_ZOOM + 0.01;
@@ -1198,7 +1278,7 @@ export default function EPaperPageClient({
     (delta: number) => {
       if (!activePaper || !delta) return;
       const maxPages = Math.max(1, Number(activePaper.pageCount || 1));
-      const step = readerDisplayMode === 'spread' && maxPages > 1 ? 2 : 1;
+      const step = shouldShowSpreadMode && maxPages > 1 ? 2 : 1;
 
       setActivePage((current) => {
         const nextPage = clampPage(current + delta * step, 1, maxPages);
@@ -1209,7 +1289,7 @@ export default function EPaperPageClient({
         return nextPage;
       });
     },
-    [activePaper, readerDisplayMode]
+    [activePaper, shouldShowSpreadMode]
   );
 
   const navigateToPage = useCallback(
@@ -1265,7 +1345,7 @@ export default function EPaperPageClient({
 
   useEffect(() => {
     if (!activePaper) return;
-    if (readerDisplayMode !== 'spread') return;
+    if (!shouldShowSpreadMode) return;
     if (activePaper.pageCount <= 1) {
       setReaderDisplayMode('single');
       return;
@@ -1275,7 +1355,7 @@ export default function EPaperPageClient({
     if (activePage > maxStartPage) {
       setActivePage(maxStartPage);
     }
-  }, [activePage, activePaper, readerDisplayMode]);
+  }, [activePage, activePaper, shouldShowSpreadMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1353,8 +1433,6 @@ export default function EPaperPageClient({
     () => pageSummaries.filter((item) => item.storyCount > 0),
     [pageSummaries]
   );
-  const canUseSpreadMode = Boolean(activePaper && activePaper.pageCount > 1);
-  const shouldShowSpreadMode = canUseSpreadMode && readerDisplayMode === 'spread';
   const spreadCompanionPage = useMemo(() => {
     if (!shouldShowSpreadMode) return null;
     return pageSummaries.find((item) => item.pageNumber === activePage + 1) || null;
@@ -1369,6 +1447,47 @@ export default function EPaperPageClient({
   const canGoNextPage = shouldShowSpreadMode
     ? activePage < maxSpreadStartPage
     : activePage < maxReaderPage;
+
+  // Pre-fetch adjacent page images to make navigation instantaneous and smooth
+  useEffect(() => {
+    if (!activePaper || pageSummaries.length === 0) return;
+    const pagesToPreload = [activePage + 1, activePage - 1];
+    if (shouldShowSpreadMode) {
+      pagesToPreload.push(activePage + 2);
+    }
+    pagesToPreload.forEach((pNum) => {
+      const pageData = pageSummaries.find((s) => s.pageNumber === pNum);
+      if (pageData?.imagePath) {
+        const img = new window.Image();
+        img.src = pageData.imagePath;
+      }
+    });
+  }, [activePage, activePaper, pageSummaries, shouldShowSpreadMode]);
+
+  // Click-away listener for details / actions overflow dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(event.target as Node)) {
+        setIsOverflowOpen(false);
+      }
+    }
+    if (isOverflowOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOverflowOpen]);
+
+  // Auto-switch sidebar tab to "contents" if the current page has no mapped stories
+  useEffect(() => {
+    if (activePaper) {
+      if (pageArticles.length === 0 && readerSidebarView === 'pages') {
+        setReaderSidebarView('contents');
+      }
+    }
+  }, [activePage, pageArticles.length, readerSidebarView, activePaper]);
+
   const pdfProxyUrl = useMemo(() => {
     if (!activePaper) return '';
     return buildEpaperPdfProxyUrl(String(activePaper._id || ''));
@@ -1914,16 +2033,29 @@ export default function EPaperPageClient({
 
   const pageTurnVariants = useMemo(
     () => ({
-      enter: (direction: number) =>
-        prefersReducedMotion
-          ? { opacity: 0 }
-          : {
-              opacity: 0,
-              x: direction >= 0 ? 72 : -72,
-              scale: 0.985,
-              rotateY: direction >= 0 ? -8 : 8,
-              filter: 'blur(4px)',
-            },
+      enter: (direction: number) => {
+        if (prefersReducedMotion) return { opacity: 0 };
+        // Turning previous: the new page enters on top, unpeeling from top-left to bottom-right
+        if (direction < 0) {
+          return {
+            opacity: 0.9,
+            clipPath: 'polygon(0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%)',
+            rotateY: -15,
+            x: -30,
+            z: 50,
+            scale: 0.98,
+          };
+        }
+        // Turning next: the new page enters underneath, scaling up gently
+        return {
+          opacity: 0.8,
+          scale: 0.96,
+          rotateY: 0,
+          x: 0,
+          z: -60,
+          clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 100% 100%, 0% 100%)',
+        };
+      },
       center: prefersReducedMotion
         ? {
             opacity: 1,
@@ -1931,31 +2063,52 @@ export default function EPaperPageClient({
           }
         : {
             opacity: 1,
-            x: 0,
-            scale: 1,
             rotateY: 0,
-            filter: 'blur(0px)',
+            scale: 1,
+            x: 0,
+            z: 0,
+            clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 100% 100%, 0% 100%)',
             transition: {
-              type: 'spring',
-              stiffness: 220,
-              damping: 28,
-              mass: 0.9,
-            },
-          },
-      exit: (direction: number) =>
-        prefersReducedMotion
-          ? { opacity: 0 }
-          : {
-              opacity: 0,
-              x: direction >= 0 ? -52 : 52,
-              scale: 0.99,
-              rotateY: direction >= 0 ? 6 : -6,
-              filter: 'blur(3px)',
-              transition: {
-                duration: 0.18,
-                ease: [0.22, 1, 0.36, 1],
+              clipPath: { duration: 0.65, ease: [0.25, 1, 0.5, 1] },
+              default: {
+                type: 'spring',
+                stiffness: 120,
+                damping: 20,
+                mass: 1.0,
               },
             },
+          },
+      exit: (direction: number) => {
+        if (prefersReducedMotion) return { opacity: 0 };
+        // Turning next: the current page peels off on top towards the top-left
+        if (direction >= 0) {
+          return {
+            opacity: 0.9,
+            clipPath: 'polygon(0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%)',
+            rotateY: -15,
+            x: -30,
+            z: 50,
+            scale: 0.98,
+            transition: {
+              clipPath: { duration: 0.65, ease: [0.25, 1, 0.5, 1] },
+              default: { duration: 0.5, ease: 'easeOut' },
+            },
+          };
+        }
+        // Turning previous: the current page disappears underneath
+        return {
+          opacity: 0.7,
+          scale: 0.96,
+          rotateY: 0,
+          x: 0,
+          z: -60,
+          clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 100% 100%, 0% 100%)',
+          transition: {
+            duration: 0.45,
+            ease: 'easeOut',
+          },
+        };
+      },
     }),
     [prefersReducedMotion]
   );
@@ -2302,37 +2455,31 @@ export default function EPaperPageClient({
     : shouldShowSpreadMode
       ? 290
       : 250;
-  const previewMaxHeight = `calc((100dvh - ${previewHeightOffset}px) * ${previewZoom})`;
-  const desktopReaderGridClassName =
-    isDesktopPageRailVisible && isDesktopContextRailVisible
-      ? 'xl:grid-cols-[13rem_minmax(0,1fr)_22rem]'
-      : isDesktopPageRailVisible
-        ? 'xl:grid-cols-[13rem_minmax(0,1fr)]'
-        : isDesktopContextRailVisible
-          ? 'xl:grid-cols-[minmax(0,1fr)_22rem]'
-          : 'grid-cols-1';
-  const readerStageBorderClassName = [
-    isDesktopPageRailVisible
-      ? 'xl:border-l xl:border-gray-200 dark:xl:border-zinc-800'
-      : '',
-    isDesktopContextRailVisible
-      ? 'xl:border-r xl:border-gray-200 dark:xl:border-zinc-800'
-      : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-  const readerStageWidthClassName =
-    !isDesktopPageRailVisible && !isDesktopContextRailVisible
-      ? shouldShowSpreadMode
-        ? 'max-w-[1360px]'
-        : 'max-w-[1120px]'
-      : !isDesktopPageRailVisible || !isDesktopContextRailVisible
-        ? shouldShowSpreadMode
-          ? 'max-w-[1280px]'
-          : 'max-w-[1060px]'
-        : shouldShowSpreadMode
-          ? 'max-w-[1180px]'
-          : 'max-w-[980px]';
+  const previewMaxHeight = useMemo(() => {
+    const baseOffset = isMobilePageStripVisible ? 290 : 136;
+    return `calc((100dvh - ${baseOffset}px) * ${previewZoom})`;
+  }, [isMobilePageStripVisible, previewZoom]);
+  const desktopReaderGridClassName = isDesktopContextRailVisible
+    ? 'xl:grid-cols-[minmax(0,1fr)_22rem]'
+    : 'grid-cols-1';
+  const readerStageBorderClassName = isDesktopContextRailVisible
+    ? 'xl:border-r xl:border-gray-200 dark:xl:border-zinc-800'
+    : '';
+  const dynamicPaddingClass = isMobilePageStripVisible
+    ? "pt-3 pb-[200px] sm:pt-4 sm:pb-[180px]"
+    : "pt-3 pb-[80px] sm:pt-4 sm:pb-6";
+  const readerStageWidthClassName = !isDesktopContextRailVisible
+    ? shouldShowSpreadMode
+      ? 'max-w-[1360px]'
+      : 'max-w-[1120px]'
+    : shouldShowSpreadMode
+      ? 'max-w-[1280px]'
+      : 'max-w-[1060px]';
+
+  const bookContainerShadowClassName = shouldShowSpreadMode
+    ? "shadow-[0_24px_60px_-30px_rgba(15,23,42,0.55),_3px_0_0_-1px_#fff,_3px_0_1px_rgba(0,0,0,0.12),_6px_0_0_-2px_#fff,_6px_0_2px_rgba(0,0,0,0.08),_-3px_0_0_-1px_#fff,_-3px_0_1px_rgba(0,0,0,0.12),_-6px_0_0_-2px_#fff,_-6px_0_2px_rgba(0,0,0,0.08)] dark:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.85),_3px_0_0_-1px_#27272a,_3px_0_1px_rgba(0,0,0,0.45),_6px_0_0_-2px_#27272a,_6px_0_2px_rgba(0,0,0,0.4),_-3px_0_0_-1px_#27272a,_-3px_0_1px_rgba(0,0,0,0.45),_-6px_0_0_-2px_#27272a,_-6px_0_2px_rgba(0,0,0,0.4)]"
+    : "shadow-[0_24px_60px_-30px_rgba(15,23,42,0.55)] dark:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.85)]";
+
   const readerSidebarSummary =
     readerSidebarView === 'pages'
       ? `${t.currentPage}: ${readerPageLabel}`
@@ -2367,30 +2514,17 @@ export default function EPaperPageClient({
       <section className="cnp-surface p-3.5 sm:p-4 md:p-5">
         <div className="mb-4 border-b border-zinc-200/80 pb-4 dark:border-zinc-800">
           <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-            <label className="block min-w-0">
-              <span className="sr-only">{t.city}</span>
-              <select
-                value={selectedCity}
-                onChange={(event) => setSelectedCity(event.target.value as EPaperCityFilter)}
-                aria-label={t.city}
-                className="reader-focus-ring h-12 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] outline-none transition focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:h-11 sm:text-sm"
-              >
-                <option value="all">{t.allCities}</option>
-                {EPAPER_CITY_OPTIONS.map((city) => (
-                  <option key={city.slug} value={city.slug}>
-                    {city.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <EPaperCityPicker
+              value={selectedCity}
+              onChange={setSelectedCity}
+              language={language}
+            />
 
-            <DateInputField
+            <EPaperDatePicker
               value={selectedPublishDate}
               onChange={onPublishDateChange}
               onClear={() => setSelectedPublishDate('')}
-              clearLabel={t.clearDate}
-              ariaLabel={t.publishDate}
-              className="reader-focus-ring h-12 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] outline-none focus:border-primary-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-primary-400 sm:h-11 sm:text-sm"
+              placeholder="तारीख चुनें"
             />
           </div>
         </div>
@@ -2590,19 +2724,227 @@ export default function EPaperPageClient({
       </section>
 
       {activePaper ? (
-        <div className="fixed inset-0 z-[95] bg-black/88 p-0 backdrop-blur-sm sm:bg-black/75 sm:p-4" data-swipe-ignore="true">
-          <div className="mx-auto flex h-[100dvh] w-full max-w-[1480px] flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:h-[calc(100dvh-2rem)] sm:rounded-2xl">
-            <div className="border-b border-gray-200 bg-white/95 px-2.5 pb-1.5 pt-[calc(env(safe-area-inset-top)+0.375rem)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:px-4 sm:py-2.5">
-              <div className="sm:hidden">
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem] gap-1">
+        <div className="fixed inset-0 z-[95] bg-zinc-950/70 p-0 backdrop-blur-md sm:bg-black/75 sm:p-4" data-swipe-ignore="true">
+          <div className="mx-auto flex h-[100dvh] w-full max-w-[1480px] flex-col overflow-hidden border-0 bg-zinc-900/40 shadow-2xl dark:bg-zinc-950/40 sm:border sm:border-gray-200 sm:bg-white sm:dark:border-zinc-800 sm:dark:bg-zinc-950 sm:h-[calc(100dvh-2rem)] sm:rounded-2xl relative">
+            {/* Ambient glows behind newspaper */}
+            <div className="pointer-events-none absolute -left-16 -top-16 z-0 h-48 w-48 rounded-full bg-red-500/15 blur-3xl sm:hidden" />
+            <div className="relative z-40 w-full shrink-0 sm:border-b sm:border-zinc-200/80 sm:bg-white/95 sm:backdrop-blur-md px-0 pb-0 pt-0 sm:dark:border-zinc-800/80 sm:dark:bg-zinc-900/95 sm:px-4 sm:py-2 sm:shadow-sm bg-transparent dark:bg-transparent">
+              <div className="sm:hidden w-full bg-white/95 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-200 dark:border-white/5 px-2.5 min-[375px]:px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 shadow-md flex items-center justify-between">
+                {/* Left: Back button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePaper(null);
+                    setActiveArticle(null);
+                  }}
+                  aria-label={t.close}
+                  className="reader-touch-button reader-focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-100/80 dark:bg-white/5 text-zinc-800 dark:text-white/90 transition hover:bg-zinc-200/80 dark:hover:bg-white/10"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+
+                {/* Center: Brand Logo */}
+                <div className="flex items-center justify-center shrink-0">
+                  <div className={`${theme === 'dark' ? 'dark' : ''} shrink-0`}>
+                    <Logo size="headerCompact" />
+                  </div>
+                </div>
+
+                {/* Right: Actions */}
+                <div className="flex items-center gap-1.5 min-[375px]:gap-2">
                   <button
                     type="button"
-                    onClick={handlePdfDownload}
-                    disabled={!pdfUrlForOpen}
-                    className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-white px-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    onClick={() => setIsMobilePageStripVisible((current) => !current)}
+                    className={`reader-touch-button reader-focus-ring flex h-9 items-center gap-1.5 rounded-xl border px-2 min-[375px]:px-3 text-xs font-bold transition ${
+                      isMobilePageStripVisible
+                        ? 'border-red-300 dark:border-red-500/35 bg-red-50 dark:bg-red-600/20 text-red-600 dark:text-red-400'
+                        : 'border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/80 dark:hover:bg-white/10'
+                    }`}
                   >
-                    <Download className="h-3 w-3" />
-                    <span>PDF</span>
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    <span className="hidden min-[380px]:inline">{language === 'hi' ? 'सेक्शन' : 'Sections'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleIssueSaveToggle}
+                    disabled={!activePaperLibraryInput || isSavingIssue}
+                    className={`reader-touch-button reader-focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isActivePaperSaved
+                        ? 'border-red-500/30 bg-red-600 text-white'
+                        : 'border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 text-zinc-800 dark:text-white/80 hover:bg-zinc-200 dark:hover:bg-white/10'
+                    }`}
+                    title={isActivePaperSaved ? t.savedIssue : t.saveIssue}
+                  >
+                    {isSavingIssue ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Bookmark className={`h-4 w-4 ${isActivePaperSaved ? 'fill-current' : ''}`} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="hidden items-center justify-between gap-4 sm:flex py-1">
+                {/* Brand & Edition */}
+                <div className="flex items-center gap-2 min-w-0 shrink-0">
+                  <span className="inline-flex items-center rounded-full bg-primary-100 px-2 py-0.5 text-[9px] font-bold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">
+                    Lokswami E-Paper
+                  </span>
+                  <span className="text-xs text-gray-300 dark:text-zinc-700">|</span>
+                  <p className="truncate text-xs font-bold text-gray-900 dark:text-zinc-100">
+                    {activePaper.cityName} Edition
+                  </p>
+                  <span className="text-[10px] text-gray-400 dark:text-zinc-500">
+                    ({formatUiDate(activePaper.publishDate, activePaper.publishDate)})
+                  </span>
+                </div>
+
+                {/* Controls (Navigation & Zoom) */}
+                <div className="flex items-center gap-1.5 sm:gap-2 justify-center flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => goToRelativePage(-1)}
+                    aria-label={t.previous}
+                    disabled={!canGoPreviousPage}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+
+                  <span className="min-w-[64px] rounded-md border border-gray-200 px-1.5 py-1 text-center text-xs font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-300">
+                    {readerPageLabel}
+                  </span>
+
+                  <div className="relative inline-flex items-center">
+                    <select
+                      value={activePage}
+                      onChange={(event) => {
+                        const nextPage = Number.parseInt(event.target.value, 10);
+                        if (Number.isFinite(nextPage)) {
+                          navigateToPage(nextPage);
+                        }
+                      }}
+                      aria-label={t.quickJump}
+                      className="appearance-none rounded-md border border-gray-300 bg-white px-2.5 py-1 pr-6 text-xs font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
+                    >
+                      {pageSummaries.map((page) => (
+                        <option 
+                          key={`jump-${page.pageNumber}`} 
+                          value={page.pageNumber}
+                          className="bg-white text-gray-900 dark:bg-zinc-950 dark:text-zinc-100"
+                        >
+                          {t.page} {page.pageNumber}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500">
+                      <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20">
+                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => goToRelativePage(1)}
+                    aria-label={t.next}
+                    disabled={!canGoNextPage}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+
+                  <div className="hidden items-center gap-1 rounded-md border border-gray-300 px-1 py-0.5 md:flex dark:border-zinc-700 bg-white dark:bg-zinc-950">
+                    <button
+                      type="button"
+                      onClick={zoomPreviewOut}
+                      aria-label={t.zoomOut}
+                      disabled={previewZoom <= MIN_PREVIEW_ZOOM}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      -
+                    </button>
+                    <span className="min-w-[44px] text-center text-[10px] font-semibold text-gray-700 dark:text-zinc-300">
+                      {Math.round(previewZoom * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={zoomPreviewIn}
+                      aria-label={t.zoomIn}
+                      disabled={previewZoom >= MAX_PREVIEW_ZOOM}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  {canUseSpreadMode && isWideScreen ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReaderDisplayMode((current) =>
+                          current === 'spread' ? 'single' : 'spread'
+                        )
+                      }
+                      className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      <span>{shouldShowSpreadMode ? t.singleView : t.spreadView}</span>
+                    </button>
+                  ) : null}
+                </div>
+
+                {/* Right Actions */}
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowHotspotHints((current) => !current)}
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition hover:bg-zinc-50 dark:hover:bg-zinc-900/60 ${
+                      showHotspotHints
+                        ? 'border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
+                        : 'border-zinc-300 bg-white text-gray-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                    }`}
+                    title="Toggle story hotspots highlight"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span className="hidden lg:inline">Hotspots</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsDesktopContextRailVisible((current) => !current)}
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition hover:bg-zinc-50 dark:hover:bg-zinc-900/60 ${
+                      isDesktopContextRailVisible
+                        ? 'border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
+                        : 'border-zinc-300 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                    }`}
+                    title={isDesktopContextRailVisible ? t.hideContentsRail : t.showContentsRail}
+                  >
+                    <Type className="h-3.5 w-3.5" />
+                    <span className="hidden lg:inline">
+                      {isDesktopContextRailVisible ? 'Hide Index' : 'Show Index'}
+                    </span>
+                  </button>
+
+                  <span className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 hidden md:inline-block" />
+
+                  <button
+                    type="button"
+                    onClick={handleIssueSaveToggle}
+                    disabled={!activePaperLibraryInput || isSavingIssue}
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isActivePaperSaved
+                        ? 'border-primary-300 bg-primary-500 text-white hover:bg-primary-600'
+                        : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                    }`}
+                    title={isActivePaperSaved ? t.savedIssue : t.saveIssue}
+                  >
+                    {isSavingIssue ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Bookmark className={`h-3.5 w-3.5 ${isActivePaperSaved ? 'fill-current' : ''}`} />
+                    )}
+                    <span className="hidden lg:inline">{isActivePaperSaved ? t.savedIssue : t.saveIssue}</span>
                   </button>
 
                   <button
@@ -2611,11 +2953,80 @@ export default function EPaperPageClient({
                       void shareActivePaperOnWhatsApp();
                     }}
                     aria-label={t.shareWhatsApp}
-                    className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    title={t.shareWhatsApp}
                   >
-                    <Share2 className="h-3 w-3" />
-                    <span>{t.shareWhatsApp}</span>
+                    <Share2 className="h-3.5 w-3.5" />
+                    <span className="hidden lg:inline">{t.shareWhatsApp}</span>
                   </button>
+
+                  <div className="relative" ref={overflowRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsOverflowOpen((curr) => !curr)}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+                        isOverflowOpen
+                          ? 'border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
+                          : 'border-zinc-300 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-850'
+                      }`}
+                      title="More options"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+
+                    {isOverflowOpen && (
+                      <div className="absolute right-0 mt-1.5 w-48 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-950 z-[60]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOverflowOpen(false);
+                            openPdfInNewTab();
+                          }}
+                          disabled={!pdfUrlForOpen}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          <span>{t.openPdf}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOverflowOpen(false);
+                            handlePdfDownload();
+                          }}
+                          disabled={!pdfUrlForOpen}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          <span>{t.downloadPdf}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOverflowOpen(false);
+                            void handleOfflinePaperSave();
+                          }}
+                          disabled={!activePaperLibraryInput || isPreparingOfflinePaper || isActivePaperOfflineReady}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-900/60"
+                        >
+                          {isPreparingOfflinePaper ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          <span>
+                            {isPreparingOfflinePaper
+                              ? t.offlineSaving
+                              : isActivePaperOfflineReady
+                                ? t.offlineReady
+                                : t.keepOffline}
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     type="button"
@@ -2624,247 +3035,41 @@ export default function EPaperPageClient({
                       setActiveArticle(null);
                     }}
                     aria-label={t.close}
-                    className="reader-touch-button reader-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     <X className="h-4 w-4" />
                   </button>
-                </div>
-              </div>
-
-              <div className="hidden flex-col gap-3 sm:flex">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-zinc-100">
-                      {activePaper.title}
-                    </p>
-                    <p className="truncate text-xs text-gray-600 dark:text-zinc-400">
-                      {activePaper.cityName} | {formatUiDate(activePaper.publishDate, activePaper.publishDate)}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActivePaper(null);
-                      setActiveArticle(null);
-                    }}
-                    aria-label={t.close}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-2 border-t border-gray-200/80 pt-2 dark:border-zinc-800 xl:flex-row xl:items-center xl:justify-between">
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <button
-                      type="button"
-                      onClick={() => goToRelativePage(-1)}
-                      aria-label={t.previous}
-                      disabled={!canGoPreviousPage}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-
-                    <span className="min-w-[72px] rounded-md border border-gray-200 px-2 py-1 text-center text-xs font-semibold text-gray-700 dark:border-zinc-700 dark:text-zinc-300">
-                      {readerPageLabel}
-                    </span>
-
-                    <label className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
-                      <span className="hidden md:inline">{t.quickJump}</span>
-                      <select
-                        value={activePage}
-                        onChange={(event) => {
-                          const nextPage = Number.parseInt(event.target.value, 10);
-                          if (Number.isFinite(nextPage)) {
-                            navigateToPage(nextPage);
-                          }
-                        }}
-                        aria-label={t.quickJump}
-                        className="min-w-[72px] bg-transparent text-xs outline-none"
-                      >
-                        {pageSummaries.map((page) => (
-                          <option key={`jump-${page.pageNumber}`} value={page.pageNumber}>
-                            {t.page} {page.pageNumber}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => goToRelativePage(1)}
-                      aria-label={t.next}
-                      disabled={!canGoNextPage}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-
-                    <div className="hidden items-center gap-1 rounded-md border border-gray-300 px-1 py-0.5 md:flex dark:border-zinc-700">
-                      <button
-                        type="button"
-                        onClick={zoomPreviewOut}
-                        aria-label={t.zoomOut}
-                        disabled={previewZoom <= MIN_PREVIEW_ZOOM}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                      >
-                        -
-                      </button>
-                      <span className="min-w-[48px] text-center text-[11px] font-semibold text-gray-700 dark:text-zinc-300">
-                        {Math.round(previewZoom * 100)}%
-                      </span>
-                      <button
-                        type="button"
-                        onClick={zoomPreviewIn}
-                        aria-label={t.zoomIn}
-                        disabled={previewZoom >= MAX_PREVIEW_ZOOM}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                      >
-                        +
-                      </button>
-                    </div>
-
-                    {canUseSpreadMode ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setReaderDisplayMode((current) =>
-                            current === 'spread' ? 'single' : 'spread'
-                          )
-                        }
-                        className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                      >
-                        <span>{shouldShowSpreadMode ? t.singleView : t.spreadView}</span>
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <button
-                      type="button"
-                      onClick={handleIssueSaveToggle}
-                      disabled={!activePaperLibraryInput || isSavingIssue}
-                      className={`inline-flex h-8 items-center gap-1 rounded-md border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                        isActivePaperSaved
-                          ? 'border-primary-300 bg-primary-600 text-white hover:bg-primary-700 dark:border-primary-500 dark:bg-primary-500 dark:hover:bg-primary-400'
-                          : 'border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40'
-                      }`}
-                    >
-                      {isSavingIssue ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Bookmark className={`h-3.5 w-3.5 ${isActivePaperSaved ? 'fill-current' : ''}`} />
-                      )}
-                      <span>{isActivePaperSaved ? t.savedIssue : t.saveIssue}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={openPdfInNewTab}
-                      disabled={!pdfUrlForOpen}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300 dark:hover:bg-primary-900/40"
-                    >
-                      <span>{t.openPdf}</span>
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handlePdfDownload}
-                      disabled={!pdfUrlForOpen}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>{t.downloadPdf}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleOfflinePaperSave();
-                      }}
-                      disabled={!activePaperLibraryInput || isPreparingOfflinePaper || isActivePaperOfflineReady}
-                      className={`inline-flex h-8 items-center gap-1 rounded-md border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                        isActivePaperOfflineReady
-                          ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
-                          : 'border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/30'
-                      }`}
-                    >
-                      {isPreparingOfflinePaper ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Download className="h-3.5 w-3.5" />
-                      )}
-                      <span>
-                        {isPreparingOfflinePaper
-                          ? t.offlineSaving
-                          : isActivePaperOfflineReady
-                            ? t.offlineReady
-                            : t.keepOffline}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void shareActivePaperOnWhatsApp();
-                      }}
-                      aria-label={t.shareWhatsApp}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
-                    >
-                      <Share2 className="h-3.5 w-3.5" />
-                      <span>{t.shareWhatsApp}</span>
-                    </button>
-
-                    <div className="hidden xl:flex xl:items-center xl:gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setIsDesktopPageRailVisible((current) => !current)}
-                        className="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                      >
-                        {isDesktopPageRailVisible ? t.hidePagesRail : t.showPagesRail}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsDesktopContextRailVisible((current) => !current)}
-                        className="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                      >
-                        {isDesktopContextRailVisible ? t.hideContentsRail : t.showContentsRail}
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
 
             {!activePageImage ? (
-              <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 sm:px-4 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+              <div className="absolute bottom-[170px] left-4 right-4 z-40 rounded-xl border border-amber-200/80 bg-amber-50/90 backdrop-blur px-3 py-2 text-center text-xs font-semibold text-amber-700 sm:bottom-6 sm:left-auto sm:right-6 sm:w-80 dark:border-amber-900/60 dark:bg-amber-950/80 dark:text-amber-300 shadow-md">
                 {t.pageMissingPrefix} {activePage}.
               </div>
             ) : null}
 
-            <div className="border-b border-gray-200 bg-white/90 px-2.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-950/80 sm:px-4 sm:py-2.5">
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    {t.pageStrip}
-                  </p>
-                  <p className="text-[11px] leading-tight text-zinc-500 dark:text-zinc-400">{t.tapPageToFocus}</p>
+            {isMobilePageStripVisible ? (
+              <div 
+                className="absolute bottom-20 left-4 right-4 z-40 rounded-3xl border border-zinc-200 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-xl p-3.5 shadow-2xl max-w-[calc(100%-2rem)] mx-auto overflow-hidden transition-all duration-350" 
+                data-swipe-ignore="true"
+              >
+                {/* Header info */}
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <span className="text-[10px] font-black tracking-wider text-zinc-700 dark:text-zinc-300 uppercase">
+                    {language === 'hi' ? 'संस्करण के पृष्ठ' : 'Edition Pages'}
+                  </span>
+                  <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
+                    {pageSummaries.length} {language === 'hi' ? 'पृष्ठ' : 'Pages'}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsMobilePageStripVisible((current) => !current)}
-                  aria-expanded={isMobilePageStripVisible}
-                  className="reader-touch-button reader-focus-ring inline-flex min-h-11 items-center rounded-full border border-gray-300 px-3 text-[10px] font-semibold text-gray-700 transition hover:bg-gray-100 sm:hidden dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                >
-                  {isMobilePageStripVisible ? t.hidePagesRail : t.showPagesRail}
-                </button>
-              </div>
 
-              <div className={`${isMobilePageStripVisible ? 'block' : 'hidden'} sm:block`}>
-                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden reader-scroll-x" data-reader-scroll="x" data-swipe-ignore="true">
+                {/* Left scroll fade gradient */}
+                <div className="pointer-events-none absolute bottom-3.5 left-3.5 top-11 z-10 w-8 bg-gradient-to-r from-white dark:from-zinc-950/85 to-transparent" />
+                {/* Right scroll fade gradient */}
+                <div className="pointer-events-none absolute bottom-3.5 right-3.5 top-11 z-10 w-8 bg-gradient-to-l from-white dark:from-zinc-950/85 to-transparent" />
+
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-6 pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden reader-scroll-x" data-reader-scroll="x" data-swipe-ignore="true">
                   {pageSummaries.map((page) => {
                     const isCurrentPage = page.pageNumber === activePage;
                     const isCompanionPage =
@@ -2875,33 +3080,33 @@ export default function EPaperPageClient({
                         key={`strip-${page.pageNumber}`}
                         type="button"
                         onClick={() => handlePageStripPageSelect(page.pageNumber)}
-                        className={`reader-touch-button reader-focus-ring group min-w-[80px] max-w-[80px] shrink-0 overflow-hidden rounded-xl border text-left transition sm:min-w-[88px] sm:max-w-[88px] md:min-w-[96px] md:max-w-[96px] ${
+                        className={`reader-touch-button reader-focus-ring group min-w-[84px] max-w-[84px] shrink-0 overflow-hidden rounded-2xl border text-left transition-all duration-300 active:scale-95 ${
                           isCurrentPage
-                            ? 'border-primary-500 bg-primary-50 shadow-sm dark:border-primary-400 dark:bg-primary-950/30'
+                            ? 'border-red-500 bg-red-50 dark:bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.25)] dark:shadow-[0_0_15px_rgba(239,68,68,0.4)] scale-[1.04]'
                             : isCompanionPage
                               ? 'border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/20'
-                              : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/20'
+                              : 'border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:border-zinc-300 dark:hover:border-white/10 hover:scale-[1.02]'
                         }`}
                       >
-                        <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-900 dark:to-zinc-800">
+                        <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-zinc-200 dark:from-zinc-900/90 to-zinc-100 dark:to-zinc-800/90">
                           {page.imagePath ? (
                             <Image
                               src={page.imagePath}
-                              alt={`${t.page} ${page.pageNumber}`}
+                              alt={`${getPageSectionName(page.pageNumber, language)}`}
                               fill
                               unoptimized
-                              className="object-contain p-1"
-                              sizes="(max-width: 640px) 80px, 96px"
+                              className="object-contain p-1.5 transition-transform duration-500 group-hover:scale-105"
+                              sizes="(max-width: 640px) 84px, 96px"
                             />
-                        ) : (
-                          <div className="flex h-full items-center justify-center px-2 text-center text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                            {t.page} {page.pageNumber}
-                          </div>
-                        )}
+                          ) : (
+                            <div className="flex h-full items-center justify-center px-2 text-center text-[10px] font-bold text-zinc-400">
+                              {getPageSectionName(page.pageNumber, language)}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex min-h-[28px] items-center justify-center border-t border-gray-100 bg-white px-1.5 py-1 dark:border-zinc-800 dark:bg-zinc-900">
-                          <span className="text-[10px] font-semibold text-primary-700 dark:text-primary-300">
-                            {t.page} {page.pageNumber}
+                        <div className="flex min-h-[28px] items-center justify-center border-t border-zinc-200 dark:border-white/5 bg-zinc-100 dark:bg-zinc-900 px-1 py-1">
+                          <span className="text-[9px] font-extrabold text-red-500 dark:text-red-400/95 tracking-wide truncate max-w-full px-1">
+                            {getPageSectionName(page.pageNumber, language)}
                           </span>
                         </div>
                       </button>
@@ -2909,63 +3114,15 @@ export default function EPaperPageClient({
                   })}
                 </div>
               </div>
-            </div>
+            ) : null}
+
+
 
             <div className={`grid min-h-0 flex-1 grid-cols-1 ${desktopReaderGridClassName}`}>
-              {isDesktopPageRailVisible ? (
-                <aside className="hidden min-h-0 bg-gray-50/80 dark:bg-zinc-900/70 xl:flex xl:flex-col">
-                  <div className="border-b border-gray-200 px-3 py-3 dark:border-zinc-800">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                      {t.pagesTab}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t.quickJump}</p>
-                  </div>
-
-                  <div className="flex-1 overflow-auto p-3">
-                    <div className="space-y-2">
-                      {pageSummaries.map((page) => {
-                        const isCurrentPage = page.pageNumber === activePage;
-                        const isCompanionPage =
-                          shouldShowSpreadMode && spreadCompanionPage?.pageNumber === page.pageNumber;
-
-                        return (
-                          <button
-                            key={`nav-${page.pageNumber}`}
-                            type="button"
-                            onClick={() => navigateToPage(page.pageNumber)}
-                            className={`w-full rounded-xl border px-3 py-2 text-left transition ${
-                              isCurrentPage
-                                ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-950/30'
-                                : isCompanionPage
-                                  ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20'
-                                  : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">
-                                {t.page} {page.pageNumber}
-                              </span>
-                              {page.storyCount > 0 ? (
-                                <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">
-                                  {page.storyCount} {t.stories}
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                              {page.imagePath ? t.openPage : t.noThumbnail}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </aside>
-              ) : null}
-
               <div
                 ref={previewTouchSurfaceRef}
-                className={`relative min-w-0 overflow-auto overscroll-contain bg-gradient-to-b from-zinc-100 via-white to-zinc-100 p-1 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 ${readerStageBorderClassName}`}
-                style={{ touchAction: 'pan-x pan-y' }}
+                className={`relative min-w-0 overflow-auto overscroll-contain bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white via-zinc-50 to-zinc-100 p-1 [-webkit-overflow-scrolling:touch] sm:p-3 md:p-4 dark:bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-950 reader-stage-scroll ${readerStageBorderClassName} ${dynamicPaddingClass}`}
+                style={{ touchAction: 'pan-x pan-y', willChange: 'transform', transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden' }}
               >
                 {loadingFallback ? (
                   <div className="flex h-full min-h-48 items-center justify-center">
@@ -2976,125 +3133,153 @@ export default function EPaperPageClient({
                     {fallbackError}
                   </div>
                 ) : activePageImage || pdfFallbackPreview ? (
-                  <div className="mx-auto flex min-h-full w-full max-w-[1340px] items-start justify-center">
+                  <div className="mx-auto flex min-h-full w-full max-w-[1340px] items-center justify-center">
                     <div
                       className={`relative w-full ${readerStageWidthClassName}`}
+                      style={{ perspective: '1500px' }}
                     >
-                      <div
-                        className={`mx-auto grid items-start gap-4 ${shouldShowSpreadMode ? 'xl:grid-cols-2' : 'grid-cols-1'}`}
+                      <div 
+                        className={`relative mx-auto w-fit max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 ${bookContainerShadowClassName}`}
+                        style={{ maxHeight: previewMaxHeight }}
                       >
-                        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_24px_60px_-30px_rgba(15,23,42,0.55)] dark:border-zinc-800 dark:bg-zinc-900">
-                          <AnimatePresence initial={false} custom={pageTurnDirection} mode="wait">
-                            <motion.div
-                              key={`epaper-page-${activePaper._id}-${activePage}-${previewSrc}`}
-                              custom={pageTurnDirection}
-                              variants={pageTurnVariants}
-                              initial="enter"
-                              animate="center"
-                              exit="exit"
-                              className="relative mx-auto w-fit"
-                              style={{ transformOrigin: pageTurnDirection >= 0 ? 'left center' : 'right center' }}
-                            >
-                              {previewIsDataUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={previewSrc}
-                                  alt={`Page ${activePage}`}
-                                  style={{ maxHeight: previewMaxHeight }}
-                                  className="block h-auto w-auto object-contain"
-                                  draggable={false}
-                                />
-                              ) : (
-                                <Image
-                                  src={previewSrc}
-                                  alt={`Page ${activePage}`}
-                                  width={previewWidth}
-                                  height={previewHeight}
-                                  unoptimized
-                                  style={{ maxHeight: previewMaxHeight }}
-                                  className="block h-auto w-auto object-contain"
-                                  draggable={false}
-                                />
-                              )}
-
-                              {pageArticles.map((article, index) => (
-                                <button
-                                  key={article._id}
-                                  type="button"
-                                  onClick={() => setActiveArticle(article)}
-                                  className="absolute rounded-[2px] bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60"
-                                  style={{
-                                    left: `${article.hotspot.x * 100}%`,
-                                    top: `${article.hotspot.y * 100}%`,
-                                    width: `${article.hotspot.w * 100}%`,
-                                    height: `${article.hotspot.h * 100}%`,
-                                  }}
-                                  title={article.title || `${t.story} ${index + 1}`}
-                                >
-                                  <span className="sr-only">
-                                    {article.title || `${t.story} ${index + 1}`}
-                                  </span>
-                                </button>
-                              ))}
-                            </motion.div>
-                          </AnimatePresence>
-                        </div>
-
-                        {shouldShowSpreadMode && spreadCompanionPage ? (
-                          <div
-                            className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_24px_60px_-30px_rgba(15,23,42,0.45)] transition hover:border-amber-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-amber-700"
-                            onClick={() => navigateToPage(spreadCompanionPage.pageNumber)}
+                        <AnimatePresence initial={false} custom={pageTurnDirection} mode="popLayout">
+                          <motion.div
+                            key={`epaper-spread-${activePaper._id}-${activePage}-${shouldShowSpreadMode}`}
+                            custom={pageTurnDirection}
+                            variants={pageTurnVariants}
+                            initial="enter"
+                            animate="center"
+                            exit="exit"
+                            className="w-fit mx-auto max-w-full"
+                            style={{ 
+                              transformStyle: 'preserve-3d',
+                              backfaceVisibility: 'hidden',
+                            }}
                           >
-                            <div className="border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 dark:border-zinc-800 dark:text-zinc-200">
-                              {t.page} {spreadCompanionPage.pageNumber}
-                            </div>
+                            <div className={`grid gap-0 items-start w-fit mx-auto ${shouldShowSpreadMode ? 'grid-cols-2 relative' : 'grid-cols-1'}`}>
+                              {/* Left Page (Active Page) */}
+                              <div className="relative mx-auto w-fit">
+                                {previewIsDataUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={previewSrc}
+                                    alt={`Page ${activePage}`}
+                                    style={{ maxHeight: previewMaxHeight }}
+                                    className="block h-auto w-auto max-w-full object-contain"
+                                    draggable={false}
+                                  />
+                                ) : (
+                                  <Image
+                                    src={previewSrc}
+                                    alt={`Page ${activePage}`}
+                                    width={previewWidth}
+                                    height={previewHeight}
+                                    unoptimized
+                                    style={{ maxHeight: previewMaxHeight }}
+                                    className="block h-auto w-auto max-w-full object-contain"
+                                    draggable={false}
+                                  />
+                                )}
 
-                            <div className="relative">
-                              {spreadCompanionPage.imagePath ? (
-                                <Image
-                                  src={spreadCompanionPage.imagePath}
-                                  alt={`Page ${spreadCompanionPage.pageNumber}`}
-                                  width={spreadCompanionPage.width}
-                                  height={spreadCompanionPage.height}
-                                  unoptimized
-                                  style={{ maxHeight: previewMaxHeight }}
-                                  className="block h-auto w-auto object-contain"
-                                  draggable={false}
-                                />
-                              ) : (
-                                <div
-                                  className="flex items-center justify-center bg-zinc-100 px-6 py-16 text-center text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400"
-                                  style={{ minHeight: '22rem' }}
-                                >
-                                  {t.pageMissingPrefix} {spreadCompanionPage.pageNumber}.
+                                {pageArticles.map((article, index) => (
+                                  <button
+                                    key={article._id}
+                                    type="button"
+                                    onClick={() => setActiveArticle(article)}
+                                    className={`absolute rounded-[2px] outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60 ${
+                                      showHotspotHints
+                                        ? 'epaper-hotspot-glow'
+                                        : 'bg-transparent'
+                                    }`}
+                                    style={{
+                                      left: `${article.hotspot.x * 100}%`,
+                                      top: `${article.hotspot.y * 100}%`,
+                                      width: `${article.hotspot.w * 100}%`,
+                                      height: `${article.hotspot.h * 100}%`,
+                                    }}
+                                    title={article.title || `${t.story} ${index + 1}`}
+                                  >
+                                    <span className="sr-only">
+                                      {article.title || `${t.story} ${index + 1}`}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+
+                              {/* Center Spine Divider Overlay (Spread Mode Only) */}
+                              {shouldShowSpreadMode ? (
+                                <div className="absolute top-0 bottom-0 left-1/2 w-[48px] -translate-x-1/2 pointer-events-none z-30 flex justify-center items-stretch">
+                                  {/* Ambient Page Curve Shadow - Left */}
+                                  <div className="absolute top-0 bottom-0 right-1/2 left-0 bg-gradient-to-r from-transparent via-black/5 to-black/15 dark:via-black/10 dark:to-black/30" />
+                                  
+                                  {/* Inner Crease Shadow - Left (Tighter roll) */}
+                                  <div className="absolute top-0 bottom-0 right-1/2 w-3 bg-gradient-to-r from-transparent to-black/20 dark:to-black/40" />
+
+                                  {/* Center Seam Line */}
+                                  <div className="relative z-10 w-[2px] h-full bg-black/35 dark:bg-black/70 shadow-[0_0_4px_rgba(0,0,0,0.5)] dark:shadow-[0_0_8px_rgba(0,0,0,0.8)]" />
+
+                                  {/* Inner Crease Shadow - Right (Tighter roll) */}
+                                  <div className="absolute top-0 bottom-0 left-1/2 w-3 bg-gradient-to-r from-black/20 to-transparent dark:from-black/40" />
+
+                                  {/* Ambient Page Curve Shadow - Right */}
+                                  <div className="absolute top-0 bottom-0 left-1/2 right-0 bg-gradient-to-r from-black/15 via-black/5 to-transparent dark:from-black/30 dark:via-black/10" />
                                 </div>
-                              )}
+                              ) : null}
 
-                              {spreadCompanionPage.articles.map((article, index) => (
-                                <button
-                                  key={`spread-${article._id}`}
-                                  type="button"
-                                  onClick={() => {
-                                    navigateToPage(spreadCompanionPage.pageNumber);
-                                    setActiveArticle(article);
-                                  }}
-                                  className="absolute rounded-[2px] bg-transparent outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60"
-                                  style={{
-                                    left: `${article.hotspot.x * 100}%`,
-                                    top: `${article.hotspot.y * 100}%`,
-                                    width: `${article.hotspot.w * 100}%`,
-                                    height: `${article.hotspot.h * 100}%`,
-                                  }}
-                                  title={article.title || `${t.story} ${index + 1}`}
-                                >
-                                  <span className="sr-only">
-                                    {article.title || `${t.story} ${index + 1}`}
-                                  </span>
-                                </button>
-                              ))}
+                              {/* Right Page (Companion Page - Spread Mode Only) */}
+                              {shouldShowSpreadMode && spreadCompanionPage ? (
+                                <div className="relative mx-auto w-fit border-l border-zinc-200 dark:border-zinc-800">
+                                  {spreadCompanionPage.imagePath ? (
+                                    <Image
+                                      src={spreadCompanionPage.imagePath}
+                                      alt={`Page ${spreadCompanionPage.pageNumber}`}
+                                      width={spreadCompanionPage.width}
+                                      height={spreadCompanionPage.height}
+                                      unoptimized
+                                      style={{ maxHeight: previewMaxHeight }}
+                                      className="block h-auto w-auto max-w-full object-contain"
+                                      draggable={false}
+                                    />
+                                  ) : (
+                                    <div
+                                      className="flex items-center justify-center bg-zinc-100 px-6 py-16 text-center text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400"
+                                      style={{ minHeight: '22rem' }}
+                                    >
+                                      {t.pageMissingPrefix} {spreadCompanionPage.pageNumber}.
+                                    </div>
+                                  )}
+
+                                  {spreadCompanionPage.articles.map((article, index) => (
+                                    <button
+                                      key={`spread-${article._id}`}
+                                      type="button"
+                                      onClick={() => {
+                                        navigateToPage(spreadCompanionPage.pageNumber);
+                                        setActiveArticle(article);
+                                      }}
+                                      className={`absolute rounded-[2px] outline-none transition focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60 ${
+                                        showHotspotHints
+                                          ? 'epaper-hotspot-glow'
+                                          : 'bg-transparent'
+                                      }`}
+                                      style={{
+                                        left: `${article.hotspot.x * 100}%`,
+                                        top: `${article.hotspot.y * 100}%`,
+                                        width: `${article.hotspot.w * 100}%`,
+                                        height: `${article.hotspot.h * 100}%`,
+                                      }}
+                                      title={article.title || `${t.story} ${index + 1}`}
+                                    >
+                                      <span className="sr-only">
+                                        {article.title || `${t.story} ${index + 1}`}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
-                          </div>
-                        ) : null}
+                          </motion.div>
+                        </AnimatePresence>
                       </div>
 
                       <div className="pointer-events-none absolute bottom-2 left-1/2 z-20 -translate-x-1/2 sm:hidden">
@@ -3226,70 +3411,104 @@ export default function EPaperPageClient({
               ) : null}
             </div>
 
-            <div
-              className="border-t border-gray-200 bg-white/95 px-2.5 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 sm:hidden"
-              data-reader-scroll="x"
+            {pageArticles.length ? (
+              <div 
+                className={`absolute ${isMobilePageStripVisible ? 'bottom-[242px]' : 'bottom-20'} left-4 right-4 z-35 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden reader-scroll-x sm:hidden transition-all duration-300`} 
+                data-reader-scroll="x"
+              >
+                {pageArticles.map((article, index) => (
+                  <button
+                    key={`mobile-page-story-${article._id}`}
+                    type="button"
+                    onClick={() => setActiveArticle(article)}
+                    className="reader-touch-button reader-focus-ring min-h-11 min-w-[13rem] max-w-[15rem] shrink-0 rounded-xl border border-zinc-200 dark:border-white/10 bg-white/90 dark:bg-zinc-900/80 backdrop-blur-md px-3 py-2 text-left transition hover:bg-zinc-100 dark:hover:bg-zinc-850"
+                  >
+                    <span className="block text-[10px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
+                      {t.story} {index + 1}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs font-semibold text-zinc-800 dark:text-white/95">
+                      {article.title || `${t.story} ${index + 1}`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {/* Floating Bottom Tabbar for Mobile (replacing old page-turn footer) */}
+            <div 
+              className="absolute bottom-4 left-4 right-4 z-40 rounded-3xl border border-zinc-200 dark:border-white/10 bg-white/95 dark:bg-zinc-950/85 backdrop-blur-2xl p-1.5 shadow-[0_15px_30px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.5)] sm:hidden" 
               data-swipe-ignore="true"
             >
-              <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] gap-2">
-                <button
-                  type="button"
-                  onClick={() => goToRelativePage(-1)}
-                  aria-label={t.previous}
-                  disabled={!canGoPreviousPage}
-                  className="reader-touch-button reader-focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              <div className="grid grid-cols-5 gap-0.5 min-[360px]:gap-1 text-center w-full">
+                {/* Fit Width */}
+                <button 
+                  type="button" 
+                  onClick={() => setPreviewZoom(1)} 
+                  className={`flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 ${
+                    previewZoom > 1 
+                      ? 'bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-extrabold' 
+                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5'
+                  }`}
                 >
-                  <ChevronLeft className="h-5 w-5" />
+                  <Plus className="h-[18px] w-[18px]" />
+                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">Fit Width</span>
                 </button>
 
-                <select
-                  value={activePage}
-                  onChange={(event) => {
-                    const nextPage = Number.parseInt(event.target.value, 10);
-                    if (Number.isFinite(nextPage)) {
-                      navigateToPage(nextPage);
-                    }
-                  }}
-                  aria-label={t.quickJump}
-                  className="reader-touch-button reader-focus-ring h-11 min-w-0 rounded-xl border border-gray-300 bg-white px-3 text-center text-sm font-black text-gray-900 outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                {/* Page View */}
+                <button 
+                  type="button" 
+                  onClick={() => { if (activeArticle) { setArticleReaderMode('story'); } }} 
+                  className={`flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 ${
+                    (!activeArticle || articleReaderMode === 'story') 
+                      ? 'bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-extrabold' 
+                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5'
+                  }`}
                 >
-                  {pageSummaries.map((page) => (
-                    <option key={`mobile-jump-${page.pageNumber}`} value={page.pageNumber}>
-                      {t.page} {page.pageNumber} / {maxReaderPage}
-                    </option>
-                  ))}
-                </select>
+                  <Newspaper className="h-[18px] w-[18px]" />
+                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">Page View</span>
+                </button>
 
-                <button
-                  type="button"
-                  onClick={() => goToRelativePage(1)}
-                  aria-label={t.next}
-                  disabled={!canGoNextPage}
-                  className="reader-touch-button reader-focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                {/* Text View */}
+                <button 
+                  type="button" 
+                  onClick={() => { 
+                    if (activeArticle) { 
+                      setArticleReaderMode('text'); 
+                    } else if (pageArticles[0]) { 
+                      setActiveArticle(pageArticles[0]); 
+                      setArticleReaderMode('text'); 
+                    } 
+                  }} 
+                  className={`flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 ${
+                    (activeArticle && articleReaderMode === 'text') 
+                      ? 'bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-extrabold' 
+                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5'
+                  }`}
                 >
-                  <ChevronRight className="h-5 w-5" />
+                  <Type className="h-[18px] w-[18px]" />
+                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">Text View</span>
+                </button>
+
+                {/* Share */}
+                <button 
+                  type="button" 
+                  onClick={() => { void shareActivePaperOnWhatsApp(); }} 
+                  className="flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5"
+                >
+                  <Share2 className="h-[18px] w-[18px]" />
+                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">Share</span>
+                </button>
+
+                {/* More */}
+                <button 
+                  type="button" 
+                  onClick={handlePdfDownload} 
+                  className="flex flex-col items-center justify-center gap-1 py-2 px-1 min-[360px]:px-2 rounded-2xl transition-all duration-200 active:scale-95 text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5"
+                >
+                  <Download className="h-[18px] w-[18px]" />
+                  <span className="text-[8px] min-[360px]:text-[8.5px] uppercase tracking-wide min-[360px]:tracking-tight font-black">More</span>
                 </button>
               </div>
-
-              {pageArticles.length ? (
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 reader-scroll-x" data-reader-scroll="x">
-                  {pageArticles.map((article, index) => (
-                    <button
-                      key={`mobile-page-story-${article._id}`}
-                      type="button"
-                      onClick={() => setActiveArticle(article)}
-                      className="reader-touch-button reader-focus-ring min-h-11 min-w-[13rem] max-w-[15rem] shrink-0 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-left transition hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/35 dark:hover:bg-primary-900/40"
-                    >
-                      <span className="block text-[10px] font-black uppercase tracking-wide text-primary-700 dark:text-primary-300">
-                        {t.story} {index + 1}
-                      </span>
-                      <span className="mt-0.5 block truncate text-xs font-semibold text-gray-900 dark:text-zinc-100">
-                        {article.title || `${t.story} ${index + 1}`}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
           </div>
         </div>
@@ -3815,6 +4034,20 @@ export default function EPaperPageClient({
                 {articleListenError ? (
                   <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
                     {articleListenError}
+                  </div>
+                ) : null}
+
+                {activeArticle.videoUrl ? (
+                  <div className="overflow-hidden rounded-2xl border border-gray-200 bg-black shadow-sm dark:border-zinc-800">
+                    <div className="aspect-video w-full">
+                      <iframe
+                        src={getEmbedUrl(activeArticle.videoUrl)}
+                        title={activeArticle.title || "Video Story"}
+                        className="h-full w-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    </div>
                   </div>
                 ) : null}
 

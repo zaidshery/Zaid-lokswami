@@ -7,7 +7,6 @@ import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
 import MobileMenu from '@/components/layout/MobileMenu';
 import Footer from '@/components/layout/Footer';
-import AiChatLauncher from '@/components/ai-chat/AiChatLauncher';
 import SigninRoleBanner from '@/components/auth/SigninRoleBanner';
 import BreakingNews from '@/components/ui/BreakingNews';
 import Container from '@/components/layout/Container';
@@ -107,7 +106,6 @@ export default function MainLayout({
 
       {!isImmersiveVideoMode && !isReaderImmersiveMode ? <DailyEpaperAlert /> : null}
       {!isImmersiveVideoMode && !isReaderImmersiveMode ? <PopupOrchestrator /> : null}
-      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <AiChatLauncher /> : null}
 
       {/* Bottom Navigation - Mobile + Tablet (below 1280px) */}
       {showBottomNav ? (

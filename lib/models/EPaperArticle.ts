@@ -18,6 +18,7 @@ export interface IEPaperArticle {
   excerpt?: string;
   contentHtml?: string;
   coverImagePath?: string;
+  videoUrl?: string;
   hotspot: IEPaperArticleHotspot;
   workflow: WorkflowMeta;
   createdAt: Date;
@@ -43,6 +44,7 @@ const EPaperArticleSchema = new mongoose.Schema<IEPaperArticle>(
     excerpt: { type: String, trim: true, maxlength: 1000, default: '' },
     contentHtml: { type: String, trim: true, default: '' },
     coverImagePath: { type: String, trim: true, maxlength: 500, default: '' },
+    videoUrl: { type: String, trim: true, default: '' },
     hotspot: { type: HotspotSchema, required: true },
     workflow: { type: WorkflowMetaSchema, default: () => ({}) },
   },

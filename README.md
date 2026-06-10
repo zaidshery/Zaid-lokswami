@@ -8,7 +8,7 @@ This project is the full Lokswami digital news platform.
 
 - Readers can browse Hindi news, videos, stories, and e-paper editions.
 - Admin users can sign in and manage articles, categories, stories, videos, and e-paper uploads.
-- The app also includes AI-powered search, summaries, and text-to-speech support.
+- The app also includes AI-powered summaries and text-to-speech support.
 - The codebase is split so reader pages, admin tools, auth flows, and marketing pages stay organized while sharing the same data layer and UI system.
 
 Developer handoff note: this human-readable overview was added for easier onboarding by `ZaidShery`.
@@ -39,7 +39,6 @@ Shared components live at the top level:
 - `components/forms`
 - `components/providers`
 - `components/auth`
-- `components/ai-chat`
 
 ## Authentication
 
@@ -101,56 +100,6 @@ npm run typecheck
 npm run build:ci
 npm run build:hostinger
 ```
-
-## Seeding
-
-Seed data comes from `scripts/seed-fixtures.json`.
-
-- `npm run seed` executes `scripts/seed.js`
-- Fixtures are intentionally small
-- Seeding recreates `Article`, `Category`, and `Author` data
-
-## API Overview
-
-Auth:
-
-- `GET/POST /api/auth/[...nextauth]`
-
-Admin CMS:
-
-- `/api/admin/articles`
-- `/api/admin/categories`
-- `/api/admin/stories`
-- `/api/admin/videos`
-- `/api/admin/epapers`
-- `/api/admin/epapers/import`
-- `/api/admin/media`
-- `/api/admin/upload`
-- `/api/admin/contact-messages`
-
-Public content:
-
-- `/api/articles/latest`
-- `/api/videos/latest`
-- `/api/shorts/latest`
-- `/api/epapers`
-- `/api/epapers/latest`
-- `/api/public/epapers/[id]/pdf`
-- `/api/public/uploads/[...path]`
-
-AI and utility:
-
-- `/api/ai/search`
-- `/api/ai/summary`
-- `/api/ai/tts`
-- `/api/ai/suggestions`
-- `/api/ai/categories`
-- `/api/analytics/track`
-- `/api/contact`
-- `/api/advertise/inquiry`
-- `/api/careers/apply`
-- `/api/subscribe`
-- `/api/health`
 
 ## E-Paper Admin Workflow
 

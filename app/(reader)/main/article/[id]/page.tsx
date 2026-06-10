@@ -915,64 +915,6 @@ export default function ArticleDetailPage() {
           ) : null}
         </section>
       ) : null}
-
-      <div className="fixed bottom-[calc(var(--reader-bottom-nav-space)+0.45rem)] left-3 right-[5.25rem] z-40 sm:hidden" data-swipe-ignore="true">
-        <div className="grid grid-cols-4 gap-1.5 rounded-2xl border border-zinc-200/90 bg-white/95 p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.2)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-          <button
-            type="button"
-            onClick={() => void handleBookmarkToggle()}
-            disabled={!canSaveArticle || isSavingBookmark}
-            aria-pressed={isBookmarked}
-            aria-label={isBookmarked ? 'Remove bookmark' : 'Save article'}
-            className={`reader-touch-button reader-focus-ring flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-bold leading-none disabled:cursor-not-allowed disabled:opacity-60 ${
-              isBookmarked
-                ? 'bg-orange-600 text-white'
-                : 'bg-orange-50 text-orange-700 dark:bg-orange-500/12 dark:text-orange-300'
-            }`}
-          >
-            {isSavingBookmark ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Bookmark className={`h-4 w-4 ${isBookmarked ? 'fill-current' : ''}`} />
-            )}
-            <span className="truncate">{isBookmarked ? 'Saved' : 'Save'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleWhatsAppShare}
-            aria-label={language === 'hi' ? '\u0935\u094d\u0939\u093e\u091f\u094d\u0938\u090f\u092a \u0936\u0947\u092f\u0930' : 'Share on WhatsApp'}
-            className="reader-touch-button reader-focus-ring flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-50 text-[10px] font-bold leading-none text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-          >
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white">
-              <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-current" aria-hidden="true">
-                <path d="M12 2a10 10 0 0 0-8.68 14.95L2 22l5.2-1.36A10 10 0 1 0 12 2Zm0 18.17a8.15 8.15 0 0 1-4.15-1.13l-.3-.18-3.09.8.82-3.01-.2-.31A8.18 8.18 0 1 1 12 20.17Zm4.48-5.86c-.24-.12-1.4-.7-1.62-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.91-1.17-.7-.63-1.18-1.4-1.32-1.64-.14-.24-.02-.37.1-.49.1-.1.24-.26.36-.39.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.79-.2-.47-.4-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.33.98 2.49c.12.16 1.7 2.61 4.11 3.66.58.25 1.03.4 1.38.52.58.18 1.1.16 1.52.1.46-.07 1.4-.57 1.6-1.12.2-.55.2-1.02.14-1.12-.06-.1-.22-.16-.46-.28Z" />
-              </svg>
-            </span>
-            <span className="truncate">WhatsApp</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void handleListen()}
-            disabled={isPreparingListen || !canPrepareListen}
-            aria-label={listenButtonTitle}
-            className="reader-touch-button reader-focus-ring flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-100 text-[10px] font-bold leading-none text-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-900/35 dark:text-emerald-200"
-          >
-            {isPreparingListen ? <Loader2 className="h-4 w-4 animate-spin" /> : <Volume2 className="h-4 w-4" />}
-            <span className="truncate">{language === 'hi' ? '\u0938\u0941\u0928\u0947\u0902' : 'Listen'}</span>
-          </button>
-
-          <Link
-            href="/main/epaper"
-            aria-label={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
-            className="reader-touch-link reader-focus-ring flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-orange-50 text-[10px] font-bold leading-none text-orange-700 dark:bg-orange-500/12 dark:text-orange-300"
-          >
-            <Newspaper className="h-4 w-4" />
-            <span className="truncate">{language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}</span>
-          </Link>
-        </div>
-      </div>
     </div>
   );
 }

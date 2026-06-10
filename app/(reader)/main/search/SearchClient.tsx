@@ -8,17 +8,6 @@ import { NEWS_CATEGORY_DEFINITIONS } from '@/lib/constants/newsCategories';
 import NewsCard from '@/components/ui/NewsCard';
 import { Search, X, TrendingUp, Clock, Filter } from 'lucide-react';
 import { categoryMatches, fetchMergedLiveArticles } from '@/lib/content/liveArticles';
-import { LOKSWAMI_AI_PILLARS } from '@/lib/constants/lokswamiAi';
-
-type AiSearchResponse = {
-  success: boolean;
-  data?: {
-    answer?: string;
-    mode?: string;
-    results?: Array<Partial<Article>>;
-  };
-  error?: string;
-};
 
 const TRENDING_SEARCHES: Record<'hi' | 'en', string[]> = {
   hi: ['IPL 2026', 'Lok Sabha', 'Mausam Update', 'Gold Price'],
@@ -54,11 +43,6 @@ export default function SearchClient() {
   const [searchResults, setSearchResults] = useState<Article[]>(mockArticles);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState<'relevance' | 'latest' | 'popular'>('relevance');
-
-  const [aiAnswer, setAiAnswer] = useState('');
-  const [aiSearchMode, setAiSearchMode] = useState('');
-  const [aiSearchError, setAiSearchError] = useState('');
-  const [isAiSearching, setIsAiSearching] = useState(false);
 
   const categoryOptions = useMemo(
     () => [
@@ -139,57 +123,10 @@ export default function SearchClient() {
 
     if (!cleanQuery) {
       setSearchResults(dataSet);
-      setAiAnswer('');
-      setAiSearchMode('');
-      setAiSearchError('');
       return;
     }
 
-    setIsAiSearching(true);
-    setAiSearchError('');
-
-    try {
-      const response = await fetch('/api/ai/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: cleanQuery,
-          category: categoryValue,
-          sortBy: sortValue,
-          limit: 30,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => ({}))) as AiSearchResponse;
-
-      if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'AI search is currently unavailable.');
-      }
-
-      const nextResults = (payload.data.results || []).filter((item): item is Article =>
-        isArticleLike(item)
-      );
-
-      if (nextResults.length) {
-        setSearchResults(nextResults);
-      } else {
-        performLocalSearch(cleanQuery, dataSet, categoryValue, sortValue);
-      }
-
-      setAiAnswer(typeof payload.data.answer === 'string' ? payload.data.answer : '');
-      setAiSearchMode(typeof payload.data.mode === 'string' ? payload.data.mode : '');
-    } catch (error) {
-      performLocalSearch(cleanQuery, dataSet, categoryValue, sortValue);
-      setAiAnswer('');
-      setAiSearchMode('');
-      setAiSearchError(
-        error instanceof Error ? error.message : 'AI search is currently unavailable.'
-      );
-    } finally {
-      setIsAiSearching(false);
-    }
+    performLocalSearch(cleanQuery, dataSet, categoryValue, sortValue);
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -286,25 +223,6 @@ export default function SearchClient() {
                 ? `"${query}" ke liye ${searchResults.length} parinaam`
                 : `${searchResults.length} results for "${query}"`}
             </p>
-
-            <div className="rounded-xl border border-zinc-200 bg-white/90 p-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/85 dark:text-zinc-200">
-              <p className="font-semibold text-zinc-900 dark:text-zinc-100">Lokswami AI</p>
-              <p className="mt-1">{LOKSWAMI_AI_PILLARS.awareness}</p>
-              {isAiSearching ? (
-                <p className="mt-2 text-xs text-orange-600 dark:text-orange-400">
-                  {language === 'hi' ? 'AI search chal raha hai...' : 'Running semantic AI search...'}
-                </p>
-              ) : null}
-              {aiAnswer ? <p className="mt-2 rounded-lg bg-zinc-100 px-3 py-2 dark:bg-zinc-800">{aiAnswer}</p> : null}
-              {aiSearchMode ? (
-                <p className="mt-2 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Mode: {aiSearchMode}
-                </p>
-              ) : null}
-              {aiSearchError ? (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">{aiSearchError}</p>
-              ) : null}
-            </div>
           </div>
 
           {searchResults.length > 0 ? (
@@ -370,13 +288,6 @@ export default function SearchClient() {
                 </button>
               ))}
             </div>
-          </section>
-
-          <section className="rounded-xl border border-zinc-200 bg-white/80 p-4 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200">
-            <p className="font-semibold text-zinc-900 dark:text-zinc-100">Lokswami AI: Triple-A</p>
-            <p className="mt-2">{LOKSWAMI_AI_PILLARS.awareness}</p>
-            <p className="mt-2">{LOKSWAMI_AI_PILLARS.abridgment}</p>
-            <p className="mt-2">{LOKSWAMI_AI_PILLARS.audibility}</p>
           </section>
         </div>
       )}

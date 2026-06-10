@@ -131,6 +131,7 @@ async function fetchInitialEPapers(city: EPaperCityFilter, publishDate: string) 
 }
 
 export default async function EPaperPage({ searchParams }: PageProps) {
+  // Force trigger rebuild of epaper client layout after modifications v3
   const resolvedParams = searchParams ? await searchParams : {};
   const filters = resolveInitialFilters(resolvedParams);
   const initial = await fetchInitialEPapers(filters.city, filters.date);

@@ -114,6 +114,7 @@ export interface EPaperArticleRecord {
   excerpt?: string;
   contentHtml?: string;
   coverImagePath?: string;
+  videoUrl?: string;
   hotspot: EPaperArticleHotspot;
   workflow?: {
     status?: string;
