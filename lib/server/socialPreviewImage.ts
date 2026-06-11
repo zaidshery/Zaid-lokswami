@@ -7,6 +7,10 @@ import { getSiteUrl, toAbsoluteArticleUrl } from '@/lib/seo/articleSeo';
 const PREVIEW_WIDTH = 1200;
 const PREVIEW_HEIGHT = 630;
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
+const PREVIEW_FONT_PATH = '/fonts/noto-sans-latin-regular.ttf';
+const PREVIEW_FONT_FAMILY = 'LokswamiPreviewFont';
+
+let previewFontStylePromise: Promise<string> | null = null;
 
 type ArticlePreviewInput = {
   title: string;
@@ -86,6 +90,43 @@ function textLinesSvg(lines: string[], x: number, y: number, fontSize: number, l
     .join('');
 }
 
+async function getPreviewFontStyle() {
+  if (!previewFontStylePromise) {
+    previewFontStylePromise = (async () => {
+      try {
+        const fontBuffer = await readPublicAsset(PREVIEW_FONT_PATH);
+        const fontBase64 = fontBuffer.toString('base64');
+        const faceWeights = [400, 500, 700, 800, 900]
+          .map(
+            (weight) => `
+      @font-face {
+        font-family: '${PREVIEW_FONT_FAMILY}';
+        src: url("data:font/ttf;base64,${fontBase64}") format('truetype');
+        font-style: normal;
+        font-weight: ${weight};
+      }`
+          )
+          .join('');
+
+        return `<style>
+      ${faceWeights}
+      text {
+        font-family: '${PREVIEW_FONT_FAMILY}', Arial, Helvetica, sans-serif;
+      }
+    </style>`;
+      } catch {
+        return `<style>
+      text {
+        font-family: Arial, Helvetica, sans-serif;
+      }
+    </style>`;
+      }
+    })();
+  }
+
+  return previewFontStylePromise;
+}
+
 async function readPublicAsset(publicPath: string) {
   const normalized = publicPath.replace(/^\/+/, '');
   return fs.readFile(path.join(PUBLIC_DIR, normalized));
@@ -159,6 +200,7 @@ export async function buildArticleSocialPreview(input: ArticlePreviewInput) {
   const safeLabel = normalizeSvgText(input.label || 'NEWS', 'NEWS');
   const titleLines = wrapText(safeTitle || COMPANY_INFO.name, 24, 3);
   const descriptionLines = wrapText(safeDescription || COMPANY_INFO.tagline.en, 34, 3);
+  const fontStyle = await getPreviewFontStyle();
   const image = await buildContainedImage({
     imageUrl: input.imageUrl,
     fallbackPath: '/lokswami-share-preview.png',
@@ -168,6 +210,7 @@ export async function buildArticleSocialPreview(input: ArticlePreviewInput) {
   });
   const overlay = Buffer.from(`
     <svg width="${PREVIEW_WIDTH}" height="${PREVIEW_HEIGHT}" viewBox="0 0 ${PREVIEW_WIDTH} ${PREVIEW_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+      ${fontStyle}
       <rect x="40" y="40" width="1120" height="550" rx="34" fill="#0f0f12" stroke="rgba(255,255,255,0.12)"/>
       <rect x="64" y="64" width="674" height="502" rx="18" fill="#09090b"/>
       <rect x="764" y="40" width="396" height="550" fill="#171417"/>
@@ -207,6 +250,7 @@ export async function buildEpaperSocialPreview(input: EpaperPreviewInput) {
       : `Lokswami ${safeCityLabel} E-Paper`
   );
   const titleLines = wrapText(safeTitle || 'Lokswami E-Paper', 23, 2);
+  const fontStyle = await getPreviewFontStyle();
   const cover = await buildContainedImage({
     imageUrl: input.imageUrl,
     fallbackPath: '/placeholders/epaper-3x4.svg',
@@ -216,6 +260,7 @@ export async function buildEpaperSocialPreview(input: EpaperPreviewInput) {
   });
   const overlay = Buffer.from(`
     <svg width="${PREVIEW_WIDTH}" height="${PREVIEW_HEIGHT}" viewBox="0 0 ${PREVIEW_WIDTH} ${PREVIEW_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+      ${fontStyle}
       <rect x="40" y="40" width="1120" height="550" rx="34" fill="#0f0f12" stroke="rgba(255,255,255,0.12)"/>
       <rect x="40" y="40" width="446" height="550" fill="#09090b"/>
       <rect x="114" y="92" width="316" height="446" rx="26" fill="#f6f1e8"/>
