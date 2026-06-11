@@ -12,6 +12,43 @@ afterEach(() => {
 });
 
 describe('short share redirect routes', () => {
+  it('redirects short article share URLs to the reader using the public request origin', async () => {
+    const { GET } = await import('@/app/a/[id]/route');
+    const response = await GET(
+      new Request('http://0.0.0.0:3000/a/brics-agriculture-meeting-indore', {
+        headers: {
+          'x-forwarded-host': 'lokswami.com',
+          'x-forwarded-proto': 'https',
+        },
+      }),
+      {
+        params: Promise.resolve({ id: 'brics-agriculture-meeting-indore' }),
+      }
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      'https://lokswami.com/main/article/brics-agriculture-meeting-indore'
+    );
+  });
+
+  it('falls back to the configured public site URL for internal article share origins', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com';
+
+    const { GET } = await import('@/app/a/[id]/route');
+    const response = await GET(
+      new Request('http://0.0.0.0:3000/a/indore-civic-update'),
+      {
+        params: Promise.resolve({ id: 'indore-civic-update' }),
+      }
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      'https://lokswami.com/main/article/indore-civic-update'
+    );
+  });
+
   it('redirects short e-paper share URLs to the reader with full query names', async () => {
     const { GET } = await import('@/app/e/[paper]/route');
     const response = await GET(new Request('https://lokswami.com/e/paper-1?p=12&s=front'), {

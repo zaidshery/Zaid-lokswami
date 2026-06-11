@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getArticleForMetadata } from '@/lib/content/serverArticles';
 import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
+import { resolveShareRequestOrigin } from '@/lib/server/requestOrigin';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -9,10 +10,10 @@ type RouteContext = {
 export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const token = decodeURIComponent(id || '').trim();
-  const url = new URL(request.url);
+  const origin = resolveShareRequestOrigin(request);
 
   if (!token) {
-    return NextResponse.redirect(new URL('/main', url), 307);
+    return NextResponse.redirect(new URL('/main', origin), 307);
   }
 
   const article = await getArticleForMetadata(token);
@@ -20,5 +21,5 @@ export async function GET(request: Request, context: RouteContext) {
     ? buildArticlePublicPath({ id: article.id, slug: article.slug })
     : `/main/article/${encodeURIComponent(token)}`;
 
-  return NextResponse.redirect(new URL(targetPath, url), 307);
+  return NextResponse.redirect(new URL(targetPath, origin), 307);
 }
