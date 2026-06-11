@@ -8,6 +8,7 @@ import { Clock3, Film, Play, Smartphone, TrendingUp } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import { videos as mockVideos } from '@/lib/mock/data';
 import { resolveNewsCategory } from '@/lib/constants/newsCategories';
+import { buildVideoReaderPath } from '@/lib/utils/readerContentPaths';
 import ArticleMetaRow from '@/components/ui/ArticleMetaRow';
 import VideoShortsFeed, { type ShortsVideoItem } from '@/components/ui/VideoShortsFeed';
 
@@ -60,6 +61,7 @@ type VideosPageClientProps = {
   initialLimit: number;
   initialHasMore: boolean;
   initialNextCursor: PublicCursor | null;
+  initialSelectedVideoId?: string;
 };
 
 function normalizeCategory(value: string) {
@@ -179,6 +181,17 @@ function mergeUniqueVideos(current: VideoItem[], incoming: VideoItem[]) {
   return merged;
 }
 
+function promoteVideoById(videos: VideoItem[], selectedVideoId: string) {
+  const normalizedId = selectedVideoId.trim();
+  if (!normalizedId) return videos;
+
+  const selectedIndex = videos.findIndex((video) => video.id === normalizedId);
+  if (selectedIndex <= 0) return videos;
+
+  const selectedVideo = videos[selectedIndex];
+  return [selectedVideo, ...videos.slice(0, selectedIndex), ...videos.slice(selectedIndex + 1)];
+}
+
 function isCompactShortsViewport() {
   if (typeof window === 'undefined') return false;
   return window.matchMedia('(max-width: 1024px)').matches;
@@ -189,6 +202,7 @@ export default function VideosPageClient({
   initialLimit,
   initialHasMore,
   initialNextCursor,
+  initialSelectedVideoId = '',
 }: VideosPageClientProps) {
   const language = useAppStore((state) => state.language);
   const setImmersiveVideoMode = useAppStore((state) => state.setImmersiveVideoMode);
@@ -232,11 +246,17 @@ export default function VideosPageClient({
 
     setIsHydrated(true);
     updateViewport();
-    setViewMode((prev) => (isCompactShortsViewport() ? 'shorts' : prev));
+    setViewMode((prev) =>
+      initialSelectedVideoId.trim()
+        ? prev
+        : isCompactShortsViewport()
+          ? 'shorts'
+          : prev
+    );
     window.addEventListener('resize', updateViewport);
 
     return () => window.removeEventListener('resize', updateViewport);
-  }, []);
+  }, [initialSelectedVideoId]);
   const demoNotice =
     language === 'hi'
       ? 'CMS videos load nahi ho paye, demo videos dikh rahe hain'
@@ -298,8 +318,8 @@ export default function VideosPageClient({
       if (activeFilter === 'trending') return b.views - a.views;
       return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
     });
-    return list;
-  }, [filteredVideos, activeFilter]);
+    return promoteVideoById(list, initialSelectedVideoId);
+  }, [activeFilter, filteredVideos, initialSelectedVideoId]);
 
   const shortsVideos = useMemo(() => {
     const list = sortedVideos.filter((video) => video.isShort);
@@ -314,8 +334,8 @@ export default function VideosPageClient({
     if (!shortsVideos.length) return sortedVideos;
 
     const nonShorts = sortedVideos.filter((video) => !video.isShort);
-    return [...shortsVideos, ...nonShorts];
-  }, [shortsVideos, sortedVideos]);
+    return promoteVideoById([...shortsVideos, ...nonShorts], initialSelectedVideoId);
+  }, [initialSelectedVideoId, shortsVideos, sortedVideos]);
   const featuredVideo = sortedVideos[0];
   const otherVideos = sortedVideos.slice(1);
   const isCompactShortsMode = isCompactViewport && viewMode === 'shorts';
@@ -615,7 +635,7 @@ export default function VideosPageClient({
               data-reader-card="true"
             >
               <Link
-                href={`/main/search?q=${encodeURIComponent(featuredVideo.title)}`}
+                href={buildVideoReaderPath(featuredVideo.id)}
                 className="reader-touch-link reader-focus-ring absolute inset-0 z-10"
                 aria-label={featuredVideo.title}
               />
@@ -669,8 +689,8 @@ export default function VideosPageClient({
                   withBorder={false}
                   inverted
                   showWhatsAppText
-                  readHref={`/main/search?q=${encodeURIComponent(featuredVideo.title)}`}
-                  sharePath={`/main/search?q=${encodeURIComponent(featuredVideo.title)}`}
+                  readHref={buildVideoReaderPath(featuredVideo.id)}
+                  sharePath={buildVideoReaderPath(featuredVideo.id)}
                 />
               </div>
             </motion.div>
@@ -688,7 +708,7 @@ export default function VideosPageClient({
               >
                 <div className="relative aspect-video overflow-hidden rounded-xl">
                   <Link
-                    href={`/main/search?q=${encodeURIComponent(video.title)}`}
+                    href={buildVideoReaderPath(video.id)}
                     className="reader-touch-link reader-focus-ring absolute inset-0 z-10"
                     aria-label={video.title}
                   />
@@ -718,7 +738,7 @@ export default function VideosPageClient({
                 </div>
 
                 <div className="mt-3">
-                  <Link href={`/main/search?q=${encodeURIComponent(video.title)}`} className="reader-touch-link reader-focus-ring block rounded-lg">
+                  <Link href={buildVideoReaderPath(video.id)} className="reader-touch-link reader-focus-ring block rounded-lg">
                     <h3 className="line-clamp-2 text-sm font-semibold text-zinc-900 transition-colors group-hover:text-red-600 dark:text-zinc-100 dark:group-hover:text-red-400">
                       {video.title}
                     </h3>
@@ -738,8 +758,8 @@ export default function VideosPageClient({
                     compact
                     withBorder
                     showWhatsAppText
-                    readHref={`/main/search?q=${encodeURIComponent(video.title)}`}
-                    sharePath={`/main/search?q=${encodeURIComponent(video.title)}`}
+                    readHref={buildVideoReaderPath(video.id)}
+                    sharePath={buildVideoReaderPath(video.id)}
                   />
                 </div>
               </motion.div>

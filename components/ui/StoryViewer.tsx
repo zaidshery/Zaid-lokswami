@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import type { VisualStory } from '@/lib/content/visualStories';
+import { buildStoryReaderPath } from '@/lib/utils/readerContentPaths';
 
 interface StoryViewerProps {
   stories: VisualStory[];
@@ -51,6 +52,25 @@ function formatTimeLabel(ms: number) {
 function isExternalHref(value: string) {
   const normalized = value.trim().toLowerCase();
   return normalized.startsWith('http://') || normalized.startsWith('https://');
+}
+
+function resolveStoryShareUrl(storyId: string, storyHref: string, origin: string) {
+  const fallbackUrl = new URL(buildStoryReaderPath(storyId), origin).toString();
+  if (!storyHref) return fallbackUrl;
+
+  try {
+    const candidate = new URL(storyHref, origin);
+    const isSameOrigin = candidate.origin === origin;
+    const isSearchPage = isSameOrigin && candidate.pathname === '/main/search';
+
+    if (isSameOrigin && !isSearchPage) {
+      return candidate.toString();
+    }
+  } catch {
+    return fallbackUrl;
+  }
+
+  return fallbackUrl;
 }
 
 function getYouTubeEmbedUrl(value: string, muted: boolean) {
@@ -484,8 +504,7 @@ export default function StoryViewer({
   const onShare = useCallback(async () => {
     if (!activeStory) return;
 
-    const fallbackUrl = `${window.location.origin}/main/stories?story=${encodeURIComponent(activeStory.id)}`;
-    const targetUrl = storyHref ? new URL(storyHref, window.location.origin).toString() : fallbackUrl;
+    const targetUrl = resolveStoryShareUrl(activeStory.id, storyHref, window.location.origin);
     const shareData = {
       title: activeStory.title,
       text: activeStory.caption || activeStory.title,

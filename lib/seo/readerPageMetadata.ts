@@ -29,6 +29,22 @@ type EpaperMetadataInput = {
   image?: string;
 };
 
+type StoryMetadataInput = {
+  storyId?: string;
+  title?: string;
+  description?: string;
+  category?: string;
+  image?: string;
+};
+
+type VideoMetadataInput = {
+  videoId?: string;
+  title?: string;
+  description?: string;
+  category?: string;
+  image?: string;
+};
+
 function formatTitle(title: string) {
   return title.includes(COMPANY_INFO.name) ? title : `${title} | ${COMPANY_INFO.name}`;
 }
@@ -149,6 +165,66 @@ export function buildVideosPageMetadata() {
       'breaking news video',
       'india video news',
     ],
+  });
+}
+
+export function buildStoriesPageMetadata() {
+  return buildMetadata({
+    title: 'Visual Stories and Quick Updates',
+    description:
+      'Browse Lokswami visual stories, quick explainers, and swipeable updates with big images and concise highlights.',
+    path: '/main/stories',
+    keywords: [
+      'lokswami stories',
+      'visual stories',
+      'quick news updates',
+      'swipe stories',
+      'hindi story updates',
+    ],
+  });
+}
+
+export function buildStoryPageMetadata(input: StoryMetadataInput) {
+  const storyId = String(input.storyId || '').trim();
+  const title = String(input.title || '').trim();
+  const description = String(input.description || '').trim();
+  const category = String(input.category || '').trim();
+
+  return buildMetadata({
+    title: title ? `${title} | Lokswami Story` : 'Lokswami Story',
+    description:
+      description ||
+      'Open this Lokswami visual story to see the full image-led update and quick summary.',
+    path: storyId ? `/main/stories?story=${encodeURIComponent(storyId)}` : '/main/stories',
+    image: input.image,
+    keywords: [
+      'lokswami story',
+      'visual news story',
+      'hindi visual update',
+      category ? `${category.toLowerCase()} story` : '',
+    ].filter(Boolean),
+  });
+}
+
+export function buildVideoPageMetadata(input: VideoMetadataInput) {
+  const videoId = String(input.videoId || '').trim();
+  const title = String(input.title || '').trim();
+  const description = String(input.description || '').trim();
+  const category = String(input.category || '').trim();
+
+  return buildMetadata({
+    title: title ? `${title} | Lokswami Video` : 'Lokswami Video',
+    description:
+      description ||
+      'Watch this Lokswami news video with a full preview image, headline, and quick summary.',
+    path: videoId ? `/main/videos?video=${encodeURIComponent(videoId)}` : '/main/videos',
+    image: input.image,
+    keywords: [
+      'lokswami video',
+      'news video',
+      'hindi video update',
+      category ? `${category.toLowerCase()} video` : '',
+    ].filter(Boolean),
   });
 }
 

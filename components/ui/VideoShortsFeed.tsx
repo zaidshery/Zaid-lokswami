@@ -16,6 +16,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { buildVideoReaderPath } from '@/lib/utils/readerContentPaths';
 import formatNumber from '@/lib/utils/formatNumber';
 
 const VIEWPORT_HEIGHT_CLASS = 'h-[calc(100dvh-12.9rem)] md:h-[calc(100dvh-13.4rem)]';
@@ -325,7 +326,7 @@ export default function VideoShortsFeed({
 
   const activeReadHref = useMemo(() => {
     if (!activeVideo) return '/main/videos';
-    return `/main/search?q=${encodeURIComponent(activeVideo.title)}`;
+    return buildVideoReaderPath(activeVideo.id);
   }, [activeVideo]);
   const activePlaybackTime = activeVideo ? currentTimeById[activeVideo.id] ?? 0 : 0;
   const activePlaybackDuration = activeVideo
@@ -738,7 +739,7 @@ export default function VideoShortsFeed({
         >
           {videos.map((video, index) => {
             const youtubeId = getYouTubeId(video.videoUrl);
-            const readHref = `/main/search?q=${encodeURIComponent(video.title)}`;
+            const readHref = buildVideoReaderPath(video.id);
 
             return (
               <article

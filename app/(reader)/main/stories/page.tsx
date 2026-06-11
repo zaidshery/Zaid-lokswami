@@ -1,131 +1,59 @@
-'use client';
-
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import StoryViewer from '@/components/ui/StoryViewer';
-import { fetchMergedLiveArticles } from '@/lib/content/liveArticles';
-import { fetchLiveStories } from '@/lib/content/liveStories';
-import { markStoryAsViewed } from '@/lib/content/storyPersistence';
+import type { Metadata } from 'next';
 import {
-  buildVisualStoriesFromArticles,
-  type VisualStory,
-} from '@/lib/content/visualStories';
-import { articles as mockArticles, type Article } from '@/lib/mock/data';
-import { useAppStore } from '@/lib/store/appStore';
+  buildStoriesPageMetadata,
+  buildStoryPageMetadata,
+} from '@/lib/seo/readerPageMetadata';
+import { getPublicStoryForMetadata } from '@/lib/server/publicStoryMetadata';
+import StoriesPageClient from './StoriesPageClient';
 
-function resolveSafeFrom(value: string | null) {
-  const from = (value || '').trim();
+type PageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function toSingleString(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+}
+
+function resolveSafeFrom(value: string | string[] | undefined) {
+  const from = toSingleString(value).trim();
   if (!from.startsWith('/main')) return '/main';
   return from;
 }
 
-function MojoStoriesPageContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const setImmersiveVideoMode = useAppStore((state) => state.setImmersiveVideoMode);
-
-  const [feedArticles, setFeedArticles] = useState<Article[]>(mockArticles);
-  const [cmsStories, setCmsStories] = useState<VisualStory[]>([]);
-
-  useEffect(() => {
-    setImmersiveVideoMode(true);
-    return () => setImmersiveVideoMode(false);
-  }, [setImmersiveVideoMode]);
-
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      const merged = await fetchMergedLiveArticles(120);
-      if (active) {
-        setFeedArticles(merged);
-      }
-    };
-
-    load();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const loadStories = async () => {
-      const rows = await fetchLiveStories(40);
-      if (active) {
-        setCmsStories(rows);
-      }
-    };
-
-    loadStories();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const stories = useMemo(
-    () =>
-      cmsStories.length
-        ? cmsStories.slice(0, 40)
-        : buildVisualStoriesFromArticles(feedArticles, 40),
-    [cmsStories, feedArticles]
-  );
-
-  const selectedStoryId = (searchParams.get('story') || '').trim();
-  const from = resolveSafeFrom(searchParams.get('from'));
-
-  const initialIndex = useMemo(() => {
-    if (!stories.length) return 0;
-    const foundIndex = stories.findIndex((story) => story.id === selectedStoryId);
-    return foundIndex >= 0 ? foundIndex : 0;
-  }, [selectedStoryId, stories]);
-
-  const onClose = () => {
-    router.push(from);
-  };
-
-  if (!stories.length) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black px-6 text-center text-white">
-        <div className="space-y-4">
-          <p className="text-lg font-semibold">No mojo stories available right now.</p>
-          <Link
-            href={from}
-            className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Link>
-        </div>
-      </div>
-    );
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const storyId = toSingleString(resolvedParams.story).trim();
+  if (!storyId) {
+    return buildStoriesPageMetadata();
   }
 
-  return (
-    <StoryViewer
-      stories={stories}
-      initialIndex={initialIndex}
-      isOpen
-      onClose={onClose}
-      onStoryViewed={(storyId) => {
-        markStoryAsViewed(storyId);
-      }}
-      variant="reel"
-    />
-  );
+  const story = await getPublicStoryForMetadata(storyId);
+  if (!story) {
+    return buildStoriesPageMetadata();
+  }
+
+  return buildStoryPageMetadata({
+    storyId: story.id,
+    title: story.title,
+    description: story.caption,
+    category: story.category,
+    image: `/api/og/story?id=${encodeURIComponent(story.id)}`,
+  });
 }
 
-export default function MojoStoriesPage() {
+export default async function MojoStoriesPage({ searchParams }: PageProps) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const selectedStoryId = toSingleString(resolvedParams.story).trim();
+  const initialSelectedStory = selectedStoryId
+    ? await getPublicStoryForMetadata(selectedStoryId)
+    : null;
+
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-black text-sm font-medium text-white/80">
-          Loading stories...
-        </div>
-      }
-    >
-      <MojoStoriesPageContent />
-    </Suspense>
+    <StoriesPageClient
+      initialFrom={resolveSafeFrom(resolvedParams.from)}
+      initialSelectedStoryId={selectedStoryId}
+      initialSelectedStory={initialSelectedStory}
+    />
   );
 }

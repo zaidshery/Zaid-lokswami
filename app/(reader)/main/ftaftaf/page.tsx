@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import { articles as mockArticles, type Article } from '@/lib/mock/data';
 import { fetchMergedLiveArticles } from '@/lib/content/liveArticles';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import { buildArticleImageVariantUrl } from '@/lib/utils/articleMedia';
 import ArticleMetaRow from '@/components/ui/ArticleMetaRow';
 
@@ -151,7 +152,7 @@ export default function FtaftafPage() {
           className={`scrollbar-hide ${VIEWPORT_HEIGHT_CLASS} snap-y snap-mandatory overflow-y-auto overscroll-y-contain rounded-[26px] bg-zinc-100 shadow-[0_24px_70px_rgba(0,0,0,0.28)] dark:bg-zinc-900`}
         >
           {ftaftafArticles.map((article, index) => {
-            const readHref = `/main/search?q=${encodeURIComponent(article.title)}`;
+            const readHref = buildArticlePublicPath({ id: article.id, slug: article.slug });
             return (
               <article
                 key={article.id}
