@@ -1,4 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+
+const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+afterEach(() => {
+  if (typeof originalSiteUrl === 'undefined') {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    return;
+  }
+
+  process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
+});
 
 describe('short share redirect routes', () => {
   it('redirects short e-paper share URLs to the reader with full query names', async () => {
@@ -10,6 +21,40 @@ describe('short share redirect routes', () => {
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe(
       'https://lokswami.com/main/epaper?paper=paper-1&page=12&story=front'
+    );
+  });
+
+  it('uses the forwarded public origin when the app receives an internal e-paper share URL', async () => {
+    const { GET } = await import('@/app/e/[paper]/route');
+    const response = await GET(
+      new Request('http://0.0.0.0:3000/e/paper-1?p=7', {
+        headers: {
+          'x-forwarded-host': 'lokswami.com',
+          'x-forwarded-proto': 'https',
+        },
+      }),
+      {
+        params: Promise.resolve({ paper: 'paper-1' }),
+      }
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      'https://lokswami.com/main/epaper?paper=paper-1&page=7'
+    );
+  });
+
+  it('falls back to the configured public site URL for internal e-paper share origins', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com';
+
+    const { GET } = await import('@/app/e/[paper]/route');
+    const response = await GET(new Request('http://0.0.0.0:3000/e/paper-1?s=lead-story'), {
+      params: Promise.resolve({ paper: 'paper-1' }),
+    });
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      'https://lokswami.com/main/epaper?paper=paper-1&story=lead-story'
     );
   });
 });

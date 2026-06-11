@@ -12,6 +12,76 @@ function normalizeBaseUrl(raw: string) {
   }
 }
 
+function normalizeHeaderValue(raw: string | null) {
+  return String(raw || '')
+    .split(',')
+    .map((value) => value.trim())
+    .find(Boolean) || '';
+}
+
+function isLocalHostname(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return (
+    normalized === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized === '0.0.0.0'
+  );
+}
+
+function isLocalOrigin(value: string) {
+  try {
+    return isLocalHostname(new URL(value).hostname);
+  } catch {
+    return true;
+  }
+}
+
+function resolveConfiguredPublicOrigin() {
+  const candidates = [process.env.NEXT_PUBLIC_SITE_URL, process.env.NEXTAUTH_URL];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeBaseUrl(candidate || '');
+    if (!isLocalOrigin(normalized)) {
+      return normalized;
+    }
+  }
+
+  return normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || '');
+}
+
+export function resolveShareRequestOrigin(request: Pick<Request, 'headers' | 'url'>) {
+  const forwardedHost = normalizeHeaderValue(request.headers.get('x-forwarded-host'));
+  const forwardedProto = normalizeHeaderValue(request.headers.get('x-forwarded-proto'));
+
+  if (forwardedHost) {
+    const proto = forwardedProto || (isLocalHostname(forwardedHost) ? 'http' : 'https');
+    return `${proto}://${forwardedHost}`;
+  }
+
+  try {
+    const url = new URL(request.url);
+    if (!isLocalHostname(url.hostname)) {
+      return url.origin;
+    }
+  } catch {
+    // Fall through to host/configured origin resolution below.
+  }
+
+  const configuredOrigin = resolveConfiguredPublicOrigin();
+  if (!isLocalOrigin(configuredOrigin)) {
+    return configuredOrigin;
+  }
+
+  const host = normalizeHeaderValue(request.headers.get('host'));
+  if (host) {
+    const proto = forwardedProto || (isLocalHostname(host) ? 'http' : 'https');
+    return `${proto}://${host}`;
+  }
+
+  return configuredOrigin;
+}
+
 export async function resolveRequestOrigin() {
   const headerStore = await headers();
   const forwardedHost = headerStore.get('x-forwarded-host');

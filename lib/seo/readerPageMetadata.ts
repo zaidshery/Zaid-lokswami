@@ -19,8 +19,13 @@ type EpaperMetadataInput = {
   city: string;
   publishDate: string;
   paperId?: string;
+  page?: number;
+  storyToken?: string;
   issueTitle?: string;
   issueCityName?: string;
+  storyTitle?: string;
+  storyExcerpt?: string;
+  storyPage?: number;
   image?: string;
 };
 
@@ -154,6 +159,10 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
     '';
   const formattedDate = input.publishDate ? formatMetadataDate(input.publishDate) : '';
   const query = new URLSearchParams();
+  const pageNumber = Number.parseInt(String(input.page ?? input.storyPage ?? ''), 10);
+  const storyToken = String(input.storyToken || '').trim();
+  const storyTitle = String(input.storyTitle || '').trim();
+  const storyExcerpt = String(input.storyExcerpt || '').trim();
 
   if (input.paperId?.trim()) {
     query.set('paper', input.paperId.trim());
@@ -164,12 +173,25 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
   if (input.publishDate) {
     query.set('date', input.publishDate);
   }
+  if (Number.isFinite(pageNumber) && pageNumber > 0) {
+    query.set('page', String(Math.floor(pageNumber)));
+  }
+  if (storyToken) {
+    query.set('story', storyToken);
+  }
 
   let title = 'E-Paper Archive and Digital Edition';
   let description =
     'Read the Lokswami e-paper online with archive filters, mapped stories, downloadable daily editions, and city-wise access.';
 
-  if (input.issueTitle && cityName && formattedDate) {
+  if (storyTitle) {
+    title = `${storyTitle} | Lokswami E-Paper`;
+    description =
+      storyExcerpt ||
+      `Read this ${cityName ? `${cityName} ` : ''}Lokswami e-paper story${
+        Number.isFinite(pageNumber) && pageNumber > 0 ? ` from page ${Math.floor(pageNumber)}` : ''
+      }${formattedDate ? ` published on ${formattedDate}` : ''}.`;
+  } else if (input.issueTitle && cityName && formattedDate) {
     title = buildEpaperIssueTitle(cityName, formattedDate);
     description = `Read the ${formattedDate} ${cityName} Lokswami e-paper edition online with the full digital newspaper thumbnail and archive access.`;
   } else if (cityName && formattedDate) {
@@ -195,6 +217,7 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
       'hindi epaper',
       'digital newspaper',
       'epaper archive',
+      storyTitle ? 'epaper story' : '',
       cityName ? `${cityName.toLowerCase()} epaper` : '',
     ].filter(Boolean),
   });

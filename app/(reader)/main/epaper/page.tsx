@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { buildEpaperPageMetadata } from '@/lib/seo/readerPageMetadata';
-import { getPublicEpaperForMetadata } from '@/lib/server/publicEpaperMetadata';
+import {
+  getPublicEpaperForMetadata,
+  getPublicEpaperStoryForMetadata,
+} from '@/lib/server/publicEpaperMetadata';
 import { resolveRequestOrigin } from '@/lib/server/requestOrigin';
 import { parseUiDateInput } from '@/lib/utils/dateFormat';
 import {
@@ -36,6 +39,12 @@ function toSingleString(value: string | string[] | undefined) {
   return value || '';
 }
 
+function parsePositiveInt(value: string | string[] | undefined) {
+  const parsed = Number.parseInt(toSingleString(value).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 0;
+  return Math.floor(parsed);
+}
+
 function resolveInitialFilters(params: Record<string, string | string[] | undefined>) {
   const cityRaw = toSingleString(params.city).trim().toLowerCase();
   const dateRaw = toSingleString(params.date).trim();
@@ -55,6 +64,8 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const resolvedParams = searchParams ? await searchParams : {};
   const filters = resolveInitialFilters(resolvedParams);
   const paperId = toSingleString(resolvedParams.paper).trim();
+  const requestedPage = parsePositiveInt(resolvedParams.page);
+  const storyToken = toSingleString(resolvedParams.story).trim();
   const shouldResolveIssue = Boolean(paperId || filters.city !== 'all' || filters.date);
   const issue = shouldResolveIssue
     ? await getPublicEpaperForMetadata({
@@ -63,6 +74,14 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
         publishDate: filters.date,
       })
     : null;
+  const story =
+    storyToken && (issue?.id || paperId)
+      ? await getPublicEpaperStoryForMetadata({
+          epaperId: issue?.id || paperId,
+          storyToken,
+        })
+      : null;
+  const resolvedPage = requestedPage || story?.pageNumber || 0;
   const ogParams = new URLSearchParams();
   if (issue?.id || paperId) {
     ogParams.set('paper', issue?.id || paperId);
@@ -73,13 +92,24 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   if (issue?.publishDate || filters.date) {
     ogParams.set('date', issue?.publishDate || filters.date);
   }
+  if (resolvedPage > 0) {
+    ogParams.set('page', String(resolvedPage));
+  }
+  if (story?.slug || storyToken) {
+    ogParams.set('story', story?.slug || storyToken);
+  }
 
   return buildEpaperPageMetadata({
     city: issue?.citySlug || filters.city,
     publishDate: issue?.publishDate || filters.date,
     paperId: issue?.id || paperId,
+    page: resolvedPage,
+    storyToken: story?.slug || storyToken,
     issueTitle: issue?.title,
     issueCityName: issue?.cityName,
+    storyTitle: story?.title,
+    storyExcerpt: story?.excerpt,
+    storyPage: story?.pageNumber,
     image: `/api/og/epaper${ogParams.size ? `?${ogParams.toString()}` : ''}`,
   });
 }

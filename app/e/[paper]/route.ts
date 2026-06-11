@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveShareRequestOrigin } from '@/lib/server/requestOrigin';
 
 type RouteContext = {
   params: Promise<{ paper: string }>;
@@ -7,10 +8,11 @@ type RouteContext = {
 export async function GET(request: Request, context: RouteContext) {
   const { paper } = await context.params;
   const paperId = decodeURIComponent(paper || '').trim();
+  const origin = resolveShareRequestOrigin(request);
   const url = new URL(request.url);
 
   if (!paperId) {
-    return NextResponse.redirect(new URL('/main/epaper', url), 307);
+    return NextResponse.redirect(new URL('/main/epaper', origin), 307);
   }
 
   const params = new URLSearchParams({ paper: paperId });
@@ -24,5 +26,5 @@ export async function GET(request: Request, context: RouteContext) {
     params.set('story', story);
   }
 
-  return NextResponse.redirect(new URL(`/main/epaper?${params.toString()}`, url), 307);
+  return NextResponse.redirect(new URL(`/main/epaper?${params.toString()}`, origin), 307);
 }

@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { getCitySlugFromName } from '@/lib/constants/epaperCities';
 import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 import EPaper from '@/lib/models/EPaper';
+import EPaperArticle from '@/lib/models/EPaperArticle';
 import {
   getStoredEPaperById,
   listAllStoredEPapers,
@@ -19,10 +20,24 @@ export type PublicEpaperMetadata = {
   pageCount: number;
 };
 
+export type PublicEpaperStoryMetadata = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  coverImagePath: string;
+  pageNumber: number;
+};
+
 type PublicEpaperMetadataQuery = {
   id?: string;
   citySlug?: string;
   publishDate?: string;
+};
+
+type PublicEpaperStoryMetadataQuery = {
+  epaperId?: string;
+  storyToken?: string;
 };
 
 function asObject(value: unknown) {
@@ -64,6 +79,16 @@ function normalizePages(value: unknown) {
     .filter((entry) => entry.pageNumber > 0);
 }
 
+function toSlug(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'story'
+  );
+}
+
 function mapMongoEpaper(input: unknown): PublicEpaperMetadata | null {
   const source = asObject(input);
   const id = firstNonEmptyString(source._id, source.id);
@@ -100,6 +125,55 @@ function mapStoredEpaper(input: StoredEPaper): PublicEpaperMetadata {
     ),
     pageCount: Math.max(toPositiveInt(input.pages), 1),
   };
+}
+
+function mapMongoEpaperStory(input: unknown): PublicEpaperStoryMetadata | null {
+  const source = asObject(input);
+  const id = firstNonEmptyString(source._id, source.id);
+  if (!id) return null;
+
+  const title = String(source.title || '').trim();
+
+  return {
+    id,
+    slug: String(source.slug || '').trim().toLowerCase(),
+    title,
+    excerpt: String(source.excerpt || '').trim(),
+    coverImagePath: String(source.coverImagePath || '').trim(),
+    pageNumber: toPositiveInt(source.pageNumber, 1),
+  };
+}
+
+function mapStoredEpaperStory(
+  input: StoredEPaper,
+  storyToken: string
+): PublicEpaperStoryMetadata | null {
+  const token = storyToken.trim().toLowerCase();
+  if (!token) return null;
+
+  const hotspots = Array.isArray(input.articleHotspots) ? input.articleHotspots : [];
+
+  for (let index = 0; index < hotspots.length; index += 1) {
+    const hotspot = hotspots[index];
+    const title = String(hotspot.title || '').trim();
+    const slug = toSlug(title || `story-${index + 1}`);
+    const id = `${String(input._id)}-${String(hotspot.id || index + 1)}`;
+
+    if (token !== slug && token !== id.toLowerCase()) {
+      continue;
+    }
+
+    return {
+      id,
+      slug,
+      title: title || `Story ${index + 1}`,
+      excerpt: String(hotspot.text || '').trim(),
+      coverImagePath: '',
+      pageNumber: toPositiveInt(hotspot.page, 1),
+    };
+  }
+
+  return null;
 }
 
 function getDateRange(dateLabel: string) {
@@ -163,6 +237,53 @@ async function getStoredEpaperMetadata(query: PublicEpaperMetadataQuery) {
   return filtered[0] ? mapStoredEpaper(filtered[0]) : null;
 }
 
+async function getMongoEpaperStoryMetadata(query: PublicEpaperStoryMetadataQuery) {
+  const epaperId = query.epaperId?.trim() || '';
+  const storyToken = query.storyToken?.trim() || '';
+  if (!epaperId || !storyToken) return null;
+
+  if (!(await isMongoAvailable({ label: 'public e-paper story metadata lookup' }))) {
+    return null;
+  }
+
+  try {
+    if (!Types.ObjectId.isValid(epaperId)) return null;
+
+    const normalizedStoryToken = storyToken.toLowerCase();
+    const storyQuery: Record<string, unknown> = {
+      epaperId: new Types.ObjectId(epaperId),
+      slug: normalizedStoryToken,
+    };
+
+    if (Types.ObjectId.isValid(storyToken)) {
+      storyQuery.$or = [
+        { slug: normalizedStoryToken },
+        { _id: new Types.ObjectId(storyToken) },
+      ];
+      delete storyQuery.slug;
+    }
+
+    const record = await EPaperArticle.findOne(storyQuery)
+      .select('_id slug title excerpt coverImagePath pageNumber')
+      .lean();
+    return mapMongoEpaperStory(record);
+  } catch (error) {
+    console.error('Failed to load public e-paper story metadata from MongoDB, falling back.', error);
+    return null;
+  }
+}
+
+async function getStoredEpaperStoryMetadata(query: PublicEpaperStoryMetadataQuery) {
+  const epaperId = query.epaperId?.trim() || '';
+  const storyToken = query.storyToken?.trim() || '';
+  if (!epaperId || !storyToken) return null;
+
+  const record = await getStoredEPaperById(epaperId);
+  if (!record) return null;
+
+  return mapStoredEpaperStory(record, storyToken);
+}
+
 export async function getPublicEpaperForMetadata(query: PublicEpaperMetadataQuery) {
   const normalizedQuery = {
     id: query.id?.trim() || '',
@@ -174,4 +295,16 @@ export async function getPublicEpaperForMetadata(query: PublicEpaperMetadataQuer
   if (mongoRecord) return mongoRecord;
 
   return getStoredEpaperMetadata(normalizedQuery);
+}
+
+export async function getPublicEpaperStoryForMetadata(query: PublicEpaperStoryMetadataQuery) {
+  const normalizedQuery = {
+    epaperId: query.epaperId?.trim() || '',
+    storyToken: query.storyToken?.trim() || '',
+  };
+
+  const mongoRecord = await getMongoEpaperStoryMetadata(normalizedQuery);
+  if (mongoRecord) return mongoRecord;
+
+  return getStoredEpaperStoryMetadata(normalizedQuery);
 }

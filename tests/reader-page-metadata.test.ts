@@ -84,6 +84,30 @@ describe('reader page metadata', () => {
     );
   });
 
+  it('builds story-specific e-paper metadata with a deep-link canonical URL', () => {
+    const metadata = buildEpaperPageMetadata({
+      city: 'indore',
+      publishDate: '2026-05-22',
+      paperId: 'paper-1',
+      page: 7,
+      storyToken: 'front-lead',
+      storyTitle: 'Front page civic lead',
+      storyExcerpt: 'A focused story excerpt for the shared e-paper article.',
+      issueCityName: 'Indore',
+    });
+
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        title: 'Front page civic lead | Lokswami E-Paper',
+        description: 'A focused story excerpt for the shared e-paper article.',
+        alternates: {
+          canonical:
+            'https://lokswami.com/main/epaper?paper=paper-1&city=indore&date=2026-05-22&page=7&story=front-lead',
+        },
+      })
+    );
+  });
+
   it('marks unknown category slugs as noindex while keeping known categories indexable', () => {
     const known = buildCategoryPageMetadata('politics');
     const unknown = buildCategoryPageMetadata('custom-desk');

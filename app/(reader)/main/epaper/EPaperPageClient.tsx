@@ -2686,6 +2686,18 @@ export default function EPaperPageClient({
                       onClick={() => handleOpenSavedStory(story)}
                       className="reader-touch-button reader-focus-ring flex min-h-16 items-start gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-3 text-left transition hover:border-primary-300 hover:bg-primary-50/60 dark:border-zinc-700 dark:bg-zinc-950/70 dark:hover:border-primary-700 dark:hover:bg-primary-950/20"
                     >
+                      {story.coverImagePath ? (
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-900">
+                          <Image
+                            src={story.coverImagePath}
+                            alt={story.title || t.storyImage}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            sizes="64px"
+                          />
+                        </div>
+                      ) : null}
                       <div className="min-w-0 flex-1">
                         <p className="line-clamp-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                           {story.title}
@@ -3407,17 +3419,33 @@ export default function EPaperPageClient({
                               onClick={() => setActiveArticle(article)}
                               className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-left transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
                             >
-                              <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
-                                {t.story} {index + 1}
-                              </span>
-                              <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-zinc-100">
-                                {article.title || `${t.story} ${index + 1}`}
-                              </span>
-                              {article.excerpt ? (
-                                <span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                                  {article.excerpt}
-                                </span>
-                              ) : null}
+                              <div className="flex items-start gap-3">
+                                {article.coverImagePath ? (
+                                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                                    <Image
+                                      src={article.coverImagePath}
+                                      alt={article.title || t.storyImage}
+                                      fill
+                                      unoptimized
+                                      className="object-cover"
+                                      sizes="56px"
+                                    />
+                                  </div>
+                                ) : null}
+                                <div className="min-w-0 flex-1">
+                                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
+                                    {t.story} {index + 1}
+                                  </span>
+                                  <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-zinc-100">
+                                    {article.title || `${t.story} ${index + 1}`}
+                                  </span>
+                                  {article.excerpt ? (
+                                    <span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                                      {article.excerpt}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
                             </button>
                           ))}
                         </div>
@@ -3453,14 +3481,30 @@ export default function EPaperPageClient({
                                   }}
                                   className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-left text-sm text-gray-700 transition hover:border-primary-300 hover:bg-primary-50/70 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-primary-700 dark:hover:bg-primary-950/25"
                                 >
-                                  <span className="block font-medium text-gray-900 dark:text-zinc-100">
-                                    {article.title || `${t.story} ${index + 1}`}
-                                  </span>
-                                  {article.excerpt ? (
-                                    <span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                                      {article.excerpt}
-                                    </span>
-                                  ) : null}
+                                  <div className="flex items-start gap-3">
+                                    {article.coverImagePath ? (
+                                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                                        <Image
+                                          src={article.coverImagePath}
+                                          alt={article.title || t.storyImage}
+                                          fill
+                                          unoptimized
+                                          className="object-cover"
+                                          sizes="64px"
+                                        />
+                                      </div>
+                                    ) : null}
+                                    <div className="min-w-0 flex-1">
+                                      <span className="block font-medium text-gray-900 dark:text-zinc-100">
+                                        {article.title || `${t.story} ${index + 1}`}
+                                      </span>
+                                      {article.excerpt ? (
+                                        <span className="mt-1 block line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                                          {article.excerpt}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
                                 </button>
                               ))}
                             </div>
