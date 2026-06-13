@@ -7,6 +7,7 @@ import {
   resolveEpaperPageResizeDimensions,
   resolveEpaperPreviewMaxZoom,
 } from '@/lib/utils/epaperPageImage';
+import { buildPdfToJpgCommand } from '@/lib/utils/epaperPageImageGeneration';
 
 const root = process.cwd();
 
@@ -178,13 +179,54 @@ describe('e-paper page image quality profile', () => {
     }
   });
 
-  it('uses 220 DPI and JPEG quality 90 for generated PDF pages', () => {
-    const source = read('lib/utils/epaperPageImageGeneration.ts');
+  it('automatically renders direct PDF uploads into 3000px page images', () => {
+    const createPage = read('app/(admin)/admin/epapers/new/page.tsx');
 
-    expect(source).toContain("'-r',");
-    expect(source).toContain("'220',");
-    expect(source).toContain("'-jpegopt',");
-    expect(source).toContain("'quality=90',");
-    expect(source).toContain("['-density', '220', inputRange, '-quality', '90'");
+    expect(createPage).toContain('getPdfFilePageCount(pdfFile)');
+    expect(createPage).toContain('renderPdfFilePages(pdfFile');
+    expect(createPage).toContain('targetWidth: EPAPER_PAGE_TARGET_WIDTH');
+    expect(createPage).toContain('jpegQuality: EPAPER_PAGE_IMAGE_QUALITY');
+    expect(createPage).toContain('width: input.width');
+    expect(createPage).toContain('height: input.height');
+  });
+
+  it('renders generated PDF pages at 3000px, 220 DPI, and JPEG quality 90', () => {
+    const poppler = buildPdfToJpgCommand(
+      'pdftoppm',
+      '/storage/edition.pdf',
+      12,
+      '/tmp/pages'
+    );
+    expect(poppler.command).toBe('pdftoppm');
+    expect(poppler.args).toEqual(
+      expect.arrayContaining([
+        '-r',
+        '220',
+        '-scale-to-x',
+        '3000',
+        '-scale-to-y',
+        '-1',
+        '-jpegopt',
+        'quality=90',
+      ])
+    );
+
+    const imageMagick = buildPdfToJpgCommand(
+      'magick',
+      '/storage/edition.pdf',
+      12,
+      '/tmp/pages'
+    );
+    expect(imageMagick.command).toBe('magick');
+    expect(imageMagick.args).toEqual(
+      expect.arrayContaining([
+        '-density',
+        '220',
+        '-resize',
+        '3000x',
+        '-quality',
+        '90',
+      ])
+    );
   });
 });

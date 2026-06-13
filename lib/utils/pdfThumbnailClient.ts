@@ -57,6 +57,12 @@ function buildImageName(pdfFileName: string) {
   return `${withoutExt || 'epaper-page-1'}.jpg`;
 }
 
+function buildPageImageName(pdfFileName: string, pageNumber: number) {
+  const trimmed = pdfFileName.trim();
+  const withoutExt = trimmed.replace(/\.[^.]+$/, '');
+  return `${withoutExt || 'epaper'}-page-${pageNumber}.jpg`;
+}
+
 function loadPdfJsScript(): Promise<PdfJsGlobal> {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('PDF conversion is only available in the browser'));
@@ -138,6 +144,19 @@ function resolveTargetWidth(options?: { targetWidth?: number }) {
   return Math.max(600, options?.targetWidth ?? 1400);
 }
 
+function validatePdfFile(pdfFile: File) {
+  if (!pdfFile.type.includes('pdf') && !pdfFile.name.toLowerCase().endsWith('.pdf')) {
+    throw new Error('Invalid PDF file');
+  }
+}
+
+async function loadPdfFileDocument(pdfFile: File) {
+  validatePdfFile(pdfFile);
+  const pdfJs = await loadPdfJsScript();
+  const bytes = new Uint8Array(await pdfFile.arrayBuffer());
+  return pdfJs.getDocument({ data: bytes }).promise;
+}
+
 function safeDestroyPdfDocument(pdfDocument: PdfDocumentProxy) {
   try {
     pdfDocument.destroy();
@@ -154,17 +173,91 @@ export interface PdfPagePreviewResult {
   height: number;
 }
 
+export interface RenderedPdfPageImage {
+  file: File;
+  pageCount: number;
+  pageNumber: number;
+  width: number;
+  height: number;
+}
+
+export async function getPdfFilePageCount(pdfFile: File) {
+  const pdfDocument = await loadPdfFileDocument(pdfFile);
+  try {
+    const pageCount = Math.max(1, Number(pdfDocument.numPages) || 1);
+    if (pageCount > 1000) {
+      throw new Error('PDF has too many pages (maximum 1000).');
+    }
+    return pageCount;
+  } finally {
+    safeDestroyPdfDocument(pdfDocument);
+  }
+}
+
+export async function renderPdfFilePages(
+  pdfFile: File,
+  options: {
+    targetWidth: number;
+    jpegQuality?: number;
+    onPage: (page: RenderedPdfPageImage) => Promise<void> | void;
+  }
+) {
+  const pdfDocument = await loadPdfFileDocument(pdfFile);
+
+  try {
+    const pageCount = Math.max(1, Number(pdfDocument.numPages) || 1);
+    if (pageCount > 1000) {
+      throw new Error('PDF has too many pages (maximum 1000).');
+    }
+
+    const targetWidth = resolveTargetWidth(options);
+    const jpegQuality = clamp(options.jpegQuality ?? 0.9, 0.1, 1);
+
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      const page = await pdfDocument.getPage(pageNumber);
+      const baseViewport = page.getViewport({ scale: 1 });
+      const scale = targetWidth / Math.max(1, baseViewport.width);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error(`Could not create canvas context for PDF page ${pageNumber}.`);
+      }
+
+      try {
+        await page.render({ canvasContext: context, viewport }).promise;
+        const blob = await renderCanvasToJpegBlob(canvas, jpegQuality);
+        await options.onPage({
+          file: new File(
+            [blob],
+            buildPageImageName(pdfFile.name, pageNumber),
+            { type: 'image/jpeg', lastModified: pdfFile.lastModified }
+          ),
+          pageCount,
+          pageNumber,
+          width: canvas.width,
+          height: canvas.height,
+        });
+      } finally {
+        canvas.width = 1;
+        canvas.height = 1;
+      }
+    }
+
+    return { pageCount };
+  } finally {
+    safeDestroyPdfDocument(pdfDocument);
+  }
+}
+
 export async function convertPdfFileToThumbnailImage(
   pdfFile: File,
   options?: { targetWidth?: number; jpegQuality?: number }
 ) {
-  if (!pdfFile.type.includes('pdf') && !pdfFile.name.toLowerCase().endsWith('.pdf')) {
-    throw new Error('Invalid PDF file');
-  }
-
-  const pdfJs = await loadPdfJsScript();
-  const bytes = new Uint8Array(await pdfFile.arrayBuffer());
-  const pdfDocument = await pdfJs.getDocument({ data: bytes }).promise;
+  const pdfDocument = await loadPdfFileDocument(pdfFile);
 
   try {
     const page = await pdfDocument.getPage(1);

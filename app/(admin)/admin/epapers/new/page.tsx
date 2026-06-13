@@ -10,8 +10,14 @@ import { EPAPER_CITY_OPTIONS, type EPaperCitySlug } from '@/lib/constants/epaper
 import { uploadEpaperAssetDirect } from '@/lib/utils/epaperDirectUploadClient';
 import {
   buildEpaperLowResolutionWarning,
+  EPAPER_PAGE_IMAGE_QUALITY,
+  EPAPER_PAGE_TARGET_WIDTH,
   normalizeEpaperPageImage,
 } from '@/lib/utils/epaperPageImage';
+import {
+  getPdfFilePageCount,
+  renderPdfFilePages,
+} from '@/lib/utils/pdfThumbnailClient';
 
 type UploadResponse = {
   success: boolean;
@@ -75,11 +81,23 @@ export default function NewEPaperPage() {
         if (!pdfFile || !thumbnailFile) {
           throw new Error('PDF and thumbnail are required for upload mode');
         }
-        if (!pageCount.trim() && pageImages.length === 0) {
-          throw new Error('Page count is required when page images are not selected.');
+        const authHeaders = getAuthHeader();
+        let detectedPdfPageCount = 0;
+        if (pageImages.length === 0) {
+          setWarning('Reading PDF page count...');
+          detectedPdfPageCount = await getPdfFilePageCount(pdfFile);
+          const enteredPageCount = Number.parseInt(pageCount, 10);
+          if (
+            Number.isFinite(enteredPageCount) &&
+            enteredPageCount > 0 &&
+            enteredPageCount !== detectedPdfPageCount
+          ) {
+            warnings.push(
+              `The entered page count was ${enteredPageCount}; the PDF contains ${detectedPdfPageCount} pages, so the PDF count was used.`
+            );
+          }
         }
 
-        const authHeaders = getAuthHeader();
         setWarning('Uploading PDF to DigitalOcean...');
         const pdfUpload = await uploadEpaperAssetDirect({
           kind: 'epaper_pdf',
@@ -110,7 +128,10 @@ export default function NewEPaperPage() {
             title: title.trim(),
             publishDate,
             status,
-            pageCount: pageCount.trim() || (pageImages.length > 0 ? String(pageImages.length) : undefined),
+            pageCount:
+              pageImages.length > 0
+                ? pageCount.trim() || String(pageImages.length)
+                : String(detectedPdfPageCount),
             pdfAsset: pdfUpload.asset,
             thumbnailAsset: thumbnailUpload.asset,
           }),
@@ -125,6 +146,45 @@ export default function NewEPaperPage() {
           warnings.push(payload.warning);
         }
 
+        const uploadPageImage = async (input: {
+          file: File;
+          pageNumber: number;
+          width: number;
+          height: number;
+        }) => {
+          const pageUpload = await uploadEpaperAssetDirect({
+            kind: 'epaper_page_image',
+            file: input.file,
+            authHeaders,
+            citySlug,
+            publishDate,
+            pageNumber: input.pageNumber,
+          });
+
+          const pageResponse = await fetch(`/api/admin/epapers/${payload.data?._id}/pages`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeaders,
+            },
+            body: JSON.stringify({
+              pages: [
+                {
+                  pageNumber: input.pageNumber,
+                  imagePath: pageUpload.asset.mediaUrl,
+                  mediaKey: pageUpload.asset.mediaKey,
+                  width: input.width,
+                  height: input.height,
+                },
+              ],
+            }),
+          });
+          const pagePayload = (await pageResponse.json().catch(() => ({}))) as BasicResponse;
+          if (!pageResponse.ok || pagePayload.success === false) {
+            throw new Error(pagePayload.error || `Failed to save page ${input.pageNumber}.`);
+          }
+        };
+
         if (pageImages.length > 0) {
           let failedUploads = 0;
           for (let index = 0; index < pageImages.length; index += 1) {
@@ -134,13 +194,11 @@ export default function NewEPaperPage() {
 
             try {
               const normalized = await normalizeEpaperPageImage(file);
-              const pageUpload = await uploadEpaperAssetDirect({
-                kind: 'epaper_page_image',
+              await uploadPageImage({
                 file: normalized.file,
-                authHeaders,
-                citySlug,
-                publishDate,
                 pageNumber,
+                width: normalized.width,
+                height: normalized.height,
               });
 
               if (normalized.isLowResolution) {
@@ -153,30 +211,6 @@ export default function NewEPaperPage() {
                   `Uploading page image ${pageNumber}/${pageImages.length}. ${lowResolutionWarning}`
                 );
               }
-
-              const pageResponse = await fetch(`/api/admin/epapers/${payload.data._id}/pages`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...authHeaders,
-                },
-                body: JSON.stringify({
-                  pages: [
-                    {
-                      pageNumber,
-                      imagePath: pageUpload.asset.mediaUrl,
-                      mediaKey: pageUpload.asset.mediaKey,
-                      width: normalized.width,
-                      height: normalized.height,
-                    },
-                  ],
-                }),
-              });
-              const pagePayload = (await pageResponse.json().catch(() => ({}))) as BasicResponse;
-
-              if (!pageResponse.ok || pagePayload.success === false) {
-                failedUploads += 1;
-              }
             } catch {
               failedUploads += 1;
             }
@@ -185,6 +219,36 @@ export default function NewEPaperPage() {
           if (failedUploads > 0) {
             warnings.push(
               `${failedUploads} page image(s) failed. Open this e-paper and retry those pages.`
+            );
+          }
+        } else {
+          let failedUploads = 0;
+          try {
+            await renderPdfFilePages(pdfFile, {
+              targetWidth: EPAPER_PAGE_TARGET_WIDTH,
+              jpegQuality: EPAPER_PAGE_IMAGE_QUALITY,
+              onPage: async (renderedPage) => {
+                setWarning(
+                  `E-paper created. Converting and uploading PDF page ${renderedPage.pageNumber}/${renderedPage.pageCount} at ${renderedPage.width}px...`
+                );
+                try {
+                  await uploadPageImage(renderedPage);
+                } catch {
+                  failedUploads += 1;
+                }
+              },
+            });
+          } catch (conversionError: unknown) {
+            warnings.push(
+              conversionError instanceof Error
+                ? `Automatic PDF page conversion failed: ${conversionError.message}`
+                : 'Automatic PDF page conversion failed.'
+            );
+          }
+
+          if (failedUploads > 0) {
+            warnings.push(
+              `${failedUploads} generated page image(s) failed to upload. Open this e-paper and retry those pages.`
             );
           }
         }
@@ -344,7 +408,7 @@ export default function NewEPaperPage() {
 
             <label>
               <span className="mb-1 block text-xs font-semibold text-gray-600">
-                Page Count
+                Page Count (optional for PDF upload)
               </span>
               <input
                 type="number"
@@ -352,7 +416,7 @@ export default function NewEPaperPage() {
                 value={pageCount}
                 onChange={(event) => setPageCount(event.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                placeholder={pageImages.length > 0 ? 'Optional if every page image is selected' : 'Required'}
+                placeholder="Detected automatically from the PDF"
               />
             </label>
           </div>
@@ -395,7 +459,7 @@ export default function NewEPaperPage() {
 
               <label>
                 <span className="mb-1 block text-xs font-semibold text-gray-600">
-                  Optional Page Images (ordered upload, one per page)
+                  Optional Page Images (override automatic PDF conversion)
                 </span>
                 <input
                   type="file"
@@ -407,7 +471,7 @@ export default function NewEPaperPage() {
                 <p className="mt-1 text-xs text-gray-600">
                   {pageImages.length > 0
                     ? `${pageImages.length} page image(s) selected (will be uploaded one-by-one after e-paper is created)`
-                    : 'If omitted, hotspots can be added later after page images are uploaded.'}
+                    : 'If omitted, every PDF page is rendered at 3000px wide and uploaded automatically.'}
                 </p>
               </label>
             </>

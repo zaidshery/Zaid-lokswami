@@ -8,10 +8,17 @@ import {
   getImageDimensionsFromPath,
   resolveEpaperAssetPath,
 } from '@/lib/utils/epaperStorage';
+import { EPAPER_PAGE_TARGET_WIDTH } from '@/lib/utils/epaperPageImage';
 
 const execFileAsync = promisify(execFile);
 
-type ConverterEngine = 'pdftoppm' | 'magick';
+export type ConverterEngine = 'pdftoppm' | 'magick';
+
+type PdfToJpgCommand = {
+  command: ConverterEngine;
+  args: string[];
+  timeout: number;
+};
 
 function safeRelativeOutput(relativePath: string) {
   return relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
@@ -42,20 +49,24 @@ async function detectConverterEngine(): Promise<ConverterEngine | null> {
   return null;
 }
 
-async function runPdfToJpg(
+export function buildPdfToJpgCommand(
   engine: ConverterEngine,
   pdfAbsolutePath: string,
   pageCount: number,
   tempDir: string
-) {
+): PdfToJpgCommand {
   if (engine === 'pdftoppm') {
     const prefix = path.join(tempDir, 'page');
-    await execFileAsync(
-      'pdftoppm',
-      [
+    return {
+      command: 'pdftoppm',
+      args: [
         '-jpeg',
         '-r',
         '220',
+        '-scale-to-x',
+        String(EPAPER_PAGE_TARGET_WIDTH),
+        '-scale-to-y',
+        '-1',
         '-jpegopt',
         'quality=90',
         '-f',
@@ -65,17 +76,44 @@ async function runPdfToJpg(
         pdfAbsolutePath,
         prefix,
       ],
-      { timeout: 240_000, maxBuffer: 10 * 1024 * 1024 }
-    );
-    return;
+      timeout: 240_000,
+    };
   }
 
   const inputRange = `${pdfAbsolutePath}[0-${Math.max(0, pageCount - 1)}]`;
   const outputPattern = path.join(tempDir, 'page-%d.jpg');
+  return {
+    command: 'magick',
+    args: [
+      '-density',
+      '220',
+      inputRange,
+      '-resize',
+      `${EPAPER_PAGE_TARGET_WIDTH}x`,
+      '-quality',
+      '90',
+      outputPattern,
+    ],
+    timeout: 300_000,
+  };
+}
+
+async function runPdfToJpg(
+  engine: ConverterEngine,
+  pdfAbsolutePath: string,
+  pageCount: number,
+  tempDir: string
+) {
+  const command = buildPdfToJpgCommand(
+    engine,
+    pdfAbsolutePath,
+    pageCount,
+    tempDir
+  );
   await execFileAsync(
-    'magick',
-    ['-density', '220', inputRange, '-quality', '90', outputPattern],
-    { timeout: 300_000, maxBuffer: 10 * 1024 * 1024 }
+    command.command,
+    command.args,
+    { timeout: command.timeout, maxBuffer: 10 * 1024 * 1024 }
   );
 }
 
