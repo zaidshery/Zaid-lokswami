@@ -6,12 +6,13 @@
     "node": "20.x"
   },
   "scripts": {
-    "clean:next": "node scripts/clean-next-artifacts.js",
+    "clean:next": "node scripts/clean-next-artifacts.js .next .next-dev",
+    "clean:next:dev": "node scripts/clean-next-artifacts.js .next-dev",
+    "clean:next:prod": "node scripts/clean-next-artifacts.js .next",
     "prepare:next:dev": "node scripts/sync-next-env-dist.js .next-dev",
     "prepare:next:prod": "node scripts/sync-next-env-dist.js .next",
-    "predev": "npm run prepare:next:dev && npm run clean:next",
-    "prebuild": "npm run prepare:next:prod && npm run clean:next",
-    "dev": "next dev",
+    "prebuild": "npm run prepare:next:prod && npm run clean:next:prod",
+    "dev": "node scripts/start-next-dev.js",
     "build:ci": "npm run prebuild && npm run build:next",
     "build:vercel": "npm run build:ci",
     "build": "npm run build:next && node scripts/prepare-hostinger.js",

@@ -4,6 +4,7 @@ node_modules/
 # Next.js
 .next/
 .next-dev/
+.next-dev-server.json
 .hostinger/
 out/
 
@@ -31,6 +32,11 @@ __create_zip.ps1
 .DS_Store
 .vscode/
 .idea/
+
+# Local browser automation artifacts
+.tmp-headless-browser/
+edge-dom.txt
+git-output.txt
 
 # Local content / uploads
 data/articles.json
