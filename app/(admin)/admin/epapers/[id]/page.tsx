@@ -18,10 +18,11 @@ import {
 } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import { uploadEpaperAssetDirect } from '@/lib/utils/epaperDirectUploadClient';
 import {
-  getImageDimensionsFromFile,
-  uploadEpaperAssetDirect,
-} from '@/lib/utils/epaperDirectUploadClient';
+  buildEpaperLowResolutionWarning,
+  normalizeEpaperPageImage,
+} from '@/lib/utils/epaperPageImage';
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
 import type {
   EPaperArticleRecord,
@@ -191,6 +192,7 @@ export default function AdminEPaperDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [pageImageWarning, setPageImageWarning] = useState('');
   const [savingMeta, setSavingMeta] = useState(false);
   const [uploadingPage, setUploadingPage] = useState<number | null>(null);
   const [generatingPages, setGeneratingPages] = useState(false);
@@ -484,20 +486,19 @@ export default function AdminEPaperDetailPage() {
     setUploadingPage(pageNumber);
     setError('');
     setNotice('');
+    setPageImageWarning('');
 
     try {
       const authHeaders = getAuthHeader();
-      const [uploaded, dimensions] = await Promise.all([
-        uploadEpaperAssetDirect({
-          kind: 'epaper_page_image',
-          file,
-          authHeaders,
-          citySlug: epaper.citySlug,
-          publishDate: epaper.publishDate,
-          pageNumber,
-        }),
-        getImageDimensionsFromFile(file),
-      ]);
+      const normalized = await normalizeEpaperPageImage(file);
+      const uploaded = await uploadEpaperAssetDirect({
+        kind: 'epaper_page_image',
+        file: normalized.file,
+        authHeaders,
+        citySlug: epaper.citySlug,
+        publishDate: epaper.publishDate,
+        pageNumber,
+      });
 
       const response = await fetch(`/api/admin/epapers/${epaper._id}/pages`, {
         method: 'PUT',
@@ -511,8 +512,8 @@ export default function AdminEPaperDetailPage() {
               pageNumber,
               imagePath: uploaded.asset.mediaUrl,
               mediaKey: uploaded.asset.mediaKey,
-              width: dimensions?.width,
-              height: dimensions?.height,
+              width: normalized.width,
+              height: normalized.height,
             },
           ],
         }),
@@ -523,6 +524,11 @@ export default function AdminEPaperDetailPage() {
       }
 
       setNotice(`Page ${pageNumber} image updated`);
+      if (normalized.isLowResolution) {
+        setPageImageWarning(
+          buildEpaperLowResolutionWarning(pageNumber, normalized.width)
+        );
+      }
       await fetchData();
     } catch (err: unknown) {
       setError(toErrorMessage(err, 'Failed to upload page image'));
@@ -931,6 +937,11 @@ export default function AdminEPaperDetailPage() {
         {notice ? (
           <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {notice}
+          </div>
+        ) : null}
+        {pageImageWarning ? (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {pageImageWarning}
           </div>
         ) : null}
 

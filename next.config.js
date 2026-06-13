@@ -63,7 +63,9 @@ const nextConfig = {
   devIndicators: false,
   images: {
     unoptimized: isDevelopment,
-    qualities: [60, 75, 90, 100],
+    formats: ['image/webp'],
+    minimumCacheTTL: 86400,
+    qualities: [55, 60, 75, 90, 100],
     remotePatterns: allowedImageHosts.map((hostname) => ({
       protocol: 'https',
       hostname,

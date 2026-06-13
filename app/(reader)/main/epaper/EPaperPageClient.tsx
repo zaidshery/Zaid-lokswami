@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import {
+  type SyntheticEvent as ReactSyntheticEvent,
   type TouchEvent as ReactTouchEvent,
   useCallback,
   useEffect,
@@ -60,6 +61,7 @@ import {
   type SavedEpaperPaperInput,
   type SavedEpaperStoryEntry,
 } from '@/lib/utils/epaperReaderLibrary';
+import { resolveEpaperPreviewMaxZoom } from '@/lib/utils/epaperPageImage';
 import { renderPdfPagePreviewFromUrl } from '@/lib/utils/pdfThumbnailClient';
 import {
   type EPaperCityFilter,
@@ -361,7 +363,6 @@ const EPAPER_LAST_PAGE_STORAGE_KEY = 'lokswami_epaper_last_page_v1';
 const EPAPER_ZOOM_HINT_STORAGE_KEY = 'lokswami_epaper_zoom_hint_seen_v1';
 const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v1';
 const MIN_PREVIEW_ZOOM = 1;
-const MAX_PREVIEW_ZOOM = 3;
 const PREVIEW_ZOOM_STEP = 0.2;
 const PREVIEW_DOUBLE_TAP_ZOOM = 2;
 const MIN_ARTICLE_IMAGE_ZOOM = 1;
@@ -897,6 +898,10 @@ export default function EPaperPageClient({
   const [loadingFallback, setLoadingFallback] = useState(false);
   const [fallbackError, setFallbackError] = useState('');
   const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewImageMetrics, setPreviewImageMetrics] = useState({
+    src: '',
+    naturalWidth: 0,
+  });
   const [showHotspotHints, setShowHotspotHints] = useState(true);
   const [articleImageZoom, setArticleImageZoom] = useState(1);
   const [pageTurnDirection, setPageTurnDirection] = useState(0);
@@ -1334,12 +1339,6 @@ export default function EPaperPageClient({
     );
   }, []);
 
-  const zoomPreviewIn = useCallback(() => {
-    setPreviewZoom((current) =>
-      Math.min(MAX_PREVIEW_ZOOM, Number((current + PREVIEW_ZOOM_STEP).toFixed(2)))
-    );
-  }, []);
-
   useEffect(() => {
     if (!activePaper || !pendingStorySlug) return;
 
@@ -1452,6 +1451,10 @@ export default function EPaperPageClient({
   const previewIsDataUrl = previewSrc.startsWith('data:');
   const previewWidth = activePageMeta?.width || 1200;
   const previewHeight = activePageMeta?.height || 1600;
+  const previewNaturalWidth =
+    previewImageMetrics.src === previewSrc ? previewImageMetrics.naturalWidth : 0;
+  const previewSourceWidth = previewNaturalWidth || Number(activePageMeta?.width || 0);
+  const maxPreviewZoom = resolveEpaperPreviewMaxZoom(previewSourceWidth);
   const isPreviewZoomed = previewZoom > MIN_PREVIEW_ZOOM + 0.01;
   const maxReaderPage = Math.max(1, Number(activePaper?.pageCount || 1));
   const maxSpreadStartPage = Math.max(1, maxReaderPage - 1);
@@ -1459,6 +1462,29 @@ export default function EPaperPageClient({
   const canGoNextPage = shouldShowSpreadMode
     ? activePage < maxSpreadStartPage
     : activePage < maxReaderPage;
+
+  const zoomPreviewIn = useCallback(() => {
+    setPreviewZoom((current) =>
+      Math.min(maxPreviewZoom, Number((current + PREVIEW_ZOOM_STEP).toFixed(2)))
+    );
+  }, [maxPreviewZoom]);
+
+  const onPreviewImageLoad = useCallback(
+    (event: ReactSyntheticEvent<HTMLImageElement>) => {
+      const naturalWidth = Number(event.currentTarget.naturalWidth || 0);
+      if (naturalWidth > 0) {
+        setPreviewImageMetrics({
+          src: previewSrc,
+          naturalWidth,
+        });
+      }
+    },
+    [previewSrc]
+  );
+
+  useEffect(() => {
+    setPreviewZoom((current) => Math.min(current, maxPreviewZoom));
+  }, [maxPreviewZoom]);
 
   // Pre-fetch adjacent page images to make navigation instantaneous and smooth
   useEffect(() => {
@@ -2137,9 +2163,9 @@ export default function EPaperPageClient({
     setPreviewZoom((current) =>
       current > MIN_PREVIEW_ZOOM + 0.05
         ? MIN_PREVIEW_ZOOM
-        : Math.min(MAX_PREVIEW_ZOOM, PREVIEW_DOUBLE_TAP_ZOOM)
+        : Math.min(maxPreviewZoom, PREVIEW_DOUBLE_TAP_ZOOM)
     );
-  }, []);
+  }, [maxPreviewZoom]);
 
   const onArticleImageTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
     if (event.touches.length !== 2) return;
@@ -2310,7 +2336,7 @@ export default function EPaperPageClient({
       pageSwipeStateRef.current.tracking = false;
 
       const nextZoom = Math.min(
-        MAX_PREVIEW_ZOOM,
+        maxPreviewZoom,
         Math.max(
           MIN_PREVIEW_ZOOM,
           Number(
@@ -2343,7 +2369,7 @@ export default function EPaperPageClient({
           pinchState.focalContentY * heightScale - pinchState.focalViewportY;
       });
     }
-  }, [activeArticle, isCoarsePointer, previewZoom]);
+  }, [activeArticle, isCoarsePointer, maxPreviewZoom, previewZoom]);
 
   const onPreviewTouchEnd = useCallback((event: TouchEvent) => {
     if (previewPinchStateRef.current.isPinching) {
@@ -2638,7 +2664,7 @@ export default function EPaperPageClient({
                             src={paper.thumbnailPath}
                             alt={paper.title}
                             fill
-                            unoptimized
+                            quality={55}
                             className="object-contain p-1"
                             sizes="64px"
                           />
@@ -2734,7 +2760,7 @@ export default function EPaperPageClient({
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
-              {epapers.map((paper) => (
+              {epapers.map((paper, index) => (
                 <button
                   key={paper._id}
                   type="button"
@@ -2748,9 +2774,10 @@ export default function EPaperPageClient({
                           src={paper.thumbnailPath}
                           alt={paper.title}
                           fill
-                          unoptimized
+                          quality={60}
+                          priority={index < 4}
                           className="object-contain p-2"
-                          sizes="(max-width: 767px) 50vw, (max-width: 1279px) 33vw, 25vw"
+                          sizes="(max-width: 639px) 44vw, (max-width: 767px) 46vw, (max-width: 1279px) 30vw, 22vw"
                         />
                       </div>
                     ) : (
@@ -2921,7 +2948,7 @@ export default function EPaperPageClient({
                       type="button"
                       onClick={zoomPreviewIn}
                       aria-label={t.zoomIn}
-                      disabled={previewZoom >= MAX_PREVIEW_ZOOM}
+                      disabled={previewZoom >= maxPreviewZoom}
                       className="inline-flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
                     >
                       +
@@ -3159,6 +3186,7 @@ export default function EPaperPageClient({
                                   <img
                                     src={previewSrc}
                                     alt={`Page ${activePage}`}
+                                    onLoad={onPreviewImageLoad}
                                     style={{ maxHeight: previewMaxHeight }}
                                     className="block h-auto w-auto max-w-full object-contain"
                                     draggable={false}
@@ -3170,6 +3198,7 @@ export default function EPaperPageClient({
                                     width={previewWidth}
                                     height={previewHeight}
                                     unoptimized
+                                    onLoad={onPreviewImageLoad}
                                     style={{ maxHeight: previewMaxHeight }}
                                     className="block h-auto w-auto max-w-full object-contain"
                                     draggable={false}

@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
+import { unstable_cache } from 'next/cache';
 import { buildEpaperPageMetadata } from '@/lib/seo/readerPageMetadata';
 import {
   getPublicEpaperForMetadata,
   getPublicEpaperStoryForMetadata,
 } from '@/lib/server/publicEpaperMetadata';
-import { resolveRequestOrigin } from '@/lib/server/requestOrigin';
+import { listPublicEpaperFeed } from '@/lib/server/publicEpaperFeed';
 import { parseUiDateInput } from '@/lib/utils/dateFormat';
 import {
+  parsePublicEpaperFilters,
   resolvePublicEpaperCityFilter,
   type EPaperCityFilter,
 } from '@/lib/utils/publicEpaperFilters';
@@ -15,14 +17,7 @@ import EPaperPageClient, {
   type PublicEPaperListItem,
 } from './EPaperPageClient';
 
-const EPAPER_LIMIT = 20;
-
-type LatestListResponse = {
-  items?: PublicEPaperListItem[];
-  limit?: number;
-  hasMore?: boolean;
-  nextCursor?: PublicCursor | null;
-};
+const EPAPER_LIMIT = 12;
 
 type PageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -114,31 +109,37 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   });
 }
 
+async function listInitialEPapers(city: EPaperCityFilter, publishDate: string) {
+  const query = new URLSearchParams();
+  if (city !== 'all') {
+    query.set('citySlug', city);
+  }
+  if (publishDate) {
+    query.set('date', publishDate);
+  }
+  const parsed = parsePublicEpaperFilters(query);
+  if ('error' in parsed) {
+    throw new Error(parsed.error);
+  }
+
+  return listPublicEpaperFeed({
+    filters: parsed.filters,
+    limit: EPAPER_LIMIT,
+  });
+}
+
+const listCachedDefaultEPapers = unstable_cache(
+  () => listInitialEPapers('all', ''),
+  ['public-epaper-feed-first-page-v1'],
+  { revalidate: 300 }
+);
+
 async function fetchInitialEPapers(city: EPaperCityFilter, publishDate: string) {
   try {
-    const origin = await resolveRequestOrigin();
-    const query = new URLSearchParams({ limit: String(EPAPER_LIMIT) });
-    if (city !== 'all') {
-      query.set('citySlug', city);
-    }
-    if (publishDate) {
-      query.set('date', publishDate);
-    }
-
-    const response = await fetch(`${origin}/api/v1/public/epapers/latest?${query.toString()}`, {
-      next: { revalidate: 300 },
-    });
-
-    if (!response.ok) {
-      return {
-        items: [] as PublicEPaperListItem[],
-        limit: EPAPER_LIMIT,
-        hasMore: false,
-        nextCursor: null as PublicCursor | null,
-      };
-    }
-
-    const payload = (await response.json()) as LatestListResponse;
+    const payload =
+      city === 'all' && !publishDate
+        ? await listCachedDefaultEPapers()
+        : await listInitialEPapers(city, publishDate);
     return {
       items: Array.isArray(payload.items) ? payload.items : [],
       limit: parseLimit(payload.limit),

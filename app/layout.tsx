@@ -17,69 +17,75 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://lokswami.com';
  Developer note for onboarding and handoff: ZaidShery.
 */
 const THEME_INIT_SCRIPT = `
-(() => {
-  const STORAGE_KEY = 'lokswami-storage';
-  const root = document.documentElement;
-  const getSystemTheme = () =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+(function () {
+  var STORAGE_KEY = 'lokswami-storage';
+  var root = document.documentElement;
 
-  const applyTheme = (theme) => {
+  function getSystemTheme() {
+    return typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+  }
+
+  function applyTheme(theme) {
     root.classList.toggle('dark', theme === 'dark');
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
-  };
+  }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    var raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       applyTheme(getSystemTheme());
       return;
     }
-    const parsed = JSON.parse(raw);
-    const storedTheme = parsed?.state?.theme;
+    var parsed = JSON.parse(raw);
+    var storedTheme = parsed && parsed.state && parsed.state.theme;
     if (storedTheme === 'dark' || storedTheme === 'light') {
       applyTheme(storedTheme);
       return;
     }
     applyTheme(getSystemTheme());
-  } catch {
+  } catch (error) {
     applyTheme(getSystemTheme());
   }
 })();
 `;
 const ASSET_RECOVERY_SCRIPT = `
-(() => {
-  const STORAGE_KEY = 'lokswami-asset-recovery';
-  const CACHE_BUST_PARAM = '__asset_recovery';
-  const RECOVERY_WINDOW_MS = 10 * 60 * 1000;
-  const MAX_ATTEMPTS = 1;
-  const chunkErrorPattern =
-    /ChunkLoadError|Loading chunk [0-9]+ failed|CSS_CHUNK_LOAD_FAILED|Failed to fetch dynamically imported module/i;
-  let recoveryInFlight = false;
+(function () {
+  var STORAGE_KEY = 'lokswami-asset-recovery';
+  var CACHE_BUST_PARAM = '__asset_recovery';
+  var RECOVERY_WINDOW_MS = 10 * 60 * 1000;
+  var RECOVERY_SUCCESS_DELAY_MS = 15000;
+  var MAX_ATTEMPTS = 1;
+  var chunkErrorPattern =
+    /ChunkLoadError|Loading chunk [0-9]+ failed|CSS_CHUNK_LOAD_FAILED|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Failed to load module script|MIME type.*text\\/html/i;
+  var recoveryInFlight = false;
 
-  const readState = () => {
+  function readState() {
     try {
-      const raw = window.sessionStorage.getItem(STORAGE_KEY);
+      var raw = window.sessionStorage.getItem(STORAGE_KEY);
       if (!raw) {
         return { attempts: 0, timestamp: 0 };
       }
 
-      const parsed = JSON.parse(raw);
-      const attempts = Number(parsed?.attempts) || 0;
-      const timestamp = Number(parsed?.timestamp) || 0;
+      var parsed = JSON.parse(raw);
+      var attempts = Number(parsed && parsed.attempts) || 0;
+      var timestamp = Number(parsed && parsed.timestamp) || 0;
 
       if (!timestamp || Date.now() - timestamp > RECOVERY_WINDOW_MS) {
         window.sessionStorage.removeItem(STORAGE_KEY);
         return { attempts: 0, timestamp: 0 };
       }
 
-      return { attempts, timestamp };
-    } catch {
+      return { attempts: attempts, timestamp: timestamp };
+    } catch (error) {
       return { attempts: 0, timestamp: 0 };
     }
-  };
+  }
 
-  const writeState = (attempts) => {
+  function writeState(attempts) {
     try {
       window.sessionStorage.setItem(
         STORAGE_KEY,
@@ -89,112 +95,152 @@ const ASSET_RECOVERY_SCRIPT = `
           path: window.location.pathname,
         })
       );
-    } catch {}
-  };
+    } catch (error) {}
+  }
 
-  const clearState = () => {
+  function clearState() {
     try {
       window.sessionStorage.removeItem(STORAGE_KEY);
-    } catch {}
-  };
+    } catch (error) {}
+  }
 
-  const clearOriginCaches = async () => {
-    if (!('caches' in window)) {
-      return;
-    }
-
-    const cacheKeys = await window.caches.keys();
-    await Promise.allSettled(cacheKeys.map((key) => window.caches.delete(key)));
-  };
-
-  const unregisterServiceWorkers = async () => {
-    if (!('serviceWorker' in navigator)) {
-      return;
-    }
-
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.allSettled(
-      registrations.map((registration) => registration.unregister())
+  function settleAll(promises) {
+    return Promise.all(
+      promises.map(function (promise) {
+        return Promise.resolve(promise).then(
+          function () {},
+          function () {}
+        );
+      })
     );
-  };
+  }
 
-  const cleanupRecoveryParam = () => {
+  function runSafely(task) {
     try {
-      const url = new URL(window.location.href);
+      return Promise.resolve(task());
+    } catch (error) {
+      return Promise.resolve();
+    }
+  }
+
+  function clearOriginCaches() {
+    if (!('caches' in window)) {
+      return Promise.resolve();
+    }
+
+    return window.caches.keys().then(function (cacheKeys) {
+      return settleAll(
+        cacheKeys.map(function (key) {
+          return window.caches.delete(key);
+        })
+      );
+    });
+  }
+
+  function unregisterServiceWorkers() {
+    if (!('serviceWorker' in navigator)) {
+      return Promise.resolve();
+    }
+
+    return navigator.serviceWorker.getRegistrations().then(function (registrations) {
+      return settleAll(
+        registrations.map(function (registration) {
+          return registration.unregister();
+        })
+      );
+    });
+  }
+
+  function cleanupRecoveryParam() {
+    try {
+      var url = new URL(window.location.href);
       if (!url.searchParams.has(CACHE_BUST_PARAM)) {
         return;
       }
 
       url.searchParams.delete(CACHE_BUST_PARAM);
-      const cleanUrl = \`\${url.pathname}\${url.search}\${url.hash}\` || '/';
+      var cleanUrl = url.pathname + url.search + url.hash || '/';
       window.history.replaceState(window.history.state, '', cleanUrl);
-    } catch {}
-  };
+    } catch (error) {}
+  }
 
-  const buildRecoveryUrl = () => {
-    const url = new URL(window.location.href);
+  function buildRecoveryUrl() {
+    var url = new URL(window.location.href);
     url.searchParams.set(CACHE_BUST_PARAM, String(Date.now()));
     return url.toString();
-  };
+  }
 
-  const recoverFromStaleAssets = () => {
-    const state = readState();
+  function recoverFromStaleAssets() {
+    var state = readState();
     if (recoveryInFlight || state.attempts >= MAX_ATTEMPTS) {
       return;
     }
 
     recoveryInFlight = true;
     writeState(state.attempts + 1);
-    const nextUrl = buildRecoveryUrl();
+    var nextUrl = buildRecoveryUrl();
 
-    Promise.allSettled([unregisterServiceWorkers(), clearOriginCaches()]).finally(() => {
+    settleAll([
+      runSafely(unregisterServiceWorkers),
+      runSafely(clearOriginCaches),
+    ]).then(function () {
       window.location.replace(nextUrl);
     });
-  };
+  }
 
   window.addEventListener(
     'load',
-    () => {
+    function () {
       try {
-        const url = new URL(window.location.href);
+        var url = new URL(window.location.href);
         if (!url.searchParams.has(CACHE_BUST_PARAM)) {
           return;
         }
 
-        clearState();
-        cleanupRecoveryParam();
-      } catch {}
+        window.setTimeout(function () {
+          if (!recoveryInFlight) {
+            clearState();
+            cleanupRecoveryParam();
+          }
+        }, RECOVERY_SUCCESS_DELAY_MS);
+      } catch (error) {}
     },
     { once: true }
   );
 
   window.addEventListener(
     'error',
-    (event) => {
-      const target = event.target;
+    function (event) {
+      var target = event.target;
+      var tagName =
+        target && target.tagName ? String(target.tagName).toUpperCase() : '';
 
-      if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement) {
-        const assetUrl = target.src || target.href || '';
+      if (tagName === 'SCRIPT' || tagName === 'LINK') {
+        var assetUrl = target.src || target.href || '';
         if (
-          assetUrl.includes('/_next/static/') ||
-          assetUrl.includes('/next/static/')
+          assetUrl.indexOf('/_next/static/') !== -1 ||
+          assetUrl.indexOf('/next/static/') !== -1
         ) {
           recoverFromStaleAssets();
           return;
         }
       }
 
-      const message = String(event.message || '');
-      if (chunkErrorPattern.test(message)) {
+      var message = String(event.message || '');
+      var filename = String(event.filename || '');
+      if (
+        chunkErrorPattern.test(message) ||
+        filename.indexOf('/_next/static/') !== -1
+      ) {
         recoverFromStaleAssets();
       }
     },
     true
   );
 
-  window.addEventListener('unhandledrejection', (event) => {
-    const reason = event.reason;
-    const message = String(reason?.message || reason || '');
+  window.addEventListener('unhandledrejection', function (event) {
+    var reason = event.reason;
+    var message = String((reason && reason.message) || reason || '');
     if (chunkErrorPattern.test(message)) {
       recoverFromStaleAssets();
     }

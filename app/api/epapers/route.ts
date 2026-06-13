@@ -194,54 +194,62 @@ export async function GET(req: NextRequest) {
 
     const query = buildPublicEpaperMongoQuery(filters, { status: 'published' });
 
-    const total = await EPaper.countDocuments(query);
-    if (total === 0 && filteredRows.length > 0) {
+    try {
+      const total = await EPaper.countDocuments(query);
+      if (total === 0 && filteredRows.length > 0) {
+        return createFileResponse();
+      }
+
+      const skip = (page - 1) * limit;
+      const records = await EPaper.find(query)
+        .sort({ publishDate: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      const data = records.map((record) => {
+        const item = asObject(record);
+        const pages = normalizePages(item.pages);
+        const pageCount = Math.max(toPositiveInt(item.pageCount), pages.length);
+        const pagesWithImage = pages.filter((pageItem) => Boolean(String(pageItem.imagePath || '').trim())).length;
+
+        return {
+          _id: String(item._id),
+          citySlug: String(item.citySlug || ''),
+          cityName: String(item.cityName || ''),
+          title: String(item.title || ''),
+          publishDate: toDateLabel(item.publishDate),
+          thumbnailPath: resolveEpaperCoverImagePath({
+            thumbnailPath: item.thumbnailPath,
+            thumbnail: item.thumbnail,
+            pages,
+          }),
+          pdfPath: firstNonEmptyString(item.pdfPath, item.pdfUrl),
+          status: 'published',
+          pageCount,
+          pagesWithImage,
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        data,
+        pagination: {
+          total,
+          page,
+          limit,
+          pages: Math.ceil(total / limit),
+        },
+      }, {
+        headers: PUBLIC_EPAPER_CACHE_HEADERS,
+      });
+    } catch (error) {
+      console.error(
+        'MongoDB query failed for public e-papers route, using file store.',
+        error
+      );
       return createFileResponse();
     }
-
-    const skip = (page - 1) * limit;
-    const records = await EPaper.find(query)
-      .sort({ publishDate: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    const data = records.map((record) => {
-      const item = asObject(record);
-      const pages = normalizePages(item.pages);
-      const pageCount = Math.max(toPositiveInt(item.pageCount), pages.length);
-      const pagesWithImage = pages.filter((pageItem) => Boolean(String(pageItem.imagePath || '').trim())).length;
-
-      return {
-        _id: String(item._id),
-        citySlug: String(item.citySlug || ''),
-        cityName: String(item.cityName || ''),
-        title: String(item.title || ''),
-        publishDate: toDateLabel(item.publishDate),
-        thumbnailPath: resolveEpaperCoverImagePath({
-          thumbnailPath: item.thumbnailPath,
-          thumbnail: item.thumbnail,
-          pages,
-        }),
-        pdfPath: firstNonEmptyString(item.pdfPath, item.pdfUrl),
-        status: 'published',
-        pageCount,
-        pagesWithImage,
-      };
-    });
-
-    return NextResponse.json({
-      success: true,
-      data,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
-      },
-    }, {
-      headers: PUBLIC_EPAPER_CACHE_HEADERS,
-    });
   } catch (error) {
     console.error('Failed to list public e-papers:', error);
     return NextResponse.json(

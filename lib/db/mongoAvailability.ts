@@ -139,3 +139,9 @@ export function getMongoAvailabilitySnapshot() {
     reason: state.lastReason || null,
   };
 }
+
+export function reportMongoUnavailable(error: unknown, label = 'MongoDB query') {
+  const reason = getErrorMessage(error);
+  markStatus('unavailable', reason);
+  logUnavailable(label, reason);
+}

@@ -25,6 +25,7 @@ function readPersistedTheme(): 'dark' | 'light' | null {
 
 function readSystemTheme(): 'dark' | 'light' {
   if (typeof window === 'undefined') return 'dark';
+  if (typeof window.matchMedia !== 'function') return 'light';
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -62,8 +63,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       applyTheme(nextTheme);
     };
 
-    mediaQuery.addEventListener('change', onSystemThemeChange);
-    return () => mediaQuery.removeEventListener('change', onSystemThemeChange);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', onSystemThemeChange);
+      return () => mediaQuery.removeEventListener('change', onSystemThemeChange);
+    }
+
+    mediaQuery.addListener(onSystemThemeChange);
+    return () => mediaQuery.removeListener(onSystemThemeChange);
   }, [setTheme, theme]);
 
   useEffect(() => {

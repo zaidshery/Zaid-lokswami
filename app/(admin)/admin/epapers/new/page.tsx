@@ -7,10 +7,11 @@ import { ArrowLeft, Link2, Loader2, UploadCloud } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { EPAPER_CITY_OPTIONS, type EPaperCitySlug } from '@/lib/constants/epaperCities';
+import { uploadEpaperAssetDirect } from '@/lib/utils/epaperDirectUploadClient';
 import {
-  getImageDimensionsFromFile,
-  uploadEpaperAssetDirect,
-} from '@/lib/utils/epaperDirectUploadClient';
+  buildEpaperLowResolutionWarning,
+  normalizeEpaperPageImage,
+} from '@/lib/utils/epaperPageImage';
 
 type UploadResponse = {
   success: boolean;
@@ -132,17 +133,26 @@ export default function NewEPaperPage() {
             setWarning(`E-paper created. Uploading page images ${pageNumber}/${pageImages.length}...`);
 
             try {
-              const [pageUpload, dimensions] = await Promise.all([
-                uploadEpaperAssetDirect({
-                  kind: 'epaper_page_image',
-                  file,
-                  authHeaders,
-                  citySlug,
-                  publishDate,
+              const normalized = await normalizeEpaperPageImage(file);
+              const pageUpload = await uploadEpaperAssetDirect({
+                kind: 'epaper_page_image',
+                file: normalized.file,
+                authHeaders,
+                citySlug,
+                publishDate,
+                pageNumber,
+              });
+
+              if (normalized.isLowResolution) {
+                const lowResolutionWarning = buildEpaperLowResolutionWarning(
                   pageNumber,
-                }),
-                getImageDimensionsFromFile(file),
-              ]);
+                  normalized.width
+                );
+                warnings.push(lowResolutionWarning);
+                setWarning(
+                  `Uploading page image ${pageNumber}/${pageImages.length}. ${lowResolutionWarning}`
+                );
+              }
 
               const pageResponse = await fetch(`/api/admin/epapers/${payload.data._id}/pages`, {
                 method: 'PUT',
@@ -156,8 +166,8 @@ export default function NewEPaperPage() {
                       pageNumber,
                       imagePath: pageUpload.asset.mediaUrl,
                       mediaKey: pageUpload.asset.mediaKey,
-                      width: dimensions?.width,
-                      height: dimensions?.height,
+                      width: normalized.width,
+                      height: normalized.height,
                     },
                   ],
                 }),

@@ -52,7 +52,19 @@ async function runPdfToJpg(
     const prefix = path.join(tempDir, 'page');
     await execFileAsync(
       'pdftoppm',
-      ['-jpeg', '-r', '170', '-f', '1', '-l', String(pageCount), pdfAbsolutePath, prefix],
+      [
+        '-jpeg',
+        '-r',
+        '220',
+        '-jpegopt',
+        'quality=90',
+        '-f',
+        '1',
+        '-l',
+        String(pageCount),
+        pdfAbsolutePath,
+        prefix,
+      ],
       { timeout: 240_000, maxBuffer: 10 * 1024 * 1024 }
     );
     return;
@@ -62,7 +74,7 @@ async function runPdfToJpg(
   const outputPattern = path.join(tempDir, 'page-%d.jpg');
   await execFileAsync(
     'magick',
-    ['-density', '170', inputRange, '-quality', '88', outputPattern],
+    ['-density', '220', inputRange, '-quality', '90', outputPattern],
     { timeout: 300_000, maxBuffer: 10 * 1024 * 1024 }
   );
 }

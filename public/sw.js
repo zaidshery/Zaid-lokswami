@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lokswami-app-shell-v6';
+const CACHE_NAME = 'lokswami-app-shell-v7';
 const RUNTIME_CACHE_NAME = 'lokswami-runtime-v2';
 const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v2';
 const APP_SHELL_URLS = [
@@ -23,11 +23,22 @@ function isRuntimeCacheable(url) {
   );
 }
 
+function settleAll(promises) {
+  return Promise.all(
+    promises.map((promise) =>
+      Promise.resolve(promise).then(
+        () => undefined,
+        () => undefined
+      )
+    )
+  );
+}
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      await Promise.allSettled(
+      await settleAll(
         APP_SHELL_URLS.map(async (url) => {
           const response = await fetch(url, { cache: 'no-store' });
           if (!response.ok) {
