@@ -3642,13 +3642,12 @@ export default function EPaperPageClient({
                     <button
                       type="button"
                       onClick={() => {
-                        void shareActiveArticle();
+                        void shareActiveArticleOnWhatsApp();
                       }}
-                      aria-label={t.shareStory}
-                      className="reader-touch-button reader-focus-ring inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-[11px] font-bold text-zinc-800 transition hover:bg-zinc-100 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                      aria-label={t.whatsApp}
+                      className="reader-touch-button reader-focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
                     >
-                      <Share2 className="h-4 w-4" />
-                      <span>{t.shareWhatsApp}</span>
+                      <WhatsAppIcon className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
