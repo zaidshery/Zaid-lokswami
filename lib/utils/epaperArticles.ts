@@ -7,6 +7,12 @@ export interface NormalizedHotspot {
   h: number;
 }
 
+export function buildEpaperPlaceholderTitle(pageNumber: number, ordinal: number) {
+  const safePageNumber = Math.max(1, Math.floor(Number(pageNumber) || 1));
+  const safeOrdinal = Math.max(1, Math.floor(Number(ordinal) || 1));
+  return `Draft story - Page ${safePageNumber} #${safeOrdinal}`;
+}
+
 function clamp01(value: number) {
   return Math.min(1, Math.max(0, value));
 }

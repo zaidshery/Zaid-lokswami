@@ -250,17 +250,40 @@ export default function AdminEPaperDetailPage() {
       const payload = (await response.json().catch(() => ({}))) as ProcessingResponse;
       if (!response.ok || !payload.success || !payload.data) return null;
       setProcessingData(payload.data);
-      setEpaper((current) =>
-        current
-          ? {
-              ...current,
-              pageCount: payload.data?.pageCount || current.pageCount,
-              pages: payload.data?.pages || current.pages,
-              productionStatus:
-                payload.data?.productionStatus || current.productionStatus,
-            }
-          : current
-      );
+      const status = payload.data.job?.status;
+      const isTerminal =
+        status === 'completed' ||
+        status === 'completed_with_errors' ||
+        status === 'failed' ||
+        status === 'cancelled';
+
+      if (isTerminal) {
+        const editionResponse = await fetch(`/api/admin/epapers/${epaperId}`, {
+          headers: { ...getAuthHeader() },
+          cache: 'no-store',
+        });
+        const editionPayload = (await editionResponse
+          .json()
+          .catch(() => ({}))) as EpaperResponse;
+        if (editionResponse.ok && editionPayload.success && editionPayload.data) {
+          setEpaper(editionPayload.data);
+          setProductionStatus(
+            editionPayload.data.productionStatus || 'draft_upload'
+          );
+        }
+      } else {
+        setEpaper((current) =>
+          current
+            ? {
+                ...current,
+                pageCount: payload.data?.pageCount || current.pageCount,
+                pages: payload.data?.pages || current.pages,
+                productionStatus:
+                  payload.data?.productionStatus || current.productionStatus,
+              }
+            : current
+        );
+      }
       return payload.data;
     } catch {
       return null;

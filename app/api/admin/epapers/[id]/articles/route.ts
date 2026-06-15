@@ -15,6 +15,7 @@ import {
   invalidateEpaperQa,
 } from '@/lib/server/epaperWorkflowPolicy';
 import {
+  buildEpaperPlaceholderTitle,
   normalizeHotspot,
   resolveUniqueSlug,
   validateHotspot,
@@ -240,7 +241,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const pageNumber = parsePageNumber(
       source.pageNumber !== undefined ? String(source.pageNumber) : null
     );
-    const title = typeof source.title === 'string' ? source.title.trim() : '';
+    const requestedTitle =
+      typeof source.title === 'string' ? source.title.trim() : '';
     const slugInput = typeof source.slug === 'string' ? source.slug.trim() : '';
     const excerpt = typeof source.excerpt === 'string' ? source.excerpt.trim() : '';
     const contentHtml =
@@ -261,13 +263,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         { status: 400 }
       );
     }
-    if (!title) {
-      return NextResponse.json(
-        { success: false, error: 'title is required' },
-        { status: 400 }
-      );
-    }
-    if (title.length > 220) {
+    if (requestedTitle.length > 220) {
       return NextResponse.json(
         { success: false, error: 'title is too long (max 220 chars)' },
         { status: 400 }
@@ -300,6 +296,13 @@ export async function POST(req: NextRequest, context: RouteContext) {
         { status: 400 }
       );
     }
+
+    const existingPageStoryCount = requestedTitle
+      ? 0
+      : await EPaperArticle.countDocuments({ epaperId: id, pageNumber });
+    const title =
+      requestedTitle ||
+      buildEpaperPlaceholderTitle(pageNumber, existingPageStoryCount + 1);
 
     const slug = await resolveUniqueSlug(slugInput || title, async (candidate) => {
       const existing = await EPaperArticle.exists({ epaperId: id, slug: candidate });
