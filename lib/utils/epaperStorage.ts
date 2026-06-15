@@ -335,6 +335,25 @@ export function isAllowedAssetPath(assetPath: string) {
   return Boolean(resolveEpaperAssetPath(assetPath));
 }
 
+export function isTrustedEpaperAssetPath(assetPath: string) {
+  const value = assetPath.trim();
+  if (!isLikelyHttpUrl(value)) {
+    return Boolean(resolveEpaperAssetPath(value));
+  }
+
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === 'https:' &&
+      (parsed.hostname.endsWith('.digitaloceanspaces.com') ||
+        parsed.hostname.endsWith('.cdn.digitaloceanspaces.com')) &&
+      parsed.pathname.includes('/lokswami/epapers/')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeAssetPath(assetPath: string) {
   const resolved = resolveEpaperAssetPath(assetPath);
   return resolved ? resolved.relativePath : '';

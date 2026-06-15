@@ -413,7 +413,7 @@ async function loadMongoFeed(limits: Required<PublicHomeFeedLimits>) {
       .sort({ createdAt: -1, _id: -1 })
       .limit(limits.shorts)
       .lean(),
-    EPaper.find({ status: 'published' })
+    EPaper.find({ status: 'published', isCurrentRevision: { $ne: false } })
       .select('_id citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl pageCount pages')
       .sort({ publishDate: -1, _id: -1 })
       .limit(1)

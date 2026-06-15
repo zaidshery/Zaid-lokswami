@@ -4,12 +4,16 @@ import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import { getAdminSession } from '@/lib/auth/admin';
+import { canEditEpaper, canViewPage } from '@/lib/auth/permissions';
 import {
   buildEpaperActivityMessage,
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
-import { ensureEpaperStoryAudio } from '@/lib/server/epaperStoryAudioAutomation';
 import { applyEpaperWorkflowAutomation } from '@/lib/server/epaperWorkflowAutomation';
+import {
+  assertEpaperDraftEditable,
+  invalidateEpaperQa,
+} from '@/lib/server/epaperWorkflowPolicy';
 import {
   normalizeHotspot,
   resolveUniqueSlug,
@@ -144,6 +148,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
         { status: 401 }
       );
     }
+    if (!canViewPage(admin.role, 'epapers')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
 
     await connectDB();
     const { id } = await context.params;
@@ -186,6 +196,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
         { status: 401 }
       );
     }
+    if (!canEditEpaper(admin.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
 
     await connectDB();
     const { id } = await context.params;
@@ -198,12 +214,23 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const epaper = await EPaper.findById(id)
-      .select('_id pageCount title cityName publishDate')
+      .select('_id pageCount pages title cityName publishDate status productionStatus')
       .lean();
     if (!epaper) {
       return NextResponse.json(
         { success: false, error: 'E-paper not found' },
         { status: 404 }
+      );
+    }
+    try {
+      assertEpaperDraftEditable(epaper);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : 'Edition is immutable.',
+        },
+        { status: 409 }
       );
     }
 
@@ -302,30 +329,23 @@ export async function POST(req: NextRequest, context: RouteContext) {
       },
     });
 
-    const audio = await ensureEpaperStoryAudio({
-      paper: epaper,
-      story: created.toObject(),
+    const pages = (epaper.pages || []).map((page) =>
+      Number(page.pageNumber || 0) === pageNumber
+        ? {
+            ...page,
+            reviewStatus: 'pending',
+            reviewedAt: null,
+            reviewedBy: null,
+          }
+        : page
+    );
+    await EPaper.findByIdAndUpdate(id, { pages });
+    await invalidateEpaperQa({
+      epaperId: id,
       actor: admin,
-      source: 'admin-epaper-story-create',
-    }).catch((error) => ({
-      attempted: true,
-      ready: false,
-      error: error instanceof Error ? error.message : 'Story audio automation failed.',
-    }));
-
-    if (audio.attempted && audio.ready) {
-      await recordEpaperActivity({
-        epaperId: id,
-        actor: admin,
-        action: 'story_audio_generated',
-        message: buildEpaperActivityMessage({ action: 'story_audio_generated' }),
-        metadata: {
-          articleId: String(created._id || ''),
-          pageNumber,
-          reused: Boolean('reused' in audio && audio.reused),
-        },
-      });
-    }
+      reason: 'A mapped story was created.',
+      pageNumbers: [pageNumber],
+    });
 
     await applyEpaperWorkflowAutomation({
       epaperId: id,

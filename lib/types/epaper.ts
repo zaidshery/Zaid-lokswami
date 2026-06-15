@@ -2,6 +2,40 @@ export type EPaperStatus = 'draft' | 'published';
 export type EPaperReadinessStatus = 'ready' | 'needs-review' | 'not-ready';
 export const EPAPER_PAGE_REVIEW_STATUSES = ['pending', 'needs_attention', 'ready'] as const;
 export type EPaperPageReviewStatus = (typeof EPAPER_PAGE_REVIEW_STATUSES)[number];
+export const EPAPER_PAGE_TYPES = [
+  'editorial',
+  'advertisement',
+  'classified',
+  'photo',
+  'blank',
+] as const;
+export type EPaperPageType = (typeof EPAPER_PAGE_TYPES)[number];
+export const EPAPER_PAGE_PROCESSING_STATUSES = [
+  'pending',
+  'processing',
+  'ready',
+  'failed',
+] as const;
+export type EPaperPageProcessingStatus =
+  (typeof EPAPER_PAGE_PROCESSING_STATUSES)[number];
+export const EPAPER_PROCESSING_JOB_STATUSES = [
+  'queued',
+  'processing',
+  'completed',
+  'completed_with_errors',
+  'failed',
+  'cancelled',
+] as const;
+export type EPaperProcessingJobStatus =
+  (typeof EPAPER_PROCESSING_JOB_STATUSES)[number];
+export const EPAPER_OCR_SUGGESTION_STATUSES = [
+  'pending',
+  'accepted',
+  'rejected',
+  'suppressed',
+] as const;
+export type EPaperOcrSuggestionStatus =
+  (typeof EPAPER_OCR_SUGGESTION_STATUSES)[number];
 export type EPaperProductionStatus =
   | 'draft_upload'
   | 'pages_ready'
@@ -32,6 +66,11 @@ export interface EPaperPageData {
   imagePath?: string;
   width?: number;
   height?: number;
+  pageType?: EPaperPageType;
+  classificationNote?: string;
+  processingStatus?: EPaperPageProcessingStatus;
+  processingError?: string;
+  processedAt?: string | null;
   reviewStatus?: EPaperPageReviewStatus;
   reviewNote?: string;
   reviewedAt?: string | null;
@@ -52,8 +91,15 @@ export interface EPaperReadiness {
   mappedArticles: number;
   articlesWithReadableText: number;
   articlesMissingReadableText: number;
+  editorialPages: number;
+  nonEditorialPages: number;
+  pagesReadyForPublish: number;
+  pagesPendingQa: number;
+  pagesNeedingAttention: number;
   missingImagePages: number[];
   missingHotspotPages: number[];
+  pendingQaPages: number[];
+  invalidBlankPages: number[];
 }
 
 export interface EPaperAutomationInfo {
@@ -82,6 +128,11 @@ export interface EPaperRecord {
   pageCount: number;
   pages: EPaperPageData[];
   status: EPaperStatus;
+  familyId?: string;
+  revisionNumber?: number;
+  isCurrentRevision?: boolean;
+  supersedesId?: string;
+  publishedAt?: string | null;
   productionStatus?: EPaperProductionStatus;
   productionAssignee?: EPaperWorkflowActor | null;
   productionNotes?: EPaperWorkflowComment[];
@@ -139,4 +190,10 @@ const epaperPageReviewStatusSet = new Set<string>(EPAPER_PAGE_REVIEW_STATUSES);
 
 export function isEPaperPageReviewStatus(value: unknown): value is EPaperPageReviewStatus {
   return typeof value === 'string' && epaperPageReviewStatusSet.has(value);
+}
+
+const epaperPageTypeSet = new Set<string>(EPAPER_PAGE_TYPES);
+
+export function isEPaperPageType(value: unknown): value is EPaperPageType {
+  return typeof value === 'string' && epaperPageTypeSet.has(value);
 }

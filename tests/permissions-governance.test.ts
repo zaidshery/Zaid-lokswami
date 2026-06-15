@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   canCreateContent,
+  canCreateEpaper,
+  canDeleteEpaper,
   canEditContent,
+  canEditEpaper,
   canManageLeadershipReports,
   canManageSettings,
   canManageTeam,
+  canPrepareEpaperForPublish,
+  canPublishEpaper,
   canReadContent,
   canTransitionContent,
   canViewPage,
@@ -154,5 +159,17 @@ describe('governance permission helpers', () => {
     expect(canTransitionContent(superAdmin, baseContent, 'archive')).toBe(true);
     expect(canEditContent(admin, baseContent)).toBe(true);
     expect(canEditContent(superAdmin, baseContent)).toBe(true);
+  });
+
+  it('separates e-paper preparation from publishing authority', () => {
+    expect(canCreateEpaper(copyEditor.role)).toBe(false);
+    expect(canEditEpaper(copyEditor.role)).toBe(true);
+    expect(canPrepareEpaperForPublish(copyEditor.role)).toBe(true);
+    expect(canPublishEpaper(copyEditor.role)).toBe(false);
+    expect(canDeleteEpaper(copyEditor.role)).toBe(false);
+
+    expect(canCreateEpaper(admin.role)).toBe(true);
+    expect(canPublishEpaper(admin.role)).toBe(true);
+    expect(canDeleteEpaper(superAdmin.role)).toBe(true);
   });
 });

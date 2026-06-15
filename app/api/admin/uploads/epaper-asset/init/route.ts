@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
-import { canViewPage } from '@/lib/auth/permissions';
+import { canEditEpaper } from '@/lib/auth/permissions';
 import {
   createEpaperAssetUploadTarget,
   type EpaperAssetKind,
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    if (!canViewPage(admin.role, 'epapers')) {
+    if (!canEditEpaper(admin.role)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

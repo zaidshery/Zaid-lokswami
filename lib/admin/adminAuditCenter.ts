@@ -8,7 +8,10 @@ import {
 } from '@/lib/server/contentActivity';
 import { getAuditLogs } from '@/lib/security/auditLogger';
 import type { IAuditLog } from '@/lib/models/AuditLog';
-import type { WorkflowContentType, WorkflowStatus } from '@/lib/workflow/types';
+import type {
+  ContentActivityStatus,
+  WorkflowContentType,
+} from '@/lib/workflow/types';
 
 export type AdminAuditScope = 'all' | 'workflow' | 'reporting' | 'alerts' | 'security';
 export type AdminAuditContentFilter = 'all' | WorkflowContentType;
@@ -54,7 +57,7 @@ function formatContentTypeLabel(contentType: WorkflowContentType) {
   return contentType === 'epaper' ? 'E-Paper' : formatTitleCase(contentType);
 }
 
-function formatWorkflowStatusLabel(status: WorkflowStatus | null) {
+function formatWorkflowStatusLabel(status: ContentActivityStatus | null) {
   return status ? formatTitleCase(status) : 'Activity';
 }
 

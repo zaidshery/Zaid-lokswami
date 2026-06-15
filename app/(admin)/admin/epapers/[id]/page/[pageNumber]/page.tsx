@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   Loader2,
   Plus,
-  RefreshCw,
   Save,
   Sparkles,
   Trash2,
@@ -28,6 +27,7 @@ import { CmsWorkflowPriorityBadge, CmsWorkflowStatusBadge } from '@/components/a
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import type {
   EPaperArticleRecord,
+  EPaperPageType,
   EPaperPageReviewStatus,
   EPaperRecord,
 } from '@/lib/types/epaper';
@@ -82,6 +82,24 @@ type DraftArticleInput = {
   contentHtml: string;
   coverImagePath: string;
   ocrImageSource?: string;
+};
+
+type PersistedOcrSuggestion = {
+  _id: string;
+  runId: string;
+  title: string;
+  excerpt?: string;
+  contentHtml?: string;
+  confidence?: number;
+  warnings?: EpaperSuggestionWarning[];
+  duplicateReason?: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'suppressed';
+  createdAt?: string;
+};
+
+type OcrSuggestionsResponse = {
+  success?: boolean;
+  data?: PersistedOcrSuggestion[];
 };
 
 type CropHotspotResult = {
@@ -360,6 +378,10 @@ export default function EPaperPageHotspotEditor() {
   const [savingId, setSavingId] = useState('');
   const [deletingId, setDeletingId] = useState('');
   const [suggestions, setSuggestions] = useState<HotspotSuggestion[]>([]);
+  const [persistedSuggestions, setPersistedSuggestions] = useState<
+    PersistedOcrSuggestion[]
+  >([]);
+  const [reviewingSuggestionId, setReviewingSuggestionId] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [storyTtsById, setStoryTtsById] = useState<Record<string, StoryTtsState>>({});
@@ -367,6 +389,8 @@ export default function EPaperPageHotspotEditor() {
   const [loadingStoryTtsIds, setLoadingStoryTtsIds] = useState<Record<string, boolean>>({});
   const [pageReviewStatus, setPageReviewStatus] = useState<EPaperPageReviewStatus>('pending');
   const [pageReviewNote, setPageReviewNote] = useState('');
+  const [pageType, setPageType] = useState<EPaperPageType>('editorial');
+  const [classificationNote, setClassificationNote] = useState('');
   const [savingPageReview, setSavingPageReview] = useState(false);
 
   const pageImageMeta = useMemo(() => {
@@ -412,23 +436,39 @@ export default function EPaperPageHotspotEditor() {
   );
   const pageReadyBlockers = useMemo(() => {
     const blockers: string[] = [];
-    if (!articles.length) blockers.push('map at least one story');
-    if (unreadableArticleCount > 0) {
+    if (pageType === 'editorial' && !articles.length) {
+      blockers.push('map at least one story');
+    }
+    if (pageType === 'editorial' && unreadableArticleCount > 0) {
       blockers.push(
         `${unreadableArticleCount} mapped stor${
           unreadableArticleCount === 1 ? 'y needs' : 'ies need'
         } readable text`
       );
     }
-    if (activeSuggestionCount > 0) {
+    const pendingPersistedSuggestions = persistedSuggestions.filter(
+      (suggestion) => suggestion.status === 'pending'
+    ).length;
+    const unresolvedSuggestions = activeSuggestionCount + pendingPersistedSuggestions;
+    if (pageType === 'editorial' && unresolvedSuggestions > 0) {
       blockers.push(
-        `${activeSuggestionCount} OCR suggestion${
-          activeSuggestionCount === 1 ? ' is' : 's are'
+        `${unresolvedSuggestions} OCR suggestion${
+          unresolvedSuggestions === 1 ? ' is' : 's are'
         } still unresolved`
       );
     }
+    if (pageType === 'blank' && !classificationNote.trim()) {
+      blockers.push('add a reviewer note explaining why the page is blank');
+    }
     return blockers;
-  }, [activeSuggestionCount, articles.length, unreadableArticleCount]);
+  }, [
+    activeSuggestionCount,
+    articles.length,
+    classificationNote,
+    pageType,
+    persistedSuggestions,
+    unreadableArticleCount,
+  ]);
   const manualDraftNeedsHeadline = Boolean(draftHotspot) && !draftInput.title.trim();
   const manualDraftNeedsBody =
     Boolean(draftHotspot) && !hasReadableContentInput(draftInput.contentHtml);
@@ -439,7 +479,15 @@ export default function EPaperPageHotspotEditor() {
   useEffect(() => {
     setPageReviewStatus(pageImageMeta?.reviewStatus || 'pending');
     setPageReviewNote(pageImageMeta?.reviewNote || '');
-  }, [pageImageMeta?.reviewNote, pageImageMeta?.reviewStatus, pageNumber]);
+    setPageType(pageImageMeta?.pageType || 'editorial');
+    setClassificationNote(pageImageMeta?.classificationNote || '');
+  }, [
+    pageImageMeta?.classificationNote,
+    pageImageMeta?.pageType,
+    pageImageMeta?.reviewNote,
+    pageImageMeta?.reviewStatus,
+    pageNumber,
+  ]);
 
   const fetchStoryTtsStatus = useCallback(
     async (storyId: string): Promise<StoryTtsState> => {
@@ -503,17 +551,23 @@ export default function EPaperPageHotspotEditor() {
     setLoading(true);
     setError('');
     try {
-      const [epaperRes, articlesRes] = await Promise.all([
+      const [epaperRes, articlesRes, suggestionsRes] = await Promise.all([
         fetch(`/api/admin/epapers/${epaperId}`, {
           headers: { ...getAuthHeader() },
         }),
         fetch(`/api/admin/epapers/${epaperId}/articles?pageNumber=${pageNumber}`, {
           headers: { ...getAuthHeader() },
         }),
+        fetch(`/api/admin/epapers/${epaperId}/ocr?pageNumber=${pageNumber}`, {
+          headers: { ...getAuthHeader() },
+          cache: 'no-store',
+        }),
       ]);
 
       const epaperPayload = (await epaperRes.json()) as EpaperResponse;
       const articlesPayload = (await articlesRes.json()) as ArticlesResponse;
+      const suggestionsPayload =
+        (await suggestionsRes.json().catch(() => ({}))) as OcrSuggestionsResponse;
 
       if (!epaperRes.ok || !epaperPayload.success || !epaperPayload.data) {
         throw new Error(epaperPayload.error || 'Failed to load e-paper');
@@ -522,6 +576,11 @@ export default function EPaperPageHotspotEditor() {
       setEpaper(epaperPayload.data);
       const nextArticles = Array.isArray(articlesPayload.data) ? articlesPayload.data : [];
       setArticles(nextArticles);
+      setPersistedSuggestions(
+        suggestionsRes.ok && suggestionsPayload.success && Array.isArray(suggestionsPayload.data)
+          ? suggestionsPayload.data
+          : []
+      );
       setSavedStoryTtsSignatures(
         Object.fromEntries(
           nextArticles.map((article) => [article._id, buildStoryListenSignature(article)])
@@ -532,6 +591,7 @@ export default function EPaperPageHotspotEditor() {
       setError(toErrorMessage(err, 'Failed to load page editor data'));
       setEpaper(null);
       setArticles([]);
+      setPersistedSuggestions([]);
       setSavedStoryTtsSignatures({});
       setStoryTtsById({});
     } finally {
@@ -1127,6 +1187,10 @@ export default function EPaperPageHotspotEditor() {
       setError(`Resolve before marking ready: ${pageReadyBlockers.join('; ')}`);
       return;
     }
+    if (pageType === 'blank' && !classificationNote.trim()) {
+      setError('Add a reviewer note explaining why this page is blank.');
+      return;
+    }
 
     setSavingPageReview(true);
     setError('');
@@ -1143,6 +1207,8 @@ export default function EPaperPageHotspotEditor() {
           pages: [
             {
               pageNumber,
+              pageType,
+              classificationNote: classificationNote.trim(),
               reviewStatus: pageReviewStatus,
               reviewNote: pageReviewNote,
             },
@@ -1160,52 +1226,6 @@ export default function EPaperPageHotspotEditor() {
       setError(toErrorMessage(err, 'Failed to save page review'));
     } finally {
       setSavingPageReview(false);
-    }
-  };
-
-  const regenerateStoryTts = async (article: EPaperArticleRecord) => {
-    setLoadingStoryTtsIds((current) => ({ ...current, [article._id]: true }));
-    setError('');
-    setNotice('');
-
-    try {
-      const response = await fetch(
-        `/api/admin/epapers/${encodeURIComponent(epaperId)}/articles/${encodeURIComponent(article._id)}/tts?force=1`,
-        {
-          method: 'POST',
-          headers: {
-            ...getAuthHeader(),
-          },
-        }
-      );
-      const payload = (await response.json().catch(() => ({}))) as {
-        success?: boolean;
-        error?: string;
-        data?: StoryTtsResponse;
-      };
-
-      if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error || 'Failed to generate story listen audio');
-      }
-
-      setStoryTtsById((current) => ({
-        ...current,
-        [article._id]: {
-          eligible: Boolean(payload.data?.eligible),
-          ready: Boolean(payload.data?.ready),
-          asset: payload.data?.asset || null,
-          message: String(payload.data?.message || '').trim(),
-        },
-      }));
-      setNotice(`Story listen audio updated for "${article.title.trim() || 'Untitled story'}".`);
-    } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to generate story listen audio'));
-    } finally {
-      setLoadingStoryTtsIds((current) => {
-        const next = { ...current };
-        delete next[article._id];
-        return next;
-      });
     }
   };
 
@@ -1251,6 +1271,43 @@ export default function EPaperPageHotspotEditor() {
         delete next[article._id];
         return next;
       });
+    }
+  };
+
+  const reviewPersistedSuggestion = async (
+    suggestionId: string,
+    action: 'accept' | 'reject'
+  ) => {
+    setReviewingSuggestionId(suggestionId);
+    setError('');
+    try {
+      const response = await fetch(
+        `/api/admin/epapers/${encodeURIComponent(
+          epaperId
+        )}/ocr/${encodeURIComponent(suggestionId)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({ action }),
+        }
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || `Failed to ${action} OCR suggestion.`);
+      }
+      setNotice(
+        action === 'accept'
+          ? 'OCR suggestion accepted and mapped as a story.'
+          : 'OCR suggestion rejected.'
+      );
+      await fetchData();
+    } catch (err) {
+      setError(toErrorMessage(err, `Failed to ${action} OCR suggestion.`));
+    } finally {
+      setReviewingSuggestionId('');
     }
   };
 
@@ -1527,6 +1584,9 @@ export default function EPaperPageHotspotEditor() {
               >
                 Page QA {formatPageReviewStatusLabel(pageReviewStatus)}
               </span>
+              <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
+                {pageType.charAt(0).toUpperCase() + pageType.slice(1)}
+              </span>
               <span
                 className={`rounded-full px-3 py-1 text-xs font-medium ${getEpaperPageQualityTone(
                   pageQuality.level
@@ -1602,7 +1662,7 @@ export default function EPaperPageHotspotEditor() {
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Page QA</p>
             <h2 className="mt-2 text-lg font-semibold text-gray-900">Reviewer note and status</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Capture OCR issues, missing story mapping, and whether this page is clear for edition QA.
+              Classify the page, capture review notes, and decide whether it is clear for edition QA.
             </p>
           </div>
           {pageImageMeta?.reviewedAt || pageImageMeta?.reviewedBy ? (
@@ -1617,7 +1677,23 @@ export default function EPaperPageHotspotEditor() {
           ) : null}
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-gray-600">Page type</span>
+            <select
+              value={pageType}
+              onChange={(event) => setPageType(event.target.value as EPaperPageType)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+              disabled={savingPageReview}
+            >
+              <option value="editorial">Editorial</option>
+              <option value="advertisement">Advertisement</option>
+              <option value="classified">Classified</option>
+              <option value="photo">Photo</option>
+              <option value="blank">Blank</option>
+            </select>
+          </label>
+
           <label>
             <span className="mb-1 block text-xs font-semibold text-gray-600">Review status</span>
             <select
@@ -1630,6 +1706,20 @@ export default function EPaperPageHotspotEditor() {
               <option value="needs_attention">Needs attention</option>
               <option value="ready">Ready</option>
             </select>
+          </label>
+
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-gray-600">
+              Classification note {pageType === 'blank' ? '(required)' : '(optional)'}
+            </span>
+            <textarea
+              value={classificationNote}
+              onChange={(event) => setClassificationNote(event.target.value)}
+              rows={3}
+              placeholder="Explain special handling, especially for intentionally blank pages."
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+              disabled={savingPageReview}
+            />
           </label>
 
           <label>
@@ -1779,6 +1869,87 @@ export default function EPaperPageHotspotEditor() {
         </div>
 
         <div className="space-y-4">
+          {persistedSuggestions.length > 0 ? (
+            <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                    Server OCR review
+                  </p>
+                  <h2 className="mt-1 text-base font-semibold text-blue-950">
+                    Persisted suggestions
+                  </h2>
+                </div>
+                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                  {
+                    persistedSuggestions.filter(
+                      (suggestion) => suggestion.status === 'pending'
+                    ).length
+                  }{' '}
+                  pending
+                </span>
+              </div>
+              <div className="mt-3 space-y-3">
+                {persistedSuggestions.map((suggestion) => (
+                  <article
+                    key={suggestion._id}
+                    className="rounded-lg border border-blue-200 bg-white p-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900">
+                          {suggestion.title || 'Untitled OCR suggestion'}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-600">
+                          Confidence {Math.round(Number(suggestion.confidence || 0))}% |
+                          Status {suggestion.status} | Run {suggestion.runId.slice(0, 8)}
+                        </p>
+                      </div>
+                      {suggestion.status === 'pending' ? (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void reviewPersistedSuggestion(suggestion._id, 'accept')
+                            }
+                            disabled={reviewingSuggestionId === suggestion._id}
+                            className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-70"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void reviewPersistedSuggestion(suggestion._id, 'reject')
+                            }
+                            disabled={reviewingSuggestionId === suggestion._id}
+                            className="rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 disabled:opacity-70"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                    {suggestion.duplicateReason ? (
+                      <p className="mt-2 text-xs text-amber-700">
+                        Duplicate check: {suggestion.duplicateReason}
+                      </p>
+                    ) : null}
+                    {suggestion.warnings?.length ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-gray-600">
+                        {suggestion.warnings.map((warning, index) => (
+                          <li key={`${suggestion._id}-${warning.code}-${index}`}>
+                            {warning.label}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -2705,17 +2876,9 @@ export default function EPaperPageHotspotEditor() {
                           <p className="text-sm font-semibold text-gray-900">Story Listen Audio</p>
                         </div>
                         <p className="mt-1 text-xs text-gray-700">
-                          {storyTtsNeedsSave
-                            ? 'Save this story first. Listen audio follows the last saved title and readable text.'
-                            : storyTtsStatus === 'ready'
-                              ? 'Reusable story listen audio is ready.'
-                              : storyTtsStatus === 'failed'
-                                ? 'The last story listen-audio generation failed. Try again.'
-                                : storyTtsStatus === 'stale'
-                                  ? 'The saved story listen-audio asset needs regeneration.'
-                                  : storyTtsStatus === 'disabled'
-                                    ? 'Add an excerpt or article text, then save before generating.'
-                                    : 'No reusable story listen audio is ready yet for the current saved text.'}
+                          {storyTtsStatus === 'ready'
+                            ? 'Manual story listen audio is ready.'
+                            : 'Automatic audio generation is disabled. Upload a prepared audio file manually.'}
                         </p>
                         {storyTts?.asset?.generatedAt ? (
                           <p className="mt-1 text-xs text-gray-500">
@@ -2763,19 +2926,6 @@ export default function EPaperPageHotspotEditor() {
                             className="sr-only"
                           />
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => void regenerateStoryTts(article)}
-                          disabled={isSaving || isDeleting || isLoadingTts || storyTtsNeedsSave || !storyHasReadableText}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-70"
-                        >
-                          {isLoadingTts ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          )}
-                          {storyTts?.asset?.audioUrl ? 'Regenerate Audio' : 'Generate Audio'}
-                        </button>
                       </div>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
-import { canViewPage } from '@/lib/auth/permissions';
+import { canEditEpaper } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
@@ -15,6 +15,7 @@ import {
   buildEpaperStoryTtsText,
   saveManualTtsAsset,
 } from '@/lib/server/ttsAssets';
+import { assertEpaperDraftEditable } from '@/lib/server/epaperWorkflowPolicy';
 
 export const runtime = 'nodejs';
 
@@ -28,6 +29,8 @@ type StorySource = {
   title: string;
   excerpt: string;
   contentHtml: string;
+  paperStatus: string;
+  productionStatus: string;
 };
 
 function parseKind(value: unknown): EpaperAssetKind | null {
@@ -70,7 +73,9 @@ async function loadStorySource(paperId: string, storyId: string): Promise<StoryS
   }
 
   const [paper, story] = await Promise.all([
-    EPaper.findById(paperId).select('_id title cityName publishDate'),
+    EPaper.findById(paperId).select(
+      '_id title cityName publishDate status productionStatus'
+    ),
     EPaperArticle.findOne({ _id: storyId, epaperId: paperId }).select(
       '_id epaperId pageNumber title excerpt contentHtml'
     ),
@@ -91,6 +96,8 @@ async function loadStorySource(paperId: string, storyId: string): Promise<StoryS
     title: String(story.title || '').trim(),
     excerpt: String(story.excerpt || '').trim(),
     contentHtml: String(story.contentHtml || '').trim(),
+    paperStatus: String(paper.status || ''),
+    productionStatus: String(paper.productionStatus || ''),
   };
 }
 
@@ -100,7 +107,7 @@ export async function POST(req: NextRequest) {
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    if (!canViewPage(admin.role, 'epapers')) {
+    if (!canEditEpaper(admin.role)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -139,6 +146,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Story not found for manual audio upload.' },
         { status: 404 }
+      );
+    }
+    try {
+      assertEpaperDraftEditable({
+        status: story.paperStatus,
+        productionStatus: story.productionStatus,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : 'Edition is immutable.',
+        },
+        { status: 409 }
       );
     }
 

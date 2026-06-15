@@ -191,14 +191,37 @@ async function getMongoEpaperMetadata(query: PublicEpaperMetadataQuery) {
 
   try {
     if (query.id?.trim()) {
-      if (!Types.ObjectId.isValid(query.id)) return null;
-      const record = await EPaper.findOne({ _id: query.id, status: 'published' })
+      const requested = Types.ObjectId.isValid(query.id)
+        ? await EPaper.findById(query.id)
+            .select('_id familyId status isCurrentRevision')
+            .lean()
+        : await EPaper.findOne({
+            familyId: query.id.trim(),
+            status: 'published',
+            isCurrentRevision: true,
+          })
+            .select('_id familyId status isCurrentRevision')
+            .lean();
+      if (!requested) return null;
+      const record =
+        requested.status === 'published' && requested.isCurrentRevision !== false
+          ? await EPaper.findById(requested._id)
+              .select('_id citySlug cityName title publishDate thumbnailPath thumbnail pageCount pages')
+              .lean()
+          : await EPaper.findOne({
+              familyId: String(requested.familyId || requested._id),
+              status: 'published',
+              isCurrentRevision: true,
+            })
         .select('_id citySlug cityName title publishDate thumbnailPath thumbnail pageCount pages')
         .lean();
       return mapMongoEpaper(record);
     }
 
-    const mongoQuery: Record<string, unknown> = { status: 'published' };
+    const mongoQuery: Record<string, unknown> = {
+      status: 'published',
+      isCurrentRevision: { $ne: false },
+    };
     if (query.citySlug?.trim()) mongoQuery.citySlug = query.citySlug.trim().toLowerCase();
     const dateRange = query.publishDate ? getDateRange(query.publishDate) : null;
     if (dateRange) mongoQuery.publishDate = dateRange;

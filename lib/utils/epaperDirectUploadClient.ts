@@ -68,7 +68,7 @@ export async function getImageDimensionsFromFile(file: File) {
   });
 }
 
-function uploadFileToSignedUrl(options: {
+export function uploadFileToSignedUrl(options: {
   file: File;
   uploadUrl: string;
   uploadHeaders?: Record<string, string>;

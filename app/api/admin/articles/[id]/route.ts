@@ -19,6 +19,7 @@ import {
 import { normalizeArticleSourceType } from '@/lib/content/newsroomPublishing';
 import {
   canDeleteContent,
+  canEditEpaper,
   canEditContent,
   canReadContent,
   canTransitionContent,
@@ -40,12 +41,11 @@ import {
   buildArticleActivityMessage,
   recordArticleActivity,
 } from '@/lib/server/articleActivity';
-import {
-  buildEpaperActivityMessage,
-  recordEpaperActivity,
-} from '@/lib/server/epaperActivity';
-import { ensureEpaperStoryAudio } from '@/lib/server/epaperStoryAudioAutomation';
 import { applyEpaperWorkflowAutomation } from '@/lib/server/epaperWorkflowAutomation';
+import {
+  assertEpaperDraftEditable,
+  invalidateEpaperQa,
+} from '@/lib/server/epaperWorkflowPolicy';
 import {
   clearStoryLinkedArticle,
   syncStoryLinkedArticle,
@@ -590,6 +590,29 @@ async function updateEpaperArticleById(
     };
   }
 
+  const parentEpaper = await EPaper.findById(current.epaperId)
+    .select('_id status productionStatus pageCount pages')
+    .lean();
+  if (!parentEpaper) {
+    return {
+      ok: false as const,
+      status: 404,
+      payload: { success: false, error: 'E-paper not found' },
+    };
+  }
+  try {
+    assertEpaperDraftEditable(parentEpaper);
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: 409,
+      payload: {
+        success: false,
+        error: error instanceof Error ? error.message : 'Edition is immutable.',
+      },
+    };
+  }
+
   const input = normalizeEpaperArticleInput(body);
   const validationError = validateEpaperArticleInput(input, isPut);
   if (validationError) {
@@ -626,8 +649,7 @@ async function updateEpaperArticleById(
   }
 
   if (updates.pageNumber !== undefined) {
-    const epaper = await EPaper.findById(current.epaperId).select('pageCount').lean();
-    const pageCount = Number(epaper?.pageCount || 0);
+    const pageCount = Number(parentEpaper.pageCount || 0);
     const pageNumber = Number(updates.pageNumber || 0);
     if (pageCount > 0 && pageNumber > pageCount) {
       return {
@@ -655,42 +677,31 @@ async function updateEpaperArticleById(
   }
 
   if (actor) {
-    const epaper = await EPaper.findById(updated.epaperId)
-      .select('_id title cityName publishDate')
-      .lean();
-
-    if (epaper) {
-      const audio = await ensureEpaperStoryAudio({
-        paper: epaper,
-        story: updated,
-        actor,
-        source: 'admin-epaper-story-update',
-      }).catch((error) => ({
-        attempted: true,
-        ready: false,
-        error: error instanceof Error ? error.message : 'Story audio automation failed.',
-      }));
-
-      if (audio.attempted && audio.ready) {
-        await recordEpaperActivity({
-          epaperId: String(updated.epaperId || ''),
-          actor,
-          action: 'story_audio_generated',
-          message: buildEpaperActivityMessage({ action: 'story_audio_generated' }),
-          metadata: {
-            articleId: String(updated._id || ''),
-            pageNumber: Number(updated.pageNumber || 1),
-            reused: Boolean('reused' in audio && audio.reused),
-          },
-        });
-      }
-
-      await applyEpaperWorkflowAutomation({
-        epaperId: String(updated.epaperId || ''),
-        actor,
-        reason: 'A mapped e-paper story was updated.',
-      });
-    }
+    const changedPages = Array.from(
+      new Set([Number(current.pageNumber || 0), Number(updated.pageNumber || 0)])
+    ).filter(Boolean);
+    const nextPages = (parentEpaper.pages || []).map((page) =>
+      changedPages.includes(Number(page.pageNumber || 0))
+        ? {
+            ...page,
+            reviewStatus: 'pending',
+            reviewedAt: null,
+            reviewedBy: null,
+          }
+        : page
+    );
+    await EPaper.findByIdAndUpdate(updated.epaperId, { pages: nextPages });
+    await invalidateEpaperQa({
+      epaperId: String(updated.epaperId || ''),
+      actor,
+      reason: 'Mapped story content or hotspot changed.',
+      pageNumbers: changedPages,
+    });
+    await applyEpaperWorkflowAutomation({
+      epaperId: String(updated.epaperId || ''),
+      actor,
+      reason: 'A mapped e-paper story was updated.',
+    });
   }
 
   return {
@@ -716,7 +727,7 @@ export async function GET(
     const { id } = await context.params;
 
     if (isEpaperKind(req)) {
-      if (!canViewPage(user.role, 'epapers')) {
+      if (!canEditEpaper(user.role)) {
         return NextResponse.json(
           { success: false, error: 'Forbidden' },
           { status: 403 }
@@ -795,7 +806,7 @@ export async function GET(
 
     const epaperArticle = await findEpaperArticle(id);
     if (epaperArticle) {
-      if (!canViewPage(user.role, 'epapers')) {
+      if (!canEditEpaper(user.role)) {
         return NextResponse.json(
           { success: false, error: 'Forbidden' },
           { status: 403 }
@@ -836,7 +847,7 @@ export async function PATCH(
     }
 
     if (isEpaperKind(req)) {
-      if (!canViewPage(user.role, 'epapers')) {
+      if (!canEditEpaper(user.role)) {
         return NextResponse.json(
           { success: false, error: 'Forbidden' },
           { status: 403 }
@@ -991,7 +1002,7 @@ export async function PATCH(
 
       const current = (await Article.findById(id).lean()) as LeanArticleRecord | null;
       if (!current) {
-        if (!canViewPage(user.role, 'epapers')) {
+        if (!canEditEpaper(user.role)) {
           return NextResponse.json(
             { success: false, error: 'Forbidden' },
             { status: 403 }
@@ -1224,7 +1235,7 @@ export async function PATCH(
 
     const current = (await Article.findById(id).lean()) as LeanArticleRecord | null;
     if (!current) {
-      if (!canViewPage(user.role, 'epapers')) {
+      if (!canEditEpaper(user.role)) {
         return NextResponse.json(
           { success: false, error: 'Forbidden' },
           { status: 403 }
@@ -1354,7 +1365,7 @@ export async function PUT(
     }
 
     if (isEpaperKind(req)) {
-      if (!canViewPage(user.role, 'epapers')) {
+      if (!canEditEpaper(user.role)) {
         return NextResponse.json(
           { success: false, error: 'Forbidden' },
           { status: 403 }
@@ -1482,7 +1493,7 @@ export async function PUT(
 
     const current = (await Article.findById(id).lean()) as LeanArticleRecord | null;
     if (!current) {
-      if (!canViewPage(user.role, 'epapers')) {
+        if (!canEditEpaper(user.role)) {
         return NextResponse.json(
           { success: false, error: 'Forbidden' },
           { status: 403 }
@@ -1604,15 +1615,8 @@ export async function DELETE(
         { status: 401 }
       );
     }
-    if (!canDeleteContent(user)) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden' },
-        { status: 403 }
-      );
-    }
-
     if (isEpaperKind(req)) {
-      if (!canViewPage(user.role, 'epapers')) {
+      if (!canEditEpaper(user.role)) {
         return NextResponse.json(
           { success: false, error: 'Forbidden' },
           { status: 403 }
@@ -1625,6 +1629,31 @@ export async function DELETE(
           { status: 400 }
         );
       }
+      const existing = await EPaperArticle.findById(id).lean();
+      if (!existing) {
+        return NextResponse.json(
+          { success: false, error: 'Article not found' },
+          { status: 404 }
+        );
+      }
+      const parent = await EPaper.findById(existing.epaperId)
+        .select('_id status productionStatus pages')
+        .lean();
+      if (!parent) {
+        return NextResponse.json(
+          { success: false, error: 'E-paper not found' },
+          { status: 404 }
+        );
+      }
+      try {
+        assertEpaperDraftEditable(parent);
+      } catch (error) {
+        return NextResponse.json(
+          { success: false, error: error instanceof Error ? error.message : 'Edition is immutable.' },
+          { status: 409 }
+        );
+      }
+
       const deleted = await EPaperArticle.findByIdAndDelete(id).lean();
       if (!deleted) {
         return NextResponse.json(
@@ -1632,10 +1661,35 @@ export async function DELETE(
           { status: 404 }
         );
       }
+      const pageNumber = Number(existing.pageNumber || 0);
+      const pages = (parent.pages || []).map((page) =>
+        Number(page.pageNumber || 0) === pageNumber
+          ? {
+              ...page,
+              reviewStatus: 'pending',
+              reviewedAt: null,
+              reviewedBy: null,
+            }
+          : page
+      );
+      await EPaper.findByIdAndUpdate(existing.epaperId, { pages });
+      await invalidateEpaperQa({
+        epaperId: String(existing.epaperId),
+        actor: user,
+        reason: 'A mapped story was deleted.',
+        pageNumbers: [pageNumber],
+      });
       return NextResponse.json({
         success: true,
         message: 'Article deleted successfully',
       });
+    }
+
+    if (!canDeleteContent(user)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
     }
 
     if (!canViewPage(user.role, 'article_edit')) {
@@ -1710,14 +1764,6 @@ export async function DELETE(
           articleId: id,
         });
       }
-      return NextResponse.json({
-        success: true,
-        message: 'Article deleted successfully',
-      });
-    }
-
-    const epaperArticle = await EPaperArticle.findByIdAndDelete(id).lean();
-    if (epaperArticle) {
       return NextResponse.json({
         success: true,
         message: 'Article deleted successfully',

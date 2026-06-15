@@ -84,6 +84,12 @@ export function buildEpaperActivityMessage(input: ActivityMessageInput) {
       return 'Page image uploaded.';
     case 'page_images_generated':
       return 'Page images generated from PDF.';
+    case 'pdf_processing_queued':
+      return 'PDF page conversion queued.';
+    case 'pdf_processing_completed':
+      return 'PDF page conversion completed.';
+    case 'pdf_processing_failed':
+      return 'PDF page conversion needs attention.';
     case 'cover_thumbnail_updated':
       return 'Cover preview updated from page 1.';
     case 'ocr_auto_detected':
@@ -94,6 +100,16 @@ export function buildEpaperActivityMessage(input: ActivityMessageInput) {
       return 'A mapped e-paper story was created.';
     case 'page_review_updated':
       return 'Page review updated.';
+    case 'request_changes':
+      return 'QA requested editorial changes.';
+    case 'qa_invalidated':
+      return 'Edition returned to QA after content changed.';
+    case 'revision_created':
+      return 'A draft replacement revision was created.';
+    case 'ocr_suggestion_accepted':
+      return 'An OCR suggestion was accepted as a story.';
+    case 'ocr_suggestion_rejected':
+      return 'An OCR suggestion was rejected.';
     default:
       return 'E-paper activity recorded.';
   }

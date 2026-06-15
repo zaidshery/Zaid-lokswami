@@ -64,7 +64,7 @@ describe('e-paper image automation', () => {
     });
   });
 
-  it('does not overwrite custom cover or skip ahead from later workflow stages', () => {
+  it('keeps page one authoritative without skipping later workflow stages', () => {
     expect(
       buildEpaperImageAutomationUpdates({
         pageCount: 1,
@@ -73,7 +73,10 @@ describe('e-paper image automation', () => {
         currentStatus: 'draft',
         pages: [{ pageNumber: 1, imagePath: '/page-1.jpg' }],
       })
-    ).toEqual({});
+    ).toEqual({
+      thumbnailPath: '/page-1.jpg',
+      thumbnail: '/page-1.jpg',
+    });
   });
 });
 
@@ -102,5 +105,60 @@ describe('e-paper readiness automation inputs', () => {
     expect(readiness.pagesMissingImage).toBe(0);
     expect(readiness.pagesMissingHotspots).toBe(0);
     expect(readiness.articlesMissingReadableText).toBe(0);
+  });
+
+  it('does not require stories or hotspots for non-editorial pages', () => {
+    const readiness = buildEpaperReadiness({
+      epaper: {
+        _id: 'paper-2',
+        cityName: 'Indore',
+        citySlug: 'indore',
+        pageCount: 2,
+        pdfPath: '/uploads/paper.pdf',
+        thumbnailPath: '/page-1.jpg',
+        pages: [
+          {
+            pageNumber: 1,
+            imagePath: '/page-1.jpg',
+            pageType: 'advertisement',
+            reviewStatus: 'ready',
+          },
+          {
+            pageNumber: 2,
+            imagePath: '/page-2.jpg',
+            pageType: 'photo',
+            reviewStatus: 'ready',
+          },
+        ],
+      },
+      articles: [],
+    });
+
+    expect(readiness.pagesMissingHotspots).toBe(0);
+    expect(readiness.blockers).toEqual([]);
+  });
+
+  it('requires a classification note for blank pages', () => {
+    const readiness = buildEpaperReadiness({
+      epaper: {
+        _id: 'paper-3',
+        cityName: 'Indore',
+        citySlug: 'indore',
+        pageCount: 1,
+        pdfPath: '/uploads/paper.pdf',
+        thumbnailPath: '/page-1.jpg',
+        pages: [
+          {
+            pageNumber: 1,
+            imagePath: '/page-1.jpg',
+            pageType: 'blank',
+            reviewStatus: 'ready',
+          },
+        ],
+      },
+      articles: [],
+    });
+
+    expect(readiness.blockers.join(' ').toLowerCase()).toContain('blank');
   });
 });

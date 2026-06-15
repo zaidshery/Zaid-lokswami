@@ -47,11 +47,14 @@
     "seed": "node scripts/seed.js",
     "hash-password": "ts-node --files scripts/hash-password.ts",
     "migrate:epapers": "ts-node scripts/migrate-epapers-to-v2.ts",
+    "migrate:epaper-workflow-v3": "ts-node scripts/migrate-epaper-workflow-v3.ts",
+    "migrate:epaper-workflow-v3:write": "ts-node scripts/migrate-epaper-workflow-v3.ts --write",
     "migrate:four-role-admin": "node scripts/migrate-four-role-admin.js",
     "migrate:four-role-admin:write": "node scripts/migrate-four-role-admin.js --write"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",
+    "@napi-rs/canvas": "^1.0.0",
     "autoprefixer": "^10.4.0",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
@@ -63,6 +66,7 @@
     "mongoose": "^8.23.0",
     "next": "15.5.12",
     "next-auth": "^5.0.0-beta.30",
+    "pdfjs-dist": "^4.10.38",
     "postcss": "^8.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
