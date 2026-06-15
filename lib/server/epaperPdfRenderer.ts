@@ -63,9 +63,16 @@ async function installPdfCanvasGlobals() {
   return canvasModule;
 }
 
+async function loadPdfJs() {
+  const globalScope = globalThis as unknown as Record<string, unknown>;
+  globalScope.pdfjsWorker ||=
+    await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
+  return import('pdfjs-dist/legacy/build/pdf.mjs');
+}
+
 export async function getPdfPageCountFromBuffer(pdfBuffer: Buffer) {
   await installPdfCanvasGlobals();
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const pdfjs = await loadPdfJs();
   const document = await pdfjs.getDocument({
     data: copyPdfBytes(pdfBuffer),
     useSystemFonts: true,
@@ -80,7 +87,7 @@ export async function renderPdfPageToJpeg(input: {
   pageNumber: number;
 }) {
   const canvasModule = await installPdfCanvasGlobals();
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const pdfjs = await loadPdfJs();
   const document = await pdfjs.getDocument({
     data: copyPdfBytes(input.pdfBuffer),
     useSystemFonts: true,
