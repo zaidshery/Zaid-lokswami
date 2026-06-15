@@ -61,7 +61,10 @@ import {
   type SavedEpaperPaperInput,
   type SavedEpaperStoryEntry,
 } from '@/lib/utils/epaperReaderLibrary';
-import { resolveEpaperPreviewMaxZoom } from '@/lib/utils/epaperPageImage';
+import {
+  resolveEpaperPreviewMaxZoom,
+  resolveEpaperTouchPreviewMaxZoom,
+} from '@/lib/utils/epaperPageImage';
 import { renderPdfPagePreviewFromUrl } from '@/lib/utils/pdfThumbnailClient';
 import {
   type EPaperCityFilter,
@@ -1454,7 +1457,9 @@ export default function EPaperPageClient({
   const previewNaturalWidth =
     previewImageMetrics.src === previewSrc ? previewImageMetrics.naturalWidth : 0;
   const previewSourceWidth = previewNaturalWidth || Number(activePageMeta?.width || 0);
-  const maxPreviewZoom = resolveEpaperPreviewMaxZoom(previewSourceWidth);
+  const maxPreviewZoom = isCoarsePointer
+    ? resolveEpaperTouchPreviewMaxZoom(previewSourceWidth)
+    : resolveEpaperPreviewMaxZoom(previewSourceWidth);
   const isPreviewZoomed = previewZoom > MIN_PREVIEW_ZOOM + 0.01;
   const maxReaderPage = Math.max(1, Number(activePaper?.pageCount || 1));
   const maxSpreadStartPage = Math.max(1, maxReaderPage - 1);
@@ -4196,4 +4201,3 @@ export default function EPaperPageClient({
     </div>
   );
 }
-
