@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
+import { canCreateEpaper } from '@/lib/auth/permissions';
 
 export const runtime = 'nodejs';
 
@@ -7,6 +8,9 @@ export async function POST(req: NextRequest) {
   const admin = await getAdminSessionFromReq(req);
   if (!admin) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!canCreateEpaper(admin.role)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
   return NextResponse.json(

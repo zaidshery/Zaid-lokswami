@@ -56,6 +56,7 @@ const searchPageCache = cacheControlHeader(
 const nextConfig = {
   distDir: isDevelopment ? '.next-dev' : '.next',
   output: 'standalone',
+  serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist'],
   // Hostinger currently normalizes some routes to a trailing slash at the edge.
   // Disable Next.js slash redirects so paths like /admin/ do not bounce back to /admin.
   skipTrailingSlashRedirect: true,

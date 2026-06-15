@@ -10,7 +10,6 @@ import {
   Loader2,
   MoreHorizontal,
   MessageSquare,
-  Volume2,
   Save,
   Trash2,
   UploadCloud,
@@ -56,6 +55,28 @@ type ProductionActivityResponse = {
   success?: boolean;
   error?: string;
   data?: ProductionActivityItem[];
+};
+
+type ProcessingData = {
+  job?: {
+    status?: string;
+    processedItems?: number;
+    totalItems?: number;
+    failedItems?: number;
+    failedPageNumbers?: number[];
+    lastError?: string;
+    updatedAt?: string;
+  } | null;
+  pageCount?: number;
+  pages?: EPaperRecord['pages'];
+  productionStatus?: EPaperProductionStatus;
+  stuckWarning?: string;
+};
+
+type ProcessingResponse = {
+  success?: boolean;
+  error?: string;
+  data?: ProcessingData;
 };
 
 type TtsStatus = 'pending' | 'ready' | 'failed' | 'stale';
@@ -197,12 +218,12 @@ export default function AdminEPaperDetailPage() {
   const [uploadingPage, setUploadingPage] = useState<number | null>(null);
   const [generatingPages, setGeneratingPages] = useState(false);
   const [runningOcrAutomation, setRunningOcrAutomation] = useState(false);
-  const [runningTtsTarget, setRunningTtsTarget] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [creatingRevision, setCreatingRevision] = useState(false);
   const [epaperTtsByStoryId, setEpaperTtsByStoryId] = useState<Record<string, TtsAssetRecord>>({});
+  const [processingData, setProcessingData] = useState<ProcessingData | null>(null);
 
   const [title, setTitle] = useState('');
-  const [status, setStatus] = useState<'draft' | 'published'>('draft');
   const [publishDate, setPublishDate] = useState('');
   const [productionStatus, setProductionStatus] =
     useState<EPaperProductionStatus>('draft_upload');
@@ -218,6 +239,33 @@ export default function AdminEPaperDetailPage() {
   const [bulkReviewStatus, setBulkReviewStatus] = useState<EPaperPageReviewStatus>('ready');
   const [bulkReviewNote, setBulkReviewNote] = useState('');
   const [isApplyingBulkReview, setIsApplyingBulkReview] = useState(false);
+
+  const loadProcessing = useCallback(async () => {
+    if (!epaperId) return null;
+    try {
+      const response = await fetch(`/api/admin/epapers/${epaperId}/processing`, {
+        headers: { ...getAuthHeader() },
+        cache: 'no-store',
+      });
+      const payload = (await response.json().catch(() => ({}))) as ProcessingResponse;
+      if (!response.ok || !payload.success || !payload.data) return null;
+      setProcessingData(payload.data);
+      setEpaper((current) =>
+        current
+          ? {
+              ...current,
+              pageCount: payload.data?.pageCount || current.pageCount,
+              pages: payload.data?.pages || current.pages,
+              productionStatus:
+                payload.data?.productionStatus || current.productionStatus,
+            }
+          : current
+      );
+      return payload.data;
+    } catch {
+      return null;
+    }
+  }, [epaperId]);
 
   const loadEpaperTtsAssets = useCallback(async () => {
     if (!epaperId) {
@@ -327,11 +375,14 @@ export default function AdminEPaperDetailPage() {
       setEpaper(epaperPayload.data);
       setArticles(Array.isArray(articlesPayload.data) ? articlesPayload.data : []);
       setTitle(epaperPayload.data.title || '');
-      setStatus(epaperPayload.data.status || 'draft');
       setPublishDate(epaperPayload.data.publishDate || '');
       setProductionStatus(epaperPayload.data.productionStatus || 'draft_upload');
       setProductionAssigneeId(epaperPayload.data.productionAssignee?.id || '');
-      await Promise.all([loadEpaperTtsAssets(), loadProductionActivity()]);
+      await Promise.all([
+        loadEpaperTtsAssets(),
+        loadProductionActivity(),
+        loadProcessing(),
+      ]);
     } catch (err: unknown) {
       setError(toErrorMessage(err, 'Failed to load e-paper'));
       setEpaper(null);
@@ -341,7 +392,7 @@ export default function AdminEPaperDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [epaperId, loadEpaperTtsAssets, loadProductionActivity]);
+  }, [epaperId, loadEpaperTtsAssets, loadProcessing, loadProductionActivity]);
 
   useEffect(() => {
     if (!epaperId) return;
@@ -352,6 +403,15 @@ export default function AdminEPaperDetailPage() {
     if (!epaperId) return;
     void loadAssignableUsers();
   }, [epaperId, loadAssignableUsers]);
+
+  useEffect(() => {
+    const status = processingData?.job?.status;
+    if (status !== 'queued' && status !== 'processing') return;
+    const timer = window.setInterval(() => {
+      void loadProcessing();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [loadProcessing, processingData?.job?.status]);
 
   useEffect(() => {
     if (!epaper) {
@@ -462,7 +522,6 @@ export default function AdminEPaperDetailPage() {
         },
         body: JSON.stringify({
           title: title.trim(),
-          status,
           publishDate,
         }),
       });
@@ -566,82 +625,52 @@ export default function AdminEPaperDetailPage() {
     setNotice('');
     try {
       const response = await fetch(
-        `/api/admin/epapers/${epaper._id}/generate-page-images`,
+        `/api/admin/epapers/${epaper._id}/processing/retry`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...getAuthHeader(),
           },
-          body: JSON.stringify({ pageCount: epaper.pageCount }),
+          body: JSON.stringify({}),
         }
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to generate page images');
+        throw new Error(payload?.error || 'Failed to queue missing pages');
       }
 
       if (payload?.warning) {
         setNotice(String(payload.warning));
       } else {
-        setNotice('Page images generated successfully');
+        setNotice('Missing or failed pages were queued for background conversion.');
       }
-      await fetchData();
+      await loadProcessing();
     } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to generate page images'));
+      setError(toErrorMessage(err, 'Failed to queue missing pages'));
     } finally {
       setGeneratingPages(false);
     }
   };
 
-  const generateStoryAudio = async (pageNumber?: number) => {
+  const createDraftRevision = async () => {
     if (!epaper) return;
-
-    const target = pageNumber ? `page-${pageNumber}` : 'all';
-    setRunningTtsTarget(target);
+    setCreatingRevision(true);
     setError('');
-    setNotice('');
-
     try {
-      const response = await fetch(`/api/admin/epapers/${epaper._id}/tts`, {
+      const response = await fetch(`/api/admin/epapers/${epaper._id}/revisions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader(),
-        },
-        body: JSON.stringify({
-          ...(pageNumber ? { pageNumber } : {}),
-          forceRegenerate: true,
-        }),
+        headers: { ...getAuthHeader() },
       });
-      const payload = (await response.json().catch(() => ({}))) as {
-        success?: boolean;
-        error?: string;
-        data?: {
-          result?: {
-            processed?: number;
-            ready?: number;
-            failed?: number;
-            skipped?: number;
-          };
-        };
-      };
-
-      if (!response.ok || !payload.success || !payload.data?.result) {
-        throw new Error(payload.error || 'Failed to generate story audio');
+      const payload = await response.json().catch(() => ({}));
+      const revisionId = payload?.data?.revisionId;
+      if ((!response.ok && response.status !== 409) || !revisionId) {
+        throw new Error(payload?.error || 'Failed to create draft revision.');
       }
-
-      const result = payload.data.result;
-      setNotice(
-        pageNumber
-          ? `Page ${pageNumber} story audio updated. ${result.ready || 0} ready, ${result.failed || 0} failed, ${result.skipped || 0} skipped.`
-          : `Edition story audio updated. ${result.ready || 0} ready, ${result.failed || 0} failed, ${result.skipped || 0} skipped.`
-      );
-      await loadEpaperTtsAssets();
-    } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to generate story audio'));
-    } finally {
-      setRunningTtsTarget('');
+      router.push(`/admin/epapers/${revisionId}`);
+    } catch (err) {
+      setError(toErrorMessage(err, 'Failed to create draft revision.'));
+      setCreatingRevision(false);
     }
   };
 
@@ -668,9 +697,8 @@ export default function AdminEPaperDetailPage() {
         error?: string;
         message?: string;
         data?: {
-          storiesCreated?: number;
+          suggestionsCreated?: number;
           pagesFailed?: number;
-          audioReady?: number;
         };
       };
 
@@ -679,11 +707,13 @@ export default function AdminEPaperDetailPage() {
       }
 
       setNotice(
-        `${pageNumbersToProcess.length ? `Selected page OCR finished. ` : ''}${payload.message || 'OCR automation finished'} ${
-          payload.data?.audioReady
-            ? `${payload.data.audioReady} story audio file${payload.data.audioReady === 1 ? '' : 's'} ready.`
+        `${pageNumbersToProcess.length ? 'Selected page OCR finished. ' : ''}${
+          payload.message || 'OCR suggestions are ready for review.'
+        }${
+          payload.data?.pagesFailed
+            ? ` ${payload.data.pagesFailed} page(s) need manual OCR review.`
             : ''
-        }${payload.data?.pagesFailed ? ` ${payload.data.pagesFailed} page(s) need manual OCR review.` : ''}`.trim()
+        }`.trim()
       );
       await fetchData();
     } catch (err: unknown) {
@@ -695,6 +725,18 @@ export default function AdminEPaperDetailPage() {
 
   const updateProductionDesk = async (nextStatus?: EPaperProductionStatus) => {
     if (!epaper) return;
+    const isRequestChanges =
+      productionStatus === 'qa_review' && nextStatus === 'hotspot_mapping';
+    let note = productionNote.trim();
+    if (isRequestChanges && !note) {
+      note =
+        window.prompt('Explain what must be corrected before QA can continue:')?.trim() ||
+        '';
+      if (!note) {
+        setError('A reason is required when requesting changes.');
+        return;
+      }
+    }
 
     setIsUpdatingProduction(true);
     setError('');
@@ -710,7 +752,8 @@ export default function AdminEPaperDetailPage() {
         body: JSON.stringify({
           ...(nextStatus ? { productionStatus: nextStatus } : {}),
           assignedToId: productionAssigneeId,
-          note: productionNote.trim(),
+          note,
+          ...(isRequestChanges ? { action: 'request_changes' } : {}),
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as EpaperResponse & {
@@ -795,6 +838,44 @@ export default function AdminEPaperDetailPage() {
       setError(toErrorMessage(err, 'Failed to update selected pages'));
     } finally {
       setIsApplyingBulkReview(false);
+    }
+  };
+
+  const updatePageType = async (
+    pageNumber: number,
+    pageType: NonNullable<EPaperRecord['pages'][number]['pageType']>
+  ) => {
+    if (!epaper) return;
+    let classificationNote = '';
+    if (pageType === 'blank') {
+      classificationNote =
+        window.prompt('Why is this page intentionally blank?')?.trim() || '';
+      if (!classificationNote) {
+        setError('A reviewer note is required for blank pages.');
+        return;
+      }
+    }
+
+    setError('');
+    try {
+      const response = await fetch(`/api/admin/epapers/${epaper._id}/pages`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          pages: [{ pageNumber, pageType, classificationNote }],
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to update page type.');
+      }
+      setNotice(`Page ${pageNumber} marked as ${pageType}.`);
+      await fetchData();
+    } catch (err) {
+      setError(toErrorMessage(err, 'Failed to update page type.'));
     }
   };
 
@@ -911,13 +992,21 @@ export default function AdminEPaperDetailPage() {
           </Link>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/admin/ai?ttsVariant=epaper_story&ttsSourceType=epaperArticle&ttsSourceParentId=${encodeURIComponent(String(epaper._id || ''))}`}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700 hover:bg-primary-100"
-            >
-              <Volume2 className="h-3.5 w-3.5" />
-              TTS Ops
-            </Link>
+            {epaper.status === 'published' ? (
+              <button
+                type="button"
+                onClick={() => void createDraftRevision()}
+                disabled={creatingRevision}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-70"
+              >
+                {creatingRevision ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <PencilRuler className="h-3.5 w-3.5" />
+                )}
+                Create Draft Revision
+              </button>
+            ) : null}
             <a
               href={`/api/public/epapers/${encodeURIComponent(String(epaper._id || ''))}/pdf`}
               target="_blank"
@@ -1010,6 +1099,77 @@ export default function AdminEPaperDetailPage() {
               </div>
             </section>
 
+            {processingData?.job ? (
+              <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                      PDF processing
+                    </p>
+                    <h2 className="mt-1 text-base font-semibold text-blue-950">
+                      {formatProductionStatusLabel(processingData.job.status)}
+                    </h2>
+                    <p className="mt-1 text-sm text-blue-800">
+                      {processingData.job.processedItems || 0}/
+                      {processingData.job.totalItems || epaper.pageCount} pages completed
+                      {processingData.job.failedItems
+                        ? `, ${processingData.job.failedItems} failed`
+                        : ''}
+                    </p>
+                  </div>
+                  {processingData.job.status !== 'queued' &&
+                  processingData.job.status !== 'processing' ? (
+                    <button
+                      type="button"
+                      onClick={() => void generatePageImages()}
+                      disabled={generatingPages}
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-70"
+                    >
+                      {generatingPages ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <UploadCloud className="h-3.5 w-3.5" />
+                      )}
+                      Retry Missing Pages
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-blue-100">
+                  <div
+                    className="h-full rounded-full bg-blue-600"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          ((processingData.job.processedItems || 0) /
+                            Math.max(
+                              1,
+                              processingData.job.totalItems || epaper.pageCount
+                            )) *
+                            100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+                {processingData.job.failedPageNumbers?.length ? (
+                  <p className="mt-2 text-xs text-red-700">
+                    Failed pages: {processingData.job.failedPageNumbers.join(', ')}
+                  </p>
+                ) : null}
+                {processingData.job.lastError ? (
+                  <p className="mt-1 whitespace-pre-line text-xs text-red-700">
+                    {processingData.job.lastError}
+                  </p>
+                ) : null}
+                {processingData.stuckWarning ? (
+                  <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                    {processingData.stuckWarning}
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+
             <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1017,7 +1177,7 @@ export default function AdminEPaperDetailPage() {
                     Batch actions
                   </p>
                   <p className="mt-1 text-sm text-gray-600">
-                    Manage page generation, audio, selection, and review state from one place.
+                    Manage conversion retries, OCR, selection, and review state from one place.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1036,20 +1196,7 @@ export default function AdminEPaperDetailPage() {
                     ) : (
                       <UploadCloud className="h-3.5 w-3.5" />
                     )}
-                    Generate Images
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void generateStoryAudio()}
-                    disabled={runningTtsTarget !== ''}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {runningTtsTarget === 'all' ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Volume2 className="h-3.5 w-3.5" />
-                    )}
-                    Generate Audio
+                    Retry Missing Pages
                   </button>
                   <button
                     type="button"
@@ -1198,7 +1345,7 @@ export default function AdminEPaperDetailPage() {
                   const isUploading = uploadingPage === pageNumber;
                   const isSelected = selectedPageNumbers.includes(pageNumber);
                   const editHref = `/admin/epapers/${epaper._id}/page/${pageNumber}`;
-                  const statusChips = [
+                    const statusChips = [
                     {
                       label: hasImage ? 'Uploaded' : 'Image Missing',
                       tone: hasImage ? 'good' : 'danger',
@@ -1212,6 +1359,10 @@ export default function AdminEPaperDetailPage() {
                           label: formatPageReviewStatusLabel(page.reviewStatus),
                           tone: page.reviewStatus === 'ready' ? 'good' : 'danger',
                         },
+                    {
+                      label: formatProductionStatusLabel(page?.pageType || 'editorial'),
+                      tone: 'neutral',
+                    },
                     epaper.status === 'published'
                       ? { label: 'Published', tone: 'publish' }
                       : null,
@@ -1319,19 +1470,34 @@ export default function AdminEPaperDetailPage() {
                                   disabled={isUploading}
                                 />
                               </label>
-                              <button
-                                type="button"
-                                onClick={() => void generateStoryAudio(pageNumber)}
-                                disabled={runningTtsTarget !== '' || tts.eligible === 0}
-                                className="block w-full rounded-md px-3 py-2 text-left font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
-                              >
-                                {runningTtsTarget === `page-${pageNumber}`
-                                  ? 'Generating audio...'
-                                  : 'Generate page audio'}
-                              </button>
                             </div>
                           </details>
                         </div>
+
+                        <label
+                          className="mt-3 block text-xs font-semibold text-gray-600"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          Page type
+                          <select
+                            value={page?.pageType || 'editorial'}
+                            onChange={(event) =>
+                              void updatePageType(
+                                pageNumber,
+                                event.target.value as NonNullable<
+                                  EPaperRecord['pages'][number]['pageType']
+                                >
+                              )
+                            }
+                            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-800"
+                          >
+                            <option value="editorial">Editorial</option>
+                            <option value="advertisement">Advertisement</option>
+                            <option value="classified">Classified</option>
+                            <option value="photo">Photo</option>
+                            <option value="blank">Blank</option>
+                          </select>
+                        </label>
 
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           {statusChips.map((chip) => (
@@ -1428,10 +1594,10 @@ export default function AdminEPaperDetailPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${editionStatusTone(
-                        status
+                        epaper.status
                       )}`}
                     >
-                      {status === 'published' ? 'Published' : 'Draft'}
+                      {epaper.status === 'published' ? 'Published' : 'Draft'}
                     </span>
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${productionTone(
@@ -1456,7 +1622,12 @@ export default function AdminEPaperDetailPage() {
                   <div className="mt-4 space-y-2">
                     {allowedProductionTransitions.map((nextStatus) => {
                       const isBlockedReadyToPublish =
-                        nextStatus === 'ready_to_publish' && publishBlockers.length > 0;
+                        (nextStatus === 'ready_to_publish' ||
+                          nextStatus === 'published') &&
+                        publishBlockers.length > 0;
+                      const isRequestChanges =
+                        activeProductionStatus === 'qa_review' &&
+                        nextStatus === 'hotspot_mapping';
 
                       return (
                         <button
@@ -1479,7 +1650,9 @@ export default function AdminEPaperDetailPage() {
                           ) : (
                             <PencilRuler className="h-3.5 w-3.5" />
                           )}
-                          {PRODUCTION_ACTION_LABELS[nextStatus] ||
+                          {isRequestChanges
+                            ? 'Request Changes'
+                            : PRODUCTION_ACTION_LABELS[nextStatus] ||
                             formatProductionStatusLabel(nextStatus)}
                         </button>
                       );
@@ -1653,17 +1826,6 @@ export default function AdminEPaperDetailPage() {
                       onChange={setPublishDate}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
                     />
-                  </label>
-                  <label>
-                    <span className="mb-1 block text-xs font-semibold text-gray-600">Status</span>
-                    <select
-                      value={status}
-                      onChange={(event) => setStatus(event.target.value as 'draft' | 'published')}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="published">Published</option>
-                    </select>
                   </label>
                   <button
                     type="button"

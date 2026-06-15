@@ -4,7 +4,14 @@ import {
   WorkflowActorRefSchema,
   WorkflowCommentSchema,
 } from '@/lib/models/schemas/workflow';
-import { EPAPER_PAGE_REVIEW_STATUSES, type EPaperPageReviewStatus } from '@/lib/types/epaper';
+import {
+  EPAPER_PAGE_PROCESSING_STATUSES,
+  EPAPER_PAGE_REVIEW_STATUSES,
+  EPAPER_PAGE_TYPES,
+  type EPaperPageProcessingStatus,
+  type EPaperPageReviewStatus,
+  type EPaperPageType,
+} from '@/lib/types/epaper';
 import type { EPaperProductionStatus, WorkflowActorRef, WorkflowComment } from '@/lib/workflow/types';
 
 export type EPaperStatus = 'draft' | 'published';
@@ -14,6 +21,11 @@ export interface IEPaperPage {
   imagePath?: string;
   width?: number;
   height?: number;
+  pageType?: EPaperPageType;
+  classificationNote?: string;
+  processingStatus?: EPaperPageProcessingStatus;
+  processingError?: string;
+  processedAt?: Date | null;
   reviewStatus?: EPaperPageReviewStatus;
   reviewNote?: string;
   reviewedAt?: Date | null;
@@ -36,6 +48,11 @@ export interface IEPaper {
   pageCount: number;
   pages: IEPaperPage[];
   status: EPaperStatus;
+  familyId: string;
+  revisionNumber: number;
+  isCurrentRevision: boolean;
+  supersedesId?: mongoose.Types.ObjectId | null;
+  publishedAt?: Date | null;
   productionStatus: EPaperProductionStatus;
   productionAssignee: WorkflowActorRef | null;
   productionNotes: WorkflowComment[];
@@ -56,6 +73,19 @@ const EPaperPageSchema = new mongoose.Schema<IEPaperPage>(
     imagePath: { type: String, default: '' },
     width: { type: Number, min: 1 },
     height: { type: Number, min: 1 },
+    pageType: {
+      type: String,
+      enum: EPAPER_PAGE_TYPES,
+      default: 'editorial',
+    },
+    classificationNote: { type: String, trim: true, maxlength: 1000, default: '' },
+    processingStatus: {
+      type: String,
+      enum: EPAPER_PAGE_PROCESSING_STATUSES,
+      default: 'pending',
+    },
+    processingError: { type: String, trim: true, maxlength: 2000, default: '' },
+    processedAt: { type: Date, default: null },
     reviewStatus: {
       type: String,
       enum: EPAPER_PAGE_REVIEW_STATUSES,
@@ -74,15 +104,24 @@ const EPaperSchema = new mongoose.Schema<IEPaper>(
     cityName: { type: String, required: true, trim: true, maxlength: 120 },
     title: { type: String, required: true, trim: true, maxlength: 220 },
     publishDate: { type: Date, required: true },
-    pdfPath: { type: String, required: true, trim: true, maxlength: 500 },
+    pdfPath: { type: String, trim: true, maxlength: 500, default: '' },
     pdfPublicId: { type: String, trim: true, maxlength: 500, default: '' },
     pdfFormat: { type: String, trim: true, maxlength: 30, default: 'pdf' },
-    thumbnailPath: { type: String, required: true, trim: true, maxlength: 500 },
+    thumbnailPath: { type: String, trim: true, maxlength: 500, default: '' },
     pdfUrl: { type: String, trim: true, maxlength: 500, default: '' },
     thumbnail: { type: String, trim: true, maxlength: 500, default: '' },
-    pageCount: { type: Number, required: true, min: 1, max: 1000 },
+    pageCount: { type: Number, required: true, min: 0, max: 1000, default: 0 },
     pages: { type: [EPaperPageSchema], default: [] },
     status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+    familyId: { type: String, trim: true, maxlength: 120, default: '' },
+    revisionNumber: { type: Number, min: 1, default: 1 },
+    isCurrentRevision: { type: Boolean, default: true },
+    supersedesId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'EPaper',
+      default: null,
+    },
+    publishedAt: { type: Date, default: null },
     productionStatus: EPaperProductionStatusSchema,
     productionAssignee: { type: WorkflowActorRefSchema, default: null },
     productionNotes: { type: [WorkflowCommentSchema], default: [] },
@@ -101,7 +140,25 @@ const EPaperSchema = new mongoose.Schema<IEPaper>(
   { timestamps: true }
 );
 
-EPaperSchema.index({ citySlug: 1, publishDate: 1 }, { unique: true });
+EPaperSchema.index(
+  { familyId: 1, revisionNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      familyId: { $type: 'string', $gt: '' },
+    },
+  }
+);
+EPaperSchema.index(
+  { citySlug: 1, publishDate: 1, isCurrentRevision: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: 'published',
+      isCurrentRevision: true,
+    },
+  }
+);
 EPaperSchema.index({ status: 1, publishDate: -1 });
 EPaperSchema.index({ productionStatus: 1, publishDate: -1 });
 EPaperSchema.index({ 'productionAssignee.id': 1, productionStatus: 1, updatedAt: -1 });

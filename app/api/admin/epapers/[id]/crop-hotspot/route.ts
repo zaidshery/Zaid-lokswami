@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import sharp from 'sharp';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
-import { canViewPage } from '@/lib/auth/permissions';
+import { canEditEpaper } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import {
@@ -14,9 +14,11 @@ import {
 import { buildEpaperCropOcrImageSource } from '@/lib/server/epaperOcrPreprocess';
 import {
   formatPublishDateFolder,
+  isTrustedEpaperAssetPath,
   resolveEpaperAssetPath,
 } from '@/lib/utils/epaperStorage';
 import { uploadBufferToDigitalOceanSpaces } from '@/lib/utils/digitalOceanSpaces';
+import { assertEpaperDraftEditable } from '@/lib/server/epaperWorkflowPolicy';
 
 export const runtime = 'nodejs';
 
@@ -81,6 +83,9 @@ async function loadPageImageBuffer(imagePath: string) {
   }
 
   if (/^https?:\/\//i.test(value)) {
+    if (!isTrustedEpaperAssetPath(value)) {
+      throw new Error('Page image URL is not a trusted e-paper asset.');
+    }
     const response = await fetch(value, { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`Page image fetch failed with status ${response.status}.`);
@@ -102,7 +107,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    if (!canViewPage(admin.role, 'epaper_edit')) {
+    if (!canEditEpaper(admin.role)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -125,10 +130,21 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const epaper = await EPaper.findById(id)
-      .select('_id title citySlug publishDate pages pageCount')
+      .select('_id title citySlug publishDate pages pageCount status productionStatus')
       .lean();
     if (!epaper) {
       return NextResponse.json({ success: false, error: 'E-paper not found' }, { status: 404 });
+    }
+    try {
+      assertEpaperDraftEditable(epaper);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : 'Edition is immutable.',
+        },
+        { status: 409 }
+      );
     }
     if (pageNumber > Number(epaper.pageCount || 0)) {
       return NextResponse.json(

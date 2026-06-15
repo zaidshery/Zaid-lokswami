@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import { getAdminSession } from '@/lib/auth/admin';
+import { canCreateEpaper } from '@/lib/auth/permissions';
 import {
   createAdminEpaperFromRemoteImport,
   mapAdminEpaper,
@@ -27,6 +28,9 @@ export async function POST(req: NextRequest) {
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+    if (!canCreateEpaper(admin.role)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
 
     await connectDB();
 
@@ -38,11 +42,10 @@ export async function POST(req: NextRequest) {
       cityName: typeof source.cityName === 'string' ? source.cityName : '',
       title: String(source.title || ''),
       publishDate: String(source.publishDate || ''),
-      status:
-        String(source.status || '').trim().toLowerCase() === 'published' ? 'published' : 'draft',
+      status: 'draft',
       pageCount: Number.parseInt(String(source.pageCount ?? ''), 10) || 0,
       pdfUrl: String(source.pdfUrl || ''),
-      thumbnailUrl: String(source.thumbnailUrl || ''),
+      thumbnailUrl: String(source.thumbnailUrl || '').trim() || undefined,
       pageImageUrls: normalizePageImageUrls(source.pageImageUrls),
       sourceLabel: String(source.sourceLabel || ''),
     });

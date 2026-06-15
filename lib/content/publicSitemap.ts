@@ -57,7 +57,10 @@ function normalizeMongoEPaper(input: unknown): PublicEPaperSitemapItem | null {
 export async function listEPapersForSitemap(limit = 1000) {
   if (await isMongoAvailable({ label: 'sitemap e-paper lookup' })) {
     try {
-      const records = await EPaper.find({ status: 'published' })
+      const records = await EPaper.find({
+        status: 'published',
+        isCurrentRevision: { $ne: false },
+      })
         .select('_id citySlug publishDate updatedAt')
         .sort({ publishDate: -1, _id: -1 })
         .limit(limit)

@@ -387,6 +387,28 @@ export function canDeleteContent(
   return isSuperAdminRole(user.role) || user.role === 'admin';
 }
 
+export function canCreateEpaper(role: AdminRole | null | undefined): boolean {
+  return role === 'admin' || isSuperAdminRole(role);
+}
+
+export function canEditEpaper(role: AdminRole | null | undefined): boolean {
+  return role === 'admin' || role === 'copy_editor' || isSuperAdminRole(role);
+}
+
+export function canPrepareEpaperForPublish(
+  role: AdminRole | null | undefined
+): boolean {
+  return canEditEpaper(role);
+}
+
+export function canPublishEpaper(role: AdminRole | null | undefined): boolean {
+  return role === 'admin' || isSuperAdminRole(role);
+}
+
+export function canDeleteEpaper(role: AdminRole | null | undefined): boolean {
+  return canPublishEpaper(role);
+}
+
 export function canTransitionContent(
   user: PermissionUser | null | undefined,
   content: PermissionContentRecord,

@@ -5,7 +5,13 @@ import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import User from '@/lib/models/User';
 import { getAdminSession } from '@/lib/auth/admin';
-import { canViewPage } from '@/lib/auth/permissions';
+import {
+  canDeleteEpaper,
+  canEditEpaper,
+  canPrepareEpaperForPublish,
+  canPublishEpaper,
+  canViewPage,
+} from '@/lib/auth/permissions';
 import {
   deleteAssetFile,
   parsePublishDate,
@@ -32,6 +38,11 @@ import {
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
 import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
+import {
+  assertEpaperDraftEditable,
+  requireRequestChangesReason,
+} from '@/lib/server/epaperWorkflowPolicy';
+import { logEpaperMetric } from '@/lib/server/epaperObservability';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -42,6 +53,10 @@ type EpaperPage = {
   imagePath: string;
   width: number | undefined;
   height: number | undefined;
+  pageType: 'editorial' | 'advertisement' | 'classified' | 'photo' | 'blank';
+  classificationNote: string;
+  processingStatus: 'pending' | 'processing' | 'ready' | 'failed';
+  processingError: string;
   reviewStatus: 'pending' | 'needs_attention' | 'ready';
   reviewNote: string;
   reviewedAt: string | null;
@@ -92,6 +107,27 @@ function normalizePages(value: unknown): EpaperPage[] {
         imagePath: typeof source.imagePath === 'string' ? source.imagePath : '',
         width: toOptionalPositiveInt(source.width),
         height: toOptionalPositiveInt(source.height),
+        pageType:
+          source.pageType === 'advertisement' ||
+          source.pageType === 'classified' ||
+          source.pageType === 'photo' ||
+          source.pageType === 'blank'
+            ? source.pageType
+            : 'editorial',
+        classificationNote:
+          typeof source.classificationNote === 'string'
+            ? source.classificationNote.trim()
+            : '',
+        processingStatus:
+          source.processingStatus === 'processing' ||
+          source.processingStatus === 'ready' ||
+          source.processingStatus === 'failed'
+            ? source.processingStatus
+            : 'pending',
+        processingError:
+          typeof source.processingError === 'string'
+            ? source.processingError.trim()
+            : '',
         reviewStatus: isEPaperPageReviewStatus(source.reviewStatus)
           ? source.reviewStatus
           : 'pending',
@@ -145,6 +181,14 @@ function mapEpaper(epaper: unknown) {
     pageCount: Math.max(toPositiveInt(source.pageCount), pages.length),
     pages,
     status: source.status === 'published' ? 'published' : 'draft',
+    familyId: firstNonEmptyString(source.familyId, source._id),
+    revisionNumber: toPositiveInt(source.revisionNumber) || 1,
+    isCurrentRevision: source.isCurrentRevision !== false,
+    supersedesId: firstNonEmptyString(source.supersedesId),
+    publishedAt:
+      source.publishedAt instanceof Date
+        ? source.publishedAt.toISOString()
+        : firstNonEmptyString(source.publishedAt) || null,
     productionStatus: production.productionStatus,
     productionAssignee: production.productionAssignee,
     productionNotes: production.productionNotes.map((note) => ({
@@ -199,7 +243,7 @@ function normalizePageCount(value: unknown) {
 
 function buildPages(
   pageCount: number,
-  currentPages: Array<{ pageNumber: number; imagePath?: string; width?: number; height?: number }>
+  currentPages: EpaperPage[]
 ) {
   const byPage = new Map<number, (typeof currentPages)[number]>();
   for (const page of currentPages) {
@@ -215,6 +259,14 @@ function buildPages(
       imagePath: existing?.imagePath || '',
       width: existing?.width,
       height: existing?.height,
+      pageType: existing?.pageType || 'editorial',
+      classificationNote: existing?.classificationNote || '',
+      processingStatus: existing?.processingStatus || 'pending',
+      processingError: existing?.processingError || '',
+      reviewStatus: existing?.reviewStatus || 'pending',
+      reviewNote: existing?.reviewNote || '',
+      reviewedAt: existing?.reviewedAt || null,
+      reviewedBy: existing?.reviewedBy || null,
     };
   });
 }
@@ -337,7 +389,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         { status: 401 }
       );
     }
-    if (!canViewPage(admin.role, 'epapers')) {
+    if (!canEditEpaper(admin.role)) {
       return NextResponse.json(
         { success: false, error: 'Forbidden' },
         { status: 403 }
@@ -379,18 +431,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       updates.title = title;
     }
 
-    if (typeof source.status === 'string') {
-      const status = source.status.trim().toLowerCase();
-      if (status !== 'draft' && status !== 'published') {
-        return NextResponse.json(
-          { success: false, error: 'Invalid status' },
-          { status: 400 }
-        );
-      }
-      updates.status = status;
-      if (status === 'published') {
-        updates.productionStatus = 'published';
-      }
+    if (Object.prototype.hasOwnProperty.call(source, 'status')) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Edition status can only be changed through the production workflow.',
+        },
+        { status: 400 }
+      );
     }
 
     if (typeof source.citySlug === 'string') {
@@ -441,7 +489,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       updates.pageCount = requestedPageCount;
       updates.pages = buildPages(
         requestedPageCount,
-        Array.isArray(current.pages) ? current.pages : []
+        normalizePages(current.pages)
       );
     }
 
@@ -504,7 +552,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         { status: 401 }
       );
     }
-    if (!canViewPage(admin.role, 'epapers')) {
+    if (!canPrepareEpaperForPublish(admin.role)) {
       return NextResponse.json(
         { success: false, error: 'Forbidden' },
         { status: 403 }
@@ -535,6 +583,21 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         { success: false, error: 'E-paper not found' },
         { status: 404 }
       );
+    }
+    const isArchivingPublishedEdition =
+      current.status === 'published' && source.productionStatus === 'archived';
+    if (!isArchivingPublishedEdition) {
+      try {
+        assertEpaperDraftEditable(current);
+      } catch (error) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: error instanceof Error ? error.message : 'Edition is immutable.',
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const mapped = mapEpaper(current);
@@ -570,6 +633,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           ? source.productionNote.trim()
           : '';
     const hasAssigneeField = Object.prototype.hasOwnProperty.call(source, 'assignedToId');
+    const isRequestChanges =
+      source.action === 'request_changes' ||
+      (currentProduction.productionStatus === 'qa_review' &&
+        nextStatus === 'hotspot_mapping');
 
     if (!nextStatus && !note && !hasAssigneeField) {
       return NextResponse.json(
@@ -592,11 +659,44 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       );
     }
 
+    if (
+      nextStatus &&
+      (nextStatus === 'published' || nextStatus === 'archived') &&
+      !canPublishEpaper(admin.role)
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'Only admins can publish or archive an edition.' },
+        { status: 403 }
+      );
+    }
+    if (isRequestChanges) {
+      try {
+        requireRequestChangesReason(note);
+      } catch (error) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: error instanceof Error ? error.message : 'A reason is required.',
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const publishBlockers = Array.from(
       new Set([...readiness.blockers, ...editionQuality.publishBlockers])
     );
 
-    if (nextStatus === 'ready_to_publish' && publishBlockers.length > 0) {
+    if (
+      (nextStatus === 'ready_to_publish' || nextStatus === 'published') &&
+      publishBlockers.length > 0
+    ) {
+      logEpaperMetric('publishing_blocked', {
+        epaperId: id,
+        targetStatus: nextStatus,
+        blockerCount: publishBlockers.length,
+        blockers: publishBlockers,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -630,17 +730,53 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       note,
     });
 
-    const updated = await EPaper.findByIdAndUpdate(
-      id,
-      {
-        productionStatus: nextProduction.productionStatus,
-        productionAssignee: nextProduction.productionAssignee,
-        productionNotes: nextProduction.productionNotes,
-        qaCompletedAt: nextProduction.qaCompletedAt,
-        ...(toStatus === 'published' ? { status: 'published' } : {}),
-      },
-      { new: true, runValidators: true }
-    ).lean();
+    const workflowUpdates = {
+      productionStatus: nextProduction.productionStatus,
+      productionAssignee: nextProduction.productionAssignee,
+      productionNotes: nextProduction.productionNotes,
+      qaCompletedAt: nextProduction.qaCompletedAt,
+      ...(toStatus === 'published'
+        ? { status: 'published' as const, isCurrentRevision: true, publishedAt: new Date() }
+        : {}),
+      ...(toStatus === 'archived'
+        ? { status: 'draft' as const, isCurrentRevision: false }
+        : {}),
+    };
+
+    let updated;
+    if (toStatus === 'published') {
+      const session = await EPaper.startSession();
+      try {
+        await session.withTransaction(async () => {
+          await EPaper.updateMany(
+            {
+              familyId: String(current.familyId || current._id),
+              _id: { $ne: id },
+              status: 'published',
+              isCurrentRevision: true,
+            },
+            {
+              status: 'draft',
+              productionStatus: 'archived',
+              isCurrentRevision: false,
+            },
+            { session }
+          );
+          updated = await EPaper.findByIdAndUpdate(id, workflowUpdates, {
+            new: true,
+            runValidators: true,
+            session,
+          }).lean();
+        });
+      } finally {
+        await session.endSession();
+      }
+    } else {
+      updated = await EPaper.findByIdAndUpdate(id, workflowUpdates, {
+        new: true,
+        runValidators: true,
+      }).lean();
+    }
 
     if (!updated) {
       return NextResponse.json(
@@ -676,6 +812,20 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         allowedNextStatuses: getAllowedEpaperProductionTransitions(toStatus),
       }),
     });
+    if (toStatus === 'published') {
+      logEpaperMetric('publishing_completed', {
+        epaperId: id,
+        familyId: String(updated.familyId || updated._id),
+        revisionNumber: Number(updated.revisionNumber || 1),
+      });
+    } else if (isRequestChanges) {
+      logEpaperMetric('qa_changes_requested', {
+        epaperId: id,
+        fromStatus,
+        toStatus,
+        reason: note,
+      });
+    }
 
     const mappedUpdated = mapEpaper(updated);
     const nextReadiness = buildEpaperReadiness({
@@ -732,7 +882,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
         { status: 401 }
       );
     }
-    if (!canViewPage(admin.role, 'epapers')) {
+    if (!canDeleteEpaper(admin.role)) {
       return NextResponse.json(
         { success: false, error: 'Forbidden' },
         { status: 403 }

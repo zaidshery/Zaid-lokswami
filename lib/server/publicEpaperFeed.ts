@@ -241,7 +241,10 @@ export async function listPublicEpaperFeed(
     return await withTimeout(
       cursorPage<PublicEpaperFeedItem>({
         model: EPaper,
-        mongoFilter: buildPublicEpaperMongoQuery(input.filters, { status: 'published' }),
+        mongoFilter: buildPublicEpaperMongoQuery(input.filters, {
+          status: 'published',
+          isCurrentRevision: { $ne: false },
+        }),
         mongoProjection:
           '_id citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl status pageCount pages createdAt',
         limit: input.limit,

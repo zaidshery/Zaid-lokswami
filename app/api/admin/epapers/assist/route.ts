@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession } from '@/lib/auth/admin';
+import { canEditEpaper } from '@/lib/auth/permissions';
 import { isPdfAsset } from '@/lib/constants/epaperCities';
 import { generateArticleHotspotsFromThumbnail } from '@/lib/utils/epaperOcrAssist';
 
@@ -25,6 +26,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+    if (!canEditEpaper(user.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

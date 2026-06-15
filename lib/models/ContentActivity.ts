@@ -1,13 +1,19 @@
 import mongoose, { type Model } from 'mongoose';
-import { WORKFLOW_CONTENT_TYPES, WORKFLOW_STATUSES, type WorkflowContentType, type WorkflowStatus } from '@/lib/workflow/types';
+import {
+  EPAPER_PRODUCTION_STATUSES,
+  WORKFLOW_CONTENT_TYPES,
+  WORKFLOW_STATUSES,
+  type ContentActivityStatus,
+  type WorkflowContentType,
+} from '@/lib/workflow/types';
 
 export interface IContentActivity {
   contentType: WorkflowContentType;
   contentId: string;
   parentId?: string;
   action: string;
-  fromStatus?: WorkflowStatus;
-  toStatus?: WorkflowStatus;
+  fromStatus?: ContentActivityStatus;
+  toStatus?: ContentActivityStatus;
   actorId?: string;
   actorName?: string;
   actorEmail?: string;
@@ -24,8 +30,16 @@ const ContentActivitySchema = new mongoose.Schema<IContentActivity>(
     contentId: { type: String, required: true, trim: true, maxlength: 120 },
     parentId: { type: String, trim: true, maxlength: 120, default: '' },
     action: { type: String, required: true, trim: true, maxlength: 120 },
-    fromStatus: { type: String, enum: WORKFLOW_STATUSES, default: undefined },
-    toStatus: { type: String, enum: WORKFLOW_STATUSES, default: undefined },
+    fromStatus: {
+      type: String,
+      enum: [...WORKFLOW_STATUSES, ...EPAPER_PRODUCTION_STATUSES],
+      default: undefined,
+    },
+    toStatus: {
+      type: String,
+      enum: [...WORKFLOW_STATUSES, ...EPAPER_PRODUCTION_STATUSES],
+      default: undefined,
+    },
     actorId: { type: String, trim: true, maxlength: 120, default: '' },
     actorName: { type: String, trim: true, maxlength: 200, default: '' },
     actorEmail: { type: String, trim: true, lowercase: true, maxlength: 320, default: '' },

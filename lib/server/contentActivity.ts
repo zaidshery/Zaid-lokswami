@@ -4,7 +4,10 @@ import type { AdminSessionIdentity } from '@/lib/auth/admin';
 import type { AdminRole } from '@/lib/auth/roles';
 import connectDB from '@/lib/db/mongoose';
 import ContentActivity from '@/lib/models/ContentActivity';
-import type { WorkflowContentType, WorkflowStatus } from '@/lib/workflow/types';
+import type {
+  ContentActivityStatus,
+  WorkflowContentType,
+} from '@/lib/workflow/types';
 
 export type ContentActivityActor = {
   id: string;
@@ -19,8 +22,8 @@ export type ContentActivityItem = {
   contentId: string;
   parentId: string;
   action: string;
-  fromStatus: WorkflowStatus | null;
-  toStatus: WorkflowStatus | null;
+  fromStatus: ContentActivityStatus | null;
+  toStatus: ContentActivityStatus | null;
   actor: ContentActivityActor | null;
   message: string;
   metadata: Record<string, unknown>;
@@ -33,8 +36,8 @@ type RecordContentActivityInput = {
   contentId: string;
   parentId?: string;
   action: string;
-  fromStatus?: WorkflowStatus | null;
-  toStatus?: WorkflowStatus | null;
+  fromStatus?: ContentActivityStatus | null;
+  toStatus?: ContentActivityStatus | null;
   actor?: Pick<AdminSessionIdentity, 'id' | 'name' | 'email' | 'role'> | null;
   message?: string;
   metadata?: Record<string, unknown>;
@@ -107,8 +110,13 @@ function serializeContentActivity(activity: {
     parentId: String(activity.parentId || '').trim(),
     action: String(activity.action || '').trim(),
     fromStatus:
-      typeof activity.fromStatus === 'string' ? (activity.fromStatus as WorkflowStatus) : null,
-    toStatus: typeof activity.toStatus === 'string' ? (activity.toStatus as WorkflowStatus) : null,
+      typeof activity.fromStatus === 'string'
+        ? (activity.fromStatus as ContentActivityStatus)
+        : null,
+    toStatus:
+      typeof activity.toStatus === 'string'
+        ? (activity.toStatus as ContentActivityStatus)
+        : null,
     actor: toActor({
       actorId: activity.actorId,
       actorName: activity.actorName,

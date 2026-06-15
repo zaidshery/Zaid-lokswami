@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import { getAdminSession } from '@/lib/auth/admin';
+import { canEditEpaper } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
@@ -27,6 +28,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+    if (!canEditEpaper(admin.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

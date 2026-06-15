@@ -113,23 +113,50 @@ export function buildEpaperReadiness(params: {
   const { epaper, articles } = params;
   const pageCount = Math.max(1, Number(epaper.pageCount || 0) || epaper.pages.length || 1);
   const pageNumbers = Array.from({ length: pageCount }, (_, index) => index + 1);
+  const pageByNumber = new Map(
+    (epaper.pages || []).map((page) => [Number(page.pageNumber || 0), page])
+  );
+  const editorialPageNumbers = pageNumbers.filter(
+    (pageNumber) => (pageByNumber.get(pageNumber)?.pageType || 'editorial') === 'editorial'
+  );
+  const nonEditorialPageNumbers = pageNumbers.filter(
+    (pageNumber) => !editorialPageNumbers.includes(pageNumber)
+  );
   const imagePages = uniqueSortedNumbers(
     (epaper.pages || [])
       .filter((page) => Boolean(nonEmptyString(page.imagePath)))
       .map((page) => Number(page.pageNumber || 0))
   );
 
-  const pagesWithHotspots = uniqueSortedNumbers(articles.map((article) => Number(article.pageNumber || 0)));
-  const mappedArticles = articles.length;
-  const articlesWithReadableText = articles.filter((article) => {
+  const editorialArticles = articles.filter((article) =>
+    editorialPageNumbers.includes(Number(article.pageNumber || 0))
+  );
+  const pagesWithHotspots = uniqueSortedNumbers(
+    editorialArticles.map((article) => Number(article.pageNumber || 0))
+  );
+  const mappedArticles = editorialArticles.length;
+  const articlesWithReadableText = editorialArticles.filter((article) => {
     return Boolean(nonEmptyString(article.contentHtml) || nonEmptyString(article.excerpt));
   }).length;
 
   const missingImagePages = pageNumbers.filter((pageNumber) => !imagePages.includes(pageNumber));
-  const missingHotspotPages = pageNumbers.filter(
+  const missingHotspotPages = editorialPageNumbers.filter(
     (pageNumber) =>
       imagePages.includes(pageNumber) && !pagesWithHotspots.includes(pageNumber)
   );
+  const pendingQaPages = pageNumbers.filter(
+    (pageNumber) => (pageByNumber.get(pageNumber)?.reviewStatus || 'pending') === 'pending'
+  );
+  const needsAttentionPages = pageNumbers.filter(
+    (pageNumber) => pageByNumber.get(pageNumber)?.reviewStatus === 'needs_attention'
+  );
+  const invalidBlankPages = pageNumbers.filter((pageNumber) => {
+    const page = pageByNumber.get(pageNumber);
+    return (
+      page?.pageType === 'blank' &&
+      !nonEmptyString(page.classificationNote || page.reviewNote)
+    );
+  });
 
   const pagesMissingImage = missingImagePages.length;
   const pagesMissingHotspots = missingHotspotPages.length;
@@ -139,7 +166,7 @@ export function buildEpaperReadiness(params: {
   const blockers: string[] = [];
   const warnings: string[] = [];
 
-  if (!nonEmptyString(epaper.thumbnailPath)) {
+  if (!nonEmptyString(epaper.thumbnailPath) && !imagePages.includes(1)) {
     blockers.push('Thumbnail is missing.');
   }
   if (!nonEmptyString(epaper.pdfPath)) {
@@ -150,21 +177,42 @@ export function buildEpaperReadiness(params: {
       `${pagesMissingImage} page image${pagesMissingImage === 1 ? ' is' : 's are'} missing.`
     );
   }
-  if (mappedArticles === 0) {
-    blockers.push('No mapped stories have been added yet.');
+  if (editorialPageNumbers.length > 0 && mappedArticles === 0) {
+    blockers.push('No mapped stories have been added to editorial pages yet.');
   }
   if (pagesMissingHotspots > 0) {
-    warnings.push(
+    blockers.push(
       `${pagesMissingHotspots} page${pagesMissingHotspots === 1 ? '' : 's'} still ${
         pagesMissingHotspots === 1 ? 'has' : 'have'
       } no mapped hotspots.`
     );
   }
   if (articlesMissingReadableText > 0) {
-    warnings.push(
+    blockers.push(
       `${articlesMissingReadableText} mapped stor${
         articlesMissingReadableText === 1 ? 'y is' : 'ies are'
       } missing readable text or excerpt.`
+    );
+  }
+  if (pendingQaPages.length > 0) {
+    blockers.push(
+      `${pendingQaPages.length} page${pendingQaPages.length === 1 ? '' : 's'} still ${
+        pendingQaPages.length === 1 ? 'has' : 'have'
+      } pending QA.`
+    );
+  }
+  if (needsAttentionPages.length > 0) {
+    blockers.push(
+      `${needsAttentionPages.length} page${needsAttentionPages.length === 1 ? '' : 's'} ${
+        needsAttentionPages.length === 1 ? 'is' : 'are'
+      } marked as needing attention.`
+    );
+  }
+  if (invalidBlankPages.length > 0) {
+    blockers.push(
+      `Blank page${invalidBlankPages.length === 1 ? '' : 's'} ${invalidBlankPages.join(
+        ', '
+      )} require a classification note.`
     );
   }
 
@@ -185,7 +233,17 @@ export function buildEpaperReadiness(params: {
     mappedArticles,
     articlesWithReadableText,
     articlesMissingReadableText,
+    editorialPages: editorialPageNumbers.length,
+    nonEditorialPages: nonEditorialPageNumbers.length,
+    pagesReadyForPublish: Math.max(
+      0,
+      pageCount - pendingQaPages.length - needsAttentionPages.length
+    ),
+    pagesPendingQa: pendingQaPages.length,
+    pagesNeedingAttention: needsAttentionPages.length,
     missingImagePages,
     missingHotspotPages,
+    pendingQaPages,
+    invalidBlankPages,
   };
 }

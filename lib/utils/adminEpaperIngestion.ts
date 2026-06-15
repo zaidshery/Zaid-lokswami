@@ -1,3 +1,8 @@
+import 'server-only';
+
+import crypto from 'crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import EPaper from '@/lib/models/EPaper';
 import {
   EPAPER_CITY_OPTIONS,
@@ -17,6 +22,11 @@ import {
   deleteDigitalOceanSpacesAssetByPublicId,
   uploadBufferToDigitalOceanSpaces,
 } from '@/lib/utils/digitalOceanSpaces';
+import {
+  isEpaperBackgroundProcessingEnabled,
+  queueEpaperPageProcessing,
+} from '@/lib/server/epaperProcessingJobs';
+import { buildEpaperImageAutomationUpdates } from '@/lib/server/epaperImageAutomation';
 
 type AdminSourceType = 'manual-upload' | 'drive-import' | 'remote-import';
 
@@ -37,7 +47,7 @@ type RemoteImportPayload = {
   status?: 'draft' | 'published';
   pageCount?: number;
   pdfUrl: string;
-  thumbnailUrl: string;
+  thumbnailUrl?: string;
   pageImageUrls?: string[];
   sourceLabel?: string;
 };
@@ -50,7 +60,7 @@ type CreateEPaperInput = {
   optionalPageCount?: number;
   statusInput?: string;
   pdfFile: File;
-  thumbnailFile: File;
+  thumbnailFile?: File;
   pageImageFiles?: File[];
   sourceType?: AdminSourceType;
   sourceLabel?: string;
@@ -182,29 +192,170 @@ function normalizeRemoteSourceUrl(value: string) {
   };
 }
 
+function isBlockedIpv4(address: string) {
+  const parts = address.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) {
+    return true;
+  }
+  const [a, b] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  );
+}
+
+export function isProtectedRemoteAddress(address: string) {
+  const normalized = address.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  const version = isIP(normalized);
+  if (version === 4) return isBlockedIpv4(normalized);
+  if (version !== 6) return true;
+
+  if (normalized.startsWith('::ffff:')) {
+    return isBlockedIpv4(normalized.slice('::ffff:'.length));
+  }
+  return (
+    normalized === '::' ||
+    normalized === '::1' ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    /^fe[89ab]/.test(normalized) ||
+    normalized.startsWith('ff') ||
+    normalized.startsWith('2001:db8:')
+  );
+}
+
+export function isProtectedRemoteHostname(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/\.$/, '');
+  return (
+    !normalized ||
+    normalized === 'localhost' ||
+    normalized.endsWith('.localhost') ||
+    normalized === 'metadata' ||
+    normalized === 'metadata.google.internal'
+  );
+}
+
+async function assertSafeRemoteUrl(value: string) {
+  const parsed = new URL(value);
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Only absolute http(s) URLs are supported for remote import.');
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('Remote import URLs cannot contain credentials.');
+  }
+
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  if (isProtectedRemoteHostname(hostname)) {
+    throw new Error('Remote import URL resolves to a protected host.');
+  }
+
+  const literalVersion = isIP(hostname);
+  const addresses = literalVersion
+    ? [{ address: hostname }]
+    : await lookup(hostname, { all: true, verbatim: true });
+  if (
+    !addresses.length ||
+    addresses.some((entry) => isProtectedRemoteAddress(entry.address))
+  ) {
+    throw new Error('Remote import URL resolves to a private or protected address.');
+  }
+
+  return parsed;
+}
+
+async function readLimitedResponse(response: Response, maxBytes: number) {
+  const declaredSize = Number(response.headers.get('content-length') || 0);
+  if (declaredSize > maxBytes) {
+    throw new Error('Remote file is larger than the allowed limit.');
+  }
+  if (!response.body) {
+    throw new Error('Remote file download was empty.');
+  }
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = response.body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error('Remote file is larger than the allowed limit.');
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total);
+}
+
+function hasExpectedSignature(buffer: Buffer, kind: RemoteAssetInput['kind']) {
+  if (kind === 'pdf') {
+    return buffer.length >= 5 && buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+  }
+  const isJpeg =
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff;
+  const isPng =
+    buffer.length >= 8 &&
+    buffer.subarray(0, 8).equals(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    );
+  const isWebp =
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  return isJpeg || isPng || isWebp;
+}
+
 async function fetchRemoteAsset(input: RemoteAssetInput) {
   const normalized = normalizeRemoteSourceUrl(input.url);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
 
   try {
-    const response = await fetch(normalized.downloadUrl, {
-      cache: 'no-store',
-      redirect: 'follow',
-      signal: controller.signal,
-    });
+    let currentUrl = normalized.downloadUrl;
+    let response: Response | null = null;
+    for (let redirectCount = 0; redirectCount <= 5; redirectCount += 1) {
+      await assertSafeRemoteUrl(currentUrl);
+      response = await fetch(currentUrl, {
+        cache: 'no-store',
+        redirect: 'manual',
+        signal: controller.signal,
+      });
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      const location = response.headers.get('location');
+      if (!location || redirectCount === 5) {
+        throw new Error('Remote download exceeded the redirect limit.');
+      }
+      currentUrl = new URL(location, currentUrl).toString();
+    }
 
+    if (!response) {
+      throw new Error('Remote download did not return a response.');
+    }
     if (!response.ok) {
       throw new Error(`Remote download failed with status ${response.status}.`);
     }
 
-    const buffer = Buffer.from(await response.arrayBuffer());
+    const buffer = await readLimitedResponse(response, input.maxBytes);
     if (!buffer.length) {
       throw new Error('Remote file download was empty.');
     }
-    if (buffer.byteLength > input.maxBytes) {
+    if (!hasExpectedSignature(buffer, input.kind)) {
       throw new Error(
-        `${input.kind === 'pdf' ? 'PDF' : 'Image'} is larger than the allowed limit.`
+        input.kind === 'pdf'
+          ? 'Remote file is not a valid PDF.'
+          : 'Remote file is not a supported JPG, PNG, or WEBP image.'
       );
     }
 
@@ -263,10 +414,10 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
     if (input.pdfFile.size > EPAPER_PDF_MAX_BYTES) {
       throw new Error('E-paper PDF size must be less than 25MB');
     }
-    if (!isImageFile(input.thumbnailFile)) {
+    if (input.thumbnailFile && !isImageFile(input.thumbnailFile)) {
       throw new Error('Thumbnail must be JPG, PNG, or WEBP');
     }
-    if (input.thumbnailFile.size > EPAPER_IMAGE_MAX_BYTES) {
+    if (input.thumbnailFile && input.thumbnailFile.size > EPAPER_IMAGE_MAX_BYTES) {
       throw new Error('Thumbnail size must be less than 10MB');
     }
 
@@ -277,6 +428,20 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
       if (pageImage.size > EPAPER_IMAGE_MAX_BYTES) {
         throw new Error('Each page image must be less than 10MB');
       }
+    }
+    const thumbnailBuffer = input.thumbnailFile
+      ? Buffer.from(await input.thumbnailFile.arrayBuffer())
+      : null;
+    if (thumbnailBuffer && !hasExpectedSignature(thumbnailBuffer, 'image')) {
+      throw new Error('Thumbnail has an invalid image signature.');
+    }
+    const pageImageBuffers = await Promise.all(
+      pageImageFiles.map(async (file) => Buffer.from(await file.arrayBuffer()))
+    );
+    if (
+      pageImageBuffers.some((buffer) => !hasExpectedSignature(buffer, 'image'))
+    ) {
+      throw new Error('A page image has an invalid image signature.');
     }
 
     const publishDate = parsePublishDate(publishDateInput);
@@ -294,6 +459,7 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
     const existing = await EPaper.findOne({
       citySlug,
       publishDate,
+      isCurrentRevision: true,
     })
       .select('_id')
       .lean();
@@ -321,9 +487,16 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
     if (pageCount > 1000) {
       throw new Error('pageCount is too high (max 1000)');
     }
+    if (statusInput && statusInput !== 'draft') {
+      throw new Error('Imported editions must start as drafts.');
+    }
 
+    const pdfBuffer = Buffer.from(await input.pdfFile.arrayBuffer());
+    if (!hasExpectedSignature(pdfBuffer, 'pdf')) {
+      throw new Error('E-paper file has an invalid PDF signature.');
+    }
     const pdfUpload = await uploadBufferToDigitalOceanSpaces(
-      Buffer.from(await input.pdfFile.arrayBuffer()),
+      pdfBuffer,
       {
         folder: baseFolder,
         resourceType: 'raw',
@@ -332,29 +505,42 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
     );
     uploadedAssetRefs.push({ publicId: pdfUpload.publicId, resourceType: 'raw' });
 
-    const thumbnailUpload = await uploadBufferToDigitalOceanSpaces(
-      Buffer.from(await input.thumbnailFile.arrayBuffer()),
-      {
-        folder: baseFolder,
+    const thumbnailUpload = input.thumbnailFile
+      ? await uploadBufferToDigitalOceanSpaces(
+          thumbnailBuffer as Buffer,
+          {
+            folder: baseFolder,
+            resourceType: 'image',
+            originalFilename: resolveImageTargetName('thumbnail', input.thumbnailFile),
+          }
+        )
+      : null;
+    if (thumbnailUpload) {
+      uploadedAssetRefs.push({
+        publicId: thumbnailUpload.publicId,
         resourceType: 'image',
-        originalFilename: resolveImageTargetName('thumbnail', input.thumbnailFile),
-      }
-    );
-    uploadedAssetRefs.push({ publicId: thumbnailUpload.publicId, resourceType: 'image' });
+      });
+    }
 
     const pages: Array<{
       pageNumber: number;
       imagePath?: string;
       width?: number;
       height?: number;
+      pageType: 'editorial';
+      processingStatus: 'pending' | 'ready';
+      reviewStatus: 'pending';
     }> = Array.from({ length: pageCount }, (_, index) => ({
       pageNumber: index + 1,
+      pageType: 'editorial',
+      processingStatus: 'pending',
+      reviewStatus: 'pending',
     }));
 
     for (let index = 0; index < pageImageFiles.length; index += 1) {
       const file = pageImageFiles[index];
       const pageNumber = index + 1;
-      const uploadedPage = await uploadBufferToDigitalOceanSpaces(Buffer.from(await file.arrayBuffer()), {
+      const uploadedPage = await uploadBufferToDigitalOceanSpaces(pageImageBuffers[index], {
         folder: `${baseFolder}/pages`,
         resourceType: 'image',
         originalFilename: resolveImageTargetName('page', file, pageNumber),
@@ -367,9 +553,19 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
         imagePath: uploadedPage.secureUrl,
         width: dimensions?.width,
         height: dimensions?.height,
+        pageType: 'editorial',
+        processingStatus: 'ready',
+        reviewStatus: 'pending',
       };
     }
 
+    const automationUpdates = buildEpaperImageAutomationUpdates({
+      pageCount,
+      pages,
+      currentThumbnailPath: thumbnailUpload?.secureUrl || '',
+      currentProductionStatus: 'draft_upload',
+      currentStatus: 'draft',
+    });
     const epaper = await EPaper.create({
       citySlug,
       cityName,
@@ -381,19 +577,48 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
         input.pdfFile.name || 'epaper.pdf',
         String(pdfUpload.format || '')
       ),
-      thumbnailPath: thumbnailUpload.secureUrl,
+      thumbnailPath:
+        automationUpdates.thumbnailPath || thumbnailUpload?.secureUrl || '',
       pageCount,
       pages,
-      status: statusInput === 'published' ? 'published' : 'draft',
+      status: 'draft',
+      familyId: crypto.randomUUID(),
+      revisionNumber: 1,
+      isCurrentRevision: true,
+      productionStatus: automationUpdates.productionStatus || 'draft_upload',
       sourceType: input.sourceType || 'manual-upload',
       sourceLabel: String(input.sourceLabel || '').trim(),
       sourceUrl: String(input.sourceUrl || '').trim(),
     });
 
+    const missingPageNumbers = pages
+      .filter((page) => !String(page.imagePath || '').trim())
+      .map((page) => page.pageNumber);
+    let processingWarning = '';
+    if (missingPageNumbers.length > 0) {
+      try {
+        if (!isEpaperBackgroundProcessingEnabled(citySlug)) {
+          throw new Error('Background PDF processing is not enabled for this city.');
+        }
+        await queueEpaperPageProcessing({
+          epaperId: String(epaper._id),
+          pageNumbers: missingPageNumbers,
+        });
+      } catch (error) {
+        processingWarning =
+          error instanceof Error
+            ? `Background conversion could not be queued: ${error.message}`
+            : 'Background conversion could not be queued.';
+      }
+    }
+
     return {
       epaper,
       warning:
-        pageImageFiles.length === 0 ? 'Add page images to enable hotspot drawing' : null,
+        processingWarning ||
+        (missingPageNumbers.length > 0
+          ? 'Missing pages were queued for background conversion.'
+          : null),
     };
   } catch (error) {
     await Promise.all(
@@ -414,12 +639,14 @@ export async function createAdminEpaperFromRemoteImport(input: RemoteImportPaylo
     fallbackName: 'epaper.pdf',
     maxBytes: EPAPER_PDF_MAX_BYTES,
   });
-  const thumbnailAsset = await fetchRemoteAsset({
-    url: input.thumbnailUrl,
-    kind: 'image',
-    fallbackName: 'thumbnail.jpg',
-    maxBytes: EPAPER_IMAGE_MAX_BYTES,
-  });
+  const thumbnailAsset = input.thumbnailUrl?.trim()
+    ? await fetchRemoteAsset({
+        url: input.thumbnailUrl,
+        kind: 'image',
+        fallbackName: 'thumbnail.jpg',
+        maxBytes: EPAPER_IMAGE_MAX_BYTES,
+      })
+    : null;
 
   const pageImageUrls = Array.isArray(input.pageImageUrls)
     ? input.pageImageUrls.map((value) => String(value || '').trim()).filter(Boolean)
@@ -450,7 +677,7 @@ export async function createAdminEpaperFromRemoteImport(input: RemoteImportPaylo
     optionalPageCount: input.pageCount,
     statusInput: input.status || 'draft',
     pdfFile: pdfAsset.file,
-    thumbnailFile: thumbnailAsset.file,
+    thumbnailFile: thumbnailAsset?.file,
     pageImageFiles,
     sourceType,
     sourceLabel,

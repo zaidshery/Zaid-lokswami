@@ -178,26 +178,37 @@ describe('e-paper page image quality profile', () => {
   });
 
   it('wires normalized dimensions into both manual upload flows', () => {
-    const createPage = read('app/(admin)/admin/epapers/new/page.tsx');
     const editPage = read('app/(admin)/admin/epapers/[id]/page.tsx');
 
-    for (const source of [createPage, editPage]) {
-      expect(source).toContain('normalizeEpaperPageImage(file)');
-      expect(source).toContain('file: normalized.file');
-      expect(source).toContain('width: normalized.width');
-      expect(source).toContain('height: normalized.height');
-    }
+    expect(editPage).toContain('normalizeEpaperPageImage(file)');
+    expect(editPage).toContain('file: normalized.file');
+    expect(editPage).toContain('width: normalized.width');
+    expect(editPage).toContain('height: normalized.height');
   });
 
-  it('automatically renders direct PDF uploads into 3000px page images', () => {
+  it('queues direct PDF uploads for background conversion', () => {
     const createPage = read('app/(admin)/admin/epapers/new/page.tsx');
+    const finalizeRoute = read(
+      'app/api/admin/epapers/[id]/uploads/finalize/route.ts'
+    );
+    const renderer = read('lib/server/epaperPdfRenderer.ts');
 
-    expect(createPage).toContain('getPdfFilePageCount(pdfFile)');
-    expect(createPage).toContain('renderPdfFilePages(pdfFile');
-    expect(createPage).toContain('targetWidth: EPAPER_PAGE_TARGET_WIDTH');
-    expect(createPage).toContain('jpegQuality: EPAPER_PAGE_IMAGE_QUALITY');
-    expect(createPage).toContain('width: input.width');
-    expect(createPage).toContain('height: input.height');
+    expect(createPage).toContain('/api/admin/epapers/uploads');
+    expect(createPage).toContain('/uploads/finalize');
+    expect(createPage).not.toContain('renderPdfFilePages');
+    expect(finalizeRoute).toContain('queueEpaperPageProcessing');
+    expect(renderer).toContain('const TARGET_WIDTH = 3000');
+    expect(renderer).toContain('const JPEG_QUALITY = 90');
+  });
+
+  it('uses rendered PDF page one as the cover without a thumbnail upload', () => {
+    const createPage = read('app/(admin)/admin/epapers/new/page.tsx');
+    const automation = read('lib/server/epaperImageAutomation.ts');
+
+    expect(createPage).not.toContain('epaper_thumbnail');
+    expect(createPage).toContain('page one becomes the cover');
+    expect(automation).toContain('thumbnailPath = coverImagePath');
+    expect(automation).toContain('thumbnail = coverImagePath');
   });
 
   it('renders generated PDF pages at 3000px, 220 DPI, and JPEG quality 90', () => {

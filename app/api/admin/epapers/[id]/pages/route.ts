@@ -3,15 +3,23 @@ import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
-import { canViewPage } from '@/lib/auth/permissions';
+import { canEditEpaper } from '@/lib/auth/permissions';
 import {
   buildEpaperActivityMessage,
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
 import { buildEpaperImageAutomationUpdates } from '@/lib/server/epaperImageAutomation';
-import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
 import {
-  isAllowedAssetPath,
+  isEPaperPageReviewStatus,
+  isEPaperPageType,
+  type EPaperPageType,
+} from '@/lib/types/epaper';
+import {
+  assertEpaperDraftEditable,
+  invalidateEpaperQa,
+} from '@/lib/server/epaperWorkflowPolicy';
+import {
+  isTrustedEpaperAssetPath,
 } from '@/lib/utils/epaperStorage';
 import { verifyEpaperAssetUpload } from '@/lib/storage/epaperAssetUpload';
 
@@ -37,6 +45,11 @@ function mapPages(
     imagePath?: string;
     width?: number;
     height?: number;
+    pageType?: EPaperPageType;
+    classificationNote?: string;
+    processingStatus?: string;
+    processingError?: string;
+    processedAt?: Date | string | null;
     reviewStatus?: string;
     reviewNote?: string;
     reviewedAt?: Date | string | null;
@@ -63,6 +76,27 @@ function mapPages(
       imagePath: existing?.imagePath || '',
       width: existing?.width,
       height: existing?.height,
+      pageType: isEPaperPageType(existing?.pageType)
+        ? existing.pageType
+        : 'editorial',
+      classificationNote:
+        typeof existing?.classificationNote === 'string'
+          ? existing.classificationNote
+          : '',
+      processingStatus:
+        existing?.processingStatus === 'processing' ||
+        existing?.processingStatus === 'ready' ||
+        existing?.processingStatus === 'failed'
+          ? existing.processingStatus
+          : 'pending',
+      processingError:
+        typeof existing?.processingError === 'string' ? existing.processingError : '',
+      processedAt:
+        existing?.processedAt instanceof Date
+          ? existing.processedAt
+          : existing?.processedAt
+            ? new Date(String(existing.processedAt))
+            : null,
       reviewStatus: isEPaperPageReviewStatus(existing?.reviewStatus)
         ? existing.reviewStatus
         : 'pending',
@@ -97,6 +131,11 @@ function updateSinglePage(
     imagePath?: string;
     width?: number;
     height?: number;
+    pageType?: EPaperPageType;
+    classificationNote?: string;
+    processingStatus?: 'pending' | 'processing' | 'ready' | 'failed';
+    processingError?: string;
+    processedAt?: Date | null;
     reviewStatus?: 'pending' | 'needs_attention' | 'ready';
     reviewNote?: string;
     reviewedAt?: Date | null;
@@ -115,6 +154,17 @@ function updateSinglePage(
   if (updates.imagePath !== undefined) target.imagePath = updates.imagePath;
   if (updates.width !== undefined) target.width = updates.width;
   if (updates.height !== undefined) target.height = updates.height;
+  if (updates.pageType !== undefined) target.pageType = updates.pageType;
+  if (updates.classificationNote !== undefined) {
+    target.classificationNote = updates.classificationNote;
+  }
+  if (updates.processingStatus !== undefined) {
+    target.processingStatus = updates.processingStatus;
+  }
+  if (updates.processingError !== undefined) {
+    target.processingError = updates.processingError;
+  }
+  if (updates.processedAt !== undefined) target.processedAt = updates.processedAt;
   if (updates.reviewStatus !== undefined) target.reviewStatus = updates.reviewStatus;
   if (updates.reviewNote !== undefined) target.reviewNote = updates.reviewNote;
   if (updates.reviewedAt !== undefined) target.reviewedAt = updates.reviewedAt;
@@ -129,7 +179,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     if (!admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    if (!canViewPage(admin.role, 'epaper_edit')) {
+    if (!canEditEpaper(admin.role)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -157,6 +207,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         { status: 400 }
       );
     }
+    try {
+      assertEpaperDraftEditable(epaper);
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: error instanceof Error ? error.message : 'Edition is immutable.' },
+        { status: 409 }
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
     const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
@@ -180,6 +238,11 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       const hasHeightField = Object.prototype.hasOwnProperty.call(entry, 'height');
       const hasReviewStatusField = Object.prototype.hasOwnProperty.call(entry, 'reviewStatus');
       const hasReviewNoteField = Object.prototype.hasOwnProperty.call(entry, 'reviewNote');
+      const hasPageTypeField = Object.prototype.hasOwnProperty.call(entry, 'pageType');
+      const hasClassificationNoteField = Object.prototype.hasOwnProperty.call(
+        entry,
+        'classificationNote'
+      );
       let imagePath =
         hasImagePathField && typeof entry.imagePath === 'string'
           ? entry.imagePath.trim()
@@ -194,6 +257,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
             ? rawReviewStatus
             : null;
       const reviewNote = hasReviewNoteField ? String(entry.reviewNote || '').trim() : undefined;
+      const pageType = hasPageTypeField
+        ? isEPaperPageType(entry.pageType)
+          ? entry.pageType
+          : null
+        : undefined;
+      const classificationNote = hasClassificationNoteField
+        ? String(entry.classificationNote || '').trim()
+        : undefined;
 
       if (!pageNumber) {
         return NextResponse.json(
@@ -220,7 +291,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         }
         imagePath = verified.mediaUrl;
       }
-      if (imagePath && !isAllowedAssetPath(imagePath)) {
+      if (imagePath && !isTrustedEpaperAssetPath(imagePath)) {
         return NextResponse.json(
           { success: false, error: `Invalid imagePath for page ${pageNumber}` },
           { status: 400 }
@@ -229,6 +300,12 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       if (reviewStatus === null) {
         return NextResponse.json(
           { success: false, error: `Invalid reviewStatus for page ${pageNumber}` },
+          { status: 400 }
+        );
+      }
+      if (pageType === null) {
+        return NextResponse.json(
+          { success: false, error: `Invalid pageType for page ${pageNumber}` },
           { status: 400 }
         );
       }
@@ -250,12 +327,46 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         pages = mapPages(pages, nextPageCount);
       }
       const hasImageUpdate = hasImagePathField || Boolean(mediaKey) || hasWidthField || hasHeightField;
+      const hasContentClassificationUpdate = hasPageTypeField || hasClassificationNoteField;
       const hasReviewUpdate = hasReviewStatusField || hasReviewNoteField;
+      const meaningfulContentChange = hasImageUpdate || hasContentClassificationUpdate;
+
+      const currentPage = pages.find((page) => page.pageNumber === pageNumber);
+      const resolvedPageType = pageType || currentPage?.pageType || 'editorial';
+      const resolvedClassificationNote =
+        classificationNote !== undefined
+          ? classificationNote
+          : currentPage?.classificationNote || '';
+      if (resolvedPageType === 'blank' && !resolvedClassificationNote) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `classificationNote is required when page ${pageNumber} is marked blank`,
+          },
+          { status: 400 }
+        );
+      }
 
       pages = updateSinglePage(pages, pageNumber, {
         ...(hasImagePathField || mediaKey ? { imagePath: imagePath || '' } : {}),
         ...(hasWidthField ? { width } : {}),
         ...(hasHeightField ? { height } : {}),
+        ...(pageType !== undefined ? { pageType } : {}),
+        ...(classificationNote !== undefined ? { classificationNote } : {}),
+        ...(hasImageUpdate
+          ? {
+              processingStatus: imagePath ? 'ready' : 'pending',
+              processingError: '',
+              processedAt: imagePath ? new Date() : null,
+            }
+          : {}),
+        ...(meaningfulContentChange
+          ? {
+              reviewStatus: 'pending',
+              reviewedAt: null,
+              reviewedBy: null,
+            }
+          : {}),
         ...(reviewStatus !== undefined ? { reviewStatus } : {}),
         ...(hasReviewNoteField ? { reviewNote } : {}),
         ...(hasReviewUpdate ? { reviewedAt: new Date() } : {}),
@@ -296,6 +407,25 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       },
       { new: true, runValidators: true }
     ).lean();
+
+    const contentChangedPages = Array.from(
+      new Set([...imageUpdatedPages, ...updates.map((entry) => {
+        const source =
+          typeof entry === 'object' && entry ? (entry as Record<string, unknown>) : {};
+        return Object.prototype.hasOwnProperty.call(source, 'pageType') ||
+          Object.prototype.hasOwnProperty.call(source, 'classificationNote')
+          ? parsePageNumber(source.pageNumber)
+          : 0;
+      })])
+    ).filter(Boolean);
+    if (contentChangedPages.length > 0) {
+      await invalidateEpaperQa({
+        epaperId: id,
+        actor: admin,
+        reason: 'Page image or page classification changed.',
+        pageNumbers: contentChangedPages,
+      });
+    }
 
     if (imageUpdatedPages.length > 0) {
       await recordEpaperActivity({

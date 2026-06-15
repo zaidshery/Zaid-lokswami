@@ -2,299 +2,191 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { ArrowLeft, Link2, Loader2, UploadCloud } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
-import { EPAPER_CITY_OPTIONS, type EPaperCitySlug } from '@/lib/constants/epaperCities';
-import { uploadEpaperAssetDirect } from '@/lib/utils/epaperDirectUploadClient';
 import {
-  buildEpaperLowResolutionWarning,
-  EPAPER_PAGE_IMAGE_QUALITY,
-  EPAPER_PAGE_TARGET_WIDTH,
-  normalizeEpaperPageImage,
-} from '@/lib/utils/epaperPageImage';
-import {
-  getPdfFilePageCount,
-  renderPdfFilePages,
-} from '@/lib/utils/pdfThumbnailClient';
+  EPAPER_CITY_OPTIONS,
+  type EPaperCitySlug,
+} from '@/lib/constants/epaperCities';
+import { uploadFileToSignedUrl } from '@/lib/utils/epaperDirectUploadClient';
 
-type UploadResponse = {
-  success: boolean;
+type UploadTarget = {
+  mediaKey: string;
+  uploadUrl: string;
+  uploadHeaders?: Record<string, string>;
+};
+
+type InitializeUploadResponse = {
+  success?: boolean;
   error?: string;
-  warning?: string | null;
-  data?: { _id: string };
+  data?: {
+    epaperId?: string;
+    uploadTarget?: UploadTarget;
+  };
 };
 
 type BasicResponse = {
   success?: boolean;
   error?: string;
+  warning?: string | null;
+  data?: { _id?: string; epaperId?: string };
 };
 
 export default function NewEPaperPage() {
   const router = useRouter();
-
   const [createMode, setCreateMode] = useState<'upload' | 'import'>('upload');
-  const [citySlug, setCitySlug] = useState<EPaperCitySlug>(EPAPER_CITY_OPTIONS[0].slug);
+  const [citySlug, setCitySlug] = useState<EPaperCitySlug>(
+    EPAPER_CITY_OPTIONS[0].slug
+  );
   const [title, setTitle] = useState('');
   const [publishDate, setPublishDate] = useState('');
-  const [status, setStatus] = useState<'draft' | 'published'>('draft');
-  const [pageCount, setPageCount] = useState('');
-
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-  const [pageImages, setPageImages] = useState<File[]>([]);
   const [pdfUrl, setPdfUrl] = useState('');
   const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [pageImageUrlInput, setPageImageUrlInput] = useState('');
   const [sourceLabel, setSourceLabel] = useState('');
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [warning, setWarning] = useState('');
+  const [notice, setNotice] = useState('');
 
-  const cityName = useMemo(() => {
-    const match = EPAPER_CITY_OPTIONS.find((item) => item.slug === citySlug);
-    return match?.name || '';
-  }, [citySlug]);
+  const cityName = useMemo(
+    () => EPAPER_CITY_OPTIONS.find((item) => item.slug === citySlug)?.name || '',
+    [citySlug]
+  );
 
-  const onPageImagesChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    setPageImages(files);
+  const submitDirectUpload = async () => {
+    if (!pdfFile) {
+      throw new Error('Choose a PDF to upload.');
+    }
+
+    const authHeaders = getAuthHeader();
+    setNotice('Creating the draft edition...');
+    const initializeResponse = await fetch('/api/admin/epapers/uploads', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      body: JSON.stringify({
+        citySlug,
+        title: title.trim(),
+        publishDate,
+        fileName: pdfFile.name,
+        fileType: pdfFile.type || 'application/pdf',
+        fileSize: pdfFile.size,
+      }),
+    });
+    const initializePayload =
+      (await initializeResponse.json().catch(() => ({}))) as InitializeUploadResponse;
+    const epaperId = initializePayload.data?.epaperId;
+    const target = initializePayload.data?.uploadTarget;
+    if (
+      !initializeResponse.ok ||
+      !initializePayload.success ||
+      !epaperId ||
+      !target?.mediaKey ||
+      !target.uploadUrl
+    ) {
+      throw new Error(
+        initializePayload.error || 'Failed to initialize the e-paper upload.'
+      );
+    }
+
+    setNotice('Uploading the PDF to DigitalOcean Spaces...');
+    await uploadFileToSignedUrl({
+      file: pdfFile,
+      uploadUrl: target.uploadUrl,
+      uploadHeaders: target.uploadHeaders || {
+        'Content-Type': pdfFile.type || 'application/pdf',
+      },
+    });
+
+    setNotice('Verifying the PDF and queuing background conversion...');
+    const finalizeResponse = await fetch(
+      `/api/admin/epapers/${encodeURIComponent(epaperId)}/uploads/finalize`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          mediaKey: target.mediaKey,
+          expectedSize: pdfFile.size,
+          expectedFileType: pdfFile.type || 'application/pdf',
+          expectedFileName: pdfFile.name,
+        }),
+      }
+    );
+    const finalizePayload =
+      (await finalizeResponse.json().catch(() => ({}))) as BasicResponse;
+    if (!finalizeResponse.ok || !finalizePayload.success) {
+      throw new Error(
+        finalizePayload.error || 'Failed to queue PDF conversion.'
+      );
+    }
+
+    return epaperId;
+  };
+
+  const submitRemoteImport = async () => {
+    if (!pdfUrl.trim()) {
+      throw new Error('A PDF link is required for URL import.');
+    }
+
+    setNotice('Downloading and validating the remote assets...');
+    const response = await fetch('/api/admin/epapers/import', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify({
+        citySlug,
+        cityName,
+        title: title.trim(),
+        publishDate,
+        pdfUrl: pdfUrl.trim(),
+        thumbnailUrl: thumbnailUrl.trim(),
+        pageImageUrls: pageImageUrlInput
+          .split(/\r?\n/)
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+        sourceLabel: sourceLabel.trim(),
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as BasicResponse;
+    const epaperId = payload.data?._id;
+    if (!response.ok || !payload.success || !epaperId) {
+      throw new Error(payload.error || 'Failed to import the e-paper.');
+    }
+    if (payload.warning) {
+      setNotice(payload.warning);
+    }
+    return epaperId;
   };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
-    setWarning('');
+    setNotice('');
+
+    if (!citySlug || !cityName || !title.trim() || !publishDate) {
+      setError('City, title, and publish date are required.');
+      return;
+    }
 
     setLoading(true);
     try {
-      if (!citySlug || !cityName || !title.trim() || !publishDate) {
-        throw new Error('city, title, and publishDate are required');
-      }
-
-      let payload: UploadResponse;
-      const warnings: string[] = [];
-
-      if (createMode === 'upload') {
-        if (!pdfFile || !thumbnailFile) {
-          throw new Error('PDF and thumbnail are required for upload mode');
-        }
-        const authHeaders = getAuthHeader();
-        let detectedPdfPageCount = 0;
-        if (pageImages.length === 0) {
-          setWarning('Reading PDF page count...');
-          detectedPdfPageCount = await getPdfFilePageCount(pdfFile);
-          const enteredPageCount = Number.parseInt(pageCount, 10);
-          if (
-            Number.isFinite(enteredPageCount) &&
-            enteredPageCount > 0 &&
-            enteredPageCount !== detectedPdfPageCount
-          ) {
-            warnings.push(
-              `The entered page count was ${enteredPageCount}; the PDF contains ${detectedPdfPageCount} pages, so the PDF count was used.`
-            );
-          }
-        }
-
-        setWarning('Uploading PDF to DigitalOcean...');
-        const pdfUpload = await uploadEpaperAssetDirect({
-          kind: 'epaper_pdf',
-          file: pdfFile,
-          authHeaders,
-          citySlug,
-          publishDate,
-        });
-
-        setWarning('Uploading thumbnail to DigitalOcean...');
-        const thumbnailUpload = await uploadEpaperAssetDirect({
-          kind: 'epaper_thumbnail',
-          file: thumbnailFile,
-          authHeaders,
-          citySlug,
-          publishDate,
-        });
-
-        const response = await fetch('/api/admin/epapers', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders,
-          },
-          body: JSON.stringify({
-            citySlug,
-            cityName,
-            title: title.trim(),
-            publishDate,
-            status,
-            pageCount:
-              pageImages.length > 0
-                ? pageCount.trim() || String(pageImages.length)
-                : String(detectedPdfPageCount),
-            pdfAsset: pdfUpload.asset,
-            thumbnailAsset: thumbnailUpload.asset,
-          }),
-        });
-
-        payload = (await response.json().catch(() => ({}))) as UploadResponse;
-        if (!response.ok || !payload.success || !payload.data?._id) {
-          throw new Error(payload.error || 'Failed to upload e-paper');
-        }
-
-        if (payload.warning) {
-          warnings.push(payload.warning);
-        }
-
-        const uploadPageImage = async (input: {
-          file: File;
-          pageNumber: number;
-          width: number;
-          height: number;
-        }) => {
-          const pageUpload = await uploadEpaperAssetDirect({
-            kind: 'epaper_page_image',
-            file: input.file,
-            authHeaders,
-            citySlug,
-            publishDate,
-            pageNumber: input.pageNumber,
-          });
-
-          const pageResponse = await fetch(`/api/admin/epapers/${payload.data?._id}/pages`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              ...authHeaders,
-            },
-            body: JSON.stringify({
-              pages: [
-                {
-                  pageNumber: input.pageNumber,
-                  imagePath: pageUpload.asset.mediaUrl,
-                  mediaKey: pageUpload.asset.mediaKey,
-                  width: input.width,
-                  height: input.height,
-                },
-              ],
-            }),
-          });
-          const pagePayload = (await pageResponse.json().catch(() => ({}))) as BasicResponse;
-          if (!pageResponse.ok || pagePayload.success === false) {
-            throw new Error(pagePayload.error || `Failed to save page ${input.pageNumber}.`);
-          }
-        };
-
-        if (pageImages.length > 0) {
-          let failedUploads = 0;
-          for (let index = 0; index < pageImages.length; index += 1) {
-            const file = pageImages[index];
-            const pageNumber = index + 1;
-            setWarning(`E-paper created. Uploading page images ${pageNumber}/${pageImages.length}...`);
-
-            try {
-              const normalized = await normalizeEpaperPageImage(file);
-              await uploadPageImage({
-                file: normalized.file,
-                pageNumber,
-                width: normalized.width,
-                height: normalized.height,
-              });
-
-              if (normalized.isLowResolution) {
-                const lowResolutionWarning = buildEpaperLowResolutionWarning(
-                  pageNumber,
-                  normalized.width
-                );
-                warnings.push(lowResolutionWarning);
-                setWarning(
-                  `Uploading page image ${pageNumber}/${pageImages.length}. ${lowResolutionWarning}`
-                );
-              }
-            } catch {
-              failedUploads += 1;
-            }
-          }
-
-          if (failedUploads > 0) {
-            warnings.push(
-              `${failedUploads} page image(s) failed. Open this e-paper and retry those pages.`
-            );
-          }
-        } else {
-          let failedUploads = 0;
-          try {
-            await renderPdfFilePages(pdfFile, {
-              targetWidth: EPAPER_PAGE_TARGET_WIDTH,
-              jpegQuality: EPAPER_PAGE_IMAGE_QUALITY,
-              onPage: async (renderedPage) => {
-                setWarning(
-                  `E-paper created. Converting and uploading PDF page ${renderedPage.pageNumber}/${renderedPage.pageCount} at ${renderedPage.width}px...`
-                );
-                try {
-                  await uploadPageImage(renderedPage);
-                } catch {
-                  failedUploads += 1;
-                }
-              },
-            });
-          } catch (conversionError: unknown) {
-            warnings.push(
-              conversionError instanceof Error
-                ? `Automatic PDF page conversion failed: ${conversionError.message}`
-                : 'Automatic PDF page conversion failed.'
-            );
-          }
-
-          if (failedUploads > 0) {
-            warnings.push(
-              `${failedUploads} generated page image(s) failed to upload. Open this e-paper and retry those pages.`
-            );
-          }
-        }
-      } else {
-        if (!pdfUrl.trim() || !thumbnailUrl.trim()) {
-          throw new Error('PDF link and thumbnail link are required for import mode');
-        }
-
-        const response = await fetch('/api/admin/epapers/import', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeader(),
-          },
-          body: JSON.stringify({
-            citySlug,
-            cityName,
-            title: title.trim(),
-            publishDate,
-            status,
-            pageCount: pageCount.trim() || undefined,
-            pdfUrl: pdfUrl.trim(),
-            thumbnailUrl: thumbnailUrl.trim(),
-            pageImageUrls: pageImageUrlInput
-              .split(/\r?\n/)
-              .map((entry) => entry.trim())
-              .filter(Boolean),
-            sourceLabel: sourceLabel.trim(),
-          }),
-        });
-
-        payload = (await response.json().catch(() => ({}))) as UploadResponse;
-        if (!response.ok || !payload.success || !payload.data?._id) {
-          throw new Error(payload.error || 'Failed to import e-paper');
-        }
-        if (payload.warning) {
-          warnings.push(payload.warning);
-        }
-      }
-
-      if (warnings.length > 0) {
-        setWarning(warnings.join(' '));
-      }
-      router.push(`/admin/epapers/${payload.data._id}`);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to upload e-paper');
+      const epaperId =
+        createMode === 'upload'
+          ? await submitDirectUpload()
+          : await submitRemoteImport();
+      router.push(`/admin/epapers/${epaperId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create e-paper.');
     } finally {
       setLoading(false);
     }
@@ -313,7 +205,8 @@ export default function NewEPaperPage() {
       <div className="mx-auto max-w-3xl rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-gray-900">Upload E-Paper</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Upload files directly or import a shared Google Drive URL into the e-paper workflow.
+          New editions are always created as drafts. PDF pages are converted in
+          the background at 3000px width, and page one becomes the cover.
         </p>
 
         {error ? (
@@ -321,10 +214,9 @@ export default function NewEPaperPage() {
             {error}
           </div>
         ) : null}
-
-        {warning ? (
+        {notice ? (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            {warning}
+            {notice}
           </div>
         ) : null}
 
@@ -333,10 +225,10 @@ export default function NewEPaperPage() {
             <button
               type="button"
               onClick={() => setCreateMode('upload')}
-              className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
                 createMode === 'upload'
                   ? 'bg-white text-primary-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600'
               }`}
             >
               Direct upload
@@ -344,10 +236,10 @@ export default function NewEPaperPage() {
             <button
               type="button"
               onClick={() => setCreateMode('import')}
-              className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
                 createMode === 'import'
                   ? 'bg-white text-primary-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600'
               }`}
             >
               Google Drive / URL import
@@ -356,11 +248,15 @@ export default function NewEPaperPage() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label>
-              <span className="mb-1 block text-xs font-semibold text-gray-600">City</span>
+              <span className="mb-1 block text-xs font-semibold text-gray-600">
+                City
+              </span>
               <select
                 value={citySlug}
-                onChange={(event) => setCitySlug(event.target.value as EPaperCitySlug)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                onChange={(event) =>
+                  setCitySlug(event.target.value as EPaperCitySlug)
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               >
                 {EPAPER_CITY_OPTIONS.map((city) => (
                   <option key={city.slug} value={city.slug}>
@@ -369,149 +265,78 @@ export default function NewEPaperPage() {
                 ))}
               </select>
             </label>
-
             <label>
-              <span className="mb-1 block text-xs font-semibold text-gray-600">Publish Date</span>
+              <span className="mb-1 block text-xs font-semibold text-gray-600">
+                Publish Date
+              </span>
               <DateInputField
                 value={publishDate}
                 onChange={setPublishDate}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 required
               />
             </label>
           </div>
 
           <label>
-            <span className="mb-1 block text-xs font-semibold text-gray-600">Title</span>
+            <span className="mb-1 block text-xs font-semibold text-gray-600">
+              Title
+            </span>
             <input
               type="text"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Indore Edition - 16 Feb 2026"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               required
             />
           </label>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <label>
-              <span className="mb-1 block text-xs font-semibold text-gray-600">Status</span>
-              <select
-                value={status}
-                onChange={(event) => setStatus(event.target.value as 'draft' | 'published')}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              >
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-              </select>
-            </label>
-
+          {createMode === 'upload' ? (
             <label>
               <span className="mb-1 block text-xs font-semibold text-gray-600">
-                Page Count (optional for PDF upload)
+                PDF (required, max 25MB)
               </span>
               <input
-                type="number"
-                min={1}
-                value={pageCount}
-                onChange={(event) => setPageCount(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                placeholder="Detected automatically from the PDF"
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(event) => setPdfFile(event.target.files?.[0] || null)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                required
               />
+              <p className="mt-1 text-xs text-gray-600">
+                Conversion continues on the server after you leave this page.
+              </p>
             </label>
-          </div>
-
-          {createMode === 'upload' ? (
-            <>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label>
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">
-                    PDF (required, max 25MB)
-                  </span>
-                  <input
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={(event) => setPdfFile(event.target.files?.[0] || null)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    required={createMode === 'upload'}
-                  />
-                  {pdfFile ? (
-                    <p className="mt-1 text-xs text-gray-600">{pdfFile.name}</p>
-                  ) : null}
-                </label>
-
-                <label>
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">
-                    Thumbnail (JPG/PNG/WEBP, max 10MB)
-                  </span>
-                  <input
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                    onChange={(event) => setThumbnailFile(event.target.files?.[0] || null)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    required={createMode === 'upload'}
-                  />
-                  {thumbnailFile ? (
-                    <p className="mt-1 text-xs text-gray-600">{thumbnailFile.name}</p>
-                  ) : null}
-                </label>
-              </div>
-
-              <label>
-                <span className="mb-1 block text-xs font-semibold text-gray-600">
-                  Optional Page Images (override automatic PDF conversion)
-                </span>
-                <input
-                  type="file"
-                  multiple
-                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                  onChange={onPageImagesChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                />
-                <p className="mt-1 text-xs text-gray-600">
-                  {pageImages.length > 0
-                    ? `${pageImages.length} page image(s) selected (will be uploaded one-by-one after e-paper is created)`
-                    : 'If omitted, every PDF page is rendered at 3000px wide and uploaded automatically.'}
-                </p>
-              </label>
-            </>
           ) : (
             <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-              <p className="text-sm text-blue-900">
-                Paste share links from Google Drive or any direct PDF/image URL. The server will download the assets and create the edition for you.
-              </p>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label>
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">
-                    PDF URL
-                  </span>
-                  <input
-                    type="url"
-                    value={pdfUrl}
-                    onChange={(event) => setPdfUrl(event.target.value)}
-                    placeholder="https://drive.google.com/file/d/..."
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    required={createMode === 'import'}
-                  />
-                </label>
-
-                <label>
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">
-                    Thumbnail URL
-                  </span>
-                  <input
-                    type="url"
-                    value={thumbnailUrl}
-                    onChange={(event) => setThumbnailUrl(event.target.value)}
-                    placeholder="https://drive.google.com/file/d/..."
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    required={createMode === 'import'}
-                  />
-                </label>
-              </div>
-
-              <label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-gray-600">
+                  PDF URL
+                </span>
+                <input
+                  type="url"
+                  value={pdfUrl}
+                  onChange={(event) => setPdfUrl(event.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-gray-600">
+                  Thumbnail URL (optional)
+                </span>
+                <input
+                  type="url"
+                  value={thumbnailUrl}
+                  onChange={(event) => setThumbnailUrl(event.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-gray-600">
+                  When omitted, rendered page one becomes the cover.
+                </p>
+              </label>
+              <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-gray-600">
                   Source Label (optional)
                 </span>
@@ -519,21 +344,18 @@ export default function NewEPaperPage() {
                   type="text"
                   value={sourceLabel}
                   onChange={(event) => setSourceLabel(event.target.value)}
-                  placeholder="Google Drive morning import"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               </label>
-
-              <label>
+              <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-gray-600">
                   Optional Page Image URLs (one per line)
                 </span>
                 <textarea
                   value={pageImageUrlInput}
                   onChange={(event) => setPageImageUrlInput(event.target.value)}
-                  rows={5}
-                  placeholder={'https://.../page-1.jpg\nhttps://.../page-2.jpg'}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                  rows={4}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               </label>
             </div>
@@ -542,7 +364,7 @@ export default function NewEPaperPage() {
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-70"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -551,7 +373,11 @@ export default function NewEPaperPage() {
             ) : (
               <Link2 className="h-4 w-4" />
             )}
-            {loading ? 'Processing...' : createMode === 'upload' ? 'Upload E-Paper' : 'Import E-Paper'}
+            {loading
+              ? 'Processing...'
+              : createMode === 'upload'
+                ? 'Upload and Queue PDF'
+                : 'Import E-Paper'}
           </button>
         </form>
       </div>

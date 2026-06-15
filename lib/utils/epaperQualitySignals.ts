@@ -57,6 +57,8 @@ export function buildEpaperPageQualitySignal(input: {
   articles: EPaperArticleRecord[];
 }): EPaperPageQualitySignal {
   const { page, articles } = input;
+  const pageType = page?.pageType || 'editorial';
+  const requiresStories = pageType === 'editorial';
   const mappedStories = articles.length;
   const readableStories = articles.filter((article) => hasReadableText(article)).length;
   const unreadableStories = Math.max(0, mappedStories - readableStories);
@@ -79,12 +81,12 @@ export function buildEpaperPageQualitySignal(input: {
     };
   }
 
-  if (mappedStories === 0) {
+  if (requiresStories && mappedStories === 0) {
     level = 'critical';
     issues.push('No hotspots mapped yet.');
   }
 
-  if (mappedStories > 0 && readableStories === 0) {
+  if (requiresStories && mappedStories > 0 && readableStories === 0) {
     level = 'critical';
     issues.push('All mapped stories still lack readable text.');
   } else if (unreadableStories > 0) {
@@ -94,6 +96,14 @@ export function buildEpaperPageQualitySignal(input: {
     issues.push(
       `${unreadableStories} mapped stor${unreadableStories === 1 ? 'y still lacks' : 'ies still lack'} readable text.`
     );
+  }
+
+  if (
+    pageType === 'blank' &&
+    !String(page.classificationNote || page.reviewNote || '').trim()
+  ) {
+    level = 'critical';
+    issues.push('Blank pages require a classification note.');
   }
 
   if (page.reviewStatus === 'needs_attention') {
@@ -180,7 +190,11 @@ export function buildEpaperEditionQualitySummary(input: {
     }
   );
 
-  const pagesWithoutHotspots = pageSignals.filter((entry) => entry.quality.mappedStories === 0).length;
+  const pagesWithoutHotspots = pageSignals.filter(
+    (entry) =>
+      (entry.page?.pageType || 'editorial') === 'editorial' &&
+      entry.quality.mappedStories === 0
+  ).length;
   const publishBlockers: string[] = [];
 
   if (counts.pendingQa > 0) {

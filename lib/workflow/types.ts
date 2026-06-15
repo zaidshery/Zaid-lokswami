@@ -48,6 +48,7 @@ export type WorkflowStatus = (typeof WORKFLOW_STATUSES)[number];
 export type WorkflowPriority = (typeof WORKFLOW_PRIORITIES)[number];
 export type WorkflowCommentKind = (typeof WORKFLOW_COMMENT_KINDS)[number];
 export type EPaperProductionStatus = (typeof EPAPER_PRODUCTION_STATUSES)[number];
+export type ContentActivityStatus = WorkflowStatus | EPaperProductionStatus;
 
 export type WorkflowTransitionRequirement =
   | 'assignedTo'

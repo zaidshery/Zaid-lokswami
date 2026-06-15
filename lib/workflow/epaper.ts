@@ -209,7 +209,10 @@ export function applyEpaperProductionUpdate(input: {
     nextNotes.push({
       id: cryptoRandomId(),
       body: trimmedNote,
-      kind: 'comment',
+      kind:
+        fromStatus === 'qa_review' && toStatus === 'hotspot_mapping'
+          ? 'revision_request'
+          : 'comment',
       author: actorRef,
       createdAt: new Date(),
     });
@@ -228,7 +231,9 @@ export function applyEpaperProductionUpdate(input: {
       qaCompletedAt:
         toStatus === 'ready_to_publish'
           ? new Date()
-          : input.currentProduction.qaCompletedAt,
+          : toStatus === 'qa_review' || toStatus === 'hotspot_mapping'
+            ? null
+            : input.currentProduction.qaCompletedAt,
     } satisfies EpaperProductionMeta,
   };
 }

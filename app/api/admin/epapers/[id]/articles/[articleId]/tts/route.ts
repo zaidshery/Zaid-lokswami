@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
+import { canEditEpaper } from '@/lib/auth/permissions';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import {
@@ -113,6 +114,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
         { status: 401 }
       );
     }
+    if (!canEditEpaper(admin.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
 
     const mongoError = await requireMongoBackedTts();
     if (mongoError) {
@@ -187,6 +194,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+    if (!canEditEpaper(admin.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

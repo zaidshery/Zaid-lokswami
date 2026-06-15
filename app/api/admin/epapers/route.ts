@@ -1,10 +1,11 @@
+import crypto from 'crypto';
 import { Types } from 'mongoose';
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import EPaper from '@/lib/models/EPaper';
 import EPaperArticle from '@/lib/models/EPaperArticle';
 import { getAdminSession } from '@/lib/auth/admin';
-import { canViewPage } from '@/lib/auth/permissions';
+import { canCreateEpaper, canViewPage } from '@/lib/auth/permissions';
 import {
   getCityNameFromSlug,
   getCitySlugFromName,
@@ -523,7 +524,7 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
-    if (!canViewPage(admin.role, 'epapers')) {
+    if (!canCreateEpaper(admin.role)) {
       return NextResponse.json(
         { success: false, error: 'Forbidden' },
         { status: 403 }
@@ -554,8 +555,14 @@ export async function POST(req: NextRequest) {
     if (requestedPageCount > 1000) {
       return NextResponse.json({ success: false, error: 'pageCount is too high (max 1000)' }, { status: 400 });
     }
-    if (statusInput && statusInput !== 'draft' && statusInput !== 'published') {
-      return NextResponse.json({ success: false, error: 'Invalid status' }, { status: 400 });
+    if (statusInput && statusInput !== 'draft') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'New editions must start as drafts and use the production workflow to publish.',
+        },
+        { status: 400 }
+      );
     }
 
     const [pdfAsset, thumbnailAsset, pageImageAssets] = await Promise.all([
@@ -577,7 +584,13 @@ export async function POST(req: NextRequest) {
     }
 
     await connectDB();
-    const existing = await EPaper.findOne({ citySlug, publishDate }).select('_id').lean();
+    const existing = await EPaper.findOne({
+      citySlug,
+      publishDate,
+      isCurrentRevision: true,
+    })
+      .select('_id')
+      .lean();
     if (existing) {
       return NextResponse.json(
         { success: false, error: `E-paper already exists for ${citySlug} on ${publishDate.toISOString().slice(0, 10)}` },
@@ -585,11 +598,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const pages = Array.from({ length: pageCount }, (_, index) => ({
+    const pages: Array<{
+      pageNumber: number;
+      imagePath: string;
+      width?: number;
+      height?: number;
+      pageType: 'editorial';
+      processingStatus: 'pending' | 'ready';
+      reviewStatus: 'pending';
+    }> = Array.from({ length: pageCount }, (_, index) => ({
       pageNumber: index + 1,
       imagePath: '',
       width: undefined as number | undefined,
       height: undefined as number | undefined,
+      pageType: 'editorial' as const,
+      processingStatus: 'pending' as const,
+      reviewStatus: 'pending' as const,
     }));
 
     for (const pageAsset of pageImageAssets) {
@@ -598,10 +622,13 @@ export async function POST(req: NextRequest) {
         imagePath: pageAsset.asset.mediaUrl,
         width: pageAsset.width,
         height: pageAsset.height,
+        pageType: 'editorial',
+        processingStatus: 'ready',
+        reviewStatus: 'pending',
       };
     }
 
-    const status = statusInput === 'published' ? 'published' : 'draft';
+    const status = 'draft';
     const automationUpdates = buildEpaperImageAutomationUpdates({
       pageCount,
       pages,
@@ -623,9 +650,10 @@ export async function POST(req: NextRequest) {
       pageCount,
       pages,
       status,
-      productionStatus: status === 'published'
-        ? 'published'
-        : automationUpdates.productionStatus || 'draft_upload',
+      familyId: crypto.randomUUID(),
+      revisionNumber: 1,
+      isCurrentRevision: true,
+      productionStatus: automationUpdates.productionStatus || 'draft_upload',
       sourceType: 'manual-upload',
       sourceLabel: 'Direct Spaces upload',
       sourceUrl: pdfAsset.mediaUrl,

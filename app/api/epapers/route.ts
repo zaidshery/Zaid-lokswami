@@ -192,7 +192,10 @@ export async function GET(req: NextRequest) {
       return createFileResponse();
     }
 
-    const query = buildPublicEpaperMongoQuery(filters, { status: 'published' });
+    const query = buildPublicEpaperMongoQuery(filters, {
+      status: 'published',
+      isCurrentRevision: { $ne: false },
+    });
 
     try {
       const total = await EPaper.countDocuments(query);

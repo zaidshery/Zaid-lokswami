@@ -187,32 +187,38 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     await connectDB();
 
-    if (!Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid e-paper ID' },
-        { status: 400 }
-      );
-    }
-
-    const epaper = await EPaper.findById(id).lean();
+    let epaper = Types.ObjectId.isValid(id)
+      ? await EPaper.findById(id).lean()
+      : await EPaper.findOne({
+          familyId: id,
+          status: 'published',
+          isCurrentRevision: true,
+        }).lean();
     if (!epaper) {
       return NextResponse.json(
         { success: false, error: 'E-paper not found' },
         { status: 404 }
       );
     }
-    if (epaper.status !== 'published') {
-      return NextResponse.json(
-        { success: false, error: 'E-paper not found' },
-        { status: 404 }
-      );
+    if (epaper.status !== 'published' || epaper.isCurrentRevision === false) {
+      epaper = await EPaper.findOne({
+        familyId: String(epaper.familyId || epaper._id),
+        status: 'published',
+        isCurrentRevision: true,
+      }).lean();
+      if (!epaper) {
+        return NextResponse.json(
+          { success: false, error: 'E-paper not found' },
+          { status: 404 }
+        );
+      }
     }
 
     const pageNumberFilter = Number.parseInt(
       req.nextUrl.searchParams.get('pageNumber') || '',
       10
     );
-    const articleQuery: Record<string, unknown> = { epaperId: id };
+    const articleQuery: Record<string, unknown> = { epaperId: epaper._id };
     if (Number.isFinite(pageNumberFilter) && pageNumberFilter > 0) {
       articleQuery.pageNumber = Math.floor(pageNumberFilter);
     }
