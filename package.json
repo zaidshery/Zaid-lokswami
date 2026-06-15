@@ -47,8 +47,8 @@
     "seed": "node scripts/seed.js",
     "hash-password": "ts-node --files scripts/hash-password.ts",
     "migrate:epapers": "ts-node scripts/migrate-epapers-to-v2.ts",
-    "migrate:epaper-workflow-v3": "ts-node scripts/migrate-epaper-workflow-v3.ts",
-    "migrate:epaper-workflow-v3:write": "ts-node scripts/migrate-epaper-workflow-v3.ts --write",
+    "migrate:epaper-workflow-v3": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/migrate-epaper-workflow-v3.ts",
+    "migrate:epaper-workflow-v3:write": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/migrate-epaper-workflow-v3.ts --write",
     "migrate:four-role-admin": "node scripts/migrate-four-role-admin.js",
     "migrate:four-role-admin:write": "node scripts/migrate-four-role-admin.js --write"
   },

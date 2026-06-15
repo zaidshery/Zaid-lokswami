@@ -1,9 +1,29 @@
 #!/usr/bin/env ts-node
 
-import 'dotenv/config';
+import path from 'node:path';
+import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 
 type AnyRecord = Record<string, unknown>;
+
+function loadMigrationEnvironment() {
+  const projectRoot = process.cwd();
+  const envFileNames = [
+    '.env.hostinger',
+    '.env.production',
+    '.env',
+    '.env.local',
+    '.env.production.local',
+  ];
+
+  for (const fileName of envFileNames) {
+    dotenv.config({
+      path: path.join(projectRoot, fileName),
+      override: false,
+      quiet: true,
+    });
+  }
+}
 
 function asRecord(value: unknown): AnyRecord {
   return typeof value === 'object' && value !== null
@@ -53,8 +73,13 @@ function normalizePages(rawPages: unknown, rawPageCount: unknown) {
 }
 
 async function migrate() {
+  loadMigrationEnvironment();
   const mongoUri = process.env.MONGODB_URI?.trim();
-  if (!mongoUri) throw new Error('MONGODB_URI is required.');
+  if (!mongoUri) {
+    throw new Error(
+      'MONGODB_URI is required. Set it in PowerShell or in .env.hostinger.'
+    );
+  }
 
   const write = process.argv.includes('--write');
   await mongoose.connect(mongoUri, {
