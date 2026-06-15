@@ -6,6 +6,7 @@ import {
   isProtectedRemoteHostname,
 } from '@/lib/utils/adminEpaperIngestion';
 import { resolveRetryableEpaperPageNumbers } from '@/lib/server/epaperProcessingJobs';
+import { buildEpaperPlaceholderTitle } from '@/lib/utils/epaperArticles';
 
 const root = process.cwd();
 
@@ -66,5 +67,23 @@ describe('e-paper workflow v3 safeguards', () => {
     expect(uploadPage).not.toContain('renderPdfFilePages');
     expect(jobModel).toContain('nextAttemptAt');
     expect(jobModel).toContain('leaseExpiresAt');
+  });
+
+  it('allows manual hotspot mapping to create an incomplete draft story', () => {
+    const pageEditor = read(
+      'app/(admin)/admin/epapers/[id]/page/[pageNumber]/page.tsx'
+    );
+    const articleRoute = read('app/api/admin/epapers/[id]/articles/route.ts');
+
+    expect(buildEpaperPlaceholderTitle(2, 1)).toBe('Draft story - Page 2 #1');
+    expect(pageEditor).toContain('Headline (optional)');
+    expect(pageEditor).toContain('fields create a placeholder draft');
+    expect(pageEditor).toContain(
+      'const canCreateManualDraft = Boolean(draftHotspot)'
+    );
+    expect(pageEditor).not.toContain('Headline required before creating draft');
+    expect(pageEditor).not.toContain('Clean Hindi body required before creating draft');
+    expect(articleRoute).not.toContain("error: 'title is required'");
+    expect(articleRoute).toContain('buildEpaperPlaceholderTitle');
   });
 });

@@ -246,16 +246,6 @@ function toContentHtmlInput(text: string) {
   return /<[a-z][\s\S]*>/i.test(value) ? value : toHtmlParagraph(value);
 }
 
-function hasReadableContentInput(value: string) {
-  return Boolean(
-    String(value || '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-}
-
 function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
@@ -469,12 +459,7 @@ export default function EPaperPageHotspotEditor() {
     persistedSuggestions,
     unreadableArticleCount,
   ]);
-  const manualDraftNeedsHeadline = Boolean(draftHotspot) && !draftInput.title.trim();
-  const manualDraftNeedsBody =
-    Boolean(draftHotspot) && !hasReadableContentInput(draftInput.contentHtml);
-  const canCreateManualDraft = Boolean(
-    draftHotspot && draftInput.title.trim() && hasReadableContentInput(draftInput.contentHtml)
-  );
+  const canCreateManualDraft = Boolean(draftHotspot);
 
   useEffect(() => {
     setPageReviewStatus(pageImageMeta?.reviewStatus || 'pending');
@@ -701,20 +686,13 @@ export default function EPaperPageHotspotEditor() {
       setError('Draw a hotspot first');
       return;
     }
-    if (!draftInput.title.trim()) {
-      setError('Article title is required');
-      return;
-    }
-    if (!hasReadableContentInput(draftInput.contentHtml)) {
-      setError('Clean Hindi body is required');
-      return;
-    }
-
     setCreating(true);
     setError('');
     setNotice('');
 
     try {
+      const isPlaceholderDraft =
+        !draftInput.title.trim() || !draftInput.contentHtml.trim();
       await createArticleRequest({
         title: draftInput.title.trim(),
         excerpt: draftInput.excerpt,
@@ -723,7 +701,11 @@ export default function EPaperPageHotspotEditor() {
         hotspot: draftHotspot,
       });
 
-      setNotice('Article created');
+      setNotice(
+        isPlaceholderDraft
+          ? 'Draft hotspot created. Add a headline and readable text before QA.'
+          : 'Article created'
+      );
       setDraftInput(buildDraftInput());
       setDraftHotspot(null);
       await fetchData();
@@ -2106,7 +2088,9 @@ export default function EPaperPageHotspotEditor() {
 
               <div className="space-y-2">
                 <label className="block">
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">Headline</span>
+                  <span className="mb-1 block text-xs font-semibold text-gray-600">
+                    Headline (optional)
+                  </span>
                   <input
                     type="text"
                     value={draftInput.title}
@@ -2118,7 +2102,9 @@ export default function EPaperPageHotspotEditor() {
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">Short summary</span>
+                  <span className="mb-1 block text-xs font-semibold text-gray-600">
+                    Short summary (optional)
+                  </span>
                   <input
                     type="text"
                     value={draftInput.excerpt}
@@ -2260,7 +2246,9 @@ export default function EPaperPageHotspotEditor() {
                   </div>
                 ) : null}
                 <label className="block">
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">Clean Hindi body</span>
+                  <span className="mb-1 block text-xs font-semibold text-gray-600">
+                    Clean Hindi body (optional)
+                  </span>
                   <textarea
                     value={draftInput.contentHtml}
                     onChange={(event) =>
@@ -2274,11 +2262,11 @@ export default function EPaperPageHotspotEditor() {
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                {draftHotspot && (manualDraftNeedsHeadline || manualDraftNeedsBody) ? (
+                {draftHotspot ? (
                   <p className="w-full rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
-                    {manualDraftNeedsHeadline
-                      ? 'Headline required before creating draft'
-                      : 'Clean Hindi body required before creating draft'}
+                    Headline, summary, and body are optional for manual mapping. Empty
+                    fields create a placeholder draft; readable text is still required
+                    before QA and publishing.
                   </p>
                 ) : null}
                 <button
