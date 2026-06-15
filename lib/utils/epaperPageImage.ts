@@ -26,6 +26,11 @@ export function resolveEpaperPreviewMaxZoom(width: unknown) {
   return 4;
 }
 
+export function resolveEpaperTouchPreviewMaxZoom(width: unknown) {
+  const desktopMaxZoom = resolveEpaperPreviewMaxZoom(width);
+  return desktopMaxZoom >= 4 ? 5 : desktopMaxZoom;
+}
+
 export function resolveEpaperPageResizeDimensions(width: number, height: number) {
   const safeWidth = Math.max(1, Math.round(width));
   const safeHeight = Math.max(1, Math.round(height));

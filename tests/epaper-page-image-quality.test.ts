@@ -6,6 +6,7 @@ import {
   normalizeEpaperPageImage,
   resolveEpaperPageResizeDimensions,
   resolveEpaperPreviewMaxZoom,
+  resolveEpaperTouchPreviewMaxZoom,
 } from '@/lib/utils/epaperPageImage';
 import { buildPdfToJpgCommand } from '@/lib/utils/epaperPageImageGeneration';
 
@@ -88,6 +89,15 @@ describe('e-paper page image quality profile', () => {
     expect(resolveEpaperPreviewMaxZoom(2200)).toBe(3.5);
     expect(resolveEpaperPreviewMaxZoom(2799)).toBe(3.5);
     expect(resolveEpaperPreviewMaxZoom(2800)).toBe(4);
+  });
+
+  it('allows 500% touch zoom for high-resolution page images', () => {
+    expect(resolveEpaperTouchPreviewMaxZoom(undefined)).toBe(3);
+    expect(resolveEpaperTouchPreviewMaxZoom(2199)).toBe(3);
+    expect(resolveEpaperTouchPreviewMaxZoom(2200)).toBe(3.5);
+    expect(resolveEpaperTouchPreviewMaxZoom(2799)).toBe(3.5);
+    expect(resolveEpaperTouchPreviewMaxZoom(2800)).toBe(5);
+    expect(resolveEpaperTouchPreviewMaxZoom(3000)).toBe(5);
   });
 
   it('never upscales and only resizes pages wider than 3200px', () => {
