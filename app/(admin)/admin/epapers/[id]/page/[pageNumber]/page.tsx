@@ -28,7 +28,6 @@ import { getAuthHeader } from '@/lib/auth/clientToken';
 import type {
   EPaperArticleRecord,
   EPaperPageType,
-  EPaperPageReviewStatus,
   EPaperRecord,
 } from '@/lib/types/epaper';
 import { detectHotspotsFromImageClient } from '@/lib/utils/epaperHotspotDetectionClient';
@@ -36,7 +35,6 @@ import {
   recognizeEpaperCropTextLocally,
   type EpaperCropTextOcrResult,
 } from '@/lib/utils/epaperLocalOcrClient';
-import { formatUiDate, formatUiDateTime } from '@/lib/utils/dateFormat';
 import {
   buildEpaperPageQualitySignal,
   getEpaperPageQualityTone,
@@ -274,29 +272,6 @@ function productionTone(status: string | null | undefined) {
   }
 }
 
-function formatPageReviewStatusLabel(status: string | null | undefined) {
-  switch (status) {
-    case 'needs_attention':
-      return 'Needs Attention';
-    case 'ready':
-      return 'Ready';
-    case 'pending':
-    default:
-      return 'Pending';
-  }
-}
-
-function pageReviewTone(status: string | null | undefined) {
-  switch (status) {
-    case 'ready':
-      return 'bg-emerald-100 text-emerald-700';
-    case 'needs_attention':
-      return 'bg-red-100 text-red-700';
-    default:
-      return 'bg-amber-100 text-amber-700';
-  }
-}
-
 function confidenceTone(confidence: number) {
   if (confidence >= 80) return 'bg-emerald-100 text-emerald-700';
   if (confidence >= 60) return 'bg-amber-100 text-amber-700';
@@ -377,11 +352,9 @@ export default function EPaperPageHotspotEditor() {
   const [storyTtsById, setStoryTtsById] = useState<Record<string, StoryTtsState>>({});
   const [savedStoryTtsSignatures, setSavedStoryTtsSignatures] = useState<Record<string, string>>({});
   const [loadingStoryTtsIds, setLoadingStoryTtsIds] = useState<Record<string, boolean>>({});
-  const [pageReviewStatus, setPageReviewStatus] = useState<EPaperPageReviewStatus>('pending');
-  const [pageReviewNote, setPageReviewNote] = useState('');
   const [pageType, setPageType] = useState<EPaperPageType>('editorial');
   const [classificationNote, setClassificationNote] = useState('');
-  const [savingPageReview, setSavingPageReview] = useState(false);
+  const [savingPageClassification, setSavingPageClassification] = useState(false);
 
   const pageImageMeta = useMemo(() => {
     if (!epaper) return null;
@@ -424,53 +397,14 @@ export default function EPaperPageHotspotEditor() {
       ).length,
     [suggestions]
   );
-  const pageReadyBlockers = useMemo(() => {
-    const blockers: string[] = [];
-    if (pageType === 'editorial' && !articles.length) {
-      blockers.push('map at least one story');
-    }
-    if (pageType === 'editorial' && unreadableArticleCount > 0) {
-      blockers.push(
-        `${unreadableArticleCount} mapped stor${
-          unreadableArticleCount === 1 ? 'y needs' : 'ies need'
-        } readable text`
-      );
-    }
-    const pendingPersistedSuggestions = persistedSuggestions.filter(
-      (suggestion) => suggestion.status === 'pending'
-    ).length;
-    const unresolvedSuggestions = activeSuggestionCount + pendingPersistedSuggestions;
-    if (pageType === 'editorial' && unresolvedSuggestions > 0) {
-      blockers.push(
-        `${unresolvedSuggestions} OCR suggestion${
-          unresolvedSuggestions === 1 ? ' is' : 's are'
-        } still unresolved`
-      );
-    }
-    if (pageType === 'blank' && !classificationNote.trim()) {
-      blockers.push('add a reviewer note explaining why the page is blank');
-    }
-    return blockers;
-  }, [
-    activeSuggestionCount,
-    articles.length,
-    classificationNote,
-    pageType,
-    persistedSuggestions,
-    unreadableArticleCount,
-  ]);
   const canCreateManualDraft = Boolean(draftHotspot);
 
   useEffect(() => {
-    setPageReviewStatus(pageImageMeta?.reviewStatus || 'pending');
-    setPageReviewNote(pageImageMeta?.reviewNote || '');
     setPageType(pageImageMeta?.pageType || 'editorial');
     setClassificationNote(pageImageMeta?.classificationNote || '');
   }, [
     pageImageMeta?.classificationNote,
     pageImageMeta?.pageType,
-    pageImageMeta?.reviewNote,
-    pageImageMeta?.reviewStatus,
     pageNumber,
   ]);
 
@@ -1164,17 +1098,13 @@ export default function EPaperPageHotspotEditor() {
     }
   };
 
-  const savePageReview = async () => {
-    if (pageReviewStatus === 'ready' && pageReadyBlockers.length > 0) {
-      setError(`Resolve before marking ready: ${pageReadyBlockers.join('; ')}`);
-      return;
-    }
+  const savePageClassification = async () => {
     if (pageType === 'blank' && !classificationNote.trim()) {
-      setError('Add a reviewer note explaining why this page is blank.');
+      setError('Add a classification note explaining why this page is blank.');
       return;
     }
 
-    setSavingPageReview(true);
+    setSavingPageClassification(true);
     setError('');
     setNotice('');
 
@@ -1191,23 +1121,21 @@ export default function EPaperPageHotspotEditor() {
               pageNumber,
               pageType,
               classificationNote: classificationNote.trim(),
-              reviewStatus: pageReviewStatus,
-              reviewNote: pageReviewNote,
             },
           ],
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to save page review');
+        throw new Error(payload?.error || 'Failed to save page classification');
       }
 
-      setNotice(payload?.message || `Page ${pageNumber} review updated`);
+      setNotice(payload?.message || `Page ${pageNumber} classification updated`);
       await fetchData();
     } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to save page review'));
+      setError(toErrorMessage(err, 'Failed to save page classification'));
     } finally {
-      setSavingPageReview(false);
+      setSavingPageClassification(false);
     }
   };
 
@@ -1549,23 +1477,6 @@ export default function EPaperPageHotspotEditor() {
                   No desk owner yet
                 </span>
               )}
-              {epaper.qaCompletedAt ? (
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                  QA closed {formatUiDateTime(epaper.qaCompletedAt, formatUiDate(epaper.qaCompletedAt))}
-                </span>
-              ) : null}
-              {pageImageMeta?.reviewedBy ? (
-                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
-                  Reviewed by {pageImageMeta.reviewedBy.name}
-                </span>
-              ) : null}
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-medium ${pageReviewTone(
-                  pageReviewStatus
-                )}`}
-              >
-                Page QA {formatPageReviewStatusLabel(pageReviewStatus)}
-              </span>
               <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
                 {pageType.charAt(0).toUpperCase() + pageType.slice(1)}
               </span>
@@ -1639,54 +1550,32 @@ export default function EPaperPageHotspotEditor() {
       </div>
 
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Page QA</p>
-            <h2 className="mt-2 text-lg font-semibold text-gray-900">Reviewer note and status</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Classify the page, capture review notes, and decide whether it is clear for edition QA.
-            </p>
-          </div>
-          {pageImageMeta?.reviewedAt || pageImageMeta?.reviewedBy ? (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-              {pageImageMeta?.reviewedBy ? <p>Reviewer {pageImageMeta.reviewedBy.name}</p> : null}
-              {pageImageMeta?.reviewedAt ? (
-                <p className={pageImageMeta?.reviewedBy ? 'mt-1' : ''}>
-                  Last reviewed {formatUiDateTime(pageImageMeta.reviewedAt, formatUiDate(pageImageMeta.reviewedAt))}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Page classification
+          </p>
+          <h2 className="mt-2 text-lg font-semibold text-gray-900">
+            Choose how this page should be processed
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Editorial pages require mapped stories and readable text. Other page types do not.
+          </p>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-3">
           <label>
             <span className="mb-1 block text-xs font-semibold text-gray-600">Page type</span>
             <select
               value={pageType}
               onChange={(event) => setPageType(event.target.value as EPaperPageType)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              disabled={savingPageReview}
+              disabled={savingPageClassification}
             >
               <option value="editorial">Editorial</option>
               <option value="advertisement">Advertisement</option>
               <option value="classified">Classified</option>
               <option value="photo">Photo</option>
               <option value="blank">Blank</option>
-            </select>
-          </label>
-
-          <label>
-            <span className="mb-1 block text-xs font-semibold text-gray-600">Review status</span>
-            <select
-              value={pageReviewStatus}
-              onChange={(event) => setPageReviewStatus(event.target.value as EPaperPageReviewStatus)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              disabled={savingPageReview}
-            >
-              <option value="pending">Pending</option>
-              <option value="needs_attention">Needs attention</option>
-              <option value="ready">Ready</option>
             </select>
           </label>
 
@@ -1700,19 +1589,7 @@ export default function EPaperPageHotspotEditor() {
               rows={3}
               placeholder="Explain special handling, especially for intentionally blank pages."
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              disabled={savingPageReview}
-            />
-          </label>
-
-          <label>
-            <span className="mb-1 block text-xs font-semibold text-gray-600">Reviewer note</span>
-            <textarea
-              value={pageReviewNote}
-              onChange={(event) => setPageReviewNote(event.target.value)}
-              rows={3}
-              placeholder="Example: OCR still weak on lower-right column, one hotspot missing under masthead."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-              disabled={savingPageReview}
+              disabled={savingPageClassification}
             />
           </label>
         </div>
@@ -1720,16 +1597,16 @@ export default function EPaperPageHotspotEditor() {
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => void savePageReview()}
-            disabled={savingPageReview}
+            onClick={() => void savePageClassification()}
+            disabled={savingPageClassification}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {savingPageReview ? (
+            {savingPageClassification ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Save className="h-3.5 w-3.5" />
             )}
-            Save Page QA
+            Save Classification
           </button>
           {unreadableArticleCount > 0 ? (
             <p className="text-xs text-amber-700">
@@ -1737,23 +1614,12 @@ export default function EPaperPageHotspotEditor() {
             </p>
           ) : activeSuggestionCount > 0 ? (
             <p className="text-xs text-amber-700">
-              Resolve {activeSuggestionCount} OCR suggestion{activeSuggestionCount === 1 ? '' : 's'} before marking this page ready.
+              Resolve {activeSuggestionCount} OCR suggestion{activeSuggestionCount === 1 ? '' : 's'} before publishing.
             </p>
           ) : (
             <p className="text-xs text-emerald-700">All mapped stories on this page have readable text.</p>
           )}
         </div>
-
-        {pageReviewStatus === 'ready' && pageReadyBlockers.length > 0 ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            <p className="font-semibold">Ready status is blocked until:</p>
-            <ul className="mt-2 space-y-1">
-              {pageReadyBlockers.map((blocker) => (
-                <li key={blocker}>- {blocker}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
 
         {pageQuality.issues.length > 0 ? (
           <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">

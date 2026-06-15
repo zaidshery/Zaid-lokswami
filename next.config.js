@@ -7,6 +7,7 @@ const scriptSrc = [
   isDevelopment ? "'unsafe-eval'" : '',
   'https://cdn.tailwindcss.com',
   'https://cdn.jsdelivr.net',
+  'https://www.youtube.com',
   'https://www.googletagmanager.com',
   'https://www.google-analytics.com',
 ].filter(Boolean);
@@ -43,6 +44,7 @@ const immutableAssetCache = cacheControlHeader('public, max-age=31536000, immuta
 const privateNoStoreCache = cacheControlHeader(
   'private, no-store, no-cache, max-age=0, must-revalidate'
 );
+const staticAssetCache = isDevelopment ? privateNoStoreCache : immutableAssetCache;
 const publicPageCache = cacheControlHeader(
   'public, max-age=0, s-maxage=300, stale-while-revalidate=900'
 );
@@ -88,15 +90,15 @@ const nextConfig = {
     return [
       {
         source: '/_next/static/:path*',
-        headers: immutableAssetCache,
+        headers: staticAssetCache,
       },
       {
         source: '/next/static/:path*',
-        headers: immutableAssetCache,
+        headers: staticAssetCache,
       },
       {
         source: '/__next_static__/:path*',
-        headers: immutableAssetCache,
+        headers: staticAssetCache,
       },
       {
         source: '/sw.js',
@@ -198,6 +200,7 @@ const nextConfig = {
               "connect-src 'self' https: wss:",
               "worker-src 'self' blob:",
               "child-src 'self' blob:",
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

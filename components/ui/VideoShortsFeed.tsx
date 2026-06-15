@@ -592,7 +592,7 @@ export default function VideoShortsFeed({
     if (!activeVideo || typeof window === 'undefined') return;
 
     const url = `${window.location.origin}${activeReadHref}`;
-    const text = `${activeVideo.title} ${url}`;
+    const text = `Lokswami News - ${activeVideo.title}\n${url}`;
 
     if (navigator.share) {
       try {
@@ -777,7 +777,7 @@ export default function VideoShortsFeed({
                       title={video.title}
                       src={`https://www.youtube.com/embed/${youtubeId}?enablejsapi=1&playsinline=1&controls=0&mute=1&loop=1&playlist=${youtubeId}&autoplay=${index === activeIndex ? 1 : 0}&rel=0&modestbranding=1`}
                       className="absolute inset-0 h-full w-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                       allowFullScreen
                     />
                   ) : (
@@ -972,7 +972,7 @@ export default function VideoShortsFeed({
                     >
                       <span className="inline-flex items-center gap-2.5 text-sm text-white md:text-base">
                         <Clock3 className="h-5 w-5 md:h-6 md:w-6" />
-                        {language === 'hi' ? '\u0911\u091f\u094b \u090f\u0921\u0935\u093e\u0902\u0938' : 'Auto-advance'}
+                        {language === 'hi' ? '\u0915\u094d\u0935\u093e\u0932\u093f\u091f\u0940' : 'Auto-advance'}
                       </span>
                       <span
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
@@ -1201,5 +1201,3 @@ export default function VideoShortsFeed({
     </section>
   );
 }
-
-

@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import AuthSync from '@/components/providers/AuthSync';
 import AuthSessionProvider from '@/components/providers/SessionProvider';
 import InstallAppPrompt from '@/components/ui/InstallAppPrompt';
+import FullscreenFix from '@/components/providers/FullscreenFix';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://lokswami.com';
 
@@ -350,6 +351,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <AuthSessionProvider>
           <ThemeProvider>
             <AuthSync />
+            <FullscreenFix />
             <SitePageTracker />
             {children}
             <InstallAppPrompt />

@@ -7,6 +7,8 @@ import {
 } from '@/lib/utils/adminEpaperIngestion';
 import { resolveRetryableEpaperPageNumbers } from '@/lib/server/epaperProcessingJobs';
 import { buildEpaperPlaceholderTitle } from '@/lib/utils/epaperArticles';
+import { buildEpaperReadiness } from '@/lib/utils/epaperAdminReadiness';
+import { getAllowedEpaperProductionTransitions } from '@/lib/workflow/transitions';
 
 const root = process.cwd();
 
@@ -85,5 +87,64 @@ describe('e-paper workflow v3 safeguards', () => {
     expect(pageEditor).not.toContain('Clean Hindi body required before creating draft');
     expect(articleRoute).not.toContain("error: 'title is required'");
     expect(articleRoute).toContain('buildEpaperPlaceholderTitle');
+  });
+
+  it('moves directly from hotspot mapping to ready to publish without page QA', () => {
+    const detailPage = read('app/(admin)/admin/epapers/[id]/page.tsx');
+    const pageEditor = read(
+      'app/(admin)/admin/epapers/[id]/page/[pageNumber]/page.tsx'
+    );
+
+    expect(getAllowedEpaperProductionTransitions('hotspot_mapping')).toEqual([
+      'ready_to_publish',
+    ]);
+    expect(detailPage).not.toContain('Move To QA Review');
+    expect(detailPage).not.toContain('Pending QA');
+    expect(pageEditor).not.toContain('Page QA');
+    expect(pageEditor).not.toContain('Review status');
+    expect(pageEditor).toContain('Save Classification');
+  });
+
+  it('ignores legacy page review statuses when calculating publish readiness', () => {
+    const readiness = buildEpaperReadiness({
+      epaper: {
+        _id: 'paper-with-legacy-review-statuses',
+        cityName: 'Indore',
+        citySlug: 'indore',
+        pageCount: 2,
+        pdfPath: '/uploads/paper.pdf',
+        thumbnailPath: '/page-1.jpg',
+        pages: [
+          {
+            pageNumber: 1,
+            imagePath: '/page-1.jpg',
+            reviewStatus: 'pending',
+          },
+          {
+            pageNumber: 2,
+            imagePath: '/page-2.jpg',
+            reviewStatus: 'needs_attention',
+          },
+        ],
+      },
+      articles: [
+        {
+          pageNumber: 1,
+          contentHtml: '<p>Page one story</p>',
+          excerpt: '',
+          coverImagePath: '',
+        },
+        {
+          pageNumber: 2,
+          contentHtml: '<p>Page two story</p>',
+          excerpt: '',
+          coverImagePath: '',
+        },
+      ],
+    });
+
+    expect(readiness.blockers).toEqual([]);
+    expect(readiness.pagesPendingQa).toBe(0);
+    expect(readiness.pagesNeedingAttention).toBe(0);
   });
 });

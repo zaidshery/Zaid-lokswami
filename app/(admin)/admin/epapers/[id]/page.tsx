@@ -25,7 +25,6 @@ import {
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
 import type {
   EPaperArticleRecord,
-  EPaperPageReviewStatus,
   EPaperRecord,
 } from '@/lib/types/epaper';
 import { formatUiDate, formatUiDateTime } from '@/lib/utils/dateFormat';
@@ -119,13 +118,12 @@ type ProductionActivityItem = {
   toStatus?: string | null;
 };
 
-type PageFilter = 'all' | 'needs-work' | 'missing-image' | 'missing-hotspots' | 'pending-qa';
+type PageFilter = 'all' | 'needs-work' | 'missing-image' | 'missing-hotspots';
 
 const PRODUCTION_ACTION_LABELS: Partial<Record<EPaperProductionStatus, string>> = {
   pages_ready: 'Mark Pages Ready',
   ocr_review: 'Start OCR Review',
   hotspot_mapping: 'Move To Hotspot Mapping',
-  qa_review: 'Move To QA Review',
   ready_to_publish: 'Mark Ready To Publish',
   published: 'Publish Edition',
   archived: 'Archive Edition',
@@ -136,7 +134,6 @@ const EPAPER_WORKFLOW_STEPS: EPaperProductionStatus[] = [
   'pages_ready',
   'ocr_review',
   'hotspot_mapping',
-  'qa_review',
   'ready_to_publish',
   'published',
 ];
@@ -166,18 +163,6 @@ function productionTone(status: string | null | undefined) {
       return 'bg-zinc-200 text-zinc-700';
     default:
       return 'bg-zinc-100 text-zinc-700';
-  }
-}
-
-function formatPageReviewStatusLabel(status: string | null | undefined) {
-  switch (status) {
-    case 'needs_attention':
-      return 'Needs Attention';
-    case 'ready':
-      return 'Ready';
-    case 'pending':
-    default:
-      return 'Pending';
   }
 }
 
@@ -236,9 +221,6 @@ export default function AdminEPaperDetailPage() {
   const [isLoadingAssignableUsers, setIsLoadingAssignableUsers] = useState(false);
   const [selectedPageNumbers, setSelectedPageNumbers] = useState<number[]>([]);
   const [pageFilter, setPageFilter] = useState<PageFilter>('all');
-  const [bulkReviewStatus, setBulkReviewStatus] = useState<EPaperPageReviewStatus>('ready');
-  const [bulkReviewNote, setBulkReviewNote] = useState('');
-  const [isApplyingBulkReview, setIsApplyingBulkReview] = useState(false);
 
   const loadProcessing = useCallback(async () => {
     if (!epaperId) return null;
@@ -748,18 +730,7 @@ export default function AdminEPaperDetailPage() {
 
   const updateProductionDesk = async (nextStatus?: EPaperProductionStatus) => {
     if (!epaper) return;
-    const isRequestChanges =
-      productionStatus === 'qa_review' && nextStatus === 'hotspot_mapping';
-    let note = productionNote.trim();
-    if (isRequestChanges && !note) {
-      note =
-        window.prompt('Explain what must be corrected before QA can continue:')?.trim() ||
-        '';
-      if (!note) {
-        setError('A reason is required when requesting changes.');
-        return;
-      }
-    }
+    const note = productionNote.trim();
 
     setIsUpdatingProduction(true);
     setError('');
@@ -776,7 +747,6 @@ export default function AdminEPaperDetailPage() {
           ...(nextStatus ? { productionStatus: nextStatus } : {}),
           assignedToId: productionAssigneeId,
           note,
-          ...(isRequestChanges ? { action: 'request_changes' } : {}),
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as EpaperResponse & {
@@ -814,56 +784,6 @@ export default function AdminEPaperDetailPage() {
     );
   };
 
-  const applyBulkPageReview = async () => {
-    if (!epaper || selectedPageNumbers.length === 0) {
-      setError('Select at least one page first.');
-      return;
-    }
-
-    if (bulkReviewStatus === 'needs_attention' && !bulkReviewNote.trim()) {
-      setError('Add a reviewer note before marking pages as needing attention.');
-      return;
-    }
-
-    setIsApplyingBulkReview(true);
-    setError('');
-    setNotice('');
-
-    try {
-      const response = await fetch(`/api/admin/epapers/${epaper._id}/pages`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader(),
-        },
-        body: JSON.stringify({
-          pages: selectedPageNumbers.map((pageNumber) => ({
-            pageNumber,
-            reviewStatus: bulkReviewStatus,
-            reviewNote: bulkReviewNote.trim(),
-          })),
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to update selected pages');
-      }
-
-      setNotice(
-        `Updated ${selectedPageNumbers.length} page${
-          selectedPageNumbers.length === 1 ? '' : 's'
-        } to ${formatPageReviewStatusLabel(bulkReviewStatus)}.`
-      );
-      setBulkReviewNote('');
-      setSelectedPageNumbers([]);
-      await fetchData();
-    } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to update selected pages'));
-    } finally {
-      setIsApplyingBulkReview(false);
-    }
-  };
-
   const updatePageType = async (
     pageNumber: number,
     pageType: NonNullable<EPaperRecord['pages'][number]['pageType']>
@@ -874,7 +794,7 @@ export default function AdminEPaperDetailPage() {
       classificationNote =
         window.prompt('Why is this page intentionally blank?')?.trim() || '';
       if (!classificationNote) {
-        setError('A reviewer note is required for blank pages.');
+        setError('A classification note is required for blank pages.');
         return;
       }
     }
@@ -934,11 +854,6 @@ export default function AdminEPaperDetailPage() {
     hotspotCount: hotspotsByPage.get(pageNumber) || 0,
     tts: ttsByPage.get(pageNumber) || { eligible: 0, ready: 0 },
   }));
-  const pageReviewSummary = {
-    ready: editionQualitySummary.counts.readyQa,
-    needsAttention: editionQualitySummary.counts.needsAttentionQa,
-    pending: editionQualitySummary.counts.pendingQa,
-  };
   const pageQualitySummary = {
     good: editionQualitySummary.counts.good,
     watch: editionQualitySummary.counts.watch,
@@ -962,16 +877,14 @@ export default function AdminEPaperDetailPage() {
   const allPagesSelected = pageNumbers.length > 0 && selectedPageNumbers.length === pageNumbers.length;
   const missingImagePages = new Set(readiness?.missingImagePages || []);
   const missingHotspotPages = new Set(readiness?.missingHotspotPages || []);
-  const visiblePages = pages.filter(({ pageNumber, page, quality }) => {
+  const visiblePages = pages.filter(({ pageNumber, quality }) => {
     if (pageFilter === 'missing-image') return missingImagePages.has(pageNumber);
     if (pageFilter === 'missing-hotspots') return missingHotspotPages.has(pageNumber);
-    if (pageFilter === 'pending-qa') return (page?.reviewStatus || 'pending') === 'pending';
     if (pageFilter === 'needs-work') {
       return (
         quality.level !== 'good' ||
         missingImagePages.has(pageNumber) ||
-        missingHotspotPages.has(pageNumber) ||
-        (page?.reviewStatus || 'pending') !== 'ready'
+        missingHotspotPages.has(pageNumber)
       );
     }
     return true;
@@ -986,20 +899,14 @@ export default function AdminEPaperDetailPage() {
       value: 'needs-work',
       label: 'Needs Work',
       count: pages.filter(
-        ({ pageNumber, page, quality }) =>
+        ({ pageNumber, quality }) =>
           quality.level !== 'good' ||
           missingImagePages.has(pageNumber) ||
-          missingHotspotPages.has(pageNumber) ||
-          (page?.reviewStatus || 'pending') !== 'ready'
+          missingHotspotPages.has(pageNumber)
       ).length,
     },
     { value: 'missing-image', label: 'Missing Image', count: missingImagePages.size },
     { value: 'missing-hotspots', label: 'No Hotspots', count: missingHotspotPages.size },
-    {
-      value: 'pending-qa',
-      label: 'Pending QA',
-      count: pages.filter(({ page }) => (page?.reviewStatus || 'pending') === 'pending').length,
-    },
   ];
 
   return (
@@ -1200,7 +1107,7 @@ export default function AdminEPaperDetailPage() {
                     Batch actions
                   </p>
                   <p className="mt-1 text-sm text-gray-600">
-                    Manage conversion retries, OCR, selection, and review state from one place.
+                    Manage conversion retries, OCR, and page selection from one place.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1253,56 +1160,6 @@ export default function AdminEPaperDetailPage() {
                     className="inline-flex min-h-10 items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
                   >
                     {allPagesSelected ? 'Clear Selection' : 'Select All'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[180px_minmax(0,1fr)_auto]">
-                <label>
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">
-                    Review status
-                  </span>
-                  <select
-                    value={bulkReviewStatus}
-                    onChange={(event) =>
-                      setBulkReviewStatus(event.target.value as EPaperPageReviewStatus)
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    disabled={isApplyingBulkReview}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="needs_attention">Needs attention</option>
-                    <option value="ready">Ready</option>
-                  </select>
-                </label>
-
-                <label>
-                  <span className="mb-1 block text-xs font-semibold text-gray-600">
-                    Shared reviewer note
-                  </span>
-                  <textarea
-                    value={bulkReviewNote}
-                    onChange={(event) => setBulkReviewNote(event.target.value)}
-                    rows={2}
-                    placeholder="Applied to every selected page."
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    disabled={isApplyingBulkReview}
-                  />
-                </label>
-
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={() => void applyBulkPageReview()}
-                    disabled={isApplyingBulkReview || selectedPageNumbers.length === 0}
-                    className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70 lg:w-auto"
-                  >
-                    {isApplyingBulkReview ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    )}
-                    Apply To {selectedPageNumbers.length || 0}
                   </button>
                 </div>
               </div>
@@ -1376,12 +1233,6 @@ export default function AdminEPaperDetailPage() {
                     quality.mappedStories > 0 && quality.unreadableStories === 0
                       ? { label: 'OCR Ready', tone: 'good' }
                       : { label: 'Needs Review', tone: quality.level === 'critical' ? 'danger' : 'warn' },
-                    page?.reviewStatus === 'pending' || !page?.reviewStatus
-                      ? { label: 'Pending QA', tone: 'warn' }
-                      : {
-                          label: formatPageReviewStatusLabel(page.reviewStatus),
-                          tone: page.reviewStatus === 'ready' ? 'good' : 'danger',
-                        },
                     {
                       label: formatProductionStatusLabel(page?.pageType || 'editorial'),
                       tone: 'neutral',
@@ -1648,10 +1499,6 @@ export default function AdminEPaperDetailPage() {
                         (nextStatus === 'ready_to_publish' ||
                           nextStatus === 'published') &&
                         publishBlockers.length > 0;
-                      const isRequestChanges =
-                        activeProductionStatus === 'qa_review' &&
-                        nextStatus === 'hotspot_mapping';
-
                       return (
                         <button
                           key={nextStatus}
@@ -1673,9 +1520,7 @@ export default function AdminEPaperDetailPage() {
                           ) : (
                             <PencilRuler className="h-3.5 w-3.5" />
                           )}
-                          {isRequestChanges
-                            ? 'Request Changes'
-                            : PRODUCTION_ACTION_LABELS[nextStatus] ||
+                          {PRODUCTION_ACTION_LABELS[nextStatus] ||
                             formatProductionStatusLabel(nextStatus)}
                         </button>
                       );
@@ -1757,20 +1602,6 @@ export default function AdminEPaperDetailPage() {
                   </div>
                 )}
 
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-2">
-                    <p className="font-bold text-emerald-700">{pageReviewSummary.ready}</p>
-                    <p className="text-gray-500">Ready</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-2">
-                    <p className="font-bold text-amber-700">{pageReviewSummary.pending}</p>
-                    <p className="text-gray-500">Pending</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-2">
-                    <p className="font-bold text-red-700">{pageReviewSummary.needsAttention}</p>
-                    <p className="text-gray-500">Issues</p>
-                  </div>
-                </div>
               </section>
 
               <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm xl:mt-0">

@@ -38,10 +38,7 @@ import {
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
 import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
-import {
-  assertEpaperDraftEditable,
-  requireRequestChangesReason,
-} from '@/lib/server/epaperWorkflowPolicy';
+import { assertEpaperDraftEditable } from '@/lib/server/epaperWorkflowPolicy';
 import { logEpaperMetric } from '@/lib/server/epaperObservability';
 
 type RouteContext = {
@@ -633,10 +630,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           ? source.productionNote.trim()
           : '';
     const hasAssigneeField = Object.prototype.hasOwnProperty.call(source, 'assignedToId');
-    const isRequestChanges =
-      source.action === 'request_changes' ||
-      (currentProduction.productionStatus === 'qa_review' &&
-        nextStatus === 'hotspot_mapping');
 
     if (!nextStatus && !note && !hasAssigneeField) {
       return NextResponse.json(
@@ -669,20 +662,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         { status: 403 }
       );
     }
-    if (isRequestChanges) {
-      try {
-        requireRequestChangesReason(note);
-      } catch (error) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: error instanceof Error ? error.message : 'A reason is required.',
-          },
-          { status: 400 }
-        );
-      }
-    }
-
     const publishBlockers = Array.from(
       new Set([...readiness.blockers, ...editionQuality.publishBlockers])
     );
@@ -817,13 +796,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         epaperId: id,
         familyId: String(updated.familyId || updated._id),
         revisionNumber: Number(updated.revisionNumber || 1),
-      });
-    } else if (isRequestChanges) {
-      logEpaperMetric('qa_changes_requested', {
-        epaperId: id,
-        fromStatus,
-        toStatus,
-        reason: note,
       });
     }
 

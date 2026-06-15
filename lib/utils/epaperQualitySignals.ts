@@ -106,20 +106,6 @@ export function buildEpaperPageQualitySignal(input: {
     issues.push('Blank pages require a classification note.');
   }
 
-  if (page.reviewStatus === 'needs_attention') {
-    level = 'critical';
-    issues.push('Page QA marked this page as needing attention.');
-  } else if (page.reviewStatus === 'pending') {
-    if (level === 'good') {
-      level = 'watch';
-    }
-    issues.push('Page QA has not been completed yet.');
-  }
-
-  if (!page.reviewNote && level !== 'good' && page.reviewStatus !== 'ready') {
-    issues.push('No reviewer note has been added yet.');
-  }
-
   const label =
     level === 'good'
       ? 'Healthy'
@@ -197,16 +183,6 @@ export function buildEpaperEditionQualitySummary(input: {
   ).length;
   const publishBlockers: string[] = [];
 
-  if (counts.pendingQa > 0) {
-    publishBlockers.push(
-      `${counts.pendingQa} page${counts.pendingQa === 1 ? '' : 's'} still ${counts.pendingQa === 1 ? 'has' : 'have'} pending page QA.`
-    );
-  }
-  if (counts.needsAttentionQa > 0) {
-    publishBlockers.push(
-      `${counts.needsAttentionQa} page${counts.needsAttentionQa === 1 ? '' : 's'} ${counts.needsAttentionQa === 1 ? 'is' : 'are'} flagged as needing attention.`
-    );
-  }
   if (pagesWithoutHotspots > 0) {
     publishBlockers.push(
       `${pagesWithoutHotspots} page${pagesWithoutHotspots === 1 ? '' : 's'} still ${pagesWithoutHotspots === 1 ? 'has' : 'have'} no mapped stories.`

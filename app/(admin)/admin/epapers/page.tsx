@@ -103,7 +103,9 @@ export default function AdminEPaperListPage() {
     return {
       total: epapers.length,
       readyToPublish: epapers.filter((item) => item.productionStatus === 'ready_to_publish').length,
-      qaReview: epapers.filter((item) => item.productionStatus === 'qa_review').length,
+      hotspotMapping: epapers.filter(
+        (item) => item.productionStatus === 'hotspot_mapping'
+      ).length,
       blocked: epapers.filter((item) => item.readiness?.status === 'not-ready').length,
     };
   }, [epapers]);
@@ -161,9 +163,9 @@ export default function AdminEPaperListPage() {
           <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">Editions that cleared the production desk.</p>
         </div>
         <div className="admin-shell-surface rounded-[22px] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">QA review</p>
-          <p className="mt-2 text-2xl font-bold text-amber-700">{summary.qaReview}</p>
-          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">Editions waiting on final desk checks.</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Hotspot mapping</p>
+          <p className="mt-2 text-2xl font-bold text-amber-700">{summary.hotspotMapping}</p>
+          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">Editions still mapping clickable stories.</p>
         </div>
         <div className="admin-shell-surface rounded-[22px] p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Blocked</p>
@@ -228,7 +230,6 @@ export default function AdminEPaperListPage() {
             <option value="pages_ready">Pages ready</option>
             <option value="ocr_review">OCR review</option>
             <option value="hotspot_mapping">Hotspot mapping</option>
-            <option value="qa_review">QA review</option>
             <option value="ready_to_publish">Ready to publish</option>
             <option value="published">Published</option>
             <option value="archived">Archived</option>

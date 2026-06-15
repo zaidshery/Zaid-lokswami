@@ -8,6 +8,7 @@
     --font-devanagari: 'Noto Sans Devanagari';
     --nav-height: 4rem;
     --nav-height-mobile: 3.5rem;
+    --reader-top-chrome-height: 8.625rem;
     --bottom-nav-height: 4rem;
     --reader-bottom-nav-space: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
     --reader-floating-button-bottom: calc(var(--reader-bottom-nav-space) + 0.85rem);
@@ -54,7 +55,7 @@
   
   html {
     scroll-behavior: smooth;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   html.dark {
@@ -62,7 +63,8 @@
   }
   
   body {
-    @apply bg-white-gray dark:bg-raisin-black text-raisin-black dark:text-gainsboro antialiased overflow-x-hidden transition-colors duration-500;
+    @apply bg-white-gray dark:bg-raisin-black text-raisin-black dark:text-gainsboro antialiased transition-colors duration-500;
+    overflow-x: clip;
     font-family: var(--font-devanagari), var(--font-latin), 'Noto Sans Devanagari', 'Inter', system-ui, sans-serif;
     text-rendering: optimizeLegibility;
     -webkit-tap-highlight-color: rgba(220, 38, 38, 0.18);
@@ -180,8 +182,14 @@
 
   /* Prevent horizontal scroll */
   body, html, main, #__next {
-    overflow-x: hidden;
+    overflow-x: clip;
     max-width: 100vw;
+  }
+
+  @media (min-width: 640px) and (max-width: 767px) {
+    :root {
+      --reader-top-chrome-height: 8.9375rem;
+    }
   }
   
   /* Safe area for notched phones */
@@ -1492,6 +1500,33 @@
 .reader-stage-scroll {
   scrollbar-color: rgba(239, 68, 68, 0.45) rgba(0, 0, 0, 0.08) !important;
   scrollbar-width: thin !important;
+}
+
+/* Fix WebKit iframe black screen bug in fullscreen */
+html:has(:fullscreen) *,
+html:has(:-webkit-full-screen) *,
+html.fullscreen-active *,
+.fullscreen-active * {
+  transform: none !important;
+  transition: none !important;
+  filter: none !important;
+  perspective: none !important;
+  will-change: auto !important;
+  backdrop-filter: none !important;
+  overflow: visible !important;
+  border-radius: 0 !important;
+}
+
+/* Ensure the iframe itself is correctly sized in fullscreen in WebKit/Safari */
+iframe:fullscreen,
+iframe:-webkit-full-screen {
+  width: 100% !important;
+  height: 100% !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 2147483647 !important;
+  background-color: #000 !important;
 }
 
 
