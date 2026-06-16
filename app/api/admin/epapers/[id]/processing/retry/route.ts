@@ -33,12 +33,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!epaper) {
     return NextResponse.json({ success: false, error: 'E-paper not found.' }, { status: 404 });
   }
-  if (epaper.status === 'published') {
-    return NextResponse.json(
-      { success: false, error: 'Published editions are immutable.' },
-      { status: 409 }
-    );
-  }
+  // Published editions are no longer strictly immutable
   if (!isEpaperBackgroundProcessingEnabled(epaper.citySlug)) {
     return NextResponse.json(
       {

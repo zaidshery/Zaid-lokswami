@@ -14,11 +14,9 @@ export function assertEpaperDraftEditable(epaper: {
   status?: unknown;
   productionStatus?: unknown;
 }) {
-  if (epaper.status === 'published' || epaper.productionStatus === 'published') {
-    throw new Error(
-      'Published editions are immutable. Create a draft revision before making changes.'
-    );
-  }
+  // Published editions are no longer strictly immutable
+  // to allow the team to map remaining pages easily without draft revisions.
+  return;
 }
 
 export async function invalidateEpaperQa(input: {
