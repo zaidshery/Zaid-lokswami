@@ -187,7 +187,11 @@ export default function TeamManagementClient({
       }
 
       const setupLink = typeof payload?.data?.setupLink === 'string' ? payload.data.setupLink : '';
-      if (setupLink) {
+      const setupEmailSent = payload?.data?.setupEmailSent === true;
+
+      if (setupEmailSent) {
+        setToastMessage('Invite email sent securely to the user.');
+      } else if (setupLink) {
         await deliverSetupLink({
           setupLink,
           copiedMessage: 'Member added. Setup link copied.',
@@ -275,19 +279,25 @@ export default function TeamManagementClient({
       }
 
       const setupLink = typeof payload?.data?.setupLink === 'string' ? payload.data.setupLink : '';
+      const setupEmailSent = payload?.data?.setupEmailSent === true;
+
       if (!setupLink) {
         throw new Error('Setup link was not generated');
       }
 
-      const isResetFlow = member.credentialStatus === 'password_ready';
-      await deliverSetupLink({
-        setupLink,
-        copiedMessage: isResetFlow ? 'Password reset link copied.' : 'Setup link copied.',
-        fallbackMessage: isResetFlow
-          ? 'Clipboard was blocked, so the password reset link is ready below.'
-          : 'Clipboard was blocked, so the setup link is ready below.',
-        actionLabel: isResetFlow ? 'Open reset page' : 'Open setup page',
-      });
+      if (setupEmailSent) {
+        setToastMessage('Invite email sent securely to the user.');
+      } else {
+        const isResetFlow = member.credentialStatus === 'password_ready';
+        await deliverSetupLink({
+          setupLink,
+          copiedMessage: isResetFlow ? 'Password reset link copied.' : 'Setup link copied.',
+          fallbackMessage: isResetFlow
+            ? 'Clipboard was blocked, so the password reset link is ready below.'
+            : 'Clipboard was blocked, so the setup link is ready below.',
+          actionLabel: isResetFlow ? 'Open reset page' : 'Open setup page',
+        });
+      }
       await fetchMembers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate setup link');

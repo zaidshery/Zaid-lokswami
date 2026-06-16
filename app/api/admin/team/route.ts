@@ -18,6 +18,7 @@ import {
   normalizeAdminRole,
 } from '@/lib/auth/roles';
 import User from '@/lib/models/User';
+import { sendTeamInviteEmail } from '@/lib/notifications/teamInviteEmail';
 
 type TeamMemberRecord = {
   _id?: unknown;
@@ -164,9 +165,21 @@ export const POST = withAdminApi(
         ? await issueStaffSetupToken({ userId, origin: getRequestOrigin(req) })
         : null;
 
+      let setupEmailSent = false;
+      if (setup?.setupLink) {
+        const emailResult = await sendTeamInviteEmail({
+          to: email,
+          name: existingUser.name,
+          role: role,
+          setupLink: setup.setupLink,
+        });
+        setupEmailSent = emailResult.sent;
+      }
+
       return apiSuccess({
           ...toTeamMember(updatedUser),
           setupLink: setup?.setupLink || '',
+          setupEmailSent,
       });
     }
 
@@ -191,10 +204,22 @@ export const POST = withAdminApi(
       ? await issueStaffSetupToken({ userId, origin: getRequestOrigin(req) })
       : null;
 
+    let setupEmailSent = false;
+    if (setup?.setupLink) {
+      const emailResult = await sendTeamInviteEmail({
+        to: email,
+        name: createdUser.name,
+        role: role,
+        setupLink: setup.setupLink,
+      });
+      setupEmailSent = emailResult.sent;
+    }
+
     return apiSuccess(
       {
           ...toTeamMember(createdObject),
           setupLink: setup?.setupLink || '',
+          setupEmailSent,
       },
       { status: 201 }
     );

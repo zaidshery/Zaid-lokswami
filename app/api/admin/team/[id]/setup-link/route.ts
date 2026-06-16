@@ -5,6 +5,7 @@ import { canManageTargetAdminRole, canManageTeam } from '@/lib/auth/permissions'
 import { issueStaffSetupToken, reserveUniqueStaffLoginId } from '@/lib/auth/staffCredentials';
 import { normalizeAdminRole } from '@/lib/auth/roles';
 import User from '@/lib/models/User';
+import { sendTeamInviteEmail } from '@/lib/notifications/teamInviteEmail';
 
 type RouteContext = {
   params: Promise<{
@@ -81,12 +82,24 @@ export async function POST(req: NextRequest, context: RouteContext) {
       origin: getRequestOrigin(req),
     });
 
+    let setupEmailSent = false;
+    if (setup.setupLink) {
+      const emailResult = await sendTeamInviteEmail({
+        to: typeof member.email === 'string' ? member.email : '',
+        name: '',
+        role: targetRole,
+        setupLink: setup.setupLink,
+      });
+      setupEmailSent = emailResult.sent;
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         loginId,
         setupLink: setup.setupLink,
         setupExpiresAt: setup.setupExpiresAt,
+        setupEmailSent,
       },
     });
   } catch (error) {
