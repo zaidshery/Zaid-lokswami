@@ -93,11 +93,11 @@ export async function applyEpaperWorkflowAutomation(input: {
     return { changed: false, nextStatus: null };
   }
 
-  const storedStatus = String(
-    epaper.productionStatus || 'draft_upload'
-  ) as EPaperProductionStatus;
+  const rawStatus = String(epaper.productionStatus || 'draft_upload');
   const currentStatus =
-    storedStatus === 'qa_review' ? 'hotspot_mapping' : storedStatus;
+    rawStatus === 'qa_review'
+      ? 'hotspot_mapping'
+      : (rawStatus as EPaperProductionStatus);
   const readiness = buildEpaperReadiness({
     epaper: normalizeEpaperForReadiness(epaper),
     articles: articles.map(normalizeArticleForReadiness),

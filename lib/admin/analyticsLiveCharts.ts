@@ -261,14 +261,13 @@ export function buildAnalyticsLiveChartsSnapshot(
       detail: 'Active editorial work',
     },
     {
-      label: 'Edition QA',
+      label: 'Edition Production',
       value: buildStageCount(analytics.currentPeriod.reviewItems, [
         'pages_ready',
         'ocr_review',
         'hotspot_mapping',
-        'qa_review',
       ]),
-      detail: 'Edition production and QA',
+      detail: 'Edition production',
     },
     {
       label: 'Ready',

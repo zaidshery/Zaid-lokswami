@@ -144,13 +144,15 @@ export function resolveEpaperProduction(source: {
     readiness: source.readiness,
   });
 
-  const storedStatus = isEpaperProductionStatus(source.productionStatus)
-    ? source.productionStatus
-    : fallbackStatus;
+  const rawStatus = typeof source.productionStatus === 'string' ? source.productionStatus : '';
+  const storedStatus = isEpaperProductionStatus(rawStatus)
+    ? rawStatus
+    : rawStatus === 'qa_review'
+      ? 'hotspot_mapping'
+      : fallbackStatus;
 
   return {
-    productionStatus:
-      storedStatus === 'qa_review' ? 'hotspot_mapping' : storedStatus,
+    productionStatus: storedStatus,
     productionAssignee: normalizeActorRef(source.productionAssignee),
     productionNotes: normalizeNotes(source.productionNotes),
     qaCompletedAt: parseOptionalDate(source.qaCompletedAt),
@@ -212,10 +214,7 @@ export function applyEpaperProductionUpdate(input: {
     nextNotes.push({
       id: cryptoRandomId(),
       body: trimmedNote,
-      kind:
-        fromStatus === 'qa_review' && toStatus === 'hotspot_mapping'
-          ? 'revision_request'
-          : 'comment',
+      kind: 'comment',
       author: actorRef,
       createdAt: new Date(),
     });

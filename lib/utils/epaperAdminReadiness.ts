@@ -172,24 +172,24 @@ export function buildEpaperReadiness(params: {
     );
   }
   if (editorialPageNumbers.length > 0 && mappedArticles === 0) {
-    blockers.push('No mapped stories have been added to editorial pages yet.');
+    warnings.push('No mapped stories have been added to editorial pages yet.');
   }
   if (pagesMissingHotspots > 0) {
-    blockers.push(
+    warnings.push(
       `${pagesMissingHotspots} page${pagesMissingHotspots === 1 ? '' : 's'} still ${
         pagesMissingHotspots === 1 ? 'has' : 'have'
       } no mapped hotspots.`
     );
   }
   if (articlesMissingReadableText > 0) {
-    blockers.push(
+    warnings.push(
       `${articlesMissingReadableText} mapped stor${
         articlesMissingReadableText === 1 ? 'y is' : 'ies are'
       } missing readable text or excerpt.`
     );
   }
   if (invalidBlankPages.length > 0) {
-    blockers.push(
+    warnings.push(
       `Blank page${invalidBlankPages.length === 1 ? '' : 's'} ${invalidBlankPages.join(
         ', '
       )} require a classification note.`

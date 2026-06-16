@@ -335,8 +335,7 @@ export async function getSuperAdminDashboardData(): Promise<SuperAdminDashboardD
   const activeEditionCount =
     Number(reviewQueue.productionCounts.pages_ready || 0) +
     Number(reviewQueue.productionCounts.ocr_review || 0) +
-    Number(reviewQueue.productionCounts.hotspot_mapping || 0) +
-    Number(reviewQueue.productionCounts.qa_review || 0);
+    Number(reviewQueue.productionCounts.hotspot_mapping || 0);
 
   const metrics: SuperAdminDashboardMetrics = {
     contentInventory:

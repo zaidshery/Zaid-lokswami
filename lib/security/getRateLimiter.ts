@@ -45,15 +45,15 @@ export function getApiLimiter(): RateLimiter {
 
 /**
  * Get or create the admin/authenticated rate limiter
- * Limits: 200 requests per minute per user
+ * Limits: 20000 requests per minute per user
  */
 export function getAdminLimiter(): RateLimiter {
   if (!adminLimiter) {
     adminLimiter = new RateLimiter({
       windowMs: 60 * 1000, // 1 minute
-      maxAttempts: 200,
+      maxAttempts: 20000,
       blockDurationMs: 10 * 60 * 1000, // 10 minute block
-      keyPrefix: 'admin',
+      keyPrefix: 'admin_v2',
     });
   }
   return adminLimiter;
@@ -61,15 +61,15 @@ export function getAdminLimiter(): RateLimiter {
 
 /**
  * Get or create the heavy route limiter
- * Limits: 20 expensive operations per minute per user/IP
+ * Limits: 2000 expensive operations per minute per user/IP
  */
 export function getHeavyRouteLimiter(): RateLimiter {
   if (!heavyRouteLimiter) {
     heavyRouteLimiter = new RateLimiter({
       windowMs: 60 * 1000, // 1 minute
-      maxAttempts: 20,
+      maxAttempts: 2000,
       blockDurationMs: 10 * 60 * 1000, // 10 minute block
-      keyPrefix: 'heavy',
+      keyPrefix: 'heavy_v2',
     });
   }
   return heavyRouteLimiter;

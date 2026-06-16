@@ -260,7 +260,6 @@ function productionTone(status: string | null | undefined) {
       return 'bg-emerald-100 text-emerald-700';
     case 'ready_to_publish':
       return 'bg-blue-100 text-blue-700';
-    case 'qa_review':
     case 'hotspot_mapping':
     case 'ocr_review':
     case 'pages_ready':

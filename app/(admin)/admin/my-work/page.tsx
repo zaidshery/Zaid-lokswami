@@ -223,7 +223,6 @@ export default async function AdminMyWorkPage() {
             Number(myWork.productionCounts.pages_ready || 0) +
             Number(myWork.productionCounts.ocr_review || 0) +
             Number(myWork.productionCounts.hotspot_mapping || 0) +
-            Number(myWork.productionCounts.qa_review || 0) +
             Number(myWork.productionCounts.ready_to_publish || 0),
           note: 'Owned content, assignments, and edition items currently on your plate',
           tone: 'bg-orange-500/10 text-orange-600',

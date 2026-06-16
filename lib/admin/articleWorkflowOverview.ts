@@ -172,7 +172,6 @@ export const REVIEW_QUEUE_EPAPER_STATUSES: EPaperProductionStatus[] = [
   'pages_ready',
   'ocr_review',
   'hotspot_mapping',
-  'qa_review',
   'ready_to_publish',
 ];
 

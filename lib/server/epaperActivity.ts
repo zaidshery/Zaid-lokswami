@@ -72,8 +72,6 @@ export function buildEpaperActivityMessage(input: ActivityMessageInput) {
       return 'Edition moved into OCR review.';
     case 'hotspot_mapping':
       return 'Edition moved into hotspot mapping.';
-    case 'qa_review':
-      return 'Edition moved into QA review.';
     case 'ready_to_publish':
       return 'Edition marked ready to publish.';
     case 'published':
@@ -192,7 +190,7 @@ export function deriveEpaperActivity(epaper: EPaperActivitySource | null | undef
       contentId: epaperId,
       parentId: '',
       action: 'ready_to_publish',
-      fromStatus: 'qa_review' as never,
+      fromStatus: 'hotspot_mapping' as never,
       toStatus: 'ready_to_publish' as never,
       actor: null,
       message: buildEpaperActivityMessage({ action: 'ready_to_publish', toStatus: 'ready_to_publish' }),

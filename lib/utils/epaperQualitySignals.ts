@@ -176,23 +176,7 @@ export function buildEpaperEditionQualitySummary(input: {
     }
   );
 
-  const pagesWithoutHotspots = pageSignals.filter(
-    (entry) =>
-      (entry.page?.pageType || 'editorial') === 'editorial' &&
-      entry.quality.mappedStories === 0
-  ).length;
   const publishBlockers: string[] = [];
-
-  if (pagesWithoutHotspots > 0) {
-    publishBlockers.push(
-      `${pagesWithoutHotspots} page${pagesWithoutHotspots === 1 ? '' : 's'} still ${pagesWithoutHotspots === 1 ? 'has' : 'have'} no mapped stories.`
-    );
-  }
-  if (counts.lowTextPages > 0) {
-    publishBlockers.push(
-      `${counts.lowTextPages} page${counts.lowTextPages === 1 ? '' : 's'} still ${counts.lowTextPages === 1 ? 'contains' : 'contain'} mapped stories without readable text.`
-    );
-  }
 
   return {
     pageSignals,

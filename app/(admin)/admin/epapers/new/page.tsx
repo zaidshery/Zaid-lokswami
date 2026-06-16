@@ -37,9 +37,9 @@ type BasicResponse = {
 export default function NewEPaperPage() {
   const router = useRouter();
   const [createMode, setCreateMode] = useState<'upload' | 'import'>('upload');
-  const [citySlug, setCitySlug] = useState<EPaperCitySlug>(
+  const [citySlugs, setCitySlugs] = useState<EPaperCitySlug[]>([
     EPAPER_CITY_OPTIONS[0].slug
-  );
+  ]);
   const [title, setTitle] = useState('');
   const [publishDate, setPublishDate] = useState('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -51,18 +51,13 @@ export default function NewEPaperPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const cityName = useMemo(
-    () => EPAPER_CITY_OPTIONS.find((item) => item.slug === citySlug)?.name || '',
-    [citySlug]
-  );
-
-  const submitDirectUpload = async () => {
+  const submitDirectUpload = async (slug: EPaperCitySlug) => {
     if (!pdfFile) {
       throw new Error('Choose a PDF to upload.');
     }
 
     const authHeaders = getAuthHeader();
-    setNotice('Creating the draft edition...');
+    setNotice(`Creating the draft edition for ${slug}...`);
     const initializeResponse = await fetch('/api/admin/epapers/uploads', {
       method: 'POST',
       headers: {
@@ -70,7 +65,7 @@ export default function NewEPaperPage() {
         ...authHeaders,
       },
       body: JSON.stringify({
-        citySlug,
+        citySlug: slug,
         title: title.trim(),
         publishDate,
         fileName: pdfFile.name,
@@ -131,12 +126,13 @@ export default function NewEPaperPage() {
     return epaperId;
   };
 
-  const submitRemoteImport = async () => {
+  const submitRemoteImport = async (slug: EPaperCitySlug) => {
     if (!pdfUrl.trim()) {
       throw new Error('A PDF link is required for URL import.');
     }
 
-    setNotice('Downloading and validating the remote assets...');
+    setNotice(`Downloading and validating the remote assets for ${slug}...`);
+    const resolvedCityName = EPAPER_CITY_OPTIONS.find((item) => item.slug === slug)?.name || '';
     const response = await fetch('/api/admin/epapers/import', {
       method: 'POST',
       headers: {
@@ -144,8 +140,8 @@ export default function NewEPaperPage() {
         ...getAuthHeader(),
       },
       body: JSON.stringify({
-        citySlug,
-        cityName,
+        citySlug: slug,
+        cityName: resolvedCityName,
         title: title.trim(),
         publishDate,
         pdfUrl: pdfUrl.trim(),
@@ -173,18 +169,26 @@ export default function NewEPaperPage() {
     setError('');
     setNotice('');
 
-    if (!citySlug || !cityName || !title.trim() || !publishDate) {
-      setError('City, title, and publish date are required.');
+    if (citySlugs.length === 0 || !title.trim() || !publishDate) {
+      setError('At least one city, title, and publish date are required.');
       return;
     }
 
     setLoading(true);
     try {
-      const epaperId =
-        createMode === 'upload'
-          ? await submitDirectUpload()
-          : await submitRemoteImport();
-      router.push(`/admin/epapers/${epaperId}`);
+      let lastEpaperId = '';
+      for (const slug of citySlugs) {
+        lastEpaperId =
+          createMode === 'upload'
+            ? await submitDirectUpload(slug)
+            : await submitRemoteImport(slug);
+      }
+      
+      if (citySlugs.length === 1 && lastEpaperId) {
+        router.push(`/admin/epapers/${lastEpaperId}`);
+      } else {
+        router.push(`/admin/epapers`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create e-paper.');
     } finally {
@@ -247,24 +251,48 @@ export default function NewEPaperPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <label>
+            <div className="flex flex-col">
               <span className="mb-1 block text-xs font-semibold text-gray-600">
-                City
+                Cities
               </span>
-              <select
-                value={citySlug}
-                onChange={(event) =>
-                  setCitySlug(event.target.value as EPaperCitySlug)
-                }
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              >
+              <div className="flex flex-wrap gap-2">
+                <label className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={citySlugs.length === EPAPER_CITY_OPTIONS.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setCitySlugs(EPAPER_CITY_OPTIONS.map((c) => c.slug));
+                      } else {
+                        setCitySlugs([]);
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
+                  />
+                  <span className="font-medium text-gray-900">All Cities</span>
+                </label>
                 {EPAPER_CITY_OPTIONS.map((city) => (
-                  <option key={city.slug} value={city.slug}>
-                    {city.name}
-                  </option>
+                  <label
+                    key={city.slug}
+                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={citySlugs.includes(city.slug)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setCitySlugs([...citySlugs, city.slug]);
+                        } else {
+                          setCitySlugs(citySlugs.filter((s) => s !== city.slug));
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
+                    />
+                    <span className="text-gray-700">{city.name}</span>
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
             <label>
               <span className="mb-1 block text-xs font-semibold text-gray-600">
                 Publish Date
