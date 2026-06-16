@@ -205,7 +205,7 @@ export async function getEpaperInsights(
     editionCounts: {
       total: epapers.length,
       inProduction: epapers.filter((epaper) =>
-        ['draft_upload', 'pages_ready', 'ocr_review', 'hotspot_mapping', 'qa_review'].includes(
+        ['draft_upload', 'pages_ready', 'ocr_review', 'hotspot_mapping'].includes(
           String(epaper.productionStatus || '')
         )
       ).length,

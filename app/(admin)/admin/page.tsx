@@ -110,7 +110,6 @@ function getWorkflowToneClass(status: string) {
     case 'pages_ready':
     case 'ocr_review':
     case 'hotspot_mapping':
-    case 'qa_review':
     case 'submitted':
     case 'assigned':
     case 'in_review':
@@ -887,7 +886,6 @@ export default async function AdminDashboardPage({
     Number(myWork?.productionCounts.pages_ready || 0) +
     Number(myWork?.productionCounts.ocr_review || 0) +
     Number(myWork?.productionCounts.hotspot_mapping || 0) +
-    Number(myWork?.productionCounts.qa_review || 0) +
     Number(myWork?.productionCounts.ready_to_publish || 0);
   const reporterActiveDeskCount =
     Number(myWork?.counts.assigned || 0) +
@@ -900,8 +898,7 @@ export default async function AdminDashboardPage({
     superAdminDashboard?.metrics.activeEditionCount ||
     Number(reviewQueue?.productionCounts.pages_ready || 0) +
       Number(reviewQueue?.productionCounts.ocr_review || 0) +
-      Number(reviewQueue?.productionCounts.hotspot_mapping || 0) +
-      Number(reviewQueue?.productionCounts.qa_review || 0);
+      Number(reviewQueue?.productionCounts.hotspot_mapping || 0);
   const readyToPublishItems = reviewItems.filter(
     (item) =>
       item.status === 'ready_for_approval' ||

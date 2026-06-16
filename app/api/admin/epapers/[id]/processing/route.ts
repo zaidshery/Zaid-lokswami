@@ -41,11 +41,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const isStale = Number.isFinite(ageMs) && ageMs > warningHours * 60 * 60 * 1000;
   const isProcessing =
     job?.status === 'queued' || job?.status === 'processing';
+  const productionStatus =
+    epaper.productionStatus === 'qa_review'
+      ? 'hotspot_mapping'
+      : epaper.productionStatus;
   const stuckWarning =
     isStale && isProcessing
       ? `This edition has been processing for more than ${warningHours} hours.`
-      : isStale && epaper.productionStatus === 'qa_review'
-        ? `This edition has remained in QA review for more than ${warningHours} hours.`
+      : isStale && productionStatus === 'hotspot_mapping'
+        ? `This edition has remained in hotspot mapping for more than ${warningHours} hours.`
         : '';
 
   return NextResponse.json({
@@ -54,7 +58,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       job,
       pageCount: epaper.pageCount,
       pages: epaper.pages,
-      productionStatus: epaper.productionStatus,
+      productionStatus,
       updatedAt: epaper.updatedAt,
       stuckWarning,
     },

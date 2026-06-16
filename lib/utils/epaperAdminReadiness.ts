@@ -144,12 +144,6 @@ export function buildEpaperReadiness(params: {
     (pageNumber) =>
       imagePages.includes(pageNumber) && !pagesWithHotspots.includes(pageNumber)
   );
-  const pendingQaPages = pageNumbers.filter(
-    (pageNumber) => (pageByNumber.get(pageNumber)?.reviewStatus || 'pending') === 'pending'
-  );
-  const needsAttentionPages = pageNumbers.filter(
-    (pageNumber) => pageByNumber.get(pageNumber)?.reviewStatus === 'needs_attention'
-  );
   const invalidBlankPages = pageNumbers.filter((pageNumber) => {
     const page = pageByNumber.get(pageNumber);
     return (
@@ -178,38 +172,24 @@ export function buildEpaperReadiness(params: {
     );
   }
   if (editorialPageNumbers.length > 0 && mappedArticles === 0) {
-    blockers.push('No mapped stories have been added to editorial pages yet.');
+    warnings.push('No mapped stories have been added to editorial pages yet.');
   }
   if (pagesMissingHotspots > 0) {
-    blockers.push(
+    warnings.push(
       `${pagesMissingHotspots} page${pagesMissingHotspots === 1 ? '' : 's'} still ${
         pagesMissingHotspots === 1 ? 'has' : 'have'
       } no mapped hotspots.`
     );
   }
   if (articlesMissingReadableText > 0) {
-    blockers.push(
+    warnings.push(
       `${articlesMissingReadableText} mapped stor${
         articlesMissingReadableText === 1 ? 'y is' : 'ies are'
       } missing readable text or excerpt.`
     );
   }
-  if (pendingQaPages.length > 0) {
-    blockers.push(
-      `${pendingQaPages.length} page${pendingQaPages.length === 1 ? '' : 's'} still ${
-        pendingQaPages.length === 1 ? 'has' : 'have'
-      } pending QA.`
-    );
-  }
-  if (needsAttentionPages.length > 0) {
-    blockers.push(
-      `${needsAttentionPages.length} page${needsAttentionPages.length === 1 ? '' : 's'} ${
-        needsAttentionPages.length === 1 ? 'is' : 'are'
-      } marked as needing attention.`
-    );
-  }
   if (invalidBlankPages.length > 0) {
-    blockers.push(
+    warnings.push(
       `Blank page${invalidBlankPages.length === 1 ? '' : 's'} ${invalidBlankPages.join(
         ', '
       )} require a classification note.`
@@ -235,15 +215,12 @@ export function buildEpaperReadiness(params: {
     articlesMissingReadableText,
     editorialPages: editorialPageNumbers.length,
     nonEditorialPages: nonEditorialPageNumbers.length,
-    pagesReadyForPublish: Math.max(
-      0,
-      pageCount - pendingQaPages.length - needsAttentionPages.length
-    ),
-    pagesPendingQa: pendingQaPages.length,
-    pagesNeedingAttention: needsAttentionPages.length,
+    pagesReadyForPublish: pageCount,
+    pagesPendingQa: 0,
+    pagesNeedingAttention: 0,
     missingImagePages,
     missingHotspotPages,
-    pendingQaPages,
+    pendingQaPages: [],
     invalidBlankPages,
   };
 }

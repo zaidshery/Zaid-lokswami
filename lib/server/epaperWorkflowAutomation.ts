@@ -74,15 +74,6 @@ function resolveAutomatedNextStatus(input: {
     return 'hotspot_mapping' as const;
   }
 
-  if (
-    currentStatus === 'hotspot_mapping' &&
-    readiness.mappedArticles > 0 &&
-    readiness.pagesMissingHotspots === 0 &&
-    readiness.articlesMissingReadableText === 0
-  ) {
-    return 'qa_review' as const;
-  }
-
   return null;
 }
 
@@ -102,7 +93,11 @@ export async function applyEpaperWorkflowAutomation(input: {
     return { changed: false, nextStatus: null };
   }
 
-  const currentStatus = String(epaper.productionStatus || 'draft_upload') as EPaperProductionStatus;
+  const rawStatus = String(epaper.productionStatus || 'draft_upload');
+  const currentStatus =
+    rawStatus === 'qa_review'
+      ? 'hotspot_mapping'
+      : (rawStatus as EPaperProductionStatus);
   const readiness = buildEpaperReadiness({
     epaper: normalizeEpaperForReadiness(epaper),
     articles: articles.map(normalizeArticleForReadiness),

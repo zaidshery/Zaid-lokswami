@@ -90,7 +90,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     revisionNumber,
     isCurrentRevision: false,
     supersedesId: source._id,
-    productionStatus: 'qa_review',
+    productionStatus: 'hotspot_mapping',
     productionAssignee: source.productionAssignee,
     productionNotes: [],
     qaCompletedAt: null,
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     actor: admin,
     action: 'revision_created',
     fromStatus: 'published',
-    toStatus: 'qa_review',
+    toStatus: 'hotspot_mapping',
     message: buildEpaperActivityMessage({ action: 'revision_created' }),
     metadata: {
       familyId,

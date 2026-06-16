@@ -13,7 +13,7 @@ import {
 describe('CMS workflow status badge', () => {
   it('formats workflow and production labels consistently', () => {
     expect(formatWorkflowStatusLabel('ready_for_approval')).toBe('Ready For Approval');
-    expect(formatWorkflowStatusLabel('qa_review')).toBe('Qa Review');
+    expect(formatWorkflowStatusLabel('ready_to_publish')).toBe('Ready To Publish');
     expect(formatWorkflowContentTypeLabel('epaper')).toBe('E-Paper');
     expect(formatWorkflowContentTypeLabel('epaperArticle')).toBe('E-Paper Article');
     expect(formatWorkflowPriorityLabel('urgent')).toBe('Urgent');

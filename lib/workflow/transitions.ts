@@ -26,9 +26,8 @@ const EPAPER_PRODUCTION_TRANSITIONS: Record<
   draft_upload: ['pages_ready'],
   pages_ready: ['ocr_review'],
   ocr_review: ['hotspot_mapping'],
-  hotspot_mapping: ['qa_review'],
-  qa_review: ['hotspot_mapping', 'ready_to_publish'],
-  ready_to_publish: ['qa_review', 'published'],
+  hotspot_mapping: ['ready_to_publish'],
+  ready_to_publish: ['hotspot_mapping', 'published'],
   published: ['archived'],
   archived: ['published'],
 };

@@ -112,7 +112,7 @@ function inferFallbackStatus(source: {
     return 'hotspot_mapping' as const;
   }
 
-  return 'qa_review' as const;
+  return 'hotspot_mapping' as const;
 }
 
 export function toWorkflowActorRef(
@@ -144,10 +144,15 @@ export function resolveEpaperProduction(source: {
     readiness: source.readiness,
   });
 
+  const rawStatus = typeof source.productionStatus === 'string' ? source.productionStatus : '';
+  const storedStatus = isEpaperProductionStatus(rawStatus)
+    ? rawStatus
+    : rawStatus === 'qa_review'
+      ? 'hotspot_mapping'
+      : fallbackStatus;
+
   return {
-    productionStatus: isEpaperProductionStatus(source.productionStatus)
-      ? source.productionStatus
-      : fallbackStatus,
+    productionStatus: storedStatus,
     productionAssignee: normalizeActorRef(source.productionAssignee),
     productionNotes: normalizeNotes(source.productionNotes),
     qaCompletedAt: parseOptionalDate(source.qaCompletedAt),
@@ -209,10 +214,7 @@ export function applyEpaperProductionUpdate(input: {
     nextNotes.push({
       id: cryptoRandomId(),
       body: trimmedNote,
-      kind:
-        fromStatus === 'qa_review' && toStatus === 'hotspot_mapping'
-          ? 'revision_request'
-          : 'comment',
+      kind: 'comment',
       author: actorRef,
       createdAt: new Date(),
     });
@@ -231,7 +233,7 @@ export function applyEpaperProductionUpdate(input: {
       qaCompletedAt:
         toStatus === 'ready_to_publish'
           ? new Date()
-          : toStatus === 'qa_review' || toStatus === 'hotspot_mapping'
+          : toStatus === 'hotspot_mapping'
             ? null
             : input.currentProduction.qaCompletedAt,
     } satisfies EpaperProductionMeta,

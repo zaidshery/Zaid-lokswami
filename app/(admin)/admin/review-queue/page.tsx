@@ -486,15 +486,14 @@ export default async function AdminReviewQueuePage({
           </p>
         </div>
         <div className="admin-shell-surface rounded-3xl p-6 shadow-sm">
-          <p className="text-sm font-medium text-[color:var(--admin-shell-text-muted)]">Edition QA / Ready</p>
+          <p className="text-sm font-medium text-[color:var(--admin-shell-text-muted)]">Edition Ready</p>
           <p className="mt-3 text-3xl font-black text-[color:var(--admin-shell-text)]">
             {formatNumber(
-              (reviewQueue.productionCounts.qa_review || 0) +
-                (reviewQueue.productionCounts.ready_to_publish || 0)
+              reviewQueue.productionCounts.ready_to_publish || 0
             )}
           </p>
           <p className="mt-4 text-sm text-[color:var(--admin-shell-text-muted)]">
-            E-paper editions in final QA or cleared for publish decisions.
+            E-paper editions cleared for publish decisions.
           </p>
         </div>
       </section>

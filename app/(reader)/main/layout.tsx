@@ -59,7 +59,7 @@ export default function MainLayout({
   }, [setIsMobile, setIsTablet]);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 overflow-x-hidden transition-colors duration-500">
+    <div className="min-h-screen overflow-x-clip bg-white transition-colors duration-500 dark:bg-slate-950">
       {/* Breaking News Bar (Top) */}
       {!isImmersiveVideoMode && !isReaderImmersiveMode ? <BreakingNews /> : null}
 
@@ -79,7 +79,9 @@ export default function MainLayout({
                 ? 'pb-0 pt-0'
                 : isReaderImmersiveMode
                   ? 'pb-0 pt-0'
-                : 'reader-bottom-safe-pad pt-[8rem] sm:pt-[8.5rem] md:pt-[9rem] xl:pb-4'
+                  : isVideosRoute
+                    ? 'pt-[8rem] sm:pt-[8.5rem] md:pt-[9rem] xl:pb-4'
+                    : 'reader-bottom-safe-pad pt-[8rem] sm:pt-[8.5rem] md:pt-[9rem] xl:pb-4'
           }
         >
           {!isImmersiveVideoMode && !isReaderImmersiveMode ? <SigninRoleBanner /> : null}

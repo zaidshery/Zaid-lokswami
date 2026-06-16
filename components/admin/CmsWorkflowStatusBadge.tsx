@@ -50,7 +50,6 @@ export function getWorkflowStatusToneClass(status: string | null | undefined) {
     case 'pages_ready':
     case 'ocr_review':
     case 'hotspot_mapping':
-    case 'qa_review':
     case 'submitted':
     case 'assigned':
     case 'in_review':

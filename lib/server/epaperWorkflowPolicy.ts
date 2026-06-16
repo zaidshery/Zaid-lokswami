@@ -34,16 +34,16 @@ export async function invalidateEpaperQa(input: {
 
   assertEpaperDraftEditable(current);
   const fromStatus = String(current.productionStatus || 'draft_upload');
-  const shouldReturnToQa = fromStatus === 'ready_to_publish';
-  const shouldClearQa = shouldReturnToQa || Boolean(current.qaCompletedAt);
+  const shouldReturnToMapping = fromStatus === 'ready_to_publish';
+  const shouldClearQa = shouldReturnToMapping || Boolean(current.qaCompletedAt);
 
-  if (!shouldReturnToQa && !shouldClearQa) {
+  if (!shouldReturnToMapping && !shouldClearQa) {
     return { changed: false, fromStatus, toStatus: fromStatus };
   }
 
-  const toStatus = shouldReturnToQa ? 'qa_review' : fromStatus;
+  const toStatus = shouldReturnToMapping ? 'hotspot_mapping' : fromStatus;
   await EPaper.findByIdAndUpdate(input.epaperId, {
-    ...(shouldReturnToQa ? { productionStatus: 'qa_review' } : {}),
+    ...(shouldReturnToMapping ? { productionStatus: 'hotspot_mapping' } : {}),
     qaCompletedAt: null,
   });
 
@@ -53,7 +53,7 @@ export async function invalidateEpaperQa(input: {
     action: 'qa_invalidated',
     fromStatus: fromStatus as never,
     toStatus: toStatus as never,
-    message: 'Edition returned to QA review after content changed.',
+    message: 'Edition returned to hotspot mapping after content changed.',
     metadata: {
       reason: input.reason,
       pageNumbers: input.pageNumbers || [],

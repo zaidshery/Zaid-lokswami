@@ -37,7 +37,6 @@ export const EPAPER_PRODUCTION_STATUSES = [
   'pages_ready',
   'ocr_review',
   'hotspot_mapping',
-  'qa_review',
   'ready_to_publish',
   'published',
   'archived',

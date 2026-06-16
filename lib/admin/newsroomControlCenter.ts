@@ -47,7 +47,6 @@ function withQueueMeta(item: WorkflowArticleCard): NewsroomQueueItem {
     'ready_for_approval',
     'approved',
     'ready_to_publish',
-    'qa_review',
   ]);
   const queueLabel = item.assignedToName
     ? `Assigned to ${item.assignedToName}`
