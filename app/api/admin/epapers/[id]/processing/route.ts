@@ -42,7 +42,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const isProcessing =
     job?.status === 'queued' || job?.status === 'processing';
   const productionStatus =
-    epaper.productionStatus === 'qa_review'
+    (epaper.productionStatus as string) === 'qa_review'
       ? 'hotspot_mapping'
       : epaper.productionStatus;
   const stuckWarning =
