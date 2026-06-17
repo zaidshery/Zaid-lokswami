@@ -19,6 +19,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   OAuthSignin: 'Google sign-in failed. Please try again.',
   OAuthCallback: 'Google sign-in failed. Please try again.',
   CredentialsSignin: 'Invalid login ID, email, or password.',
+  rate_limited: 'Too many failed sign-in attempts. Please wait 15 minutes, then try again.',
   no_admin_access: 'This account cannot access the admin panel.',
   Default: 'Sign-in failed. Please try again.',
 };
@@ -575,7 +576,7 @@ function SignInPageContent({
       });
 
       if (result?.error) {
-        setErrorMessage(resolveAuthError(result.error));
+        setErrorMessage(resolveAuthError(result.code || result.error));
         setIsSigningIn(false);
         return;
       }
@@ -613,7 +614,7 @@ function SignInPageContent({
       });
 
       if (result?.error) {
-        setErrorMessage(resolveAuthError(result.error));
+        setErrorMessage(resolveAuthError(result.code || result.error));
         setIsCredentialSigningIn(false);
         return;
       }

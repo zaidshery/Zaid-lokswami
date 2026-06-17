@@ -1,4 +1,4 @@
-import NextAuth, { type NextAuthConfig } from 'next-auth';
+import NextAuth, { CredentialsSignin, type NextAuthConfig } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { LOKSWAMI_SESSION_COOKIE } from '@/lib/auth/cookies';
@@ -14,6 +14,7 @@ import { getJwtSecretOrNull } from '@/lib/auth/jwtSecret';
 import connectDB from '@/lib/db/mongoose';
 import User from '@/lib/models/User';
 import { logAuthAuditEvent } from '@/lib/security/auditLogger';
+import { getLoginLimiter } from '@/lib/security/getRateLimiter';
 
 type SyncableUser = {
   id?: string;
@@ -26,6 +27,50 @@ type SyncableUser = {
   createdAt?: string;
   savedArticles?: string[];
 };
+
+class LoginRateLimitError extends CredentialsSignin {
+  code = 'rate_limited';
+}
+
+function normalizeIpForAuthRateLimit(value: string) {
+  const ip = value.trim();
+  if (!ip || ip === 'unknown') return 'unknown';
+  if (ip.startsWith('[')) return ip.split(']')[0] + ']';
+  if (ip.includes(':')) return ip.split(':')[0] || ip;
+  return ip;
+}
+
+function getCredentialLoginRateLimitKey(request: Request) {
+  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const ip =
+    request.headers.get('cf-connecting-ip')?.trim() ||
+    forwardedFor ||
+    request.headers.get('x-real-ip')?.trim() ||
+    'unknown';
+
+  return `login:ip:${normalizeIpForAuthRateLimit(ip)}`;
+}
+
+function throwIfCredentialLoginBlocked(request: Request, loginId: string) {
+  const loginLimiter = getLoginLimiter();
+  const key = getCredentialLoginRateLimitKey(request);
+  const status = loginLimiter.getStatus(key);
+
+  if (status?.blocked) {
+    if (loginId.trim()) {
+      void logAuthAuditEvent({
+        action: 'login',
+        userEmail: loginId.trim().toLowerCase(),
+        success: false,
+        reason: 'Credential login rate limited',
+      });
+    }
+
+    throw new LoginRateLimitError();
+  }
+
+  return { key, loginLimiter };
+}
 
 type DbUserRecord = {
   _id?: unknown;
@@ -207,28 +252,38 @@ function buildProviders(): NonNullable<NextAuthConfig['providers']> {
           type: 'password',
         },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const loginId =
           typeof credentials?.loginId === 'string' ? credentials.loginId : '';
         const password =
           typeof credentials?.password === 'string' ? credentials.password : '';
+        const credentialLimit = throwIfCredentialLoginBlocked(request, loginId);
         const envAdmin = await authorizeAdminCredentials({ loginId, password });
         if (envAdmin) {
+          credentialLimit.loginLimiter.reset(credentialLimit.key);
           return envAdmin;
         }
 
         const staffUser = await authorizeStaffCredentials({ loginId, password });
         if (staffUser) {
+          credentialLimit.loginLimiter.reset(credentialLimit.key);
           return staffUser;
         }
 
+        const rateLimitResult = credentialLimit.loginLimiter.check(credentialLimit.key);
         if (loginId.trim()) {
           void logAuthAuditEvent({
             action: 'login',
             userEmail: loginId.trim().toLowerCase(),
             success: false,
-            reason: 'Invalid credentials',
+            reason: rateLimitResult.allowed
+              ? 'Invalid credentials'
+              : 'Credential login rate limited',
           });
+        }
+
+        if (!rateLimitResult.allowed) {
+          throw new LoginRateLimitError();
         }
 
         return null;

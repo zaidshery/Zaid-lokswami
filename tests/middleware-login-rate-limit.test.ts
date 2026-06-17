@@ -38,7 +38,7 @@ describe('middleware login rate limiting', () => {
     }
   });
 
-  it('rate limits repeated credential login API attempts', async () => {
+  it('does not return custom JSON for credential login API attempts', async () => {
     let response: Response | undefined;
 
     for (let index = 0; index < 6; index += 1) {
@@ -50,10 +50,6 @@ describe('middleware login rate limiting', () => {
       });
     }
 
-    expect(response?.status).toBe(429);
-    expect(await response?.json()).toMatchObject({
-      error: 'Too many login attempts',
-      retryAfter: 900,
-    });
+    expect(response?.status).not.toBe(429);
   });
 });

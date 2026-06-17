@@ -8,7 +8,6 @@ import {
   getAdminLimiter,
   getApiLimiter,
   getHeavyRouteLimiter,
-  getLoginLimiter,
 } from '@/lib/security/getRateLimiter';
 import { getIpRateLimitKey, getUserRateLimitKey } from '@/lib/security/ipUtils';
 import {
@@ -115,26 +114,6 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       }
 
       return response;
-    }
-
-    const isCredentialLoginAttempt =
-      request.method === 'POST' &&
-      (pathname === '/api/auth/callback/credentials' ||
-        pathname === '/api/auth/signin/credentials');
-
-    if (isCredentialLoginAttempt) {
-      const loginLimiter = getLoginLimiter();
-      const ipKey = getIpRateLimitKey(request, 'login');
-      const result = loginLimiter.check(ipKey);
-
-      if (!result.allowed) {
-        const retryAfter = result.retryAfter || 900; // 15 minutes default
-        return scheduleRequestLog(createRateLimitResponse(
-          'Too many login attempts',
-          `Please try again in ${retryAfter} seconds`,
-          retryAfter
-        ));
-      }
     }
 
     const isAdminArea = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
