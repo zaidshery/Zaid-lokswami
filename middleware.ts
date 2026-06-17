@@ -117,9 +117,12 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       return response;
     }
 
-    // Rate limit login/signin endpoints
-    const isAuthEndpoint = pathname === '/signin' || pathname === '/login';
-    if (isAuthEndpoint) {
+    const isCredentialLoginAttempt =
+      request.method === 'POST' &&
+      (pathname === '/api/auth/callback/credentials' ||
+        pathname === '/api/auth/signin/credentials');
+
+    if (isCredentialLoginAttempt) {
       const loginLimiter = getLoginLimiter();
       const ipKey = getIpRateLimitKey(request, 'login');
       const result = loginLimiter.check(ipKey);
