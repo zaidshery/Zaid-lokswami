@@ -6,25 +6,13 @@ import { issueStaffSetupToken, reserveUniqueStaffLoginId } from '@/lib/auth/staf
 import { normalizeAdminRole } from '@/lib/auth/roles';
 import User from '@/lib/models/User';
 import { sendTeamInviteEmail } from '@/lib/notifications/teamInviteEmail';
+import { resolveShareRequestOrigin } from '@/lib/server/requestOrigin';
 
 type RouteContext = {
   params: Promise<{
     id: string;
   }>;
 };
-
-function getRequestOrigin(req: Pick<NextRequest, 'url'> & { nextUrl?: { origin?: string } }) {
-  const nextOrigin = typeof req.nextUrl?.origin === 'string' ? req.nextUrl.origin.trim() : '';
-  if (nextOrigin) {
-    return nextOrigin;
-  }
-
-  try {
-    return new URL(req.url).origin;
-  } catch {
-    return 'http://localhost:3000';
-  }
-}
 
 export async function POST(req: NextRequest, context: RouteContext) {
   try {
@@ -79,7 +67,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
     const setup = await issueStaffSetupToken({
       userId,
-      origin: getRequestOrigin(req),
+      origin: resolveShareRequestOrigin(req),
     });
 
     let setupEmailSent = false;

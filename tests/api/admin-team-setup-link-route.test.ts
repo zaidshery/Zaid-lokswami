@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getAdminSessionMock = vi.fn();
 const connectDBMock = vi.fn();
@@ -7,6 +7,7 @@ const reserveUniqueStaffLoginIdMock = vi.fn();
 const issueStaffSetupTokenMock = vi.fn();
 const findByIdMock = vi.fn();
 const findByIdAndUpdateMock = vi.fn();
+const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
 vi.mock('@/lib/auth/admin', () => ({
   getAdminSession: getAdminSessionMock,
@@ -36,6 +37,15 @@ describe('/api/admin/team/[id]/setup-link', () => {
       setupLink: 'http://localhost/setup-admin-account?token=fresh',
       setupExpiresAt: '2026-04-11T00:00:00.000Z',
     });
+  });
+
+  afterEach(() => {
+    if (typeof originalSiteUrl === 'undefined') {
+      delete process.env.NEXT_PUBLIC_SITE_URL;
+      return;
+    }
+
+    process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   });
 
   it('prevents admin from generating a setup link for a super admin account', async () => {
@@ -108,6 +118,7 @@ describe('/api/admin/team/[id]/setup-link', () => {
         loginId: 'copy.desk',
         setupLink: 'http://localhost/setup-admin-account?token=fresh',
         setupExpiresAt: '2026-04-11T00:00:00.000Z',
+        setupEmailSent: false,
       },
     });
     expect(reserveUniqueStaffLoginIdMock).toHaveBeenCalledWith({
@@ -119,7 +130,45 @@ describe('/api/admin/team/[id]/setup-link', () => {
     });
     expect(issueStaffSetupTokenMock).toHaveBeenCalledWith({
       userId: 'copy-1',
-      origin: 'http://localhost',
+      origin: 'http://localhost:3000',
+    });
+  });
+
+  it('uses the configured public origin when the proxy forwards an internal host', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com';
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk',
+      role: 'admin',
+    });
+    findByIdMock.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue({
+          _id: 'copy-1',
+          email: 'copy@example.com',
+          role: 'copy_editor',
+          loginId: 'copy.desk',
+        }),
+      }),
+    });
+
+    const { POST } = await import('@/app/api/admin/team/[id]/setup-link/route');
+    const response = await POST(
+      new Request('http://0.0.0.0:3000/api/admin/team/copy-1/setup-link', {
+        method: 'POST',
+        headers: {
+          'x-forwarded-host': '0.0.0.0:3000',
+          'x-forwarded-proto': 'https',
+        },
+      }) as unknown as NextRequest,
+      { params: Promise.resolve({ id: 'copy-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(issueStaffSetupTokenMock).toHaveBeenCalledWith({
+      userId: 'copy-1',
+      origin: 'https://lokswami.com',
     });
   });
 });

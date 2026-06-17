@@ -20,7 +20,16 @@ function normalizeHeaderValue(raw: string | null) {
 }
 
 function isLocalHostname(value: string) {
-  const normalized = value.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  const raw = value.trim().toLowerCase();
+  let hostname = raw;
+
+  try {
+    hostname = new URL(raw.includes('://') ? raw : `http://${raw}`).hostname;
+  } catch {
+    hostname = raw.split(':')[0] || raw;
+  }
+
+  const normalized = hostname.replace(/^\[|\]$/g, '');
   return (
     normalized === 'localhost' ||
     normalized === '127.0.0.1' ||
@@ -53,10 +62,18 @@ function resolveConfiguredPublicOrigin() {
 export function resolveShareRequestOrigin(request: Pick<Request, 'headers' | 'url'>) {
   const forwardedHost = normalizeHeaderValue(request.headers.get('x-forwarded-host'));
   const forwardedProto = normalizeHeaderValue(request.headers.get('x-forwarded-proto'));
+  const configuredOrigin = resolveConfiguredPublicOrigin();
 
   if (forwardedHost) {
     const proto = forwardedProto || (isLocalHostname(forwardedHost) ? 'http' : 'https');
-    return `${proto}://${forwardedHost}`;
+    const forwardedOrigin = normalizeBaseUrl(`${proto}://${forwardedHost}`);
+    if (!isLocalOrigin(forwardedOrigin)) {
+      return forwardedOrigin;
+    }
+
+    if (!isLocalOrigin(configuredOrigin)) {
+      return configuredOrigin;
+    }
   }
 
   try {
@@ -68,7 +85,6 @@ export function resolveShareRequestOrigin(request: Pick<Request, 'headers' | 'ur
     // Fall through to host/configured origin resolution below.
   }
 
-  const configuredOrigin = resolveConfiguredPublicOrigin();
   if (!isLocalOrigin(configuredOrigin)) {
     return configuredOrigin;
   }

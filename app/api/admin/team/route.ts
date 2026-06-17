@@ -19,6 +19,7 @@ import {
 } from '@/lib/auth/roles';
 import User from '@/lib/models/User';
 import { sendTeamInviteEmail } from '@/lib/notifications/teamInviteEmail';
+import { resolveShareRequestOrigin } from '@/lib/server/requestOrigin';
 
 type TeamMemberRecord = {
   _id?: unknown;
@@ -34,19 +35,6 @@ type TeamMemberRecord = {
   lastLoginAt?: Date | string | null;
   createdAt?: Date | string;
 };
-
-function getRequestOrigin(req: Pick<NextRequest, 'url'> & { nextUrl?: { origin?: string } }) {
-  const nextOrigin = typeof req.nextUrl?.origin === 'string' ? req.nextUrl.origin.trim() : '';
-  if (nextOrigin) {
-    return nextOrigin;
-  }
-
-  try {
-    return new URL(req.url).origin;
-  } catch {
-    return 'http://localhost:3000';
-  }
-}
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
@@ -162,7 +150,7 @@ export const POST = withAdminApi(
       const userId =
         typeof updatedUser._id?.toString === 'function' ? updatedUser._id.toString() : '';
       const setup = userId
-        ? await issueStaffSetupToken({ userId, origin: getRequestOrigin(req) })
+        ? await issueStaffSetupToken({ userId, origin: resolveShareRequestOrigin(req) })
         : null;
 
       let setupEmailSent = false;
@@ -201,7 +189,7 @@ export const POST = withAdminApi(
     const userId =
       typeof createdObject._id?.toString === 'function' ? createdObject._id.toString() : '';
     const setup = userId
-      ? await issueStaffSetupToken({ userId, origin: getRequestOrigin(req) })
+      ? await issueStaffSetupToken({ userId, origin: resolveShareRequestOrigin(req) })
       : null;
 
     let setupEmailSent = false;
