@@ -86,7 +86,7 @@ export async function sendTeamInviteEmail(
       body: JSON.stringify({
         from,
         to: [to],
-        subject: \`Invitation: Join Lokswami Newsroom\`,
+        subject: `Invitation: Join Lokswami Newsroom`,
         text: body.text,
         html: body.html,
       }),
@@ -99,7 +99,7 @@ export async function sendTeamInviteEmail(
         sent: false,
         error:
           errorPayload.slice(0, 200) ||
-          \`Email service returned status \${response.status}\`,
+          `Email service returned status ${response.status}`,
       };
     }
 
