@@ -189,7 +189,7 @@ export function buildEpaperReadiness(params: {
     );
   }
   if (invalidBlankPages.length > 0) {
-    warnings.push(
+    blockers.push(
       `Blank page${invalidBlankPages.length === 1 ? '' : 's'} ${invalidBlankPages.join(
         ', '
       )} require a classification note.`

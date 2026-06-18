@@ -61,13 +61,13 @@ export function getAdminLimiter(): RateLimiter {
 
 /**
  * Get or create the heavy route limiter
- * Limits: 2000 expensive operations per minute per user/IP
+ * Limits: 20 expensive operations per minute per user/IP
  */
 export function getHeavyRouteLimiter(): RateLimiter {
   if (!heavyRouteLimiter) {
     heavyRouteLimiter = new RateLimiter({
       windowMs: 60 * 1000, // 1 minute
-      maxAttempts: 2000,
+      maxAttempts: 20,
       blockDurationMs: 10 * 60 * 1000, // 10 minute block
       keyPrefix: 'heavy_v2',
     });
