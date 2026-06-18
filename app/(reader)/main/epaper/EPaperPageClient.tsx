@@ -1647,6 +1647,7 @@ export default function EPaperPageClient({
       issueUrl: shareUrl,
       cityLabel: activePaper.cityName,
       dateLabel,
+      includeUrl: false,
     });
 
     if (navigator.share) {
@@ -1715,6 +1716,7 @@ export default function EPaperPageClient({
       paperTitle: activePaper.title,
       excerpt: activeArticle.excerpt,
       page: activeArticle.pageNumber || activePage,
+      includeUrl: false,
     });
 
     if (navigator.share) {

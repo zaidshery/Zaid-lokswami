@@ -5,6 +5,7 @@ export type BuildArticleWhatsAppShareInput = {
   category?: string;
   sourceLabel?: string;
   ctaLabel?: string;
+  includeUrl?: boolean;
 };
 
 export type BuildEpaperIssueShareInput = {
@@ -14,6 +15,7 @@ export type BuildEpaperIssueShareInput = {
   dateLabel?: string;
   sourceLabel?: string;
   ctaLabel?: string;
+  includeUrl?: boolean;
 };
 
 export type BuildEpaperStoryShareInput = {
@@ -24,6 +26,7 @@ export type BuildEpaperStoryShareInput = {
   page?: number;
   sourceLabel?: string;
   ctaLabel?: string;
+  includeUrl?: boolean;
 };
 
 export type BuildEpaperSharePathInput = {
@@ -97,6 +100,7 @@ export function buildArticleWhatsAppShareText({
   category,
   sourceLabel = 'Lokswami',
   ctaLabel = 'Read full story',
+  includeUrl = true,
 }: BuildArticleWhatsAppShareInput) {
   const lines: string[] = [];
   const cleanTitle = truncateShareLine(title, 170);
@@ -108,7 +112,7 @@ export function buildArticleWhatsAppShareText({
   lines.push(cleanCategory ? `${source} | ${cleanCategory}` : `${source} | Top Story`);
   pushShareLine(lines, cleanTitle);
   pushShareLine(lines, cleanSummary);
-  if (cleanArticleUrl) {
+  if (includeUrl && cleanArticleUrl) {
     lines.push(`${cleanShareLine(ctaLabel) || 'Read full story'}: ${cleanArticleUrl}`);
   }
 
@@ -151,6 +155,7 @@ export function buildEpaperIssueShareText({
   dateLabel,
   sourceLabel = 'Lokswami E-Paper',
   ctaLabel = 'Open e-paper',
+  includeUrl = true,
 }: BuildEpaperIssueShareInput) {
   const lines: string[] = [];
   const meta = [cleanShareLine(cityLabel), cleanShareLine(dateLabel)].filter(Boolean).join(' | ');
@@ -158,7 +163,7 @@ export function buildEpaperIssueShareText({
   lines.push(cleanShareLine(sourceLabel) || 'Lokswami E-Paper');
   pushShareLine(lines, truncateShareLine(title, 160));
   pushShareLine(lines, meta);
-  if (issueUrl) {
+  if (includeUrl && issueUrl) {
     lines.push(`${cleanShareLine(ctaLabel) || 'Open e-paper'}: ${cleanUrl(issueUrl)}`);
   }
 
@@ -178,6 +183,7 @@ export function buildEpaperStoryShareText({
   page,
   sourceLabel = 'Lokswami E-Paper | Story',
   ctaLabel = 'Read in e-paper',
+  includeUrl = true,
 }: BuildEpaperStoryShareInput) {
   const lines: string[] = [];
   const pageNumber = Number.parseInt(String(page ?? ''), 10);
@@ -192,7 +198,7 @@ export function buildEpaperStoryShareText({
   pushShareLine(lines, truncateShareLine(title, 170));
   pushShareLine(lines, meta);
   pushShareLine(lines, truncateShareLine(excerpt || '', 220));
-  if (storyUrl) {
+  if (includeUrl && storyUrl) {
     lines.push(`${cleanShareLine(ctaLabel) || 'Read in e-paper'}: ${cleanUrl(storyUrl)}`);
   }
 

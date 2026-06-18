@@ -592,11 +592,12 @@ export default function VideoShortsFeed({
     if (!activeVideo || typeof window === 'undefined') return;
 
     const url = `${window.location.origin}${activeReadHref}`;
-    const text = `Lokswami News - ${activeVideo.title}\n${url}`;
+    const nativeText = `Lokswami News - ${activeVideo.title}`;
+    const text = `${nativeText}\n${url}`;
 
     if (navigator.share) {
       try {
-        await navigator.share({ title: activeVideo.title, text, url });
+        await navigator.share({ title: activeVideo.title, text: nativeText, url });
         return;
       } catch {
         // User canceled native share; fallback below.

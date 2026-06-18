@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import {
-  appendSocialOgImageVersion,
   buildStoriesPageMetadata,
   buildStoryPageMetadata,
 } from '@/lib/seo/readerPageMetadata';
@@ -39,7 +38,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     title: story.title,
     description: story.caption,
     category: story.category,
-    image: appendSocialOgImageVersion(`/api/og/story?id=${encodeURIComponent(story.id)}`),
+    image: story.thumbnail,
   });
 }
 

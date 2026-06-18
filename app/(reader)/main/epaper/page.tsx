@@ -1,9 +1,6 @@
 import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
-import {
-  appendSocialOgImageVersion,
-  buildEpaperPageMetadata,
-} from '@/lib/seo/readerPageMetadata';
+import { buildEpaperPageMetadata } from '@/lib/seo/readerPageMetadata';
 import {
   getPublicEpaperForMetadata,
   getPublicEpaperStoryForMetadata,
@@ -80,22 +77,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
         })
       : null;
   const resolvedPage = requestedPage || story?.pageNumber || 0;
-  const ogParams = new URLSearchParams();
-  if (issue?.id || paperId) {
-    ogParams.set('paper', issue?.id || paperId);
-  }
-  if (issue?.citySlug || filters.city !== 'all') {
-    ogParams.set('city', issue?.citySlug || filters.city);
-  }
-  if (issue?.publishDate || filters.date) {
-    ogParams.set('date', issue?.publishDate || filters.date);
-  }
-  if (resolvedPage > 0) {
-    ogParams.set('page', String(resolvedPage));
-  }
-  if (story?.slug || storyToken) {
-    ogParams.set('story', story?.slug || storyToken);
-  }
+  const shareImage = story?.coverImagePath || issue?.thumbnailPath || '';
 
   return buildEpaperPageMetadata({
     city: issue?.citySlug || filters.city,
@@ -108,9 +90,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     storyTitle: story?.title,
     storyExcerpt: story?.excerpt,
     storyPage: story?.pageNumber,
-    image: appendSocialOgImageVersion(
-      `/api/og/epaper${ogParams.size ? `?${ogParams.toString()}` : ''}`
-    ),
+    image: shareImage,
   });
 }
 

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import {
-  appendSocialOgImageVersion,
   buildVideoPageMetadata,
   buildVideosPageMetadata,
 } from '@/lib/seo/readerPageMetadata';
@@ -116,7 +115,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     title: selectedVideo.title,
     description: selectedVideo.description,
     category: selectedVideo.category,
-    image: appendSocialOgImageVersion(`/api/og/video?id=${encodeURIComponent(selectedVideo.id)}`),
+    image: selectedVideo.thumbnail,
   });
 }
 

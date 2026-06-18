@@ -56,4 +56,24 @@ describe('article and e-paper share helpers', () => {
     expect(storyText).toContain('Lokswami - Indore Edition | Page 3');
     expect(storyText).toContain('Read in e-paper: https://lokswami.com/e/epaper-1?p=3&s=story-1');
   });
+
+  it('can build native share text without duplicating the URL payload', () => {
+    const issueText = buildEpaperIssueShareText({
+      title: 'Lokswami - Indore Edition',
+      cityLabel: 'Indore',
+      dateLabel: '22/05/26',
+      issueUrl: 'https://lokswami.com/e/epaper-1?p=1',
+      includeUrl: false,
+    });
+    const storyText = buildEpaperStoryShareText({
+      title: 'Mapped story headline',
+      paperTitle: 'Lokswami - Indore Edition',
+      page: 3,
+      storyUrl: 'https://lokswami.com/e/epaper-1?p=3&s=story-1',
+      includeUrl: false,
+    });
+
+    expect(issueText).not.toContain('https://lokswami.com/e/epaper-1?p=1');
+    expect(storyText).not.toContain('https://lokswami.com/e/epaper-1?p=3&s=story-1');
+  });
 });

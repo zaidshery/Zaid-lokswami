@@ -5,6 +5,7 @@ import { getSiteUrl, toAbsoluteArticleUrl } from '@/lib/seo/articleSeo';
 
 const PREVIEW_WIDTH = 1200;
 const PREVIEW_HEIGHT = 630;
+const IMAGE_FETCH_TIMEOUT_MS = 2500;
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
 
 type ArticlePreviewInput = {
@@ -48,12 +49,19 @@ async function loadImageBuffer(input: string, fallbackPath: string) {
     }
 
     const url = toAbsoluteArticleUrl(source, getSiteUrl());
-    const response = await fetch(url, {
-      headers: { accept: 'image/*' },
-      next: { revalidate: 300 },
-    });
-    if (!response.ok) throw new Error(`Image fetch failed with ${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        headers: { accept: 'image/*' },
+        next: { revalidate: 300 },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`Image fetch failed with ${response.status}`);
+      return Buffer.from(await response.arrayBuffer());
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch {
     return readPublicAsset(fallbackPath);
   }
@@ -99,7 +107,7 @@ export async function buildEpaperSocialPreview(input: EpaperPreviewInput) {
   return buildMediaOnlyPreview({
     imageUrl: input.imageUrl,
     fallbackPath: '/placeholders/epaper-3x4.svg',
-    fit: 'contain',
+    fit: 'cover',
     background: '#f6f1e8',
   });
 }

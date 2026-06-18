@@ -762,13 +762,14 @@ export default function VideosPageClient({
     const roundedTime = Math.floor(currentTime);
     const timeParam = targetVideo.id === selectedVideo?.id && roundedTime > 0 ? `&t=${roundedTime}` : '';
     const url = `${window.location.origin}${buildVideoReaderPath(targetVideo.id)}${timeParam}`;
-    const shareText = `Lokswami News - ${targetVideo.title}\n${url}`;
+    const nativeShareText = `Lokswami News - ${targetVideo.title}`;
+    const shareText = `${nativeShareText}\n${url}`;
 
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({
           title: targetVideo.title,
-          text: shareText,
+          text: nativeShareText,
           url,
         });
         return;

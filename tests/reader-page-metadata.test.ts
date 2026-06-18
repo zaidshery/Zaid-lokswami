@@ -73,7 +73,7 @@ describe('reader page metadata', () => {
       title: 'City monsoon visual update',
       description: 'Swipe through the latest Lokswami visual monsoon update.',
       category: 'Weather',
-      image: '/api/og/story?id=story-123',
+      image: '/uploads/stories/monsoon.jpg',
     });
 
     expect(metadata).toEqual(
@@ -83,6 +83,13 @@ describe('reader page metadata', () => {
         alternates: {
           canonical: 'https://lokswami.com/main/stories?story=story-123',
         },
+        openGraph: expect.objectContaining({
+          images: [
+            expect.objectContaining({
+              url: 'https://lokswami.com/uploads/stories/monsoon.jpg',
+            }),
+          ],
+        }),
       })
     );
   });
@@ -93,7 +100,7 @@ describe('reader page metadata', () => {
       title: 'Indore headlines in 60 seconds',
       description: 'Watch the top Lokswami headlines from Indore in one quick video.',
       category: 'Politics',
-      image: '/api/og/video?id=video-123',
+      image: 'https://cdn.lokswami.com/videos/video-123.jpg',
     });
 
     expect(metadata).toEqual(
@@ -103,6 +110,13 @@ describe('reader page metadata', () => {
         alternates: {
           canonical: 'https://lokswami.com/main/videos?video=video-123',
         },
+        openGraph: expect.objectContaining({
+          images: [
+            expect.objectContaining({
+              url: 'https://cdn.lokswami.com/videos/video-123.jpg',
+            }),
+          ],
+        }),
       })
     );
   });
@@ -150,6 +164,7 @@ describe('reader page metadata', () => {
       storyTitle: 'Front page civic lead',
       storyExcerpt: 'A focused story excerpt for the shared e-paper article.',
       issueCityName: 'Indore',
+      image: '/uploads/epapers/paper-1-page-7.jpg',
     });
 
     expect(metadata).toEqual(
@@ -160,6 +175,13 @@ describe('reader page metadata', () => {
           canonical:
             'https://lokswami.com/main/epaper?paper=paper-1&city=indore&date=2026-05-22&page=7&story=front-lead',
         },
+        openGraph: expect.objectContaining({
+          images: [
+            expect.objectContaining({
+              url: 'https://lokswami.com/uploads/epapers/paper-1-page-7.jpg',
+            }),
+          ],
+        }),
       })
     );
   });

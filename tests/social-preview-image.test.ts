@@ -91,7 +91,7 @@ describe('social preview image renderer', () => {
     expectRgbNear(await readRgb(articleImage, 1080, 315), [30, 64, 175]);
   });
 
-  it('renders e-paper previews with only the cover image and plain padding', async () => {
+  it('renders e-paper previews as cover media without side padding', async () => {
     const epaperImage = await buildEpaperSocialPreview({
       title: 'Lokswami - Indore Edition',
       cityLabel: 'Indore',
@@ -104,6 +104,6 @@ describe('social preview image renderer', () => {
     expectPngBuffer(epaperImage);
     await expectPreviewSize(epaperImage);
     expectRgbNear(await readRgb(epaperImage, 600, 315), [21, 128, 61]);
-    expectRgbNear(await readRgb(epaperImage, 1080, 315), [246, 241, 232]);
+    expectRgbNear(await readRgb(epaperImage, 1080, 315), [21, 128, 61]);
   });
 });

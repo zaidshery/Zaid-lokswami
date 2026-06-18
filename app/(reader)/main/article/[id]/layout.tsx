@@ -6,8 +6,8 @@ import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
   buildArticlePublicPath,
   buildNewsArticleJsonLd,
+  toAbsoluteArticleUrl,
 } from '@/lib/seo/articleSeo';
-import { appendSocialOgImageVersion } from '@/lib/seo/readerPageMetadata';
 
 const fallbackSiteUrl = 'http://localhost:3000';
 
@@ -39,9 +39,11 @@ export async function generateMetadata(context: LayoutContext): Promise<Metadata
   const canonical =
     article.seo.canonicalUrl ||
     `${siteUrl}${buildArticlePublicPath({ id: article.id, slug: article.slug })}`;
-  const ogImage = appendSocialOgImageVersion(
-    `${siteUrl}/api/og/article/${encodeURIComponent(article.slug || article.id)}`
-  );
+  const imageRaw = resolveArticleOgImageUrl({
+    ogImage: article.seo.ogImage,
+    image: article.image,
+  });
+  const ogImage = toAbsoluteArticleUrl(imageRaw || '/lokswami-share-preview.png', siteUrl);
 
   return {
     title,
