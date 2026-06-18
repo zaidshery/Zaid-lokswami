@@ -7,6 +7,7 @@ import {
   buildArticlePublicPath,
   buildNewsArticleJsonLd,
 } from '@/lib/seo/articleSeo';
+import { appendSocialOgImageVersion } from '@/lib/seo/readerPageMetadata';
 
 const fallbackSiteUrl = 'http://localhost:3000';
 
@@ -38,7 +39,9 @@ export async function generateMetadata(context: LayoutContext): Promise<Metadata
   const canonical =
     article.seo.canonicalUrl ||
     `${siteUrl}${buildArticlePublicPath({ id: article.id, slug: article.slug })}`;
-  const ogImage = `${siteUrl}/api/og/article/${encodeURIComponent(article.slug || article.id)}`;
+  const ogImage = appendSocialOgImageVersion(
+    `${siteUrl}/api/og/article/${encodeURIComponent(article.slug || article.id)}`
+  );
 
   return {
     title,

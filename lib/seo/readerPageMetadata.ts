@@ -5,6 +5,7 @@ import { resolveNewsCategory } from '@/lib/constants/newsCategories';
 
 const FALLBACK_SITE_URL = 'http://localhost:3000';
 const DEFAULT_OG_IMAGE = '/lokswami-share-preview.png';
+export const SOCIAL_OG_IMAGE_VERSION = 'media-only-v1';
 
 type MetadataInput = {
   title: string;
@@ -62,6 +63,12 @@ export function toAbsoluteUrl(input: string, siteUrl = resolveSiteUrl()) {
   if (/^https?:\/\//i.test(input)) return input;
   if (!input.startsWith('/')) return `${siteUrl}/${input}`;
   return `${siteUrl}${input}`;
+}
+
+export function appendSocialOgImageVersion(input: string) {
+  if (!input) return input;
+  const separator = input.includes('?') ? '&' : '?';
+  return `${input}${separator}v=${SOCIAL_OG_IMAGE_VERSION}`;
 }
 
 function slugToTitle(slug: string) {

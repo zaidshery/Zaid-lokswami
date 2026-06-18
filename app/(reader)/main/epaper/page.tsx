@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
-import { buildEpaperPageMetadata } from '@/lib/seo/readerPageMetadata';
+import {
+  appendSocialOgImageVersion,
+  buildEpaperPageMetadata,
+} from '@/lib/seo/readerPageMetadata';
 import {
   getPublicEpaperForMetadata,
   getPublicEpaperStoryForMetadata,
@@ -105,7 +108,9 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     storyTitle: story?.title,
     storyExcerpt: story?.excerpt,
     storyPage: story?.pageNumber,
-    image: `/api/og/epaper${ogParams.size ? `?${ogParams.toString()}` : ''}`,
+    image: appendSocialOgImageVersion(
+      `/api/og/epaper${ogParams.size ? `?${ogParams.toString()}` : ''}`
+    ),
   });
 }
 
