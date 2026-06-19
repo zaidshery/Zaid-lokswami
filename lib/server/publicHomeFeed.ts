@@ -128,6 +128,27 @@ const DEFAULT_LIMITS: Required<PublicHomeFeedLimits> = {
   shorts: 8,
 };
 
+const HOMEPAGE_INITIAL_LIMITS: Required<PublicHomeFeedLimits> = {
+  hero: 5,
+  latest: 6,
+  trending: 3,
+  breaking: 0,
+  stories: 6,
+  videos: 0,
+  shorts: 0,
+};
+
+const DEFAULT_ARTICLE_CANDIDATE_MINIMUM = 40;
+const HOMEPAGE_ARTICLE_CANDIDATE_MINIMUM = 24;
+
+type LimitOptions = {
+  allowZero?: boolean;
+};
+
+type FeedLoadOptions = {
+  articleCandidateMinimum?: number;
+};
+
 function asObject(value: unknown) {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
@@ -177,20 +198,28 @@ function firstNonEmptyString(...values: unknown[]) {
   return '';
 }
 
-function normalizeLimit(value: number | undefined, fallback: number) {
+function normalizeLimit(
+  value: number | undefined,
+  fallback: number,
+  options: LimitOptions = {}
+) {
   if (!Number.isFinite(value)) return fallback;
-  return Math.max(1, Math.min(50, Math.floor(Number(value))));
+  const minimum = options.allowZero ? 0 : 1;
+  return Math.max(minimum, Math.min(50, Math.floor(Number(value))));
 }
 
-function resolveLimits(input: PublicHomeFeedLimits = {}): Required<PublicHomeFeedLimits> {
+function resolveLimits(
+  input: PublicHomeFeedLimits = {},
+  options: LimitOptions = {}
+): Required<PublicHomeFeedLimits> {
   return {
-    hero: normalizeLimit(input.hero, DEFAULT_LIMITS.hero),
-    latest: normalizeLimit(input.latest, DEFAULT_LIMITS.latest),
-    trending: normalizeLimit(input.trending, DEFAULT_LIMITS.trending),
-    breaking: normalizeLimit(input.breaking, DEFAULT_LIMITS.breaking),
-    stories: normalizeLimit(input.stories, DEFAULT_LIMITS.stories),
-    videos: normalizeLimit(input.videos, DEFAULT_LIMITS.videos),
-    shorts: normalizeLimit(input.shorts, DEFAULT_LIMITS.shorts),
+    hero: normalizeLimit(input.hero, DEFAULT_LIMITS.hero, options),
+    latest: normalizeLimit(input.latest, DEFAULT_LIMITS.latest, options),
+    trending: normalizeLimit(input.trending, DEFAULT_LIMITS.trending, options),
+    breaking: normalizeLimit(input.breaking, DEFAULT_LIMITS.breaking, options),
+    stories: normalizeLimit(input.stories, DEFAULT_LIMITS.stories, options),
+    videos: normalizeLimit(input.videos, DEFAULT_LIMITS.videos, options),
+    shorts: normalizeLimit(input.shorts, DEFAULT_LIMITS.shorts, options),
   };
 }
 
@@ -381,11 +410,16 @@ async function resolveSource(): Promise<PublicHomeFeedSource> {
   return (await isMongoAvailable({ label: 'public home feed' })) ? 'mongo' : 'file';
 }
 
-async function loadMongoFeed(limits: Required<PublicHomeFeedLimits>) {
+async function loadMongoFeed(
+  limits: Required<PublicHomeFeedLimits>,
+  options: FeedLoadOptions = {}
+) {
+  const articleCandidateMinimum =
+    options.articleCandidateMinimum ?? DEFAULT_ARTICLE_CANDIDATE_MINIMUM;
   const articleLimit = Math.max(
     limits.hero + limits.latest + limits.trending,
     limits.breaking * 3,
-    40
+    articleCandidateMinimum
   );
 
   const [articleDocs, storyDocs, videoDocs, shortDocs, epaperDocs] = await Promise.all([
@@ -396,23 +430,29 @@ async function loadMongoFeed(limits: Required<PublicHomeFeedLimits>) {
       .sort({ publishedAt: -1, _id: -1 })
       .limit(articleLimit)
       .lean(),
-    Story.find({ isPublished: true })
-      .select(
-        '_id title caption thumbnail mediaType mediaUrl linkUrl category priority publishedAt mediaAssets'
-      )
-      .sort({ priority: -1, publishedAt: -1, _id: -1 })
-      .limit(limits.stories)
-      .lean(),
-    Video.find({ isPublished: true, isShort: { $ne: true } })
-      .select('_id title description thumbnail videoUrl duration category isShort views publishedAt createdAt')
-      .sort({ publishedAt: -1, _id: -1 })
-      .limit(limits.videos)
-      .lean(),
-    Video.find({ isPublished: true, isShort: true })
-      .select('_id title description thumbnail videoUrl duration category isShort views publishedAt createdAt')
-      .sort({ createdAt: -1, _id: -1 })
-      .limit(limits.shorts)
-      .lean(),
+    limits.stories > 0
+      ? Story.find({ isPublished: true })
+          .select(
+            '_id title caption thumbnail mediaType mediaUrl linkUrl category priority publishedAt mediaAssets'
+          )
+          .sort({ priority: -1, publishedAt: -1, _id: -1 })
+          .limit(limits.stories)
+          .lean()
+      : Promise.resolve([]),
+    limits.videos > 0
+      ? Video.find({ isPublished: true, isShort: { $ne: true } })
+          .select('_id title description thumbnail videoUrl duration category isShort views publishedAt createdAt')
+          .sort({ publishedAt: -1, _id: -1 })
+          .limit(limits.videos)
+          .lean()
+      : Promise.resolve([]),
+    limits.shorts > 0
+      ? Video.find({ isPublished: true, isShort: true })
+          .select('_id title description thumbnail videoUrl duration category isShort views publishedAt createdAt')
+          .sort({ createdAt: -1, _id: -1 })
+          .limit(limits.shorts)
+          .lean()
+      : Promise.resolve([]),
     EPaper.find({ status: 'published', isCurrentRevision: { $ne: false } })
       .select('_id citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl pageCount pages')
       .sort({ publishDate: -1, _id: -1 })
@@ -426,12 +466,15 @@ async function loadMongoFeed(limits: Required<PublicHomeFeedLimits>) {
     .filter((item): item is PublicHomeFeedArticle => Boolean(item))
     .sort(compareByPublishedAtDesc);
 
-  const breaking = articleDocs
-    .filter((item) => isPubliclyPublishedArticle(item))
-    .map((item) => mapBreakingItem(item))
-    .filter((item): item is PublicHomeFeedBreakingItem => Boolean(item))
-    .sort(compareBreakingItems)
-    .slice(0, limits.breaking);
+  const breaking =
+    limits.breaking > 0
+      ? articleDocs
+          .filter((item) => isPubliclyPublishedArticle(item))
+          .map((item) => mapBreakingItem(item))
+          .filter((item): item is PublicHomeFeedBreakingItem => Boolean(item))
+          .sort(compareBreakingItems)
+          .slice(0, limits.breaking)
+      : [];
 
   return {
     articles,
@@ -458,8 +501,8 @@ async function loadMongoFeed(limits: Required<PublicHomeFeedLimits>) {
 async function loadFileFeed(limits: Required<PublicHomeFeedLimits>) {
   const [articleRows, storyRows, videoRows, epaperRows] = await Promise.all([
     listAllStoredArticles(),
-    listAllStoredStories(),
-    listAllStoredVideos(),
+    limits.stories > 0 ? listAllStoredStories() : Promise.resolve([]),
+    limits.videos > 0 || limits.shorts > 0 ? listAllStoredVideos() : Promise.resolve([]),
     listAllStoredEPapers(),
   ]);
 
@@ -469,12 +512,15 @@ async function loadFileFeed(limits: Required<PublicHomeFeedLimits>) {
     .filter((item): item is PublicHomeFeedArticle => Boolean(item))
     .sort(compareByPublishedAtDesc);
 
-  const breaking = articleRows
-    .filter((item) => isPubliclyPublishedArticle(item))
-    .map((item) => mapBreakingItem(item))
-    .filter((item): item is PublicHomeFeedBreakingItem => Boolean(item))
-    .sort(compareBreakingItems)
-    .slice(0, limits.breaking);
+  const breaking =
+    limits.breaking > 0
+      ? articleRows
+          .filter((item) => isPubliclyPublishedArticle(item))
+          .map((item) => mapBreakingItem(item))
+          .filter((item): item is PublicHomeFeedBreakingItem => Boolean(item))
+          .sort(compareBreakingItems)
+          .slice(0, limits.breaking)
+      : [];
 
   const latestEPaper: PublicHomeFeedEPaper | null = epaperRows
     .map((item) => mapFileEPaper(item))
@@ -527,15 +573,34 @@ function buildFeed(input: LoadedHomeFeedData, limits: Required<PublicHomeFeedLim
 }
 
 export async function getPublicHomeFeed(
-  options: { limits?: PublicHomeFeedLimits } = {}
+  options: {
+    limits?: PublicHomeFeedLimits;
+    allowZeroLimits?: boolean;
+    articleCandidateMinimum?: number;
+  } = {}
 ): Promise<PublicHomeFeedResult> {
-  const limits = resolveLimits(options.limits);
+  const limits = resolveLimits(options.limits, {
+    allowZero: options.allowZeroLimits,
+  });
   const source = await resolveSource();
-  const data = source === 'mongo' ? await loadMongoFeed(limits) : await loadFileFeed(limits);
+  const data =
+    source === 'mongo'
+      ? await loadMongoFeed(limits, {
+          articleCandidateMinimum: options.articleCandidateMinimum,
+        })
+      : await loadFileFeed(limits);
 
   return {
     feed: buildFeed(data, limits),
     source,
     limits,
   };
+}
+
+export async function getPublicHomepageInitialFeed(): Promise<PublicHomeFeedResult> {
+  return getPublicHomeFeed({
+    limits: HOMEPAGE_INITIAL_LIMITS,
+    allowZeroLimits: true,
+    articleCandidateMinimum: HOMEPAGE_ARTICLE_CANDIDATE_MINIMUM,
+  });
 }

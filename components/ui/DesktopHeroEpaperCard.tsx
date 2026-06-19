@@ -76,7 +76,6 @@ export default function DesktopHeroEpaperCard({
                   fallbackSrc="/placeholders/epaper-3x4.svg"
                   className="object-contain p-1 transition-transform duration-500 group-hover:scale-[1.02]"
                   sizes="136px"
-                  priority
                 />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-[#f6f1e8] via-[#f6f1e8]/96 to-transparent" />
               </div>

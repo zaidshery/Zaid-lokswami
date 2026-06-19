@@ -40,20 +40,48 @@ function cacheControlHeader(value) {
   ];
 }
 
+const appRouterFlightRequestSignals = [
+  { type: 'header', key: 'RSC' },
+  { type: 'query', key: '_rsc' },
+];
+const appRouterFlightVary =
+  'RSC, Next-Router-State-Tree, Next-Router-Prefetch, Next-Url, Accept-Encoding';
+const appRouterFlightNoStoreCache = [
+  {
+    key: 'Cache-Control',
+    value: 'private, no-store, no-cache, max-age=0, must-revalidate',
+  },
+  {
+    key: 'CDN-Cache-Control',
+    value: 'no-store',
+  },
+  {
+    key: 'Surrogate-Control',
+    value: 'no-store',
+  },
+  {
+    key: 'Vary',
+    value: appRouterFlightVary,
+  },
+];
+
 const immutableAssetCache = cacheControlHeader('public, max-age=31536000, immutable');
 const privateNoStoreCache = cacheControlHeader(
   'private, no-store, no-cache, max-age=0, must-revalidate'
 );
 const staticAssetCache = isDevelopment ? privateNoStoreCache : immutableAssetCache;
-const publicPageCache = cacheControlHeader(
-  'public, max-age=0, s-maxage=300, stale-while-revalidate=900'
-);
-const shortPublicPageCache = cacheControlHeader(
-  'public, max-age=0, s-maxage=120, stale-while-revalidate=600'
-);
-const searchPageCache = cacheControlHeader(
-  'public, max-age=0, s-maxage=30, stale-while-revalidate=120'
-);
+const publicPageCache = [
+  ...cacheControlHeader('public, max-age=0, s-maxage=300, stale-while-revalidate=900'),
+  { key: 'Vary', value: appRouterFlightVary },
+];
+const shortPublicPageCache = [
+  ...cacheControlHeader('public, max-age=0, s-maxage=120, stale-while-revalidate=600'),
+  { key: 'Vary', value: appRouterFlightVary },
+];
+const searchPageCache = [
+  ...cacheControlHeader('public, max-age=0, s-maxage=30, stale-while-revalidate=120'),
+  { key: 'Vary', value: appRouterFlightVary },
+];
 
 const nextConfig = {
   distDir: isDevelopment ? '.next-dev' : '.next',
@@ -89,6 +117,16 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: '/:path*',
+        has: [{ type: 'header', key: 'RSC' }],
+        headers: appRouterFlightNoStoreCache,
+      },
+      {
+        source: '/:path*',
+        has: [{ type: 'query', key: '_rsc' }],
+        headers: appRouterFlightNoStoreCache,
+      },
+      {
         source: '/_next/static/:path*',
         headers: staticAssetCache,
       },
@@ -106,42 +144,52 @@ const nextConfig = {
       },
       {
         source: '/',
+        missing: appRouterFlightRequestSignals,
         headers: shortPublicPageCache,
       },
       {
         source: '/main',
+        missing: appRouterFlightRequestSignals,
         headers: shortPublicPageCache,
       },
       {
         source: '/main/latest/:path*',
+        missing: appRouterFlightRequestSignals,
         headers: shortPublicPageCache,
       },
       {
         source: '/main/news/:path*',
+        missing: appRouterFlightRequestSignals,
         headers: shortPublicPageCache,
       },
       {
         source: '/main/stories/:path*',
+        missing: appRouterFlightRequestSignals,
         headers: shortPublicPageCache,
       },
       {
         source: '/main/category/:path*',
+        missing: appRouterFlightRequestSignals,
         headers: publicPageCache,
       },
       {
         source: '/main/article/:path*',
+        missing: appRouterFlightRequestSignals,
         headers: publicPageCache,
       },
       {
         source: '/main/epaper/:path*',
+        missing: appRouterFlightRequestSignals,
         headers: publicPageCache,
       },
       {
         source: '/main/videos/:path*',
+        missing: appRouterFlightRequestSignals,
         headers: publicPageCache,
       },
       {
         source: '/main/search/:path*',
+        missing: appRouterFlightRequestSignals,
         headers: searchPageCache,
       },
       {

@@ -293,6 +293,62 @@ function serveStaticAsset(req, res, staticRoot) {
 }
 
 function proxyRequest(req, res, internalPort) {
+  function appendVaryHeader(currentValue, nextTokens) {
+    const existing = String(Array.isArray(currentValue) ? currentValue.join(',') : currentValue || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const seen = new Set(existing.map((value) => value.toLowerCase()));
+
+    for (const token of nextTokens) {
+      if (!seen.has(token.toLowerCase())) {
+        existing.push(token);
+        seen.add(token.toLowerCase());
+      }
+    }
+
+    return existing.join(', ');
+  }
+
+  function isAppRouterFlightRequest() {
+    const rscHeader = String(req.headers.rsc || '').trim();
+    if (rscHeader === '1') {
+      return true;
+    }
+
+    try {
+      return new URL(req.url || '/', 'http://localhost').searchParams.has('_rsc');
+    } catch {
+      return false;
+    }
+  }
+
+  function withSafeAppRouterFlightCacheHeaders(upstreamHeaders) {
+    const headers = { ...upstreamHeaders };
+    const contentType = String(
+      Array.isArray(headers['content-type'])
+        ? headers['content-type'].join('; ')
+        : headers['content-type'] || ''
+    ).toLowerCase();
+
+    if (!isAppRouterFlightRequest() && !contentType.includes('text/x-component')) {
+      return headers;
+    }
+
+    headers['cache-control'] = 'private, no-store, no-cache, max-age=0, must-revalidate';
+    headers['cdn-cache-control'] = 'no-store';
+    headers['surrogate-control'] = 'no-store';
+    headers.vary = appendVaryHeader(headers.vary, [
+      'RSC',
+      'Next-Router-State-Tree',
+      'Next-Router-Prefetch',
+      'Next-Url',
+      'Accept-Encoding',
+    ]);
+
+    return headers;
+  }
+
   const upstream = http.request(
     {
       hostname: '127.0.0.1',
@@ -305,7 +361,7 @@ function proxyRequest(req, res, internalPort) {
       res.writeHead(
         upstreamRes.statusCode || 502,
         upstreamRes.statusMessage || '',
-        upstreamRes.headers
+        withSafeAppRouterFlightCacheHeaders(upstreamRes.headers)
       );
       upstreamRes.pipe(res);
     }

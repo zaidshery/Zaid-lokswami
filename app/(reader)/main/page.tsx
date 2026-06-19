@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import HomePageClient from './HomePageClient';
 import { mapHomeFeedToHomePageState } from '@/lib/content/homeFeed';
-import { resolveRequestOrigin } from '@/lib/server/requestOrigin';
+import { getPublicHomepageInitialFeed } from '@/lib/server/publicHomeFeed';
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const canonical = `${siteUrl}/main`;
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Lokswami - \u092d\u093e\u0930\u0924 \u0915\u093e \u0938\u092c\u0938\u0947 \u0935\u093f\u0936\u094d\u0935\u0938\u0928\u0940\u092f \u0938\u092e\u093e\u091a\u093e\u0930 \u092a\u094d\u0932\u0947\u091f\u092b\u0949\u0930\u094d\u092e',
@@ -37,14 +39,8 @@ export const metadata: Metadata = {
 
 async function fetchInitialHomeFeed() {
   try {
-    const origin = await resolveRequestOrigin();
-    const response = await fetch(`${origin}/api/v1/public/home-feed`, {
-      next: { revalidate: 60 },
-    });
-    if (!response.ok) return null;
-
-    const payload = await response.json().catch(() => null);
-    return mapHomeFeedToHomePageState(payload);
+    const result = await getPublicHomepageInitialFeed();
+    return mapHomeFeedToHomePageState(result.feed);
   } catch {
     return null;
   }

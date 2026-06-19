@@ -1,11 +1,12 @@
 import { createElement, type ReactNode } from 'react';
-import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   fetchHomeFeedForHomePage: vi.fn(),
   fetchMergedLiveArticles: vi.fn(),
   fetchLiveStories: vi.fn(),
+  fetchPublicArticlesPage: vi.fn(),
 }));
 
 vi.mock('next/image', () => ({
@@ -79,6 +80,16 @@ vi.mock('@/lib/content/liveStories', () => ({
   fetchLiveStories: mocks.fetchLiveStories,
 }));
 
+vi.mock('@/lib/content/publicArticles', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/content/publicArticles')>(
+    '@/lib/content/publicArticles'
+  );
+  return {
+    ...actual,
+    fetchPublicArticlesPage: mocks.fetchPublicArticlesPage,
+  };
+});
+
 vi.mock('@/lib/utils/articleMedia', () => ({
   buildArticleImageVariantUrl: (value: string) => value,
   isLegacyCloudinaryImageUrl: () => false,
@@ -118,11 +129,15 @@ vi.mock('@/components/ui/NewsPoll', () => ({
 }));
 
 describe('HomePageClient v1 home-feed integration', () => {
+  const intersectionCallbacks: IntersectionObserverCallback[] = [];
+
   beforeEach(() => {
     vi.clearAllMocks();
+    intersectionCallbacks.length = 0;
     mocks.fetchHomeFeedForHomePage.mockResolvedValue(null);
     mocks.fetchMergedLiveArticles.mockResolvedValue([]);
     mocks.fetchLiveStories.mockResolvedValue([]);
+    mocks.fetchPublicArticlesPage.mockResolvedValue(null);
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -130,6 +145,26 @@ describe('HomePageClient v1 home-feed integration', () => {
         json: vi.fn().mockResolvedValue({}),
       })
     );
+    class MockIntersectionObserver implements IntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = '';
+      readonly thresholds = [];
+
+      constructor(callback: IntersectionObserverCallback) {
+        intersectionCallbacks.push(callback);
+      }
+
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+      takeRecords = vi.fn(() => []);
+    }
+
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('renders initial v1 home-feed state through the existing homepage slots', async () => {
@@ -250,13 +285,138 @@ describe('HomePageClient v1 home-feed integration', () => {
     expect(screen.getByTestId('hero-carousel')).toHaveTextContent(
       'Lead Story From Feed'
     );
-    expect(screen.getByTestId('stories-rail')).toHaveTextContent('Story From Feed');
+    expect(await screen.findByTestId('stories-rail')).toHaveTextContent('Story From Feed');
     expect(screen.getAllByTestId('news-card').some((node) =>
       node.textContent?.includes('Latest Story From Feed')
     )).toBe(true);
-    expect(screen.getByTestId('epaper-card')).toHaveTextContent('Indore Edition');
+    expect(await screen.findByTestId('epaper-card')).toHaveTextContent('Indore Edition');
     expect(mocks.fetchHomeFeedForHomePage).not.toHaveBeenCalled();
     expect(mocks.fetchMergedLiveArticles).not.toHaveBeenCalled();
     expect(mocks.fetchLiveStories).not.toHaveBeenCalled();
+  });
+
+  it('loads category stories only when a category section nears the viewport', async () => {
+    const HomePageClient = (await import('@/app/(reader)/main/HomePageClient'))
+      .default;
+
+    render(
+      createElement(HomePageClient, {
+        initialHomeFeed: {
+          articles: [
+            {
+              id: 'article-1',
+              slug: 'lead-story',
+              title: 'Lead Story From Feed',
+              summary: 'Lead summary',
+              image: '/lead.jpg',
+              category: 'Regional',
+              author: { id: 'desk', name: 'Desk', avatar: '/logo-icon-final.png' },
+              publishedAt: '2026-05-09T10:00:00.000Z',
+              views: 20,
+              isTrending: true,
+            },
+            {
+              id: 'article-2',
+              slug: 'latest-story',
+              title: 'Second Story From Feed',
+              summary: 'Latest summary',
+              image: '/latest.jpg',
+              category: 'National',
+              author: {
+                id: 'reporter',
+                name: 'Reporter',
+                avatar: '/logo-icon-final.png',
+              },
+              publishedAt: '2026-05-09T09:00:00.000Z',
+              views: 8,
+            },
+            {
+              id: 'article-3',
+              title: 'Third Story From Feed',
+              summary: 'Third summary',
+              image: '/third.jpg',
+              category: 'National',
+              author: {
+                id: 'reporter',
+                name: 'Reporter',
+                avatar: '/logo-icon-final.png',
+              },
+              publishedAt: '2026-05-09T08:00:00.000Z',
+              views: 7,
+            },
+            {
+              id: 'article-4',
+              title: 'Fourth Story From Feed',
+              summary: 'Fourth summary',
+              image: '/fourth.jpg',
+              category: 'National',
+              author: {
+                id: 'reporter',
+                name: 'Reporter',
+                avatar: '/logo-icon-final.png',
+              },
+              publishedAt: '2026-05-09T07:00:00.000Z',
+              views: 6,
+            },
+            {
+              id: 'article-5',
+              title: 'Fifth Story From Feed',
+              summary: 'Fifth summary',
+              image: '/fifth.jpg',
+              category: 'National',
+              author: {
+                id: 'reporter',
+                name: 'Reporter',
+                avatar: '/logo-icon-final.png',
+              },
+              publishedAt: '2026-05-09T06:00:00.000Z',
+              views: 5,
+            },
+            {
+              id: 'article-6',
+              title: 'Latest Story From Feed',
+              summary: 'Sixth summary',
+              image: '/sixth.jpg',
+              category: 'National',
+              author: {
+                id: 'reporter',
+                name: 'Reporter',
+                avatar: '/logo-icon-final.png',
+              },
+              publishedAt: '2026-05-09T05:00:00.000Z',
+              views: 4,
+            },
+          ],
+          stories: [],
+          epaper: {
+            _id: 'paper-1',
+            citySlug: 'indore',
+            cityName: 'Indore',
+            title: 'Indore Edition',
+            publishDate: '2026-05-09',
+            thumbnailPath: '/paper.jpg',
+            pageCount: 12,
+          },
+        },
+      })
+    );
+
+    await waitFor(() => expect(intersectionCallbacks.length).toBeGreaterThan(0));
+    expect(mocks.fetchPublicArticlesPage).not.toHaveBeenCalled();
+
+    act(() => {
+      intersectionCallbacks[0](
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver
+      );
+    });
+
+    await waitFor(() =>
+      expect(mocks.fetchPublicArticlesPage).toHaveBeenCalledWith({
+        category: 'regional',
+        limit: 12,
+      })
+    );
+    expect(mocks.fetchPublicArticlesPage).toHaveBeenCalledTimes(1);
   });
 });

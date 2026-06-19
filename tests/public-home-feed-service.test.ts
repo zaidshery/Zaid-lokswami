@@ -172,4 +172,91 @@ describe('public home feed service', () => {
       })
     );
   });
+
+  it('builds a lightweight homepage initial feed without unused media sections', async () => {
+    listAllStoredArticlesMock.mockResolvedValue([
+      {
+        _id: 'article-1',
+        slug: 'lead-story',
+        title: 'Lead Story',
+        summary: 'Lead summary',
+        image: '/lead.jpg',
+        category: 'Indore',
+        author: 'Reporter',
+        publishedAt: '2026-05-09T10:00:00.000Z',
+        views: 25,
+        isBreaking: true,
+        isTrending: true,
+        workflow: { status: 'published' },
+      },
+      {
+        _id: 'article-2',
+        slug: 'second-story',
+        title: 'Second Story',
+        summary: 'Second summary',
+        image: '/second.jpg',
+        category: 'State',
+        author: 'Editor',
+        publishedAt: '2026-05-09T09:00:00.000Z',
+        views: 5,
+        workflow: { status: 'published' },
+      },
+    ]);
+    listAllStoredStoriesMock.mockResolvedValue([
+      {
+        _id: 'story-1',
+        title: 'Visual Story',
+        caption: 'Caption',
+        thumbnail: '/story.jpg',
+        mediaType: 'image',
+        publishedAt: '2026-05-09T10:30:00.000Z',
+        priority: 4,
+        isPublished: true,
+      },
+    ]);
+    listAllStoredVideosMock.mockResolvedValue([
+      {
+        _id: 'video-1',
+        title: 'Video Story',
+        description: 'Video summary',
+        thumbnail: '/video.jpg',
+        videoUrl: 'https://video.example.com/watch',
+        duration: 90,
+        category: 'News',
+        isPublished: true,
+        isShort: false,
+        publishedAt: '2026-05-09T07:00:00.000Z',
+      },
+    ]);
+    listAllStoredEPapersMock.mockResolvedValue([
+      {
+        _id: 'paper-1',
+        city: 'Indore',
+        title: 'Indore Edition',
+        publishDate: '2026-05-09',
+        thumbnailPath: '/paper.jpg',
+        pdfPath: '/paper.pdf',
+        pages: 12,
+      },
+    ]);
+
+    const { getPublicHomepageInitialFeed } = await import('@/lib/server/publicHomeFeed');
+    const result = await getPublicHomepageInitialFeed();
+
+    expect(result.limits).toEqual({
+      hero: 5,
+      latest: 6,
+      trending: 3,
+      breaking: 0,
+      stories: 6,
+      videos: 0,
+      shorts: 0,
+    });
+    expect(listAllStoredVideosMock).not.toHaveBeenCalled();
+    expect(result.feed.breaking).toEqual([]);
+    expect(result.feed.videos).toEqual([]);
+    expect(result.feed.shorts).toEqual([]);
+    expect(result.feed.stories.map((item) => item.id)).toEqual(['story-1']);
+    expect(result.feed.epaper?.id).toBe('paper-1');
+  });
 });

@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import dynamic from 'next/dynamic';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -9,10 +17,7 @@ import {
   Flame,
 } from 'lucide-react';
 import HeroCarousel from '@/components/ui/HeroCarousel';
-import StoriesRail from '@/components/ui/StoriesRail';
 import NewsCard from '@/components/ui/NewsCard';
-import DesktopHeroEpaperCard from '@/components/ui/DesktopHeroEpaperCard';
-import NewsPoll from '@/components/ui/NewsPoll';
 import ReaderImage from '@/components/ui/ReaderImage';
 import { articles as mockArticles, type Article } from '@/lib/mock/data';
 import { categoryMatches, fetchMergedLiveArticles } from '@/lib/content/liveArticles';
@@ -33,6 +38,7 @@ import {
 import {
   getNewsCategoryHref,
   NEWS_CATEGORY_DEFINITIONS,
+  type NewsCategory,
   resolveNewsCategory,
 } from '@/lib/constants/newsCategories';
 import { useAppStore } from '@/lib/store/appStore';
@@ -83,10 +89,12 @@ function getPublishedTimestamp(article: Article) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-const HOME_LATEST_INITIAL_COUNT = 8;
-const HOME_LATEST_PAGE_STEP = 8;
+const HOME_LATEST_INITIAL_COUNT = 6;
+const HOME_LATEST_PAGE_STEP = 6;
 const CATEGORY_INITIAL_STORIES_COUNT = 4;
 const CATEGORY_STORIES_PAGE_STEP = 4;
+const CATEGORY_FETCH_LIMIT = 12;
+const CATEGORY_VIEWPORT_ROOT_MARGIN = '700px 0px';
 const HI_EPAPER_CITY_LABELS: Record<string, string> = {
   indore: '\u0907\u0902\u0926\u094c\u0930',
   ujjain: '\u0909\u091c\u094d\u091c\u0948\u0928',
@@ -101,6 +109,247 @@ type HomeEpaperResponse = {
 type HomePageProps = {
   initialHomeFeed?: HomePageFeedState | null;
 };
+
+type CategorySectionViewModel = {
+  slug: string;
+  category: NewsCategory | undefined;
+  items: Article[];
+  accent: string;
+};
+
+const StoriesRail = dynamic(() => import('@/components/ui/StoriesRail'), {
+  ssr: false,
+  loading: StoriesRailFallback,
+});
+
+const DesktopHeroEpaperCard = dynamic(
+  () => import('@/components/ui/DesktopHeroEpaperCard'),
+  {
+    ssr: false,
+    loading: DesktopHeroEpaperCardFallback,
+  }
+);
+
+const NewsPoll = dynamic(() => import('@/components/ui/NewsPoll'), {
+  ssr: false,
+  loading: NewsPollFallback,
+});
+
+function StoriesRailFallback() {
+  return (
+    <div className="flex gap-3 overflow-hidden py-1 sm:gap-4 sm:py-1.5">
+      {[0, 1, 2, 3, 4].map((item) => (
+        <div
+          key={item}
+          className="h-[10.7rem] w-24 shrink-0 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800 md:w-28"
+        />
+      ))}
+    </div>
+  );
+}
+
+function DesktopHeroEpaperCardFallback() {
+  return (
+    <div className="h-full animate-pulse rounded-[1.6rem] border border-zinc-200/90 bg-zinc-100 dark:border-white/10 dark:bg-zinc-900">
+      <div className="grid h-full grid-cols-[150px_minmax(0,1fr)] items-center gap-3 px-3.5 py-2">
+        <div className="mx-auto aspect-[3/4] w-[136px] rounded-[1.35rem] bg-zinc-200 dark:bg-zinc-800" />
+        <div className="space-y-3">
+          <div className="h-5 w-24 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-5 w-11/12 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-4 w-8/12 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-7 w-32 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewsPollFallback() {
+  return (
+    <div className="cnp-surface overflow-hidden p-4">
+      <div className="animate-pulse space-y-3">
+        <div className="h-5 w-24 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+        <div className="h-6 w-4/5 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="h-12 rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopSideStoriesFallback({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, index) => (
+        <div
+          key={index}
+          className="h-full animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <div className="flex h-full items-center gap-3 p-3">
+            <div className="h-[72px] w-[108px] flex-none rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-4 w-11/12 rounded bg-zinc-200 dark:bg-zinc-800" />
+              <div className="h-4 w-7/12 rounded bg-zinc-200 dark:bg-zinc-800" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function CategoryStoriesSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {[0, 1].map((item) => (
+        <div
+          key={item}
+          className="min-h-24 animate-pulse rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <div className="space-y-2 p-4">
+            <div className="h-3 w-20 rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-4 w-11/12 rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-4 w-8/12 rounded bg-zinc-200 dark:bg-zinc-800" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function useNearViewport() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [isNearViewport, setIsNearViewport] = useState(false);
+
+  useEffect(() => {
+    if (isNearViewport) return;
+
+    const node = ref.current;
+    if (!node) return;
+
+    if (typeof IntersectionObserver === 'undefined') {
+      setIsNearViewport(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsNearViewport(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: CATEGORY_VIEWPORT_ROOT_MARGIN, threshold: 0.01 }
+    );
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isNearViewport]);
+
+  return { ref, isNearViewport };
+}
+
+type LazyCategorySectionProps = {
+  section: CategorySectionViewModel;
+  language: 'en' | 'hi';
+  visibleCount: number;
+  onVisible: (slug: string) => void;
+  onShowMore: (slug: string, totalItems: number) => void;
+};
+
+function LazyCategorySection({
+  section,
+  language,
+  visibleCount,
+  onVisible,
+  onShowMore,
+}: LazyCategorySectionProps) {
+  const { ref, isNearViewport } = useNearViewport();
+  const categoryLabel = section.category
+    ? language === 'hi'
+      ? section.category.name
+      : section.category.nameEn
+    : section.slug;
+  const visibleArticles = isNearViewport
+    ? section.items.slice(0, visibleCount)
+    : [];
+  const hasMoreStories = isNearViewport && visibleCount < section.items.length;
+  const categoryHref = getNewsCategoryHref(section.slug);
+  const headerStyle: CSSProperties = {
+    borderColor: hexToRgba(section.accent, 0.28),
+    boxShadow: `0 18px 55px -44px ${hexToRgba(section.accent, 0.75)}`,
+  };
+  const accentStyle: CSSProperties = {
+    backgroundColor: section.accent,
+  };
+
+  useEffect(() => {
+    if (isNearViewport) {
+      onVisible(section.slug);
+    }
+  }, [isNearViewport, onVisible, section.slug]);
+
+  return (
+    <div
+      ref={ref}
+      style={headerStyle}
+      className="cnp-surface overflow-hidden border px-3 py-4 sm:px-5 sm:py-5 md:px-6"
+    >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-3 dark:border-zinc-800 sm:mb-4 sm:pb-4">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-[1.05rem] font-black tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
+            <span style={accentStyle} className="h-5 w-1 rounded-full sm:h-6 sm:w-1.5" />
+            <span className="truncate">{categoryLabel}</span>
+          </h2>
+          <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">
+            {language === 'hi'
+              ? '\u0938\u092c\u0938\u0947 \u0928\u0908 \u092a\u094d\u0930\u0915\u093e\u0936\u093f\u0924 \u0916\u092c\u0930\u0947\u0902'
+              : 'Top latest published stories'}
+          </p>
+        </div>
+        <Link
+          href={categoryHref}
+          className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-1 rounded-full border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-800 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:text-sm"
+        >
+          {language === 'hi' ? '\u0936\u094d\u0930\u0947\u0923\u0940 \u0926\u0947\u0916\u0947\u0902' : 'View Category'}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      {!isNearViewport ? (
+        <CategoryStoriesSkeleton />
+      ) : visibleArticles.length ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {visibleArticles.map((article, index) => (
+            <NewsCard key={article.id} article={article} size="sm" index={index} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center text-sm font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-400">
+          {language === 'hi'
+            ? '\u0907\u0938 \u0936\u094d\u0930\u0947\u0923\u0940 \u092e\u0947\u0902 \u0905\u092d\u0940 \u0915\u094b\u0908 \u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948.'
+            : 'No latest stories are published in this category yet.'}
+        </div>
+      )}
+
+      {hasMoreStories ? (
+        <div className="flex justify-center pt-4 sm:pt-5">
+          <button
+            type="button"
+            onClick={() => onShowMore(section.slug, section.items.length)}
+            className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-6 py-3 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:w-auto sm:px-8 sm:text-sm"
+          >
+            Load more Stories
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 async function fetchLatestEpaperPreview(): Promise<HomePageEpaperPreview | null> {
   try {
@@ -128,6 +377,7 @@ async function fetchLatestEpaperPreview(): Promise<HomePageEpaperPreview | null>
 export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const { language } = useAppStore();
   const topStoriesVariant: 'editorial' | 'modern' = 'editorial';
+  const [isClientReady, setIsClientReady] = useState(false);
   const [feedArticles, setFeedArticles] = useState<Article[]>(
     () => initialHomeFeed?.articles.length ? initialHomeFeed.articles : mockArticles
   );
@@ -145,13 +395,15 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   );
   const [visibleCategoryStoryCounts, setVisibleCategoryStoryCounts] = useState<Record<string, number>>({});
   const [categoryArticlesBySlug, setCategoryArticlesBySlug] = useState<Record<string, Article[]>>({});
+  const requestedCategorySlugsRef = useRef<Set<string>>(new Set());
+  const categoryRequestGenerationRef = useRef(0);
   const heroArticles = feedArticles.slice(0, 5);
   const trendingArticles = feedArticles.filter((article) => article.isTrending);
   const spotlightTablet = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 3);
   const latestNews = feedArticles.slice(5);
   const visibleLatestNews = latestNews.slice(0, visibleLatestNewsCount);
   const hasMoreLatestNews = visibleLatestNewsCount < latestNews.length;
-  const featuredSidebar: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 5);
+  const featuredSidebar: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 3);
   const desktopHeroSidebarStories: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 2);
   const latestPublishedArticles = useMemo(
     () =>
@@ -174,7 +426,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       const fetchedItems = categoryArticlesBySlug[slug] || [];
       const feedItems = latestPublishedArticles
         .filter((article) => categoryMatches(article.category, slug, NEWS_CATEGORY_DEFINITIONS));
-      const items = (fetchedItems.length ? fetchedItems : feedItems).slice(0, 24);
+      const items = (fetchedItems.length ? fetchedItems : feedItems).slice(0, CATEGORY_FETCH_LIMIT);
 
       return {
         slug,
@@ -184,6 +436,46 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       };
     });
   }, [categoryArticlesBySlug, latestPublishedArticles]);
+
+  useEffect(() => {
+    setIsClientReady(true);
+  }, []);
+
+  const loadCategoryStories = useCallback((slug: string) => {
+    if (requestedCategorySlugsRef.current.has(slug)) return;
+    requestedCategorySlugsRef.current.add(slug);
+    const generation = categoryRequestGenerationRef.current;
+
+    void (async () => {
+      const page = await fetchPublicArticlesPage({
+        category: slug,
+        limit: CATEGORY_FETCH_LIMIT,
+      });
+      const articles = page
+        ? mapPublicArticlesToUiArticles(page.items).sort(
+            (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
+          )
+        : [];
+
+      if (generation !== categoryRequestGenerationRef.current) return;
+
+      setCategoryArticlesBySlug((current) => ({
+        ...current,
+        [slug]: articles,
+      }));
+    })();
+  }, []);
+
+  const showMoreCategoryStories = useCallback((slug: string, totalItems: number) => {
+    setVisibleCategoryStoryCounts((current) => {
+      const visibleCount = current[slug] || CATEGORY_INITIAL_STORIES_COUNT;
+
+      return {
+        ...current,
+        [slug]: Math.min(visibleCount + CATEGORY_STORIES_PAGE_STEP, totalItems),
+      };
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -245,39 +537,10 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
 
   useEffect(() => {
     setVisibleCategoryStoryCounts({});
+    setCategoryArticlesBySlug({});
+    requestedCategorySlugsRef.current.clear();
+    categoryRequestGenerationRef.current += 1;
   }, [feedArticles]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadCategoryStories = async () => {
-      const entries = await Promise.all(
-        NEWS_CATEGORY_DEFINITIONS.map(async (definition) => {
-          const page = await fetchPublicArticlesPage({
-            category: definition.slug,
-            limit: 24,
-          });
-          const articles = page
-            ? mapPublicArticlesToUiArticles(page.items).sort(
-                (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
-              )
-            : [];
-
-          return [definition.slug, articles] as const;
-        })
-      );
-
-      if (!active) return;
-
-      setCategoryArticlesBySlug(Object.fromEntries(entries));
-    };
-
-    void loadCategoryStories();
-
-    return () => {
-      active = false;
-    };
-  }, [feedArticles.length]);
 
   const epaperHref = (() => {
     if (!latestEpaper) return '/main/epaper';
@@ -384,41 +647,44 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
           </div>
 
           <div className="hidden md:col-span-4 md:grid md:h-[var(--tablet-top-h)] md:grid-rows-3 md:gap-3 xl:hidden">
-            {spotlightTablet.map((article, index) => (
-              <motion.div
-                key={article.id}
-                initial={{ opacity: 0, x: 14 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.06 }}
-                className="h-full"
-              >
-                <Link
-                  href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
-                  className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 p-3 dark:from-zinc-900 dark:to-zinc-900/70"
+            {isClientReady ? (
+              spotlightTablet.map((article, index) => (
+                <motion.div
+                  key={article.id}
+                  initial={{ opacity: 0, x: 14 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.06 }}
+                  className="h-full"
                 >
-                  <div className="flex h-full items-center gap-2.5">
-                    <div className="relative h-[74px] w-[112px] flex-none overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-950">
-                      <ReaderImage
-                        src={buildArticleImageVariantUrl(article.image, 'thumb')}
-                        alt={article.title}
-                        fill
-                        className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
-                        sizes="(max-width: 1023px) 112px, 112px"
-                        priority
-                      />
-                      <span className="absolute left-1.5 top-1.5 inline-flex max-w-[72px] items-center rounded-full bg-red-600/95 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white shadow-sm">
-                        <span className="truncate">{article.category}</span>
-                      </span>
+                  <Link
+                    href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
+                    className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 p-3 dark:from-zinc-900 dark:to-zinc-900/70"
+                  >
+                    <div className="flex h-full items-center gap-2.5">
+                      <div className="relative h-[74px] w-[112px] flex-none overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-950">
+                        <ReaderImage
+                          src={buildArticleImageVariantUrl(article.image, 'thumb')}
+                          alt={article.title}
+                          fill
+                          className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                          sizes="(max-width: 1023px) 112px, 112px"
+                        />
+                        <span className="absolute left-1.5 top-1.5 inline-flex max-w-[72px] items-center rounded-full bg-red-600/95 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white shadow-sm">
+                          <span className="truncate">{article.category}</span>
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="hi-heading line-clamp-2 text-[1rem] font-semibold leading-[1.34] text-zinc-900 transition-colors group-hover:text-red-600 dark:text-zinc-100 dark:group-hover:text-red-400">
+                          {article.title}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="hi-heading line-clamp-2 text-[1rem] font-semibold leading-[1.34] text-zinc-900 transition-colors group-hover:text-red-600 dark:text-zinc-100 dark:group-hover:text-red-400">
-                        {article.title}
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
+                  </Link>
+                </motion.div>
+              ))
+            ) : (
+              <TopSideStoriesFallback count={3} />
+            )}
           </div>
 
           <div className="hidden xl:col-span-4 xl:grid xl:h-[var(--top-stories-h)] xl:grid-rows-[minmax(0,1.55fr)_repeat(2,minmax(0,0.725fr))] xl:gap-3">
@@ -442,41 +708,44 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
               />
             </motion.div>
 
-            {desktopHeroSidebarStories.map((article, index) => (
-              <motion.div
-                key={article.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.35, delay: 0.08 + index * 0.07 }}
-                className="h-full"
-              >
-                <Link
-                  href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
-                  className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 px-3 py-2 dark:from-zinc-900 dark:to-zinc-900/70"
+            {isClientReady ? (
+              desktopHeroSidebarStories.map((article, index) => (
+                <motion.div
+                  key={article.id}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.35, delay: 0.08 + index * 0.07 }}
+                  className="h-full"
                 >
-                  <div className="flex h-full items-center gap-3">
-                    <div className="relative h-[72px] w-[108px] flex-none overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-950">
-                      <ReaderImage
-                        src={buildArticleImageVariantUrl(article.image, 'thumb')}
-                        alt={article.title}
-                        fill
-                        className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
-                        sizes="108px"
-                        priority
-                      />
-                      <span className="absolute left-1.5 top-1.5 inline-flex max-w-[80px] items-center rounded-full bg-red-600/95 px-2 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
-                        <span className="truncate">{article.category}</span>
-                      </span>
+                  <Link
+                    href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
+                    className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 px-3 py-2 dark:from-zinc-900 dark:to-zinc-900/70"
+                  >
+                    <div className="flex h-full items-center gap-3">
+                      <div className="relative h-[72px] w-[108px] flex-none overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-950">
+                        <ReaderImage
+                          src={buildArticleImageVariantUrl(article.image, 'thumb')}
+                          alt={article.title}
+                          fill
+                          className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                          sizes="108px"
+                        />
+                        <span className="absolute left-1.5 top-1.5 inline-flex max-w-[80px] items-center rounded-full bg-red-600/95 px-2 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
+                          <span className="truncate">{article.category}</span>
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex h-full flex-1 flex-col justify-center">
+                        <p className="hi-heading line-clamp-2 pt-0.5 text-[1.01rem] font-semibold leading-[1.34] text-zinc-900 transition-colors group-hover:text-red-600 dark:text-zinc-100 dark:group-hover:text-red-400">
+                          {article.title}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex h-full flex-1 flex-col justify-center">
-                      <p className="hi-heading line-clamp-2 pt-0.5 text-[1.01rem] font-semibold leading-[1.34] text-zinc-900 transition-colors group-hover:text-red-600 dark:text-zinc-100 dark:group-hover:text-red-400">
-                        {article.title}
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
+                  </Link>
+                </motion.div>
+              ))
+            ) : (
+              <TopSideStoriesFallback count={2} />
+            )}
           </div>
         </div>
 
@@ -559,91 +828,18 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       </div>
       {categorySections.length ? (
         <section className="relative mt-[var(--section-gap)] space-y-4 sm:space-y-5">
-          {categorySections.map((section) => {
-            const categoryLabel = section.category
-              ? (language === 'hi' ? section.category.name : section.category.nameEn)
-              : section.slug;
-            const visibleCount =
-              visibleCategoryStoryCounts[section.slug] || CATEGORY_INITIAL_STORIES_COUNT;
-            const visibleArticles = section.items.slice(0, visibleCount);
-            const hasMoreStories = visibleCount < section.items.length;
-            const categoryHref = getNewsCategoryHref(section.slug);
-            const headerStyle: CSSProperties = {
-              borderColor: hexToRgba(section.accent, 0.28),
-              boxShadow: `0 18px 55px -44px ${hexToRgba(section.accent, 0.75)}`,
-            };
-            const accentStyle: CSSProperties = {
-              backgroundColor: section.accent,
-            };
-
-            return (
-              <div
-                key={section.slug}
-                style={headerStyle}
-                className="cnp-surface overflow-hidden border px-3 py-4 sm:px-5 sm:py-5 md:px-6"
-              >
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-3 dark:border-zinc-800 sm:mb-4 sm:pb-4">
-                  <div className="min-w-0">
-                    <h2 className="flex items-center gap-2 text-[1.05rem] font-black tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
-                      <span style={accentStyle} className="h-5 w-1 rounded-full sm:h-6 sm:w-1.5" />
-                      <span className="truncate">{categoryLabel}</span>
-                    </h2>
-                    <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">
-                      {language === 'hi'
-                        ? '\u0938\u092c\u0938\u0947 \u0928\u0908 \u092a\u094d\u0930\u0915\u093e\u0936\u093f\u0924 \u0916\u092c\u0930\u0947\u0902'
-                        : 'Top latest published stories'}
-                    </p>
-                  </div>
-                  <Link
-                    href={categoryHref}
-                    className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-1 rounded-full border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-800 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:text-sm"
-                  >
-                    {language === 'hi' ? '\u0936\u094d\u0930\u0947\u0923\u0940 \u0926\u0947\u0916\u0947\u0902' : 'View Category'}
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-
-                {visibleArticles.length ? (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {visibleArticles.map((article, index) => (
-                      <NewsCard
-                        key={article.id}
-                        article={article}
-                        size="sm"
-                        index={index}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center text-sm font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-400">
-                    {language === 'hi'
-                      ? '\u0907\u0938 \u0936\u094d\u0930\u0947\u0923\u0940 \u092e\u0947\u0902 \u0905\u092d\u0940 \u0915\u094b\u0908 \u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948.'
-                      : 'No latest stories are published in this category yet.'}
-                  </div>
-                )}
-
-                {hasMoreStories ? (
-                  <div className="flex justify-center pt-4 sm:pt-5">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setVisibleCategoryStoryCounts((current) => ({
-                          ...current,
-                          [section.slug]: Math.min(
-                            visibleCount + CATEGORY_STORIES_PAGE_STEP,
-                            section.items.length
-                          ),
-                        }))
-                      }
-                      className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-6 py-3 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:w-auto sm:px-8 sm:text-sm"
-                    >
-                      Load more Stories
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+          {categorySections.map((section) => (
+            <LazyCategorySection
+              key={section.slug}
+              section={section}
+              language={language}
+              visibleCount={
+                visibleCategoryStoryCounts[section.slug] || CATEGORY_INITIAL_STORIES_COUNT
+              }
+              onVisible={loadCategoryStories}
+              onShowMore={showMoreCategoryStories}
+            />
+          ))}
         </section>
       ) : null}
     </div>
