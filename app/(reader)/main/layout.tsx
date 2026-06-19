@@ -18,11 +18,10 @@ import MobileSwipeTabs, {
 
 const MOBILE_BOTTOM_TAB_ROUTES: MobileSwipeTabRoute[] = [
   { path: '/main', name: 'Home' },
-  { path: '/main/videos', name: 'Videos' },
   { path: '/main/epaper', name: 'E-Paper' },
+  { path: '/main/videos', name: 'Videos' },
   { path: '/main/ftaftaf', name: 'Quick' },
   { path: '/main/menu', name: 'Menu', type: 'menu' },
-  { path: '/main/account', name: 'Account' },
 ];
 
 export default function MainLayout({

@@ -8,7 +8,6 @@ import { signOut, useSession } from 'next-auth/react';
 import {
   Bookmark,
   LogOut,
-  Menu,
   Moon,
   Newspaper,
   Settings,
@@ -29,8 +28,6 @@ export default function Header() {
     toggleTheme,
     language,
     toggleLanguage,
-    toggleMobileMenu,
-    isMobileMenuOpen,
   } = useAppStore();
   const { data: session, status } = useSession();
 
@@ -268,19 +265,6 @@ export default function Header() {
                 <span className="attention-pulsate-bck-slow inline-flex">
                   {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
                 </span>
-              </motion.button>
-
-              <motion.button
-                type="button"
-                onClick={toggleMobileMenu}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="cnp-motion reader-touch-button reader-focus-ring inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200/80 bg-white text-zinc-800 shadow-sm hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 lg:hidden"
-                aria-label={language === 'hi' ? '\u092e\u0947\u0928\u0942' : 'Menu'}
-                aria-controls="mobile-drawer"
-                aria-expanded={isMobileMenuOpen}
-              >
-                <Menu size={16} />
               </motion.button>
             </div>
           </div>

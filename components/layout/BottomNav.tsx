@@ -1,11 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { useSession } from 'next-auth/react';
-import { Home, PlayCircle, Newspaper, Zap, Menu, User } from 'lucide-react';
+import { Home, PlayCircle, Newspaper, Zap, Menu } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 
 interface BottomNavProps {
@@ -16,17 +14,10 @@ interface BottomNavProps {
 
 const navItems = [
   { icon: Home, label: '\u0939\u094b\u092e', labelEn: 'Home', href: '/main' },
-  { icon: PlayCircle, label: '\u0935\u0940\u0921\u093f\u092f\u094b', labelEn: 'Videos', href: '/main/videos' },
   { icon: Newspaper, label: '\u0908-\u092a\u0947\u092a\u0930', labelEn: 'E-Paper', href: '/main/epaper', isCenter: true },
+  { icon: PlayCircle, label: '\u0935\u0940\u0921\u093f\u092f\u094b', labelEn: 'Videos', href: '/main/videos' },
   { icon: Zap, label: '\u095e\u091f\u093e\u095e\u091f', labelEn: 'Quick', href: '/main/ftaftaf' },
   { icon: Menu, label: '\u092e\u0947\u0928\u0942', labelEn: 'Menu', href: '#', isMenu: true },
-  {
-    icon: User,
-    label: '\u0905\u0915\u093e\u0909\u0902\u091f',
-    labelEn: 'Account',
-    href: '/main/account',
-    isAccount: true,
-  },
 ];
 
 export default function BottomNav({
@@ -34,16 +25,8 @@ export default function BottomNav({
   isMenuOpen = false,
   isOverlayDark = false,
 }: BottomNavProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const { language } = useAppStore();
-  const { data: session, status } = useSession();
-  const userName = session?.user?.name?.trim() || session?.user?.email?.trim() || 'Reader';
-  const userImage = session?.user?.image || null;
-  const userInitial = (userName.charAt(0) || 'R').toUpperCase();
-  const isSignedIn = status === 'authenticated' && Boolean(session?.user?.email);
-  const accountLabel = isSignedIn ? 'Account' : 'Sign In';
-  const accountTarget = isSignedIn ? '/main/account' : '/signin';
 
   const shellTone = isOverlayDark
     ? 'border-white/10 bg-black/90 dark:border-white/10 dark:bg-black/90'
@@ -62,19 +45,12 @@ export default function BottomNav({
       aria-label="Bottom Navigation"
       className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur xl:hidden ${shellTone}`}
     >
-      <div className="mx-auto grid min-h-[var(--bottom-nav-height)] w-full max-w-2xl grid-cols-6 items-center gap-x-1 px-2 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1 sm:gap-x-2 sm:px-3">
+      <div className="mx-auto grid min-h-[var(--bottom-nav-height)] w-full max-w-xl grid-cols-5 items-center gap-x-1 px-2 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1 sm:gap-x-2 sm:px-3">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const label = item.isAccount
-            ? accountLabel
-            : language === 'hi'
-              ? item.label
-              : item.labelEn;
-          const href = item.isAccount ? accountTarget : item.href;
-          const isActive =
-            item.isAccount
-              ? isSignedIn && (pathname === '/main/account' || pathname.startsWith('/main/account/'))
-              : href !== '#' && (pathname === href || pathname.startsWith(`${href}/`));
+          const label = language === 'hi' ? item.label : item.labelEn;
+          const href = item.href;
+          const isActive = href !== '#' && (pathname === href || pathname.startsWith(`${href}/`));
 
           if (item.isMenu) {
             return (
@@ -94,64 +70,6 @@ export default function BottomNav({
               >
                 <Icon size={22} strokeWidth={2} />
                 <span className="text-[10px] font-semibold leading-none min-[380px]:text-[11px]">{label}</span>
-              </motion.button>
-            );
-          }
-
-          if (item.isAccount) {
-            return (
-              <motion.button
-                key="account"
-                type="button"
-                onClick={() => router.push(accountTarget)}
-                whileTap={{ scale: 0.96 }}
-                aria-current={isActive ? 'page' : undefined}
-                aria-label={accountLabel}
-                className="reader-touch-button reader-focus-ring touch-target-compact relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5"
-              >
-                {isActive ? (
-                  <motion.div
-                    layoutId="bottomNavActive"
-                    className={`absolute inset-1 rounded-xl ${activeBackgroundTone}`}
-                    transition={{ type: 'spring', stiffness: 380, damping: 34 }}
-                  />
-                ) : null}
-
-                <span
-                  className={`relative z-10 inline-flex h-[22px] w-[22px] items-center justify-center overflow-hidden rounded-full ${
-                    isSignedIn
-                      ? 'border border-zinc-300 bg-white text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100'
-                      : ''
-                  }`}
-                >
-                  {isSignedIn ? (
-                    userImage ? (
-                      <Image
-                        src={userImage}
-                        alt={userName}
-                        width={22}
-                        height={22}
-                        unoptimized
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-[10px] font-bold">{userInitial}</span>
-                    )
-                  ) : (
-                    <Icon
-                      size={22}
-                      strokeWidth={isActive ? 2.35 : 2}
-                      className={isActive ? activeTone : inactiveTone}
-                    />
-                  )}
-                </span>
-                <span
-                  className={`cnp-motion relative z-10 text-[10px] font-semibold leading-none min-[380px]:text-[11px] ${
-                    isActive ? activeTone : inactiveTone
-                  }`}
-                >
-                  {label}
-                </span>
               </motion.button>
             );
           }
