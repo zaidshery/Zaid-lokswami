@@ -30,20 +30,45 @@ async function getSessionToken(request: NextRequest) {
 }
 
 const HEAVY_RATE_LIMIT_ROUTES = [
-  /^\/api\/v1\/public\/search(?:\/|$)/,
-  /^\/api\/ai\/(?:actions|search|suggestions|summary)(?:\/|$)/,
-  /^\/api\/admin\/epapers\/assist(?:\/|$)/,
-  /^\/api\/admin\/epapers\/[^/]+\/(?:crop-hotspot|generate-page-images|ocr|tts)(?:\/|$)/,
-  /^\/api\/admin\/epapers\/[^/]+\/articles\/[^/]+\/tts(?:\/|$)/,
-  /^\/api\/admin\/articles\/[^/]+\/breaking-tts(?:\/|$)/,
-  /^\/api\/admin\/analytics\/briefing-schedules\/[^/]+\/run(?:\/|$)/,
-  /^\/api\/admin\/social-posts\/generate(?:\/|$)/,
+  { pattern: /^\/api\/v1\/public\/search(?:\/|$)/, scope: 'public-search' },
+  { pattern: /^\/api\/ai\/actions(?:\/|$)/, scope: 'ai-actions' },
+  { pattern: /^\/api\/ai\/search(?:\/|$)/, scope: 'ai-search' },
+  { pattern: /^\/api\/ai\/suggestions(?:\/|$)/, scope: 'ai-suggestions' },
+  { pattern: /^\/api\/ai\/summary(?:\/|$)/, scope: 'ai-summary' },
+  { pattern: /^\/api\/admin\/epapers\/assist(?:\/|$)/, scope: 'epaper-assist' },
+  {
+    pattern: /^\/api\/admin\/epapers\/[^/]+\/crop-hotspot(?:\/|$)/,
+    scope: 'epaper-crop-hotspot',
+  },
+  {
+    pattern: /^\/api\/admin\/epapers\/[^/]+\/generate-page-images(?:\/|$)/,
+    scope: 'epaper-generate-page-images',
+  },
+  { pattern: /^\/api\/admin\/epapers\/[^/]+\/ocr(?:\/|$)/, scope: 'epaper-ocr' },
+  { pattern: /^\/api\/admin\/epapers\/[^/]+\/tts(?:\/|$)/, scope: 'epaper-tts' },
+  {
+    pattern: /^\/api\/admin\/epapers\/[^/]+\/articles\/[^/]+\/tts(?:\/|$)/,
+    scope: 'epaper-article-tts',
+  },
+  {
+    pattern: /^\/api\/admin\/articles\/[^/]+\/breaking-tts(?:\/|$)/,
+    scope: 'article-breaking-tts',
+  },
+  {
+    pattern: /^\/api\/admin\/analytics\/briefing-schedules\/[^/]+\/run(?:\/|$)/,
+    scope: 'analytics-briefing-run',
+  },
+  {
+    pattern: /^\/api\/admin\/social-posts\/generate(?:\/|$)/,
+    scope: 'social-post-generate',
+  },
 ];
 
 type SessionToken = Awaited<ReturnType<typeof getSessionToken>>;
 
-function isHeavyRateLimitedRoute(pathname: string) {
-  return HEAVY_RATE_LIMIT_ROUTES.some((pattern) => pattern.test(pathname));
+function getHeavyRateLimitPrefix(pathname: string) {
+  const route = HEAVY_RATE_LIMIT_ROUTES.find(({ pattern }) => pattern.test(pathname));
+  return route ? `heavy:${route.scope}` : null;
 }
 
 function createRateLimitResponse(error: string, message: string, retryAfter: number) {
@@ -118,13 +143,14 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
 
     const isAdminArea = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
     const isAuthApiRoute = pathname.startsWith('/api/auth/');
-    const isHeavyRoute = isHeavyRateLimitedRoute(pathname);
+    const heavyRateLimitPrefix = getHeavyRateLimitPrefix(pathname);
+    const isHeavyRoute = Boolean(heavyRateLimitPrefix);
     const isPublicReadRoute = isCacheablePublicReadApiRoute(request.method, pathname);
 
     if (isApiRequest && !isAdminArea && !isAuthApiRoute) {
-      if (isHeavyRoute) {
+      if (heavyRateLimitPrefix) {
         const heavyLimiter = getHeavyRouteLimiter();
-        const heavyKey = getIpRateLimitKey(request, 'heavy');
+        const heavyKey = getIpRateLimitKey(request, heavyRateLimitPrefix);
         const heavyResult = heavyLimiter.check(heavyKey);
 
         if (!heavyResult.allowed) {
@@ -163,9 +189,9 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     const email = typeof session?.email === 'string' ? session.email.trim() : '';
     const userId = typeof session?.userId === 'string' ? session.userId.trim() : '';
 
-    if (isHeavyRoute && isAdminArea) {
+    if (heavyRateLimitPrefix && isAdminArea) {
       const heavyLimiter = getHeavyRouteLimiter();
-      const heavyKey = getSessionAwareRateLimitKey(request, session, 'heavy');
+      const heavyKey = getSessionAwareRateLimitKey(request, session, heavyRateLimitPrefix);
       const heavyResult = heavyLimiter.check(heavyKey);
 
       if (!heavyResult.allowed) {

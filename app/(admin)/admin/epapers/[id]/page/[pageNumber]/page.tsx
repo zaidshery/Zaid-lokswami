@@ -702,6 +702,8 @@ export default function EPaperPageHotspotEditor() {
       const payload = (await response.json().catch(() => ({}))) as {
         success?: boolean;
         error?: string;
+        message?: string;
+        retryAfter?: number;
         coverImagePath?: string;
         data?: {
           coverImagePath?: string;
@@ -712,6 +714,12 @@ export default function EPaperPageHotspotEditor() {
       };
       const coverImagePath = String(payload.coverImagePath || payload.data?.coverImagePath || '').trim();
       if (!response.ok || !payload.success || !coverImagePath) {
+        if (response.status === 429) {
+          const retryAfter = Number(payload.retryAfter || response.headers.get('Retry-After') || 60);
+          throw new Error(
+            `Clipping is temporarily limited. Please wait ${Math.max(1, retryAfter)} seconds and try again.`
+          );
+        }
         throw new Error(payload.error || 'Failed to crop hotspot image');
       }
 
