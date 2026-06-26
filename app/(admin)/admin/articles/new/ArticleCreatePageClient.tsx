@@ -322,7 +322,7 @@ export default function UploadArticle() {
     content: formData.content,
     category: formData.category,
     author: formData.author,
-    image: imagePreview,
+    image: imagePreview ? 'featured-image-ready' : '',
     seoSlug: formData.seoSlug,
     seo: {
       metaTitle: formData.seoTitle,

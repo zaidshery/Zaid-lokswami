@@ -23,7 +23,7 @@ function normalizeAssistInput(body: unknown): ArticleAssistInput {
     content: typeof source.content === 'string' ? source.content : '',
     category: typeof source.category === 'string' ? source.category : '',
     author: typeof source.author === 'string' ? source.author : '',
-    image: typeof source.image === 'string' ? source.image : '',
+    image: typeof source.image === 'string' && source.image.trim() ? 'featured-image-ready' : '',
     seoSlug: typeof source.seoSlug === 'string' ? source.seoSlug : '',
     seo,
     isBreaking: Boolean(source.isBreaking),

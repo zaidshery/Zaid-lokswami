@@ -415,6 +415,28 @@ describe('Article create manual listen audio', () => {
     );
   });
 
+  it('does not send featured image data URLs to the assistant endpoint', async () => {
+    const { container } = await renderCreatePage();
+
+    await fillRequiredArticleFields(container);
+    await userEvent.click(screen.getByRole('button', { name: /^assist$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Suggested field updates')).toBeInTheDocument();
+    });
+
+    const fetchMock = fetch as ReturnType<typeof createFetchMock>;
+    const assistCall = fetchMock.mock.calls.find(
+      ([input]) => String(input) === '/api/admin/articles/assist'
+    );
+    const body = JSON.parse(String((assistCall?.[1] as RequestInit | undefined)?.body || '{}')) as {
+      image?: string;
+    };
+
+    expect(body.image).toBe('featured-image-ready');
+    expect(body.image).not.toContain('data:image');
+  });
+
   it('can apply all visible assistant suggestions together', async () => {
     await renderCreatePage();
 
