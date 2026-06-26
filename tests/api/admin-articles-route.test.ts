@@ -52,6 +52,11 @@ vi.mock('@/lib/server/newsroomStoryLinks', () => ({
   validateStoryForArticleCreation: validateStoryForArticleCreationMock,
 }));
 
+const READY_SUMMARY =
+  'This summary gives readers the important facts, location, and context needed before publication.';
+const READY_CONTENT =
+  'This article body contains enough verified newsroom copy to satisfy publication readiness checks, including useful context, supporting background, and next steps for readers.';
+
 describe('/api/admin/articles route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -213,8 +218,8 @@ describe('/api/admin/articles route', () => {
         body: JSON.stringify({
           intent: 'submit',
           title: 'Desk article',
-          summary: 'Story summary',
-          content: 'Story body',
+          summary: READY_SUMMARY,
+          content: READY_CONTENT,
           image: 'https://cdn.example.com/story.jpg',
           category: 'General',
           author: 'Copy Editor',
@@ -281,8 +286,8 @@ describe('/api/admin/articles route', () => {
           intent: 'publish',
           title: 'Indore Metro update',
           slug: 'indore-metro-update',
-          summary: 'Story summary',
-          content: 'Story body',
+          summary: READY_SUMMARY,
+          content: READY_CONTENT,
           image: 'https://cdn.example.com/story.jpg',
           category: 'General',
           author: 'Desk Admin',
@@ -310,6 +315,81 @@ describe('/api/admin/articles route', () => {
     );
   });
 
+  it('rejects submit and publish requests with readiness blockers', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk Admin',
+      role: 'admin',
+    });
+
+    const { POST } = await import('@/app/api/admin/articles/route');
+    for (const intent of ['submit', 'publish'] as const) {
+      const response = await POST(
+        new Request('http://localhost/api/admin/articles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intent,
+            title: 'Short',
+            summary: 'Too short',
+            content: 'Too short.',
+            image: '',
+            category: '',
+            author: '',
+          }),
+        }) as unknown as NextRequest
+      );
+      const payload = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toContain('Article is not ready:');
+      expect(payload.error).toContain('Headline');
+      expect(payload.error).toContain('Featured image');
+    }
+    expect(createStoredArticleMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps draft creation loose while preserving format validation', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk Admin',
+      role: 'admin',
+    });
+    listAllStoredArticlesMock.mockResolvedValue([]);
+    createStoredArticleMock.mockResolvedValue({
+      _id: 'draft-1',
+      slug: 'article',
+      title: '',
+      workflow: { status: 'draft', createdBy: { id: 'admin-1' } },
+    });
+
+    const { POST } = await import('@/app/api/admin/articles/route');
+    const response = await POST(
+      new Request('http://localhost/api/admin/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: 'draft',
+        }),
+      }) as unknown as NextRequest
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(createStoredArticleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: 'article',
+        workflow: expect.objectContaining({ status: 'draft' }),
+      })
+    );
+    expect(payload).toEqual({
+      success: true,
+      data: expect.objectContaining({ _id: 'draft-1' }),
+    });
+  });
+
   it('prevents duplicate primary linked articles for the same story', async () => {
     getAdminSessionMock.mockResolvedValue({
       id: 'admin-1',
@@ -332,8 +412,8 @@ describe('/api/admin/articles route', () => {
         body: JSON.stringify({
           intent: 'draft',
           title: 'Desk article',
-          summary: 'Story summary',
-          content: 'Story body',
+          summary: READY_SUMMARY,
+          content: READY_CONTENT,
           image: 'https://cdn.example.com/story.jpg',
           category: 'General',
           author: 'Desk Admin',

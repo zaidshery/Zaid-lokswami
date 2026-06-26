@@ -8,19 +8,27 @@ import { useSession } from 'next-auth/react';
 import {
   ArrowLeft,
   FileAudio,
+  FileText,
   Link2,
   Loader2,
+  Search,
   Upload,
   Volume2,
   X,
   AlertCircle,
   CheckCircle,
+  CircleDot,
   Image as ImageIcon,
+  Sparkles,
 } from 'lucide-react';
 import ArticleEditorStudio, {
   ArticleEditorSidebar,
   type ArticleEditorStudioMode,
 } from '@/components/forms/ArticleEditorStudio';
+import ArticleFeaturedImageReaderPreview from '@/components/forms/ArticleFeaturedImageReaderPreview';
+import ArticleWorkbenchAssistant, {
+  getArticleAssistPatchKey,
+} from '@/components/forms/ArticleWorkbenchAssistant';
 import {
   CmsEditorCanvas,
   CmsEditorColumns,
@@ -47,6 +55,15 @@ import {
   normalizeArticleSeo,
   normalizeArticleSlug,
 } from '@/lib/seo/articleSeo';
+import {
+  buildArticleAssistResult,
+  suggestArticleFocusKeyword,
+  summarizeArticleReadiness,
+  type ArticleAssistField,
+  type ArticleAssistPatch,
+  type ArticleAssistResult,
+  type ArticleReadinessItem,
+} from '@/lib/utils/articleAssistant';
 
 const DEFAULT_CATEGORIES = NEWS_CATEGORIES.map((category) => category.nameEn);
 const DRAFT_STORAGE_KEY = 'lokswami:article-draft:new';
@@ -154,6 +171,16 @@ function isValidAbsoluteHttpUrl(value: string) {
   }
 }
 
+function normalizeDraftArticleSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 200);
+}
+
 function formatArticleAudioSize(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -184,6 +211,32 @@ function validateArticleAudioFile(file: File | null, label = 'Article') {
   }
 
   return '';
+}
+
+function getReadinessStatusClass(status: ArticleReadinessItem['status']) {
+  switch (status) {
+    case 'done':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-100';
+    case 'blocked':
+      return 'border-red-200 bg-red-50 text-red-900 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100';
+    case 'warning':
+      return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/30 dark:bg-amber-400/10 dark:text-amber-100';
+    default:
+      return 'border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-300';
+  }
+}
+
+function getReadinessIcon(item: ArticleReadinessItem) {
+  if (item.status === 'done') {
+    return <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-200" />;
+  }
+  if (item.status === 'blocked') {
+    return <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-200" />;
+  }
+  if (item.status === 'warning') {
+    return <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-200" />;
+  }
+  return <CircleDot className="h-4 w-4 text-gray-400 dark:text-gray-300" />;
 }
 
 function createArticleAudioPreviewUrl(file: File) {
@@ -238,6 +291,12 @@ export default function UploadArticle() {
   const [sourcePrefillApplied, setSourcePrefillApplied] = useState(false);
   const [isSeoSlugTouched, setIsSeoSlugTouched] = useState(false);
   const [relatedArticles, setRelatedArticles] = useState<RelatedArticleSuggestion[]>([]);
+  const [assistResult, setAssistResult] = useState<ArticleAssistResult | null>(null);
+  const [assistError, setAssistError] = useState('');
+  const [isAssistLoading, setIsAssistLoading] = useState(false);
+  const [rejectedAssistPatchKeys, setRejectedAssistPatchKeys] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const sourceStoryId = searchParams.get('sourceStoryId')?.trim() || '';
   const canPublishImmediately =
@@ -255,6 +314,46 @@ export default function UploadArticle() {
     : isUploadingArticleAudio
       ? 'Uploading audio...'
       : `${submitVerb}...`;
+
+  const buildAssistPayload = useCallback(() => ({
+    mode: 'create' as const,
+    title: formData.title,
+    summary: formData.summary,
+    content: formData.content,
+    category: formData.category,
+    author: formData.author,
+    image: imagePreview,
+    seoSlug: formData.seoSlug,
+    seo: {
+      metaTitle: formData.seoTitle,
+      metaDescription: formData.seoDescription,
+      ogImage: formData.ogImage,
+      canonicalUrl: formData.canonicalUrl,
+      focusKeyword: formData.focusKeyword,
+      secondaryKeywords: formData.secondaryKeywords,
+      featuredImageAlt: formData.featuredImageAlt,
+      featuredImageCaption: formData.featuredImageCaption,
+      imageCredit: formData.imageCredit,
+      authorProfileUrl: formData.authorProfileUrl,
+      includeInNewsSitemap: formData.includeInNewsSitemap,
+      majorUpdateNote: formData.majorUpdateNote,
+    },
+    isBreaking: formData.isBreaking,
+    isTrending: formData.isTrending,
+    language: 'hi' as const,
+    breakingAudioReady: !formData.isBreaking || Boolean(breakingAudioFile),
+    requireBreakingAudio: canPublishImmediately && formData.isBreaking,
+    listenAudioReady: Boolean(articleAudioFile),
+  }), [articleAudioFile, breakingAudioFile, canPublishImmediately, formData, imagePreview]);
+
+  const liveAssistResult = useMemo(
+    () => buildArticleAssistResult(buildAssistPayload()),
+    [buildAssistPayload]
+  );
+  const liveReadinessSummary = useMemo(
+    () => summarizeArticleReadiness(liveAssistResult.readiness),
+    [liveAssistResult]
+  );
 
   const breakingRecordingScript = useMemo(
     () =>
@@ -435,18 +534,179 @@ export default function UploadArticle() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
-    const nextValue = name === 'seoSlug' ? normalizeArticleSlug(value) : value;
+    const nextValue = name === 'seoSlug' ? normalizeDraftArticleSlug(value) : value;
     if (name === 'seoSlug') {
       setIsSeoSlugTouched(true);
     }
-    setFormData((current) => ({
-      ...current,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : nextValue,
-      ...(!isSeoSlugTouched && (name === 'title' || name === 'seoTitle')
-        ? { seoSlug: normalizeArticleSlug(nextValue) }
-        : {}),
-    }));
+    setFormData((current) => {
+      const next = {
+        ...current,
+        [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : nextValue,
+      };
+
+      if (name === 'title') {
+        if (!current.seoTitle.trim()) next.seoTitle = String(nextValue).slice(0, 160);
+        if (!current.featuredImageAlt.trim()) {
+          next.featuredImageAlt = String(nextValue).slice(0, 220);
+        }
+        if (!current.focusKeyword.trim()) {
+          next.focusKeyword = suggestArticleFocusKeyword(String(nextValue)).slice(0, 120);
+        }
+        if (!isSeoSlugTouched) {
+          next.seoSlug = normalizeArticleSlug(String(nextValue));
+        }
+      }
+
+      if (name === 'summary' && !current.seoDescription.trim()) {
+        next.seoDescription = String(nextValue).slice(0, 320);
+      }
+
+      if (name === 'seoTitle' && !isSeoSlugTouched) {
+        next.seoSlug = normalizeArticleSlug(String(nextValue));
+      }
+
+      return next;
+    });
   };
+
+  const runArticleAssist = async () => {
+    setIsAssistLoading(true);
+    setAssistError('');
+    try {
+      const response = await fetch('/api/admin/articles/assist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify(buildAssistPayload()),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        data?: ArticleAssistResult;
+      };
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error || 'Article assist failed');
+      }
+
+      setRejectedAssistPatchKeys(new Set());
+      setAssistResult(payload.data);
+    } catch (assistError) {
+      setAssistError(
+        assistError instanceof Error ? assistError.message : 'Article assist failed'
+      );
+    } finally {
+      setIsAssistLoading(false);
+    }
+  };
+
+  const applyAssistPatch = (patch: ArticleAssistPatch) => {
+    if (patch.field === 'seoSlug') {
+      setIsSeoSlugTouched(true);
+    }
+
+    setFormData((current) => {
+      if (!(patch.field in current)) return current;
+      const currentValue = current[patch.field as keyof ArticleFormState];
+      if (typeof currentValue !== 'string') return current;
+
+      return {
+        ...current,
+        [patch.field]: patch.suggestedValue,
+      };
+    });
+
+    setRejectedAssistPatchKeys((current) => {
+      const next = new Set(current);
+      next.add(getArticleAssistPatchKey(patch));
+      return next;
+    });
+  };
+
+  const applyAssistPatches = (patches: ArticleAssistPatch[]) => {
+    if (!patches.length) return;
+
+    if (patches.some((patch) => patch.field === 'seoSlug')) {
+      setIsSeoSlugTouched(true);
+    }
+
+    setFormData((current) => {
+      let next = current;
+
+      patches.forEach((patch) => {
+        if (!(patch.field in next)) return;
+        const currentValue = next[patch.field as keyof ArticleFormState];
+        if (typeof currentValue !== 'string') return;
+
+        next = {
+          ...next,
+          [patch.field]: patch.suggestedValue,
+        };
+      });
+
+      return next;
+    });
+
+    setRejectedAssistPatchKeys((current) => {
+      const next = new Set(current);
+      patches.forEach((patch) => next.add(getArticleAssistPatchKey(patch)));
+      return next;
+    });
+  };
+
+  const rejectAssistPatch = (patch: ArticleAssistPatch) => {
+    setRejectedAssistPatchKeys((current) => {
+      const next = new Set(current);
+      next.add(getArticleAssistPatchKey(patch));
+      return next;
+    });
+  };
+
+  const focusWorkbenchField = useCallback((field: ArticleAssistField) => {
+    if (typeof document === 'undefined') return;
+    const fieldSelectors: Partial<Record<ArticleAssistField, string>> = {
+      title: '[name="title"]',
+      summary: '[name="summary"]',
+      content:
+        '[data-article-field="content"] [contenteditable="true"], [data-article-field="content"] textarea, [data-article-field="content"]',
+      category: '[name="category"]',
+      author: '[name="author"]',
+      image: '[data-article-field="image"]',
+      seoTitle: '[name="seoTitle"]',
+      seoDescription: '[name="seoDescription"]',
+      seoSlug: '[name="seoSlug"]',
+      focusKeyword: '[name="focusKeyword"]',
+      secondaryKeywords: '[name="secondaryKeywords"]',
+      featuredImageAlt: '[name="featuredImageAlt"]',
+      featuredImageCaption: '[name="featuredImageCaption"]',
+      imageCredit: '[name="imageCredit"]',
+      canonicalUrl: '[name="canonicalUrl"]',
+      authorProfileUrl: '[name="authorProfileUrl"]',
+      breakingAudio: '[data-article-field="breakingAudio"], [name="isBreaking"]',
+    };
+    const selector = fieldSelectors[field] || `[name="${field}"]`;
+    const element = document.querySelector<HTMLElement>(selector);
+    const details = element?.closest('details') as HTMLDetailsElement | null;
+    if (details) details.open = true;
+    if (typeof element?.scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    const focusTarget = element?.matches('input, textarea, select, button, [contenteditable="true"]')
+      ? element
+      : element?.querySelector<HTMLElement>('input, textarea, select, button, [contenteditable="true"]');
+    window.setTimeout(() => focusTarget?.focus(), 0);
+  }, []);
+
+  const focusReadinessItem = useCallback(
+    (item?: ArticleReadinessItem) => {
+      if (item?.field) {
+        focusWorkbenchField(item.field);
+      }
+    },
+    [focusWorkbenchField]
+  );
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -468,6 +728,15 @@ export default function UploadArticle() {
       const prepared = await prepareArticleImageFile(file);
       setImageFile(prepared.file);
       setImagePreview(prepared.previewDataUrl);
+      setFormData((current) => ({
+        ...current,
+        featuredImageAlt: current.featuredImageAlt.trim()
+          ? current.featuredImageAlt
+          : current.title.trim().slice(0, 220),
+        featuredImageCaption: current.featuredImageCaption.trim()
+          ? current.featuredImageCaption
+          : current.summary.trim().slice(0, 300),
+      }));
 
       const notes: string[] = [];
       if (prepared.wasResized) {
@@ -675,6 +944,19 @@ export default function UploadArticle() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (sourceStory?.linkedArticleId) {
+      setError('A linked article already exists for this source story.');
+      return;
+    }
+
+    if (!liveReadinessSummary.canSend) {
+      const blockerLabels = liveReadinessSummary.blockers.map((item) => item.label).join(', ');
+      setError(`Resolve blockers: ${blockerLabels}`);
+      focusReadinessItem(liveReadinessSummary.blockers[0]);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -1012,13 +1294,42 @@ export default function UploadArticle() {
             </div>
           ) : null}
 
+          {!isFocusMode ? (
+            <div className="sticky top-0 z-20 mb-5 flex items-center gap-2 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-950/95 p-2 shadow-lg shadow-black/10 backdrop-blur dark:border-white/10">
+              {[
+                { label: 'Write', field: 'content' as ArticleAssistField, Icon: FileText },
+                { label: 'SEO', field: 'seoTitle' as ArticleAssistField, Icon: Search },
+                { label: 'Media', field: 'image' as ArticleAssistField, Icon: ImageIcon },
+                { label: 'Audio', field: 'breakingAudio' as ArticleAssistField, Icon: FileAudio },
+              ].map(({ label, field, Icon }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => focusWorkbenchField(field)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:border-white/25 hover:bg-white/[0.08] hover:text-white"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={runArticleAssist}
+                className="inline-flex shrink-0 items-center gap-2 rounded-md bg-spanish-red px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>Ready</span>
+              </button>
+            </div>
+          ) : null}
+
           <form
             onSubmit={handleSubmit}
             className="space-y-4 sm:space-y-8"
           >
             <CmsEditorColumns stacked={isFocusMode} sidebarWidth="narrow">
             <CmsEditorMain>
-              <div>
+              <div data-article-field="title">
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Article Title <span className="text-red-500">*</span>
               </label>
@@ -1033,7 +1344,7 @@ export default function UploadArticle() {
               />
               </div>
 
-              <div>
+              <div data-article-field="summary">
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Summary <span className="text-red-500">*</span>
               </label>
@@ -1048,7 +1359,7 @@ export default function UploadArticle() {
               />
               </div>
 
-              <div>
+              <div data-article-field="content">
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Article Content <span className="text-red-500">*</span>
               </label>
@@ -1082,6 +1393,13 @@ export default function UploadArticle() {
                 mode={contentMode}
                 focusMode={isFocusMode}
                 showSidebar={false}
+                previewVariant="article"
+                author={formData.author}
+                image={imagePreview}
+                imageAlt={formData.featuredImageAlt}
+                imageCaption={formData.featuredImageCaption}
+                imageCredit={formData.imageCredit}
+                category={formData.category}
                 onModeChange={setContentMode}
                 onFocusModeChange={setIsFocusMode}
                 onContentChange={(content) =>
@@ -1092,7 +1410,7 @@ export default function UploadArticle() {
               />
               </div>
               <div className="grid gap-6 lg:grid-cols-2">
-                <div>
+                <div data-article-field="category">
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Category <span className="text-red-500">*</span>
                   </label>
@@ -1195,7 +1513,7 @@ export default function UploadArticle() {
                   ) : null}
                 </div>
 
-                <div>
+                <div data-article-field="author">
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Author Name <span className="text-red-500">*</span>
                   </label>
@@ -1329,6 +1647,19 @@ export default function UploadArticle() {
                 </div>
               ) : null}
 
+              <ArticleWorkbenchAssistant
+                result={assistResult}
+                isLoading={isAssistLoading}
+                error={assistError}
+                rejectedPatchKeys={rejectedAssistPatchKeys}
+                onRun={runArticleAssist}
+                onApplyPatch={applyAssistPatch}
+                onApplyAll={applyAssistPatches}
+                onRejectPatch={rejectAssistPatch}
+                onFocusField={focusWorkbenchField}
+                title="Packaging assistant"
+              />
+
               <details className="rounded-xl border border-blue-100 bg-blue-50 text-sm text-blue-900">
                 <summary className="cursor-pointer px-4 py-3 font-medium">Draft & Local Restore</summary>
                 <div className="border-t border-blue-100 p-4 pt-3">
@@ -1451,7 +1782,7 @@ export default function UploadArticle() {
                 </div>
               </div>
 
-              <details className="rounded-xl border border-gray-200 bg-gray-50">
+              <details data-article-field="seo" className="rounded-xl border border-gray-200 bg-gray-50">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
                   SEO Settings
                 </summary>
@@ -1598,7 +1929,7 @@ export default function UploadArticle() {
                 </div>
               </details>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+              <div data-article-field="image" className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
                 <label className="block text-sm font-medium text-gray-900 mb-2 sm:mb-3">
                   Featured Image <span className="text-red-500">*</span>
                 </label>
@@ -1627,7 +1958,11 @@ export default function UploadArticle() {
                     animate={{ opacity: 1, scale: 1 }}
                     className="mt-3 overflow-hidden rounded-lg border border-gray-200 sm:mt-4"
                   >
-                    <img src={imagePreview} alt="Preview" className="h-40 w-full object-cover sm:h-52" />
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="aspect-[16/9] w-full bg-zinc-950 object-contain"
+                    />
                     <button
                       type="button"
                       onClick={() => {
@@ -1670,6 +2005,15 @@ export default function UploadArticle() {
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
                   />
                 </div>
+                <ArticleFeaturedImageReaderPreview
+                  image={imagePreview}
+                  title={formData.title}
+                  summary={formData.summary}
+                  caption={formData.featuredImageCaption}
+                  credit={formData.imageCredit}
+                  alt={formData.featuredImageAlt}
+                  category={formData.category}
+                />
               </div>
 
               <details className="rounded-xl border border-gray-200 bg-gray-50">
@@ -1688,7 +2032,7 @@ export default function UploadArticle() {
                   <span className="text-sm text-gray-700">Mark as Breaking News</span>
                 </label>
                 {formData.isBreaking ? (
-                  <div className="space-y-3 rounded-lg border border-red-200 bg-white p-3 dark:border-red-500/30 dark:bg-zinc-900">
+                  <div data-article-field="breakingAudio" className="space-y-3 rounded-lg border border-red-200 bg-white p-3 dark:border-red-500/30 dark:bg-zinc-900">
                     <div className="flex items-start gap-3">
                       <div className="rounded-lg bg-red-50 p-2 text-spanish-red dark:bg-red-500/15 dark:text-red-100">
                         <Volume2 className="h-4 w-4" />
@@ -1821,16 +2165,87 @@ export default function UploadArticle() {
               </details>
 
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-900">Ready to send</p>
-                <p className="mt-1 text-xs text-gray-600">
-                  Submit from here after checking title, summary, featured image, and structure.
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">Publishing readiness</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-600">
+                      {liveReadinessSummary.canSend
+                        ? 'Critical checks are clear. Review warnings before sending.'
+                        : 'Resolve critical blockers before this article can be sent.'}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-900">
+                    {liveReadinessSummary.score}%
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Done</p>
+                    <p className="mt-1 text-sm font-bold text-gray-900">
+                      {liveReadinessSummary.done.length}/{liveReadinessSummary.total}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-red-100 bg-white px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500">Blockers</p>
+                    <p className="mt-1 text-sm font-bold text-red-700">
+                      {liveReadinessSummary.blockers.length}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-amber-100 bg-white px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Warnings</p>
+                    <p className="mt-1 text-sm font-bold text-amber-700">
+                      {liveReadinessSummary.warnings.length + liveReadinessSummary.todos.length}
+                    </p>
+                  </div>
+                </div>
+
+                {sourceStory?.linkedArticleId ? (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                    A linked article already exists for this source story.
+                  </p>
+                ) : null}
+
+                {!liveReadinessSummary.canSend ? (
+                  <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                    Resolve blockers: {liveReadinessSummary.blockers.map((item) => item.label).join(', ')}
+                  </p>
+                ) : null}
+
+                <div className="mt-3 space-y-2">
+                  {liveAssistResult.readiness.items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => focusReadinessItem(item)}
+                      aria-label={`${item.label} readiness: ${item.status}`}
+                      className={`flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors hover:border-gray-400 ${getReadinessStatusClass(item.status)}`}
+                    >
+                      <span className="mt-0.5">{getReadinessIcon(item)}</span>
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold">{item.label}</span>
+                        <span className="mt-0.5 block text-xs opacity-80">{item.detail}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
                 <div className="mt-4 flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={runArticleAssist}
+                    disabled={isAssistLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isAssistLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Assist with fixes
+                  </button>
                   <button
                     type="submit"
                     disabled={
                       submitBusy ||
-                      Boolean(sourceStory?.linkedArticleId)
+                      Boolean(sourceStory?.linkedArticleId) ||
+                      !liveReadinessSummary.canSend
                     }
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red py-3 text-white font-medium transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -1887,7 +2302,8 @@ export default function UploadArticle() {
                     type="submit"
                     disabled={
                       submitBusy ||
-                      Boolean(sourceStory?.linkedArticleId)
+                      Boolean(sourceStory?.linkedArticleId) ||
+                      !liveReadinessSummary.canSend
                     }
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red py-3 text-white font-medium transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
                   >

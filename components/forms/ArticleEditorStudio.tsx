@@ -5,6 +5,7 @@ import Image from 'next/image';
 import {
   CheckCircle2,
   Eye,
+  Image as ImageIcon,
   LayoutPanelTop,
   Maximize2,
   Minimize2,
@@ -21,6 +22,7 @@ import {
 } from '@/lib/seo/articleSeo';
 
 export type ArticleEditorStudioMode = 'write' | 'split' | 'preview';
+type ArticlePreviewDensity = 'full' | 'split';
 
 type ArticleEditorStudioProps = {
   title: string;
@@ -32,6 +34,10 @@ type ArticleEditorStudioProps = {
   previewVariant?: 'compact' | 'article';
   author?: string;
   image?: string;
+  imageAlt?: string;
+  imageCaption?: string;
+  imageCredit?: string;
+  category?: string;
   editorClassName?: string;
   onModeChange: (mode: ArticleEditorStudioMode) => void;
   onFocusModeChange?: (focusMode: boolean) => void;
@@ -43,61 +49,159 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
+const HINDI_PREVIEW_FONT_STYLE = {
+  fontFamily:
+    '"Noto Sans Devanagari", "Noto Sans", Mangal, "Kohinoor Devanagari", system-ui, sans-serif',
+};
+
+function hasDevanagariText(value: string) {
+  return /[\u0900-\u097F]/u.test(value);
+}
+
 function PreviewPanel({
   title,
   summary,
   html,
   variant = 'compact',
+  density = 'full',
   author,
   image,
+  imageAlt,
+  imageCaption,
+  imageCredit,
+  category,
 }: {
   title: string;
   summary: string;
   html: string;
   variant?: 'compact' | 'article';
+  density?: ArticlePreviewDensity;
   author?: string;
   image?: string;
+  imageAlt?: string;
+  imageCaption?: string;
+  imageCredit?: string;
+  category?: string;
 }) {
   const trimmedTitle = title.trim();
   const trimmedSummary = summary.trim();
   const trimmedAuthor = author?.trim();
   const trimmedImage = image?.trim();
+  const trimmedImageAlt = imageAlt?.trim();
+  const trimmedImageCaption = imageCaption?.trim();
+  const trimmedImageCredit = imageCredit?.trim();
+  const trimmedCategory = category?.trim();
+  const isHindiPreview = hasDevanagariText(`${trimmedTitle} ${trimmedSummary} ${html}`);
+  const previewLanguage = isHindiPreview ? 'hi' : 'en';
+  const previewFontStyle = isHindiPreview ? HINDI_PREVIEW_FONT_STYLE : undefined;
+  const isSplitPreview = density === 'split';
 
   if (variant === 'article') {
     return (
-      <article className="min-h-[420px] rounded-lg border border-gray-300 bg-white dark:border-white/30 dark:bg-[#111317]">
-        {trimmedImage ? (
-          <div className="overflow-hidden rounded-t-lg border-b border-gray-200 bg-gray-100 dark:border-white/15 dark:bg-white/[0.04]">
-            <Image
-              src={trimmedImage}
-              alt={trimmedTitle || 'Article image preview'}
-              width={960}
-              height={540}
-              sizes="(min-width: 1280px) 42vw, 90vw"
-              className="h-56 w-full object-cover"
-            />
-          </div>
-        ) : null}
-        <div className="mx-auto max-w-3xl px-6 py-6">
+      <article
+        lang={previewLanguage}
+        style={{
+          ...(previewFontStyle || {}),
+          backgroundColor: '#fbfaf8',
+          color: '#18181b',
+          colorScheme: 'light',
+        }}
+        className={cx(
+          'overflow-hidden rounded-lg border border-zinc-200 text-zinc-950 shadow-sm',
+          isSplitPreview ? 'min-h-[560px]' : 'min-h-[520px]'
+        )}
+      >
+        <div className="overflow-hidden border-b border-zinc-200 bg-zinc-100">
+          {trimmedImage ? (
+            <div className="relative aspect-[16/9] w-full bg-zinc-950">
+              <Image
+                src={trimmedImage}
+                alt={trimmedImageAlt || trimmedTitle || 'Article image preview'}
+                fill
+                sizes="(min-width: 1280px) 42vw, 90vw"
+                className="object-contain"
+              />
+            </div>
+          ) : (
+            <div
+              className={cx(
+                'flex items-center justify-center border border-dashed border-zinc-300 bg-zinc-50 text-zinc-500',
+                isSplitPreview ? 'm-4 aspect-[16/9] rounded-md' : 'm-6 aspect-[16/9] rounded-lg'
+              )}
+            >
+              <div className="text-center">
+                <ImageIcon className="mx-auto h-6 w-6" />
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide">
+                  Featured image preview
+                </p>
+              </div>
+            </div>
+          )}
+          {trimmedImageCaption || trimmedImageCredit ? (
+            <div className="border-t border-zinc-200 bg-white px-4 py-3 text-xs leading-5 text-zinc-600">
+              {trimmedImageCaption ? <p>{trimmedImageCaption}</p> : null}
+              {trimmedImageCredit ? (
+                <p className="mt-1 font-semibold text-zinc-500">{trimmedImageCredit}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <div className={cx('mx-auto max-w-3xl', isSplitPreview ? 'px-4 py-5 sm:px-5' : 'px-5 py-6 sm:px-8 sm:py-8')}>
           <header>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-spanish-red">
-              Article Preview
-            </p>
-            <h3 className="mt-3 text-3xl font-bold leading-tight text-gray-950 dark:text-white">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
+              <span className="rounded-full bg-spanish-red px-2.5 py-1 text-white">
+                {trimmedCategory || 'News'}
+              </span>
+              <span className="text-zinc-500">Reader preview</span>
+            </div>
+            <h3
+              className={cx(
+                'mt-4 break-words font-bold text-zinc-950',
+                isSplitPreview && isHindiPreview && 'text-[22px] leading-[1.42] sm:text-[24px]',
+                isSplitPreview && !isHindiPreview && 'text-2xl leading-tight',
+                !isSplitPreview && isHindiPreview && 'text-[28px] leading-[1.36] sm:text-[34px]',
+                !isSplitPreview && !isHindiPreview && 'text-3xl leading-tight sm:text-4xl'
+              )}
+            >
               {trimmedTitle || 'Untitled article'}
             </h3>
-            <p className="mt-3 text-lg leading-7 text-gray-600 dark:text-gray-200">
+            <p
+              className={cx(
+                'mt-4 break-words text-zinc-600',
+                isSplitPreview && isHindiPreview && 'text-[15px] leading-7',
+                isSplitPreview && !isHindiPreview && 'text-sm leading-6',
+                !isSplitPreview && isHindiPreview && 'text-[17px] leading-8 sm:text-[18px]',
+                !isSplitPreview && !isHindiPreview && 'text-lg leading-7'
+              )}
+            >
               {trimmedSummary || 'Summary preview will appear here.'}
             </p>
-            <div className="mt-5 flex flex-wrap items-center gap-2 border-y border-gray-200 py-3 text-sm text-gray-500 dark:border-white/15 dark:text-gray-300">
-              <span className="font-semibold text-gray-800 dark:text-gray-100">
+            <div className={cx(
+              'flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-zinc-200 text-zinc-500',
+              isSplitPreview ? 'mt-5 py-2.5 text-xs' : 'mt-6 py-3 text-sm'
+            )}>
+              <span className="font-semibold text-zinc-900">
                 {trimmedAuthor || 'News Desk'}
               </span>
-              <span>Draft article</span>
+              <span>Draft preview</span>
+              <span>Updated in newsroom</span>
             </div>
           </header>
           <div
-            className="article-rich-content mt-6 text-[16px] leading-8 text-gray-800 [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-gray-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-gray-700 dark:text-gray-100 dark:[&_ol]:marker:text-gray-100 dark:[&_ul]:marker:text-gray-100"
+            className={cx(
+              'article-rich-content mt-7 break-words text-zinc-800',
+              'marker:text-zinc-600 [&_a]:!text-spanish-red [&_blockquote]:border-l-4 [&_blockquote]:border-spanish-red [&_blockquote]:pl-4 [&_blockquote]:!text-zinc-700',
+              '[&_h2]:mb-3 [&_h2]:mt-8 [&_h2]:font-bold [&_h2]:leading-snug [&_h2]:text-zinc-950',
+              '[&_h3]:mb-2 [&_h3]:mt-6 [&_h3]:font-bold [&_h3]:leading-snug [&_h3]:text-zinc-950',
+              '[&_li]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-6 [&_table]:my-5 [&_ul]:list-disc [&_ul]:pl-6',
+              isSplitPreview
+                ? '[&_h2]:text-xl [&_h3]:text-lg [&_ol]:my-4 [&_p]:mb-4 [&_ul]:my-4'
+                : '[&_h2]:text-2xl [&_h3]:text-xl [&_ol]:my-5 [&_p]:mb-5 [&_ul]:my-5',
+              isSplitPreview && isHindiPreview && 'text-[15px] leading-8',
+              isSplitPreview && !isHindiPreview && 'text-[15px] leading-7',
+              !isSplitPreview && isHindiPreview && 'text-[17px] leading-9 sm:text-[18px] sm:leading-10',
+              !isSplitPreview && !isHindiPreview && 'text-[16px] leading-8'
+            )}
             dangerouslySetInnerHTML={{ __html: html }}
           />
         </div>
@@ -106,12 +210,16 @@ function PreviewPanel({
   }
 
   return (
-    <div className="min-h-[180px] rounded-lg border border-gray-300 bg-white p-3 sm:min-h-[260px] sm:p-4">
-      <h3 className="text-lg font-bold text-gray-900">{trimmedTitle || 'Untitled article'}</h3>
-      <p className="mt-1 text-sm text-gray-600">
+    <div
+      lang={previewLanguage}
+      style={previewFontStyle}
+      className="min-h-[180px] rounded-lg border border-gray-300 bg-white p-3 sm:min-h-[260px] sm:p-4 dark:border-white/20 dark:bg-zinc-950"
+    >
+      <h3 className="text-lg font-bold text-gray-900 dark:text-white">{trimmedTitle || 'Untitled article'}</h3>
+      <p className="mt-1 text-sm text-gray-600 dark:text-zinc-300">
         {trimmedSummary || 'Summary preview will appear here.'}
       </p>
-      <div className="my-4 h-px bg-gray-200" />
+      <div className="my-4 h-px bg-gray-200 dark:bg-white/10" />
       <div
         className="article-rich-content text-gray-800 [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-gray-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-gray-700 dark:text-gray-100 dark:[&_ol]:marker:text-gray-100 dark:[&_ul]:marker:text-gray-100"
         dangerouslySetInnerHTML={{ __html: html }}
@@ -300,6 +408,10 @@ export default function ArticleEditorStudio({
   previewVariant = 'compact',
   author,
   image,
+  imageAlt,
+  imageCaption,
+  imageCredit,
+  category,
   editorClassName,
   onModeChange,
   onFocusModeChange,
@@ -420,6 +532,11 @@ export default function ArticleEditorStudio({
             variant={previewVariant}
             author={author}
             image={image}
+            imageAlt={imageAlt}
+            imageCaption={imageCaption}
+            imageCredit={imageCredit}
+            category={category}
+            density="full"
           />
         ) : null}
 
@@ -430,7 +547,7 @@ export default function ArticleEditorStudio({
               focusMode
                 ? 'xl:grid-cols-2'
                 : previewVariant === 'article'
-                  ? '2xl:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]'
+                  ? 'xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] 2xl:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.85fr)]'
                   : '2xl:grid-cols-2'
             )}
           >
@@ -448,6 +565,11 @@ export default function ArticleEditorStudio({
                 variant={previewVariant}
                 author={author}
                 image={image}
+                imageAlt={imageAlt}
+                imageCaption={imageCaption}
+                imageCredit={imageCredit}
+                category={category}
+                density="split"
               />
             </div>
           </div>

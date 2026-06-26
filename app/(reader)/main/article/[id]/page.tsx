@@ -679,12 +679,12 @@ export default function ArticleDetailPage() {
       </Link>
 
       <article className="cnp-surface overflow-hidden p-0">
-        <div className="relative aspect-[16/9] w-full overflow-hidden">
+        <div className="relative aspect-[16/9] w-full overflow-hidden bg-zinc-950">
           <Image
             src={buildArticleImageVariantUrl(article.image, 'detail')}
             alt={article.seo?.featuredImageAlt || article.title}
             fill
-            className="object-cover"
+            className="object-contain"
             sizes="(max-width: 639px) 100vw, (max-width: 1023px) 92vw, 896px"
             priority
           />

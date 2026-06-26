@@ -1,0 +1,70 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getAdminSessionFromReq } from '@/lib/auth/admin';
+import { canViewPage } from '@/lib/auth/permissions';
+import {
+  buildArticleAssistResult,
+  type ArticleAssistInput,
+} from '@/lib/utils/articleAssistant';
+
+function normalizeAssistInput(body: unknown): ArticleAssistInput {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error('Request body must be an object');
+  }
+
+  const source = body as Record<string, unknown>;
+  const seo = source.seo && typeof source.seo === 'object' && !Array.isArray(source.seo)
+    ? (source.seo as Record<string, unknown>)
+    : {};
+
+  return {
+    mode: source.mode === 'edit' ? 'edit' : 'create',
+    title: typeof source.title === 'string' ? source.title : '',
+    summary: typeof source.summary === 'string' ? source.summary : '',
+    content: typeof source.content === 'string' ? source.content : '',
+    category: typeof source.category === 'string' ? source.category : '',
+    author: typeof source.author === 'string' ? source.author : '',
+    image: typeof source.image === 'string' ? source.image : '',
+    seoSlug: typeof source.seoSlug === 'string' ? source.seoSlug : '',
+    seo,
+    isBreaking: Boolean(source.isBreaking),
+    isTrending: Boolean(source.isTrending),
+    language: source.language === 'en' ? 'en' : 'hi',
+    breakingAudioReady: Boolean(source.breakingAudioReady),
+    requireBreakingAudio: Boolean(source.requireBreakingAudio),
+    listenAudioReady: Boolean(source.listenAudioReady),
+  };
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getAdminSessionFromReq(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    if (!canViewPage(user.role, 'articles')) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => null);
+    const input = normalizeAssistInput(body);
+    const result = buildArticleAssistResult(input);
+
+    return NextResponse.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Article assist failed';
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: message.includes('Request body') ? 400 : 500 }
+    );
+  }
+}

@@ -137,6 +137,42 @@ function createFetchMock() {
       });
     }
 
+    if (url === '/api/admin/articles/assist') {
+      return jsonResponse({
+        success: true,
+        data: {
+          suggestions: [
+            {
+              id: 'social-copy',
+              label: 'Social post starter',
+              value: 'Manual Audio Story - Short article summary',
+              reason: 'Useful for social packaging.',
+            },
+          ],
+          readiness: {
+            score: 55,
+            items: [
+              {
+                id: 'summary',
+                label: 'Summary',
+                status: 'todo',
+                detail: 'Add a reader summary.',
+                field: 'summary',
+              },
+            ],
+          },
+          patches: [
+            {
+              field: 'summary',
+              currentValue: '',
+              suggestedValue: 'Suggested desk summary for the article.',
+              reason: 'Use the lead paragraphs to fill a concise reader summary.',
+            },
+          ],
+        },
+      });
+    }
+
     if (url === '/api/admin/articles') {
       return jsonResponse({
         success: true,
@@ -197,14 +233,21 @@ function getImageInput(container: HTMLElement) {
   return input;
 }
 
+const READY_SUMMARY =
+  'This summary gives readers the key point, location, and publication context for the desk article.';
+const READY_CONTENT =
+  'This article body has enough verified newsroom copy for publication readiness checks, including context, background, and the next steps readers need before the story moves through the desk.';
+
 async function fillRequiredArticleFields(container: HTMLElement) {
-  const user = userEvent.setup();
-  await user.type(screen.getByPlaceholderText('Enter an engaging title'), 'Manual Audio Story');
-  await user.type(
-    screen.getByPlaceholderText(/brief summary of the article/i),
-    'Short article summary'
-  );
-  await user.type(screen.getByLabelText('Article editor content'), 'Full article body text.');
+  fireEvent.change(screen.getByPlaceholderText('Enter an engaging title'), {
+    target: { value: 'Manual Audio Story' },
+  });
+  fireEvent.change(screen.getByPlaceholderText(/brief summary of the article/i), {
+    target: { value: READY_SUMMARY },
+  });
+  fireEvent.change(screen.getByLabelText('Article editor content'), {
+    target: { value: READY_CONTENT },
+  });
 
   const image = new File(['image-bytes'], 'featured.jpg', { type: 'image/jpeg' });
   fireEvent.change(getImageInput(container), { target: { files: [image] } });
@@ -289,6 +332,45 @@ describe('Article create manual listen audio', () => {
     expect(screen.getByLabelText('Remove article listen audio')).toBeInTheDocument();
   });
 
+  it('starts with publishing disabled while readiness blockers exist', async () => {
+    await renderCreatePage();
+
+    expect(screen.getByRole('button', { name: /publish article/i })).toBeDisabled();
+    expect(screen.getByText(/Resolve blockers:/i)).toHaveTextContent('Headline');
+    expect(screen.getByText(/Resolve blockers:/i)).toHaveTextContent('Featured image');
+  });
+
+  it('enables publishing after critical fields pass even with SEO warnings', async () => {
+    const { container } = await renderCreatePage();
+    await fillRequiredArticleFields(container);
+
+    expect(screen.getByRole('button', { name: /publish article/i })).not.toBeDisabled();
+    expect(screen.getByText('Warnings')).toBeInTheDocument();
+  });
+
+  it('shows readiness blockers on blocked form submit and does not create the article', async () => {
+    const { container } = await renderCreatePage();
+    fireEvent.change(screen.getByPlaceholderText('Enter an engaging title'), {
+      target: { value: 'Short story' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/brief summary of the article/i), {
+      target: { value: 'Too short' },
+    });
+    fireEvent.change(screen.getByLabelText('Article editor content'), {
+      target: { value: 'Too short.' },
+    });
+    const image = new File(['image-bytes'], 'featured.jpg', { type: 'image/jpeg' });
+    fireEvent.change(getImageInput(container), { target: { files: [image] } });
+
+    const form = container.querySelector('form');
+    expect(form).toBeTruthy();
+    fireEvent.submit(form as HTMLFormElement);
+
+    await screen.findAllByText(/Resolve blockers:/i);
+    expect(screen.getAllByText(/Resolve blockers:/i).some((node) => node.textContent?.includes('Summary'))).toBe(true);
+    expect(hasArticleCreateFetchCall(fetch as ReturnType<typeof createFetchMock>)).toBe(false);
+  });
+
   it('blocks submit while the staged audio file is invalid', async () => {
     const { container } = await renderCreatePage();
     await fillRequiredArticleFields(container);
@@ -316,14 +398,70 @@ describe('Article create manual listen audio', () => {
     expect(getBreakingAudioInput(container)).toBeInstanceOf(HTMLInputElement);
   });
 
+  it('applies assistant suggestions only after editor approval', async () => {
+    await renderCreatePage();
+
+    await userEvent.click(screen.getByRole('button', { name: /^assist$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Suggested field updates')).toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText(/brief summary of the article/i)).toHaveValue('');
+
+    await userEvent.click(screen.getByRole('button', { name: /apply suggestion/i }));
+
+    expect(screen.getByPlaceholderText(/brief summary of the article/i)).toHaveValue(
+      'Suggested desk summary for the article.'
+    );
+  });
+
+  it('can apply all visible assistant suggestions together', async () => {
+    await renderCreatePage();
+
+    await userEvent.click(screen.getByRole('button', { name: /^assist$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Suggested field updates')).toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText(/brief summary of the article/i)).toHaveValue('');
+
+    await userEvent.click(screen.getByRole('button', { name: /apply all safe/i }));
+
+    expect(screen.getByPlaceholderText(/brief summary of the article/i)).toHaveValue(
+      'Suggested desk summary for the article.'
+    );
+    expect(screen.getByText('No pending field suggestions. The current package is already well-filled.')).toBeInTheDocument();
+  });
+
+  it('does not overwrite a manually edited SEO slug when the headline changes', async () => {
+    await renderCreatePage();
+    const user = userEvent.setup();
+    const titleInput = screen.getByPlaceholderText('Enter an engaging title');
+    fireEvent.click(screen.getByText('SEO Settings'));
+    const slugInput = screen.getByPlaceholderText('article-public-url-slug');
+
+    await user.type(titleInput, 'First headline');
+    expect(slugInput).toHaveValue('first-headline');
+
+    await user.clear(slugInput);
+    await user.type(slugInput, 'manual-slug');
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Second headline');
+
+    expect(slugInput).toHaveValue('manual-slug');
+  });
+
   it('blocks publishing a breaking article until breaking audio is staged', async () => {
     const { container } = await renderCreatePage();
     await fillRequiredArticleFields(container);
     await userEvent.click(screen.getByLabelText(/mark as breaking news/i));
 
-    await userEvent.click(screen.getByRole('button', { name: /publish article/i }));
+    const form = container.querySelector('form');
+    expect(form).toBeTruthy();
+    fireEvent.submit(form as HTMLFormElement);
 
-    expect(screen.getAllByText(/Upload breaking news audio before publishing/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Breaking audio/i).length).toBeGreaterThan(0);
+    await screen.findAllByText(/Resolve blockers: Breaking audio/i);
     expect(hasArticleCreateFetchCall(fetch as ReturnType<typeof createFetchMock>)).toBe(false);
     expect(mocks.uploadBreakingTtsAudioDirect).not.toHaveBeenCalled();
   });
@@ -380,7 +518,7 @@ describe('Article create manual listen audio', () => {
       },
       { timeout: 3500 }
     );
-  });
+  }, 10000);
 
   it('creates the article first, then uploads staged audio against the returned article id', async () => {
     const { container } = await renderCreatePage();

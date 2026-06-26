@@ -38,6 +38,10 @@ import {
 } from '@/lib/server/newsroomStoryLinks';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
+  buildArticleAssistResult,
+  summarizeArticleReadiness,
+} from '@/lib/utils/articleAssistant';
+import {
   isValidArticleSlug,
   normalizeArticleSeo,
   resolveUniqueArticleSlug,
@@ -302,18 +306,7 @@ function normalizeArticleInput(body: unknown) {
 }
 
 function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
-  if (
-    !input.title ||
-    !input.summary ||
-    !input.content ||
-    !input.image ||
-    !input.category ||
-    !input.author
-  ) {
-    return 'Missing required fields';
-  }
-
-  if (input.title.length > 200) {
+  if (input.title && input.title.length > 200) {
     return 'Title is too long (max 200 characters)';
   }
 
@@ -321,7 +314,7 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
     return 'SEO slug must use lowercase letters, numbers, and hyphens only';
   }
 
-  if (input.summary.length > 500) {
+  if (input.summary && input.summary.length > 500) {
     return 'Summary is too long (max 500 characters)';
   }
 
@@ -356,6 +349,38 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
   }
 
   return null;
+}
+
+function validateArticleReadiness(
+  input: ReturnType<typeof normalizeArticleInput>,
+  options: {
+    breakingAudioReady?: boolean;
+    requireBreakingAudio?: boolean;
+  } = {}
+) {
+  const result = buildArticleAssistResult({
+    mode: 'create',
+    title: input.title,
+    summary: input.summary,
+    content: input.content,
+    category: input.category,
+    author: input.author,
+    image: input.image,
+    seoSlug: input.slug,
+    seo: input.seo,
+    isBreaking: input.isBreaking,
+    isTrending: input.isTrending,
+    language: 'hi',
+    breakingAudioReady: options.breakingAudioReady,
+    requireBreakingAudio: options.requireBreakingAudio,
+  });
+  const summary = summarizeArticleReadiness(result.readiness);
+
+  if (summary.canSend) return null;
+
+  return `Article is not ready: ${summary.blockers
+    .map((item) => item.label)
+    .join(', ')}`;
 }
 
 export async function GET(req: NextRequest) {
@@ -551,6 +576,20 @@ export async function POST(req: NextRequest) {
         { success: false, error: validationError },
         { status: 400 }
       );
+    }
+
+    if (intent !== 'draft') {
+      const readinessError = validateArticleReadiness(input, {
+        breakingAudioReady:
+          breakingAudioUploadPending || Boolean(bodyRecord.breakingAudioReady),
+        requireBreakingAudio: intent === 'publish' && input.isBreaking,
+      });
+      if (readinessError) {
+        return NextResponse.json(
+          { success: false, error: readinessError },
+          { status: 400 }
+        );
+      }
     }
 
     let sourceStoryTitle = '';

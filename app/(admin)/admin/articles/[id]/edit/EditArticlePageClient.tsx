@@ -11,8 +11,10 @@ import {
   AlertCircle,
   CheckCircle,
   FileAudio,
+  FileText,
   Image as ImageIcon,
   Loader,
+  Search,
   Volume2,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -20,6 +22,10 @@ import ArticleEditorStudio, {
   ArticleEditorSidebar,
   type ArticleEditorStudioMode,
 } from '@/components/forms/ArticleEditorStudio';
+import ArticleFeaturedImageReaderPreview from '@/components/forms/ArticleFeaturedImageReaderPreview';
+import ArticleWorkbenchAssistant, {
+  getArticleAssistPatchKey,
+} from '@/components/forms/ArticleWorkbenchAssistant';
 import {
   CmsEditorCanvas,
   CmsEditorColumns,
@@ -68,6 +74,12 @@ import {
   normalizeArticleSeo,
   normalizeArticleSlug,
 } from '@/lib/seo/articleSeo';
+import {
+  suggestArticleFocusKeyword,
+  type ArticleAssistField,
+  type ArticleAssistPatch,
+  type ArticleAssistResult,
+} from '@/lib/utils/articleAssistant';
 import {
   buildWorkflowFeedbackSummary,
   type WorkflowFeedbackTone,
@@ -328,6 +340,16 @@ function isValidAbsoluteHttpUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function normalizeDraftArticleSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 200);
 }
 
 function formatBreakingTtsTimestamp(value: string | undefined) {
@@ -600,6 +622,12 @@ export default function EditArticle() {
   const [runningWorkflowAction, setRunningWorkflowAction] = useState<ContentTransitionAction | ''>('');
   const [articleActivity, setArticleActivity] = useState<ArticleActivityItem[]>([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
+  const [assistResult, setAssistResult] = useState<ArticleAssistResult | null>(null);
+  const [assistError, setAssistError] = useState('');
+  const [isAssistLoading, setIsAssistLoading] = useState(false);
+  const [rejectedAssistPatchKeys, setRejectedAssistPatchKeys] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const currentArticleListenSignature = useMemo(
     () => buildArticleListenSignature(formData),
@@ -609,7 +637,7 @@ export default function EditArticle() {
   const currentBreakingRecordingScript = useMemo(
     () =>
       buildBreakingRecordingScriptFromForm(formData, articleId || 'breaking-preview'),
-    [articleId, formData.locationTag, formData.title]
+    [articleId, formData]
   );
 
   const currentFormSnapshot = useMemo(
@@ -713,6 +741,36 @@ export default function EditArticle() {
     : articleTtsReady && articleTtsInfo?.audioUrl
       ? 'ready'
       : articleTtsInfo?.status || 'missing';
+
+  const buildAssistPayload = useCallback(() => ({
+    mode: 'edit',
+    title: formData.title,
+    summary: formData.summary,
+    content: formData.content,
+    category: formData.category,
+    author: formData.author,
+    image: imagePreview,
+    seoSlug: formData.seoSlug,
+    seo: {
+      metaTitle: formData.seoTitle,
+      metaDescription: formData.seoDescription,
+      ogImage: formData.ogImage,
+      canonicalUrl: formData.canonicalUrl,
+      focusKeyword: formData.focusKeyword,
+      secondaryKeywords: formData.secondaryKeywords,
+      featuredImageAlt: formData.featuredImageAlt,
+      featuredImageCaption: formData.featuredImageCaption,
+      imageCredit: formData.imageCredit,
+      authorProfileUrl: formData.authorProfileUrl,
+      includeInNewsSitemap: formData.includeInNewsSitemap,
+      majorUpdateNote: formData.majorUpdateNote,
+    },
+    isBreaking: formData.isBreaking,
+    isTrending: formData.isTrending,
+    language: 'hi',
+    breakingAudioReady: !formData.isBreaking || breakingTtsStatus === 'ready',
+    listenAudioReady: articleTtsStatus === 'ready',
+  }), [articleTtsStatus, breakingTtsStatus, formData, imagePreview]);
 
   const fetchArticleTtsStatus = useCallback(async () => {
     if (!articleId) {
@@ -1135,18 +1193,172 @@ export default function EditArticle() {
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = event.target;
-    const nextValue = name === 'seoSlug' ? normalizeArticleSlug(value) : value;
+    const nextValue = name === 'seoSlug' ? normalizeDraftArticleSlug(value) : value;
     if (name === 'seoSlug') {
       setIsSeoSlugTouched(true);
     }
-    setFormData((current) => ({
-      ...current,
-      [name]: type === 'checkbox' ? (event.target as HTMLInputElement).checked : nextValue,
-      ...(!isSeoSlugTouched && (name === 'title' || name === 'seoTitle')
-        ? { seoSlug: normalizeArticleSlug(nextValue) }
-        : {}),
-    }));
+    setFormData((current) => {
+      const next = {
+        ...current,
+        [name]: type === 'checkbox' ? (event.target as HTMLInputElement).checked : nextValue,
+      };
+
+      if (name === 'title') {
+        if (!current.seoTitle.trim()) next.seoTitle = String(nextValue).slice(0, 160);
+        if (!current.featuredImageAlt.trim()) {
+          next.featuredImageAlt = String(nextValue).slice(0, 220);
+        }
+        if (!current.focusKeyword.trim()) {
+          next.focusKeyword = suggestArticleFocusKeyword(String(nextValue)).slice(0, 120);
+        }
+        if (!isSeoSlugTouched) {
+          next.seoSlug = normalizeArticleSlug(String(nextValue));
+        }
+      }
+
+      if (name === 'summary' && !current.seoDescription.trim()) {
+        next.seoDescription = String(nextValue).slice(0, 320);
+      }
+
+      if (name === 'seoTitle' && !isSeoSlugTouched) {
+        next.seoSlug = normalizeArticleSlug(String(nextValue));
+      }
+
+      return next;
+    });
   };
+
+  const runArticleAssist = async () => {
+    setIsAssistLoading(true);
+    setAssistError('');
+    try {
+      const response = await fetch('/api/admin/articles/assist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify(buildAssistPayload()),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        data?: ArticleAssistResult;
+      };
+
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error || 'Article assist failed');
+      }
+
+      setRejectedAssistPatchKeys(new Set());
+      setAssistResult(payload.data);
+    } catch (assistError) {
+      setAssistError(
+        assistError instanceof Error ? assistError.message : 'Article assist failed'
+      );
+    } finally {
+      setIsAssistLoading(false);
+    }
+  };
+
+  const applyAssistPatch = (patch: ArticleAssistPatch) => {
+    if (patch.field === 'seoSlug') {
+      setIsSeoSlugTouched(true);
+    }
+
+    setFormData((current) => {
+      if (!(patch.field in current)) return current;
+      const currentValue = current[patch.field as keyof ArticleFormState];
+      if (typeof currentValue !== 'string') return current;
+
+      return {
+        ...current,
+        [patch.field]: patch.suggestedValue,
+      };
+    });
+
+    setRejectedAssistPatchKeys((current) => {
+      const next = new Set(current);
+      next.add(getArticleAssistPatchKey(patch));
+      return next;
+    });
+  };
+
+  const applyAssistPatches = (patches: ArticleAssistPatch[]) => {
+    if (!patches.length) return;
+
+    if (patches.some((patch) => patch.field === 'seoSlug')) {
+      setIsSeoSlugTouched(true);
+    }
+
+    setFormData((current) => {
+      let next = current;
+
+      patches.forEach((patch) => {
+        if (!(patch.field in next)) return;
+        const currentValue = next[patch.field as keyof ArticleFormState];
+        if (typeof currentValue !== 'string') return;
+
+        next = {
+          ...next,
+          [patch.field]: patch.suggestedValue,
+        };
+      });
+
+      return next;
+    });
+
+    setRejectedAssistPatchKeys((current) => {
+      const next = new Set(current);
+      patches.forEach((patch) => next.add(getArticleAssistPatchKey(patch)));
+      return next;
+    });
+  };
+
+  const rejectAssistPatch = (patch: ArticleAssistPatch) => {
+    setRejectedAssistPatchKeys((current) => {
+      const next = new Set(current);
+      next.add(getArticleAssistPatchKey(patch));
+      return next;
+    });
+  };
+
+  const focusWorkbenchField = useCallback((field: ArticleAssistField) => {
+    if (typeof document === 'undefined') return;
+    const fieldSelectors: Partial<Record<ArticleAssistField, string>> = {
+      title: '[name="title"]',
+      summary: '[name="summary"]',
+      content:
+        '[data-article-field="content"] [contenteditable="true"], [data-article-field="content"] textarea, [data-article-field="content"]',
+      category: '[name="category"]',
+      author: '[name="author"]',
+      image: '[data-article-field="image"], input[accept="image/*"]',
+      seoTitle: '[name="seoTitle"]',
+      seoDescription: '[name="seoDescription"]',
+      seoSlug: '[name="seoSlug"]',
+      focusKeyword: '[name="focusKeyword"]',
+      secondaryKeywords: '[name="secondaryKeywords"]',
+      featuredImageAlt: '[name="featuredImageAlt"]',
+      featuredImageCaption: '[name="featuredImageCaption"]',
+      imageCredit: '[name="imageCredit"]',
+      canonicalUrl: '[name="canonicalUrl"]',
+      authorProfileUrl: '[name="authorProfileUrl"]',
+      isBreaking: '[name="isBreaking"]',
+      isTrending: '[name="isTrending"]',
+      breakingAudio: `[data-article-field="breakingAudio"], input[accept="${MANUAL_AUDIO_ACCEPT}"], [name="isBreaking"]`,
+    };
+    const selector = fieldSelectors[field] || `[name="${field}"]`;
+    const element = document.querySelector<HTMLElement>(selector);
+    const details = element?.closest('details') as HTMLDetailsElement | null;
+    if (details) details.open = true;
+    if (typeof element?.scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    const focusTarget = element?.matches('input, textarea, select, button, [contenteditable="true"]')
+      ? element
+      : element?.querySelector<HTMLElement>('input, textarea, select, button, [contenteditable="true"]');
+    window.setTimeout(() => focusTarget?.focus(), 0);
+  }, []);
 
   const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1167,6 +1379,15 @@ export default function EditArticle() {
       const prepared = await prepareArticleImageFile(file);
       setImageFile(prepared.file);
       setImagePreview(prepared.previewDataUrl);
+      setFormData((current) => ({
+        ...current,
+        featuredImageAlt: current.featuredImageAlt.trim()
+          ? current.featuredImageAlt
+          : current.title.trim().slice(0, 220),
+        featuredImageCaption: current.featuredImageCaption.trim()
+          ? current.featuredImageCaption
+          : current.summary.trim().slice(0, 300),
+      }));
 
       const notes: string[] = [];
       if (prepared.wasResized) {
@@ -1736,10 +1957,39 @@ export default function EditArticle() {
             </div>
           ) : null}
 
+          {!isFocusMode ? (
+            <div className="sticky top-0 z-20 mb-5 flex items-center gap-2 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-950/95 p-2 shadow-lg shadow-black/10 backdrop-blur dark:border-white/10">
+              {[
+                { label: 'Write', field: 'content' as ArticleAssistField, Icon: FileText },
+                { label: 'SEO', field: 'seoTitle' as ArticleAssistField, Icon: Search },
+                { label: 'Media', field: 'image' as ArticleAssistField, Icon: ImageIcon },
+                { label: 'Audio', field: 'breakingAudio' as ArticleAssistField, Icon: FileAudio },
+              ].map(({ label, field, Icon }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => focusWorkbenchField(field)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:border-white/25 hover:bg-white/[0.08] hover:text-white"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={runArticleAssist}
+                className="inline-flex shrink-0 items-center gap-2 rounded-md bg-spanish-red px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>Ready</span>
+              </button>
+            </div>
+          ) : null}
+
           <form onSubmit={handleSubmit} className="space-y-8">
             <CmsEditorColumns stacked={isFocusMode}>
               <CmsEditorMain>
-                <div>
+                <div data-article-field="title">
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Article Title <span className="text-red-500">*</span>
                   </label>
@@ -1753,7 +2003,7 @@ export default function EditArticle() {
                   />
                 </div>
 
-                <div>
+                <div data-article-field="summary">
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Summary <span className="text-red-500">*</span>
                   </label>
@@ -1767,7 +2017,7 @@ export default function EditArticle() {
                   />
                 </div>
 
-                <div>
+                <div data-article-field="content">
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Article Content <span className="text-red-500">*</span>
                   </label>
@@ -1799,6 +2049,13 @@ export default function EditArticle() {
                     mode={contentMode}
                     focusMode={isFocusMode}
                     showSidebar={false}
+                    previewVariant="article"
+                    author={formData.author}
+                    image={imagePreview}
+                    imageAlt={formData.featuredImageAlt}
+                    imageCaption={formData.featuredImageCaption}
+                    imageCredit={formData.imageCredit}
+                    category={formData.category}
                     onModeChange={setContentMode}
                     onFocusModeChange={setIsFocusMode}
                     onContentChange={(content) => setFormData((current) => ({ ...current, content }))}
@@ -2326,6 +2583,19 @@ export default function EditArticle() {
                   ) : null}
                 </div>
 
+                <ArticleWorkbenchAssistant
+                  result={assistResult}
+                  isLoading={isAssistLoading}
+                  error={assistError}
+                  rejectedPatchKeys={rejectedAssistPatchKeys}
+                  onRun={runArticleAssist}
+                  onApplyPatch={applyAssistPatch}
+                  onApplyAll={applyAssistPatches}
+                  onRejectPatch={rejectAssistPatch}
+                  onFocusField={focusWorkbenchField}
+                  title="Packaging assistant"
+                />
+
                 {formData.sourceType === 'story' && formData.sourceStoryId ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2382,8 +2652,11 @@ export default function EditArticle() {
                   </div>
                 </div>
 
-                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-sm font-semibold text-gray-900">SEO Settings</p>
+                <details className="rounded-lg border border-gray-200 bg-gray-50">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
+                    SEO Settings
+                  </summary>
+                  <div className="space-y-3 border-t border-gray-200 p-4">
                   <input
                     type="text"
                     name="seoSlug"
@@ -2502,9 +2775,10 @@ export default function EditArticle() {
                     <p className="mt-1 break-all text-xs text-green-700">{googlePreview.url}</p>
                     <p className="mt-1 line-clamp-3 text-xs text-gray-600">{googlePreview.description || 'Meta description or summary will appear here.'}</p>
                   </div>
-                </div>
+                  </div>
+                </details>
 
-                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <div data-article-field="image" className="rounded-lg border border-gray-200 bg-white p-4">
                   <label className="block text-sm font-medium text-gray-900 mb-2">
                     Featured Image <span className="text-red-500">*</span>
                   </label>
@@ -2521,7 +2795,11 @@ export default function EditArticle() {
                   ) : null}
                   {imagePreview ? (
                     <div className="mt-4 rounded-lg overflow-hidden border border-gray-200">
-                      <img src={imagePreview} alt="Preview" className="w-full h-52 object-cover" />
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="aspect-[16/9] w-full bg-zinc-950 object-contain"
+                      />
                     </div>
                   ) : null}
                   <div className="mt-4 space-y-3">
@@ -2553,6 +2831,15 @@ export default function EditArticle() {
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
                     />
                   </div>
+                  <ArticleFeaturedImageReaderPreview
+                    image={imagePreview}
+                    title={formData.title}
+                    summary={formData.summary}
+                    caption={formData.featuredImageCaption}
+                    credit={formData.imageCredit}
+                    alt={formData.featuredImageAlt}
+                    category={formData.category}
+                  />
                 </div>
 
                 <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
@@ -2568,7 +2855,7 @@ export default function EditArticle() {
                     <span className="text-sm text-gray-700">Mark as Breaking News</span>
                   </label>
                   {formData.isBreaking ? (
-                    <div className="space-y-3 rounded-lg border border-red-200 bg-white p-3 dark:border-red-500/30 dark:bg-zinc-900">
+                    <div data-article-field="breakingAudio" className="space-y-3 rounded-lg border border-red-200 bg-white p-3 dark:border-red-500/30 dark:bg-zinc-900">
                       <div className="flex items-start gap-3">
                         <div className="rounded-lg bg-red-50 p-2 text-spanish-red dark:bg-red-500/15 dark:text-red-100">
                           <Volume2 className="h-4 w-4" />
