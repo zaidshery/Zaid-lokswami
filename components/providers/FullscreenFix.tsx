@@ -2,16 +2,23 @@
 
 import { useEffect } from 'react';
 
+type VendorFullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  mozFullScreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
+};
+
 export default function FullscreenFix() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const handleFullscreenChange = () => {
+      const fullscreenDocument = document as VendorFullscreenDocument;
       const isFullscreen = !!(
-        document.fullscreenElement ||
-        (document as any).webkitFullscreenElement ||
-        (document as any).mozFullScreenElement ||
-        (document as any).msFullscreenElement
+        fullscreenDocument.fullscreenElement ||
+        fullscreenDocument.webkitFullscreenElement ||
+        fullscreenDocument.mozFullScreenElement ||
+        fullscreenDocument.msFullscreenElement
       );
 
       document.documentElement.classList.toggle('fullscreen-active', isFullscreen);

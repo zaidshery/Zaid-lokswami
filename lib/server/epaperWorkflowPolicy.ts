@@ -14,6 +14,7 @@ export function assertEpaperDraftEditable(epaper: {
   status?: unknown;
   productionStatus?: unknown;
 }) {
+  void epaper;
   // Published editions are no longer strictly immutable
   // to allow the team to map remaining pages easily without draft revisions.
   return;

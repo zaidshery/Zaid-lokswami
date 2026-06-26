@@ -8,11 +8,14 @@ import {
   Link2,
   List,
   ListOrdered,
+  Loader2,
   MessageSquareQuote,
   Redo2,
   Table2,
   Underline,
   Undo2,
+  Wand2,
+  X,
 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import {
@@ -31,6 +34,89 @@ interface RichTextEditorProps {
   editorClassName?: string;
 }
 
+const HINDI_EDITOR_FONT_STYLE =
+  '"Noto Sans Devanagari", "Noto Sans", Mangal, "Kohinoor Devanagari", system-ui, sans-serif';
+
+function hasDevanagariText(value: string) {
+  return /[\u0900-\u097F]/u.test(value);
+}
+
+function escapeEditorHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function normalizeEditorLine(value: string) {
+  return value.replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
+}
+
+function buildPolishedPlainTextHtml(value: string) {
+  const blocks = value
+    .replace(/\r\n?/g, '\n')
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  if (!blocks.length) return '';
+
+  return blocks
+    .map((block) => {
+      const lines = block
+        .split('\n')
+        .map(normalizeEditorLine)
+        .filter(Boolean);
+
+      if (lines.length > 1 && lines.every((line) => /^[-*•]\s+/.test(line))) {
+        return `<ul>${lines
+          .map((line) => `<li>${escapeEditorHtml(line.replace(/^[-*•]\s+/, ''))}</li>`)
+          .join('')}</ul>`;
+      }
+
+      return `<p>${escapeEditorHtml(lines.join(' '))}</p>`;
+    })
+    .join('');
+}
+
+function polishEditorHtml(html: string) {
+  if (typeof document === 'undefined') return html;
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  const hasStructuredBlocks = Boolean(
+    container.querySelector(
+      'p,h1,h2,h3,h4,ul,ol,li,blockquote,figure,table,iframe,img,.article-resource-card'
+    )
+  );
+
+  if (!hasStructuredBlocks) {
+    return buildPolishedPlainTextHtml(container.textContent || html);
+  }
+
+  container.querySelectorAll('script,style').forEach((node) => node.remove());
+  container.querySelectorAll('p,li,h2,h3,blockquote').forEach((node) => {
+    node.textContent = normalizeEditorLine(node.textContent || '');
+  });
+  container.querySelectorAll('p,li,h2,h3,blockquote').forEach((node) => {
+    if (!normalizeEditorLine(node.textContent || '')) node.remove();
+  });
+
+  return container.innerHTML.trim();
+}
+
+type EditorTool =
+  | 'link'
+  | 'youtube'
+  | 'social'
+  | 'resource'
+  | 'table'
+  | 'quote'
+  | 'imageDetails'
+  | 'error';
+
 export default function RichTextEditor({
   value,
   onChange,
@@ -39,8 +125,13 @@ export default function RichTextEditor({
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const inlineImageInputRef = useRef<HTMLInputElement>(null);
+  const savedSelectionRef = useRef<Range | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [isUploadingInlineImage, setIsUploadingInlineImage] = useState(false);
+  const [activeTool, setActiveTool] = useState<EditorTool | null>(null);
+  const [toolFields, setToolFields] = useState<Record<string, string>>({});
+  const [toolError, setToolError] = useState('');
+  const isHindiDraft = hasDevanagariText(value);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -64,37 +155,83 @@ export default function RichTextEditor({
     event.preventDefault();
   };
 
+  const saveEditorSelection = () => {
+    if (typeof window === 'undefined') return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    savedSelectionRef.current = selection.getRangeAt(0).cloneRange();
+  };
+
+  const restoreEditorSelection = () => {
+    if (typeof window === 'undefined') return;
+    const selection = window.getSelection();
+    if (!selection || !savedSelectionRef.current) return;
+    selection.removeAllRanges();
+    selection.addRange(savedSelectionRef.current);
+  };
+
+  const openTool = (tool: EditorTool, fields: Record<string, string> = {}) => {
+    saveEditorSelection();
+    setToolFields(fields);
+    setToolError('');
+    setActiveTool(tool);
+  };
+
+  const closeTool = () => {
+    setActiveTool(null);
+    setToolFields({});
+    setToolError('');
+  };
+
+  const updateToolField = (name: string, value: string) => {
+    setToolFields((current) => ({ ...current, [name]: value }));
+  };
+
   const insertHtml = (html: string) => {
     if (!html) return;
+    restoreEditorSelection();
     document.execCommand('insertHTML', false, html);
     handleInput();
     editorRef.current?.focus();
   };
 
   const insertLink = () => {
-    if (typeof window === 'undefined') return;
-    const rawUrl = window.prompt('Enter link URL');
-    if (!rawUrl) return;
+    openTool('link', { url: '', text: '' });
+  };
+
+  const submitLink = () => {
+    const rawUrl = toolFields.url || '';
+    if (!rawUrl.trim()) {
+      setToolError('Enter a link URL.');
+      return;
+    }
 
     const normalizedUrl = normalizeArticleEditorLinkUrl(rawUrl);
-    if (!normalizedUrl) return;
+    if (!normalizedUrl) {
+      setToolError('Enter a valid link URL.');
+      return;
+    }
 
+    restoreEditorSelection();
     const selection = window.getSelection();
     const hasSelectedText = Boolean(selection && selection.toString().trim().length);
 
     if (hasSelectedText) {
       document.execCommand('createLink', false, normalizedUrl);
     } else {
-      const safeText = normalizedUrl.replace(/"/g, '&quot;');
+      const label = toolFields.text?.trim() || normalizedUrl;
+      const safeText = label.replace(/"/g, '&quot;');
+      const safeUrl = normalizedUrl.replace(/"/g, '&quot;');
       document.execCommand(
         'insertHTML',
         false,
-        `<a href="${safeText}" target="_blank" rel="noopener noreferrer">${safeText}</a>`
+        `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeText}</a>`
       );
     }
 
     handleInput();
     editorRef.current?.focus();
+    closeTool();
   };
 
   const handleInput = () => {
@@ -118,8 +255,29 @@ export default function RichTextEditor({
     }
 
     // Paste plain text only, then update state from DOM once.
+    if (text.includes('\n')) {
+      const polishedHtml = buildPolishedPlainTextHtml(text);
+      if (polishedHtml) {
+        document.execCommand('insertHTML', false, polishedHtml);
+        handleInput();
+        return;
+      }
+    }
+
     document.execCommand('insertText', false, text);
     handleInput();
+  };
+
+  const polishCurrentDraft = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const polishedHtml = polishEditorHtml(editor.innerHTML || value);
+    if (!polishedHtml) return;
+
+    editor.innerHTML = polishedHtml;
+    onChange(polishedHtml);
+    editor.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -133,25 +291,31 @@ export default function RichTextEditor({
   };
 
   const insertYouTubeEmbed = () => {
-    if (typeof window === 'undefined') return;
-    const input = window.prompt('Paste YouTube URL');
-    if (!input) return;
+    openTool('youtube', { url: '' });
+  };
+
+  const submitYouTubeEmbed = () => {
+    const input = toolFields.url || '';
+    if (!input.trim()) {
+      setToolError('Paste a YouTube URL.');
+      return;
+    }
 
     const videoId = extractYouTubeVideoId(input);
     if (!videoId) {
-      window.alert('Please enter a valid YouTube link');
+      setToolError('Please enter a valid YouTube link.');
       return;
     }
 
     const shortcode = `[youtube:https://www.youtube.com/watch?v=${videoId}]`;
+    restoreEditorSelection();
     document.execCommand('insertText', false, shortcode);
     handleInput();
     editorRef.current?.focus();
+    closeTool();
   };
 
   const insertSocialEmbed = (platform: 'facebook' | 'x' | 'instagram' | 'link') => {
-    if (typeof window === 'undefined') return;
-
     const label =
       platform === 'facebook'
         ? 'Facebook'
@@ -160,14 +324,23 @@ export default function RichTextEditor({
           : platform === 'instagram'
             ? 'Instagram'
             : 'social media';
-    const input = window.prompt(`Paste ${label} post URL`);
-    if (!input?.trim()) return;
+    openTool('social', { platform, label, url: '' });
+  };
 
+  const submitSocialEmbed = () => {
+    const input = toolFields.url || '';
+    if (!input.trim()) {
+      setToolError(`Paste a ${toolFields.label || 'social'} URL.`);
+      return;
+    }
+    const platform = (toolFields.platform || 'link') as 'facebook' | 'x' | 'instagram' | 'link';
     const url = normalizeArticleEditorLinkUrl(input);
     const shortcode = `[social:${platform}:${url}]`;
+    restoreEditorSelection();
     document.execCommand('insertText', false, shortcode);
     handleInput();
     editorRef.current?.focus();
+    closeTool();
   };
 
   const triggerInlineImageUpload = () => {
@@ -181,7 +354,8 @@ export default function RichTextEditor({
     if (!file) return;
 
     if (!file.type.toLowerCase().startsWith('image/')) {
-      window.alert('Please choose a JPG, PNG, or WebP image.');
+      setToolError('Please choose a JPG, PNG, or WebP image.');
+      setActiveTool('error');
       event.target.value = '';
       return;
     }
@@ -219,24 +393,16 @@ export default function RichTextEditor({
         throw new Error('Inline image upload returned an empty URL');
       }
 
-      const altText = window.prompt('Alt text for this image', file.name.replace(/\.[^.]+$/, '')) || '';
-      const caption = window.prompt('Caption (optional)') || '';
-      const sourceName = window.prompt('Image source / credit (optional)') || '';
-      const sourceUrl = sourceName
-        ? window.prompt('Image source link (optional)') || ''
-        : '';
-
-      insertHtml(
-        buildArticleImageFigureHtml({
-          src: imageUrl,
-          alt: altText,
-          caption,
-          sourceName,
-          sourceUrl,
-        })
-      );
+      openTool('imageDetails', {
+        src: imageUrl,
+        alt: file.name.replace(/\.[^.]+$/, ''),
+        caption: '',
+        sourceName: '',
+        sourceUrl: '',
+      });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to upload inline image');
+      setToolError(error instanceof Error ? error.message : 'Failed to upload inline image');
+      setActiveTool('error');
     } finally {
       setIsUploadingInlineImage(false);
       event.target.value = '';
@@ -244,49 +410,88 @@ export default function RichTextEditor({
   };
 
   const insertResourceCard = () => {
-    if (typeof window === 'undefined') return;
-    const title = window.prompt('Resource title', 'Source / Reference') || '';
-    if (!title.trim()) return;
-    const url = window.prompt('Resource link (optional)') || '';
-    const description = window.prompt('Short note (optional)') || '';
+    openTool('resource', { title: 'Source / Reference', url: '', description: '' });
+  };
+
+  const submitResourceCard = () => {
+    const title = toolFields.title || '';
+    if (!title.trim()) {
+      setToolError('Enter a resource title.');
+      return;
+    }
 
     insertHtml(
       buildArticleResourceCardHtml({
         title,
-        url,
-        description,
+        url: toolFields.url || '',
+        description: toolFields.description || '',
       })
     );
+    closeTool();
   };
 
   const insertTable = () => {
-    if (typeof window === 'undefined') return;
-    const columns = Number.parseInt(window.prompt('How many columns?', '3') || '3', 10);
-    const rows = Number.parseInt(window.prompt('How many body rows?', '3') || '3', 10);
+    openTool('table', { columns: '3', rows: '3' });
+  };
+
+  const submitTable = () => {
+    const columns = Number.parseInt(toolFields.columns || '3', 10);
+    const rows = Number.parseInt(toolFields.rows || '3', 10);
     insertHtml(
       buildArticleTableHtml({
         columns,
         rows,
       })
     );
+    closeTool();
   };
 
   const insertQuote = () => {
-    if (typeof window === 'undefined') return;
-    const quote = window.prompt('Quote text');
-    if (!quote?.trim()) return;
-    const attribution = window.prompt('Quote attribution (optional)') || '';
+    openTool('quote', { quote: '', attribution: '' });
+  };
+
+  const submitQuote = () => {
+    const quote = toolFields.quote || '';
+    if (!quote.trim()) {
+      setToolError('Enter quote text.');
+      return;
+    }
 
     insertHtml(
       buildArticleQuoteHtml({
         quote,
-        attribution,
+        attribution: toolFields.attribution || '',
       })
     );
+    closeTool();
+  };
+
+  const submitImageDetails = () => {
+    insertHtml(
+      buildArticleImageFigureHtml({
+        src: toolFields.src || '',
+        alt: toolFields.alt || '',
+        caption: toolFields.caption || '',
+        sourceName: toolFields.sourceName || '',
+        sourceUrl: toolFields.sourceUrl || '',
+      })
+    );
+    closeTool();
+  };
+
+  const submitActiveTool = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (activeTool === 'link') submitLink();
+    if (activeTool === 'youtube') submitYouTubeEmbed();
+    if (activeTool === 'social') submitSocialEmbed();
+    if (activeTool === 'resource') submitResourceCard();
+    if (activeTool === 'table') submitTable();
+    if (activeTool === 'quote') submitQuote();
+    if (activeTool === 'imageDetails') submitImageDetails();
   };
 
   return (
-    <div className="w-full overflow-hidden rounded-lg border border-gray-300 transition-colors focus-within:border-spanish-red dark:border-white/30">
+    <div className="w-full overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm transition-colors focus-within:border-spanish-red focus-within:shadow-[0_0_0_1px_rgba(231,33,41,0.28)] dark:border-white/20 dark:bg-zinc-950">
       <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 p-2 dark:border-white/15 dark:bg-white/[0.04] sm:p-3">
         <button
           type="button"
@@ -395,7 +600,11 @@ export default function RichTextEditor({
           className="rounded p-2 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:text-gray-100 dark:hover:bg-white/10"
           title="Upload Inline Image"
         >
-          <ImagePlus className="w-4 h-4" />
+          {isUploadingInlineImage ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ImagePlus className="w-4 h-4" />
+          )}
         </button>
         <button
           type="button"
@@ -436,6 +645,15 @@ export default function RichTextEditor({
           title="Clear Formatting"
         >
           Clear
+        </button>
+        <button
+          type="button"
+          onMouseDown={keepEditorSelection}
+          onClick={polishCurrentDraft}
+          className="rounded p-2 text-spanish-red transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10"
+          title="Polish pasted formatting"
+        >
+          <Wand2 className="w-4 h-4" />
         </button>
         <button
           type="button"
@@ -534,10 +752,13 @@ export default function RichTextEditor({
           <button type="button" onMouseDown={keepEditorSelection} onClick={() => applyFormat('removeFormat')} className="rounded px-2.5 py-2 font-semibold transition-colors hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-white/10" title="Clear Formatting">
             Clear
           </button>
+          <button type="button" onMouseDown={keepEditorSelection} onClick={polishCurrentDraft} className="rounded px-2.5 py-2 font-semibold text-spanish-red transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10" title="Polish pasted formatting">
+            Polish
+          </button>
         </div>
       </details>
 
-      <div className="relative">
+      <div className="relative bg-white dark:bg-zinc-950">
         <input
           ref={inlineImageInputRef}
           type="file"
@@ -556,6 +777,8 @@ export default function RichTextEditor({
           suppressContentEditableWarning
           className={`${editorClassName} prose prose-sm max-w-none p-3 text-gray-900 focus:outline-none [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-gray-700 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-gray-700 dark:prose-invert dark:text-gray-100 dark:[&_ol]:marker:text-gray-100 dark:[&_ul]:marker:text-gray-100 sm:p-4`}
           style={{
+            fontFamily: isHindiDraft ? HINDI_EDITOR_FONT_STYLE : undefined,
+            lineHeight: isHindiDraft ? 1.85 : undefined,
             wordWrap: 'break-word',
             whiteSpace: 'pre-wrap',
           }}
@@ -578,6 +801,199 @@ export default function RichTextEditor({
           </>
         ) : null}
       </div>
+
+      {activeTool ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <form
+            onSubmit={submitActiveTool}
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-4 shadow-xl dark:border-white/10 dark:bg-zinc-950"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-gray-950 dark:text-white">
+                  {activeTool === 'link'
+                    ? 'Insert link'
+                    : activeTool === 'youtube'
+                      ? 'Insert YouTube'
+                      : activeTool === 'social'
+                        ? `Insert ${toolFields.label || 'social'} post`
+                        : activeTool === 'resource'
+                          ? 'Insert resource'
+                          : activeTool === 'table'
+                            ? 'Insert table'
+                            : activeTool === 'quote'
+                              ? 'Insert quote'
+                              : activeTool === 'imageDetails'
+                                ? 'Image details'
+                                : 'Editor notice'}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Add the details, then insert the prepared block into the story.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeTool}
+                className="rounded-md p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-white/10 dark:hover:text-white"
+                aria-label="Close editor tool"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {toolError ? (
+              <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">
+                {toolError}
+              </p>
+            ) : null}
+
+            {activeTool !== 'error' ? (
+              <div className="mt-4 space-y-3">
+                {activeTool === 'link' ? (
+                  <>
+                    <input
+                      value={toolFields.url || ''}
+                      onChange={(event) => updateToolField('url', event.target.value)}
+                      placeholder="https://example.com"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <input
+                      value={toolFields.text || ''}
+                      onChange={(event) => updateToolField('text', event.target.value)}
+                      placeholder="Optional link text when no text is selected"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                  </>
+                ) : null}
+
+                {activeTool === 'youtube' || activeTool === 'social' ? (
+                  <input
+                    value={toolFields.url || ''}
+                    onChange={(event) => updateToolField('url', event.target.value)}
+                    placeholder={activeTool === 'youtube' ? 'Paste YouTube URL' : 'Paste post URL'}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                  />
+                ) : null}
+
+                {activeTool === 'resource' ? (
+                  <>
+                    <input
+                      value={toolFields.title || ''}
+                      onChange={(event) => updateToolField('title', event.target.value)}
+                      placeholder="Resource title"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <input
+                      value={toolFields.url || ''}
+                      onChange={(event) => updateToolField('url', event.target.value)}
+                      placeholder="Resource link"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <textarea
+                      value={toolFields.description || ''}
+                      onChange={(event) => updateToolField('description', event.target.value)}
+                      placeholder="Short note"
+                      rows={3}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                  </>
+                ) : null}
+
+                {activeTool === 'table' ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="number"
+                      min={2}
+                      max={6}
+                      value={toolFields.columns || '3'}
+                      onChange={(event) => updateToolField('columns', event.target.value)}
+                      aria-label="Table columns"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <input
+                      type="number"
+                      min={2}
+                      max={8}
+                      value={toolFields.rows || '3'}
+                      onChange={(event) => updateToolField('rows', event.target.value)}
+                      aria-label="Table rows"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                  </div>
+                ) : null}
+
+                {activeTool === 'quote' ? (
+                  <>
+                    <textarea
+                      value={toolFields.quote || ''}
+                      onChange={(event) => updateToolField('quote', event.target.value)}
+                      placeholder="Quote text"
+                      rows={4}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <input
+                      value={toolFields.attribution || ''}
+                      onChange={(event) => updateToolField('attribution', event.target.value)}
+                      placeholder="Attribution"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                  </>
+                ) : null}
+
+                {activeTool === 'imageDetails' ? (
+                  <>
+                    <input
+                      value={toolFields.alt || ''}
+                      onChange={(event) => updateToolField('alt', event.target.value)}
+                      placeholder="Alt text"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <textarea
+                      value={toolFields.caption || ''}
+                      onChange={(event) => updateToolField('caption', event.target.value)}
+                      placeholder="Caption"
+                      rows={2}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <input
+                      value={toolFields.sourceName || ''}
+                      onChange={(event) => updateToolField('sourceName', event.target.value)}
+                      placeholder="Image source / credit"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <input
+                      value={toolFields.sourceUrl || ''}
+                      onChange={(event) => updateToolField('sourceUrl', event.target.value)}
+                      placeholder="Image source link"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-spanish-red focus:outline-none dark:border-white/20 dark:bg-zinc-900 dark:text-white"
+                    />
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeTool}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-white/20 dark:text-gray-200 dark:hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              {activeTool !== 'error' ? (
+                <button
+                  type="submit"
+                  className="rounded-md bg-spanish-red px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-guardsman-red"
+                >
+                  Insert
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { startTransition, useDeferredValue, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
 import {
   BookmarkPlus,
   Captions,
@@ -628,28 +628,7 @@ export default function VideosPageClient({
     setIsPaused(false);
   }, [resumeProgressById, selectedVideo]);
 
-  useEffect(() => {
-    if (viewMode !== 'feed' || !hasMore || isLoadingMore) return;
-    if (typeof IntersectionObserver === 'undefined') return;
-
-    const node = loadMoreSentinelRef.current;
-    if (!node) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        if (!nextCursor) return;
-
-        void loadMoreVideos();
-      },
-      { rootMargin: '240px 0px' }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, nextCursor, viewMode]);
-
-  async function loadMoreVideos() {
+  const loadMoreVideos = useCallback(async () => {
     if (isLoadingMore || !hasMore || !nextCursor) return;
 
     setIsLoadingMore(true);
@@ -688,7 +667,28 @@ export default function VideosPageClient({
     } finally {
       setIsLoadingMore(false);
     }
-  }
+  }, [cursorLimit, hasMore, isLoadingMore, language, nextCursor]);
+
+  useEffect(() => {
+    if (viewMode !== 'feed' || !hasMore || isLoadingMore) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    const node = loadMoreSentinelRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        if (!nextCursor) return;
+
+        void loadMoreVideos();
+      },
+      { rootMargin: '240px 0px' }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, loadMoreVideos, nextCursor, viewMode]);
 
   function handleVideoSelect(
     nextVideoId: string,

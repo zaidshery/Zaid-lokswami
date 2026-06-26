@@ -14,25 +14,6 @@ const TRENDING_SEARCHES: Record<'hi' | 'en', string[]> = {
   en: ['IPL 2026', 'Lok Sabha', 'Weather Update', 'Gold Price'],
 };
 
-function isArticleLike(value: unknown): value is Article {
-  if (!value || typeof value !== 'object') return false;
-  const source = value as Partial<Article>;
-
-  return Boolean(
-    typeof source.id === 'string' &&
-      typeof source.title === 'string' &&
-      typeof source.summary === 'string' &&
-      typeof source.image === 'string' &&
-      typeof source.category === 'string' &&
-      typeof source.publishedAt === 'string' &&
-      typeof source.views === 'number' &&
-      source.author &&
-      typeof source.author.id === 'string' &&
-      typeof source.author.name === 'string' &&
-      typeof source.author.avatar === 'string'
-  );
-}
-
 export default function SearchClient() {
   const { language } = useAppStore();
   const searchParams = useSearchParams();
