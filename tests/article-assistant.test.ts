@@ -103,7 +103,7 @@ describe('article assistant helpers', () => {
     ).toEqual(expect.objectContaining({ status: 'blocked' }));
   });
 
-  it('keeps SEO, source, and heading gaps as warnings when critical fields pass', () => {
+  it('auto-completes SEO essentials but keeps missing source and headings as warnings', () => {
     const result = buildArticleAssistResult({
       mode: 'create',
       title: 'Indore civic update reaches residents',
@@ -120,9 +120,32 @@ describe('article assistant helpers', () => {
 
     expect(summary.canSend).toBe(true);
     expect(summary.blockers).toHaveLength(0);
+    expect(summary.done.map((item) => item.id)).toContain('seo');
     expect(summary.warnings.map((item) => item.id)).toEqual(
+      expect.arrayContaining(['source', 'headings'])
+    );
+  });
+
+  it('counts reporter source handoff as source readiness without an external link', () => {
+    const result = buildArticleAssistResult({
+      mode: 'create',
+      title: 'Indore civic update reaches residents',
+      summary:
+        'The civic update gives residents clear information about road changes, public access, and the next administrative steps.',
+      content:
+        '<h2>Road changes</h2><p>Indore officials shared a detailed civic update for residents, with enough verified background to support publication after desk review and packaging checks.</p>',
+      category: 'City',
+      author: 'Desk',
+      image: '/uploads/civic.jpg',
+      seo: {},
+      sourceInfo: 'Staff reporter and local municipal bulletin',
+    });
+    const summary = summarizeArticleReadiness(result.readiness);
+
+    expect(summary.done.map((item) => item.id)).toEqual(
       expect.arrayContaining(['seo', 'source', 'headings'])
     );
+    expect(summary.warnings.map((item) => item.id)).not.toContain('source');
   });
 
   it('respects existing editor-entered values and suggests keyword support', () => {

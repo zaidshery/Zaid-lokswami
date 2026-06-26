@@ -2,6 +2,7 @@ import {
   analyzeArticleSeo,
   normalizeArticleSeo,
   normalizeArticleSlug,
+  isValidArticleSlug,
   stripArticleHtml,
   type ArticleSeoFields,
 } from '@/lib/seo/articleSeo';
@@ -29,7 +30,8 @@ export type ArticleAssistField =
   | 'authorProfileUrl'
   | 'isBreaking'
   | 'isTrending'
-  | 'breakingAudio';
+  | 'breakingAudio'
+  | 'sourceInfo';
 
 export type ArticleAssistPatch = {
   field: ArticleAssistField;
@@ -69,6 +71,8 @@ export type ArticleAssistInput = {
   breakingAudioReady?: boolean;
   requireBreakingAudio?: boolean;
   listenAudioReady?: boolean;
+  sourceInfo?: string;
+  sourceStoryId?: string;
 };
 
 export type ArticleAssistResult = {
@@ -243,6 +247,8 @@ export function buildArticleAssistResult(input: ArticleAssistInput): ArticleAssi
   const category = cleanText(input.category);
   const author = cleanText(input.author);
   const image = cleanText(input.image);
+  const sourceInfo = cleanText(input.sourceInfo);
+  const sourceStoryId = cleanText(input.sourceStoryId);
   const seo = normalizeArticleSeo(input.seo);
   const insights = analyzeArticleEditorContent(content);
   const currentSlug = cleanText(input.seoSlug);
@@ -250,6 +256,12 @@ export function buildArticleAssistResult(input: ArticleAssistInput): ArticleAssi
   const suggestedSummary = suggestSummary({ title, summary, content });
   const suggestedKeyword = suggestArticleFocusKeyword(`${title} ${summary} ${plainContent}`);
   const effectiveKeyword = seo.focusKeyword || suggestedKeyword;
+  const hasSourceSignal = Boolean(
+    insights.linkCount > 0 ||
+      insights.resourceCount > 0 ||
+      sourceInfo ||
+      sourceStoryId
+  );
   const seoAnalysis = analyzeArticleSeo({
     title,
     summary,
@@ -257,8 +269,18 @@ export function buildArticleAssistResult(input: ArticleAssistInput): ArticleAssi
     slug: currentSlug || slug,
     seo,
     hasFeaturedImage: Boolean(image),
-    hasSourceOrExternalLink: insights.linkCount > 0 || insights.resourceCount > 0,
+    hasSourceOrExternalLink: hasSourceSignal,
   });
+  const effectiveSeoTitle = seo.metaTitle || title;
+  const effectiveSeoDescription = seo.metaDescription || summary || suggestedSummary;
+  const effectiveImageAlt = seo.featuredImageAlt || (title ? `${title}${category ? ` - ${category}` : ''}` : '');
+  const seoEssentialsReady = Boolean(
+    effectiveSeoTitle.trim().length >= 20 &&
+      effectiveSeoDescription.trim().length >= 70 &&
+      isValidArticleSlug(currentSlug || slug) &&
+      image &&
+      effectiveImageAlt.trim()
+  );
 
   const patches: ArticleAssistPatch[] = [];
   addPatch(patches, 'summary', summary, suggestedSummary, 'Use the lead paragraphs to fill a concise reader summary.');
@@ -345,7 +367,7 @@ export function buildArticleAssistResult(input: ArticleAssistInput): ArticleAssi
       blocked: true,
       doneDetail: 'Article body has enough copy to review.',
       todoDetail: 'Add more body copy before publishing.',
-      field: 'content',
+      field: 'sourceInfo',
     }),
     readinessItem('category', 'Category', Boolean(category), {
       blocked: true,
@@ -365,16 +387,20 @@ export function buildArticleAssistResult(input: ArticleAssistInput): ArticleAssi
       todoDetail: 'Upload or keep a featured image.',
       field: 'image',
     }),
-    readinessItem('seo', 'SEO package', seoAnalysis.score >= 70, {
+    readinessItem('seo', 'SEO package', seoEssentialsReady || seoAnalysis.score >= 70, {
       warning: true,
-      doneDetail: `SEO score is ${seoAnalysis.score}%.`,
-      todoDetail: `SEO score is ${seoAnalysis.score}%; apply suggestions or add links/metadata.`,
+      doneDetail: seoEssentialsReady
+        ? 'SEO essentials are auto-filled.'
+        : `SEO score is ${seoAnalysis.score}%.`,
+      todoDetail: `SEO score is ${seoAnalysis.score}%; add headline, summary, slug, or image alt metadata.`,
       field: 'seoTitle',
     }),
-    readinessItem('source', 'Source or link', insights.linkCount > 0 || insights.resourceCount > 0, {
+    readinessItem('source', 'Source or link', hasSourceSignal, {
       warning: true,
-      doneDetail: 'Source or supporting link is included.',
-      todoDetail: 'Add at least one source, resource card, or relevant link.',
+      doneDetail: sourceInfo || sourceStoryId
+        ? 'Reporter/source handoff is included.'
+        : 'Source or supporting link is included.',
+      todoDetail: 'Add reporter source info, a resource card, or a relevant link.',
       field: 'content',
     }),
     readinessItem('headings', 'Scannable structure', insights.headingCount > 0, {

@@ -54,10 +54,12 @@ import {
   isValidArticleSlug,
   normalizeArticleSeo,
   normalizeArticleSlug,
+  stripArticleHtml,
 } from '@/lib/seo/articleSeo';
 import {
   buildArticleAssistResult,
   suggestArticleFocusKeyword,
+  suggestArticleSecondaryKeywords,
   summarizeArticleReadiness,
   type ArticleAssistField,
   type ArticleAssistPatch,
@@ -344,7 +346,9 @@ export default function UploadArticle() {
     breakingAudioReady: !formData.isBreaking || Boolean(breakingAudioFile),
     requireBreakingAudio: canPublishImmediately && formData.isBreaking,
     listenAudioReady: Boolean(articleAudioFile),
-  }), [articleAudioFile, breakingAudioFile, canPublishImmediately, formData, imagePreview]);
+    sourceInfo: formData.sourceInfo,
+    sourceStoryId,
+  }), [articleAudioFile, breakingAudioFile, canPublishImmediately, formData, imagePreview, sourceStoryId]);
 
   const liveAssistResult = useMemo(
     () => buildArticleAssistResult(buildAssistPayload()),
@@ -569,6 +573,32 @@ export default function UploadArticle() {
     });
   };
 
+  const handleContentChange = useCallback((content: string) => {
+    setFormData((current) => {
+      const plainContent = stripArticleHtml(content);
+      const combinedText = `${current.title} ${current.summary} ${plainContent}`;
+      const focusKeyword =
+        current.focusKeyword.trim() || suggestArticleFocusKeyword(combinedText).slice(0, 120);
+
+      return {
+        ...current,
+        content,
+        ...(!current.seoDescription.trim() && !current.summary.trim() && plainContent
+          ? { seoDescription: plainContent.slice(0, 320) }
+          : {}),
+        ...(!current.focusKeyword.trim() && focusKeyword ? { focusKeyword } : {}),
+        ...(!current.secondaryKeywords.trim()
+          ? {
+              secondaryKeywords: suggestArticleSecondaryKeywords(
+                combinedText,
+                focusKeyword
+              ).slice(0, 180),
+            }
+          : {}),
+      };
+    });
+  }, []);
+
   const runArticleAssist = async () => {
     setIsAssistLoading(true);
     setAssistError('');
@@ -684,6 +714,7 @@ export default function UploadArticle() {
       imageCredit: '[name="imageCredit"]',
       canonicalUrl: '[name="canonicalUrl"]',
       authorProfileUrl: '[name="authorProfileUrl"]',
+      sourceInfo: '[name="sourceInfo"]',
       breakingAudio: '[data-article-field="breakingAudio"], [name="isBreaking"]',
     };
     const selector = fieldSelectors[field] || `[name="${field}"]`;
@@ -1402,9 +1433,7 @@ export default function UploadArticle() {
                 category={formData.category}
                 onModeChange={setContentMode}
                 onFocusModeChange={setIsFocusMode}
-                onContentChange={(content) =>
-                  setFormData((current) => ({ ...current, content }))
-                }
+                onContentChange={handleContentChange}
                 editorClassName="min-h-[260px] sm:min-h-64"
                 placeholder="Write your article here. Use the toolbar above for formatting."
               />

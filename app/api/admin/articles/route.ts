@@ -373,6 +373,8 @@ function validateArticleReadiness(
     language: 'hi',
     breakingAudioReady: options.breakingAudioReady,
     requireBreakingAudio: options.requireBreakingAudio,
+    sourceInfo: input.reporterMeta.sourceInfo,
+    sourceStoryId: input.sourceStoryId,
   });
   const summary = summarizeArticleReadiness(result.readiness);
 

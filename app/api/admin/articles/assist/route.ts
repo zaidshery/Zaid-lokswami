@@ -32,6 +32,8 @@ function normalizeAssistInput(body: unknown): ArticleAssistInput {
     breakingAudioReady: Boolean(source.breakingAudioReady),
     requireBreakingAudio: Boolean(source.requireBreakingAudio),
     listenAudioReady: Boolean(source.listenAudioReady),
+    sourceInfo: typeof source.sourceInfo === 'string' ? source.sourceInfo : '',
+    sourceStoryId: typeof source.sourceStoryId === 'string' ? source.sourceStoryId : '',
   };
 }
 

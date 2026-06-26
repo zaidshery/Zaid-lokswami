@@ -73,9 +73,11 @@ import {
   isValidArticleSlug,
   normalizeArticleSeo,
   normalizeArticleSlug,
+  stripArticleHtml,
 } from '@/lib/seo/articleSeo';
 import {
   suggestArticleFocusKeyword,
+  suggestArticleSecondaryKeywords,
   type ArticleAssistField,
   type ArticleAssistPatch,
   type ArticleAssistResult,
@@ -770,6 +772,8 @@ export default function EditArticle() {
     language: 'hi',
     breakingAudioReady: !formData.isBreaking || breakingTtsStatus === 'ready',
     listenAudioReady: articleTtsStatus === 'ready',
+    sourceInfo: formData.sourceInfo,
+    sourceStoryId: formData.sourceStoryId,
   }), [articleTtsStatus, breakingTtsStatus, formData, imagePreview]);
 
   const fetchArticleTtsStatus = useCallback(async () => {
@@ -1228,6 +1232,32 @@ export default function EditArticle() {
     });
   };
 
+  const handleContentChange = useCallback((content: string) => {
+    setFormData((current) => {
+      const plainContent = stripArticleHtml(content);
+      const combinedText = `${current.title} ${current.summary} ${plainContent}`;
+      const focusKeyword =
+        current.focusKeyword.trim() || suggestArticleFocusKeyword(combinedText).slice(0, 120);
+
+      return {
+        ...current,
+        content,
+        ...(!current.seoDescription.trim() && !current.summary.trim() && plainContent
+          ? { seoDescription: plainContent.slice(0, 320) }
+          : {}),
+        ...(!current.focusKeyword.trim() && focusKeyword ? { focusKeyword } : {}),
+        ...(!current.secondaryKeywords.trim()
+          ? {
+              secondaryKeywords: suggestArticleSecondaryKeywords(
+                combinedText,
+                focusKeyword
+              ).slice(0, 180),
+            }
+          : {}),
+      };
+    });
+  }, []);
+
   const runArticleAssist = async () => {
     setIsAssistLoading(true);
     setAssistError('');
@@ -1345,6 +1375,7 @@ export default function EditArticle() {
       authorProfileUrl: '[name="authorProfileUrl"]',
       isBreaking: '[name="isBreaking"]',
       isTrending: '[name="isTrending"]',
+      sourceInfo: '[name="sourceInfo"]',
       breakingAudio: `[data-article-field="breakingAudio"], input[accept="${MANUAL_AUDIO_ACCEPT}"], [name="isBreaking"]`,
     };
     const selector = fieldSelectors[field] || `[name="${field}"]`;
@@ -2058,7 +2089,7 @@ export default function EditArticle() {
                     category={formData.category}
                     onModeChange={setContentMode}
                     onFocusModeChange={setIsFocusMode}
-                    onContentChange={(content) => setFormData((current) => ({ ...current, content }))}
+                    onContentChange={handleContentChange}
                   />
                 </div>
 
