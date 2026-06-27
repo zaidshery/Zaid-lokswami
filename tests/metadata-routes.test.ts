@@ -41,7 +41,7 @@ describe('metadata routes', () => {
       rules: [
         {
           userAgent: '*',
-          allow: '/',
+          allow: ['/', '/api/og/'],
           disallow: ['/admin', '/api', '/main/account', '/main/preferences', '/main/saved'],
         },
       ],

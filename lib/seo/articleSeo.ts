@@ -29,7 +29,7 @@ export type ArticlePublicRef = {
   slug?: string;
 };
 
-const FALLBACK_SITE_URL = 'http://localhost:3000';
+const FALLBACK_SITE_URL = 'https://lokswami.com';
 const ARTICLE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function defaultArticleSeo(): ArticleSeoFields {

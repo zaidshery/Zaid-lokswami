@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-const FALLBACK_SITE_URL = 'http://localhost:3000';
+const FALLBACK_SITE_URL = 'https://lokswami.com';
 
 function getSiteUrl() {
   const raw = process.env.NEXT_PUBLIC_SITE_URL || FALLBACK_SITE_URL;
@@ -13,7 +13,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: '/',
+        allow: ['/', '/api/og/'],
         disallow: ['/admin', '/api', '/main/account', '/main/preferences', '/main/saved'],
       },
     ],

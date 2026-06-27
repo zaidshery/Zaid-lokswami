@@ -1,6 +1,43 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+const getArticleForMetadataMock = vi.fn();
+
+vi.mock('@/lib/content/serverArticles', () => ({
+  getArticleForMetadata: getArticleForMetadataMock,
+}));
+
+const publishedArticle = {
+  id: 'article-1',
+  slug: 'brics-agriculture-meeting-indore',
+  previousSlugs: [],
+  title: 'BRICS agriculture meeting begins in Indore',
+  summary: 'Delegates shared a local agriculture cooperation update.',
+  image: 'https://cdn.lokswami.com/articles/brics.jpg',
+  category: 'National',
+  author: 'Lokswami Desk',
+  publishedAt: '2026-05-06T09:00:00.000Z',
+  updatedAt: '2026-05-06T10:00:00.000Z',
+  seo: {
+    metaTitle: 'BRICS agriculture meeting begins in Indore',
+    metaDescription: 'Delegates shared a local agriculture cooperation update.',
+    ogImage: '',
+    canonicalUrl: '',
+    focusKeyword: '',
+    secondaryKeywords: '',
+    featuredImageAlt: 'BRICS agriculture delegates in Indore',
+    featuredImageCaption: '',
+    imageCredit: '',
+    authorProfileUrl: '',
+    includeInNewsSitemap: true,
+    majorUpdateNote: '',
+  },
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  getArticleForMetadataMock.mockResolvedValue(publishedArticle);
+});
 
 afterEach(() => {
   if (typeof originalSiteUrl === 'undefined') {
@@ -12,62 +49,75 @@ afterEach(() => {
 });
 
 describe('short share redirect routes', () => {
-  it('redirects short article share URLs to the reader using the public request origin', async () => {
-    const { GET } = await import('@/app/a/[id]/route');
-    const response = await GET(
-      new Request('http://0.0.0.0:3000/a/brics-agriculture-meeting-indore', {
-        headers: {
-          'x-forwarded-host': 'lokswami.com',
-          'x-forwarded-proto': 'https',
-        },
-      }),
-      {
-        params: Promise.resolve({ id: 'brics-agriculture-meeting-indore' }),
-      }
-    );
+  it('builds previewable short article metadata with a PNG social image', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com';
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe(
-      'https://lokswami.com/main/article/brics-agriculture-meeting-indore'
+    const { generateMetadata, resolveShortArticleTargetPath } = await import('@/app/a/[id]/page');
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ id: 'brics-agriculture-meeting-indore' }),
+    });
+
+    expect(getArticleForMetadataMock).toHaveBeenCalledWith(
+      'brics-agriculture-meeting-indore'
+    );
+    expect(resolveShortArticleTargetPath('old-token', publishedArticle)).toBe(
+      '/main/article/brics-agriculture-meeting-indore'
+    );
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        title: 'BRICS agriculture meeting begins in Indore | Lokswami',
+        alternates: {
+          canonical: 'https://lokswami.com/main/article/brics-agriculture-meeting-indore',
+        },
+        robots: expect.objectContaining({
+          index: false,
+          follow: true,
+          'max-image-preview': 'large',
+        }),
+        openGraph: expect.objectContaining({
+          url: 'https://lokswami.com/main/article/brics-agriculture-meeting-indore',
+          images: [
+            expect.objectContaining({
+              url: 'https://lokswami.com/api/og/article/brics-agriculture-meeting-indore',
+              width: 1200,
+              height: 630,
+              type: 'image/png',
+            }),
+          ],
+        }),
+        twitter: expect.objectContaining({
+          card: 'summary_large_image',
+          images: ['https://lokswami.com/api/og/article/brics-agriculture-meeting-indore'],
+        }),
+      })
     );
   });
 
-  it('falls back to the configured public site URL for internal article share origins', async () => {
+  it('falls back to the configured public site URL for unknown article share metadata', async () => {
     process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com';
+    getArticleForMetadataMock.mockResolvedValue(null);
 
-    const { GET } = await import('@/app/a/[id]/route');
-    const response = await GET(
-      new Request('http://0.0.0.0:3000/a/indore-civic-update'),
-      {
-        params: Promise.resolve({ id: 'indore-civic-update' }),
-      }
+    const { generateMetadata, resolveShortArticleTargetPath } = await import('@/app/a/[id]/page');
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ id: 'indore-civic-update' }),
+    });
+
+    expect(resolveShortArticleTargetPath('indore-civic-update', null)).toBe(
+      '/main/article/indore-civic-update'
     );
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe(
-      'https://lokswami.com/main/article/indore-civic-update'
-    );
-  });
-
-  it('ignores internal forwarded hosts that include a port when a public site URL is configured', async () => {
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://lokswami.com';
-
-    const { GET } = await import('@/app/a/[id]/route');
-    const response = await GET(
-      new Request('http://0.0.0.0:3000/a/proxy-internal-host', {
-        headers: {
-          'x-forwarded-host': '0.0.0.0:3000',
-          'x-forwarded-proto': 'https',
-        },
-      }),
-      {
-        params: Promise.resolve({ id: 'proxy-internal-host' }),
-      }
-    );
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe(
-      'https://lokswami.com/main/article/proxy-internal-host'
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        title: 'Article | Lokswami',
+        robots: { index: false, follow: true },
+        openGraph: expect.objectContaining({
+          images: [
+            expect.objectContaining({
+              url: 'https://lokswami.com/lokswami-share-preview.png',
+              type: 'image/png',
+            }),
+          ],
+        }),
+      })
     );
   });
 
