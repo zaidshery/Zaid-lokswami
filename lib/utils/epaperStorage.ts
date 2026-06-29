@@ -347,7 +347,8 @@ export function isTrustedEpaperAssetPath(assetPath: string) {
       parsed.protocol === 'https:' &&
       (parsed.hostname.endsWith('.digitaloceanspaces.com') ||
         parsed.hostname.endsWith('.cdn.digitaloceanspaces.com')) &&
-      parsed.pathname.includes('/lokswami/epapers/')
+      (parsed.pathname.includes('/lokswami/epapers/') ||
+        parsed.pathname.includes('/lokswami/emagazines/'))
     );
   } catch {
     return false;

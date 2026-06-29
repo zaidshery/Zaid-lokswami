@@ -19,6 +19,7 @@ import MobileSwipeTabs, {
 const MOBILE_BOTTOM_TAB_ROUTES: MobileSwipeTabRoute[] = [
   { path: '/main', name: 'Home' },
   { path: '/main/epaper', name: 'E-Paper' },
+  { path: '/main/e-magazine', name: 'E-Magazine' },
   { path: '/main/videos', name: 'Videos' },
   { path: '/main/ftaftaf', name: 'Quick' },
   { path: '/main/menu', name: 'Menu', type: 'menu' },
@@ -40,7 +41,8 @@ export default function MainLayout({
     isEpaperReaderOpen,
   } = useAppStore();
   const isVideosRoute = pathname?.startsWith('/main/videos') ?? false;
-  const isEpaperRoute = pathname?.startsWith('/main/epaper') ?? false;
+  const isEpaperRoute =
+    pathname?.startsWith('/main/epaper') || pathname?.startsWith('/main/e-magazine') || false;
   const isReaderImmersiveMode = isEpaperRoute && isEpaperReaderOpen;
   const showBottomNav = (!isImmersiveVideoMode || isVideosRoute) && !isReaderImmersiveMode;
 

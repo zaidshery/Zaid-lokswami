@@ -37,6 +37,8 @@ __create_zip.ps1
 .tmp-headless-browser/
 edge-dom.txt
 git-output.txt
+test-results/
+playwright-report/
 
 # Local content / uploads
 data/articles.json

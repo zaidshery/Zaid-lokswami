@@ -1,4 +1,6 @@
 export type EPaperStatus = 'draft' | 'published';
+export const EPAPER_PUBLICATION_TYPES = ['epaper', 'emagazine'] as const;
+export type EPaperPublicationType = (typeof EPAPER_PUBLICATION_TYPES)[number];
 export type EPaperReadinessStatus = 'ready' | 'needs-review' | 'not-ready';
 export const EPAPER_PAGE_REVIEW_STATUSES = ['pending', 'needs_attention', 'ready'] as const;
 export type EPaperPageReviewStatus = (typeof EPAPER_PAGE_REVIEW_STATUSES)[number];
@@ -118,6 +120,7 @@ export interface EPaperAutomationInfo {
 
 export interface EPaperRecord {
   _id: string;
+  publicationType?: EPaperPublicationType;
   citySlug: string;
   cityName: string;
   title: string;
@@ -186,6 +189,15 @@ export interface EPaperArticleRecord {
 }
 
 const epaperPageReviewStatusSet = new Set<string>(EPAPER_PAGE_REVIEW_STATUSES);
+const epaperPublicationTypeSet = new Set<string>(EPAPER_PUBLICATION_TYPES);
+
+export function isEPaperPublicationType(value: unknown): value is EPaperPublicationType {
+  return typeof value === 'string' && epaperPublicationTypeSet.has(value);
+}
+
+export function normalizeEPaperPublicationType(value: unknown): EPaperPublicationType {
+  return value === 'emagazine' ? 'emagazine' : 'epaper';
+}
 
 export function isEPaperPageReviewStatus(value: unknown): value is EPaperPageReviewStatus {
   return typeof value === 'string' && epaperPageReviewStatusSet.has(value);

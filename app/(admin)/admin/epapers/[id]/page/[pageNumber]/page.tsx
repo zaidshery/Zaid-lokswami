@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import {
   PointerEvent as ReactPointerEvent,
   useCallback,
@@ -44,6 +44,10 @@ import {
   type EpaperSuggestionWarning,
 } from '@/lib/utils/epaperSuggestionQuality';
 import { uploadEpaperAssetDirect } from '@/lib/utils/epaperDirectUploadClient';
+import {
+  getPublicationTypeLabels,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
 
 type EpaperResponse = {
   success: boolean;
@@ -318,8 +322,16 @@ function buildCropOcrReview(result: EpaperCropTextOcrResult): CropOcrReview {
 
 export default function EPaperPageHotspotEditor() {
   const params = useParams();
+  const pathname = usePathname();
   const epaperId = String(params.id || '');
   const pageNumber = parsePageNumber(params.pageNumber);
+  const publicationType = resolveEPaperPublicationType(
+    pathname.startsWith('/admin/emagazines') ? 'emagazine' : 'epaper'
+  );
+  const labels = useMemo(
+    () => getPublicationTypeLabels(publicationType),
+    [publicationType]
+  );
 
   const previewRef = useRef<HTMLDivElement | null>(null);
 
@@ -470,7 +482,7 @@ export default function EPaperPageHotspotEditor() {
     setError('');
     try {
       const [epaperRes, articlesRes, suggestionsRes] = await Promise.all([
-        fetch(`/api/admin/epapers/${epaperId}`, {
+        fetch(`/api/admin/epapers/${epaperId}?publicationType=${publicationType}`, {
           headers: { ...getAuthHeader() },
         }),
         fetch(`/api/admin/epapers/${epaperId}/articles?pageNumber=${pageNumber}`, {
@@ -515,7 +527,7 @@ export default function EPaperPageHotspotEditor() {
     } finally {
       setLoading(false);
     }
-  }, [epaperId, loadStoryTtsStatuses, pageNumber]);
+  }, [epaperId, loadStoryTtsStatuses, pageNumber, publicationType]);
 
   useEffect(() => {
     if (!epaperId) return;
@@ -1402,14 +1414,14 @@ export default function EPaperPageHotspotEditor() {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <Link
-          href="/admin/epapers"
+          href={labels.adminBasePath}
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to E-Papers
+          Back to {labels.plural}
         </Link>
         <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error || 'E-paper not found'}
+          {error || `${labels.singular} not found`}
         </div>
       </div>
     );
@@ -1419,11 +1431,11 @@ export default function EPaperPageHotspotEditor() {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <Link
-          href={`/admin/epapers/${epaperId}`}
+          href={`${labels.adminBasePath}/${epaperId}`}
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to E-Paper
+          Back to {labels.singular}
         </Link>
         <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           Page {pageNumber} does not have an image yet. Upload the page image first.
@@ -1439,11 +1451,11 @@ export default function EPaperPageHotspotEditor() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <Link
-          href={`/admin/epapers/${epaperId}`}
+          href={`${labels.adminBasePath}/${epaperId}`}
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to E-Paper
+          Back to {labels.singular}
         </Link>
         <p className="text-sm text-gray-700">
           {epaper.title} | Page {pageNumber}

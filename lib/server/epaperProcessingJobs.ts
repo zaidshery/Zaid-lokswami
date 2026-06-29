@@ -15,6 +15,8 @@ import { buildEpaperImageAutomationUpdates } from '@/lib/server/epaperImageAutom
 import { logEpaperMetric } from '@/lib/server/epaperObservability';
 import { uploadBufferToDigitalOceanSpaces } from '@/lib/utils/digitalOceanSpaces';
 import { deleteDigitalOceanSpacesAssetByPublicId } from '@/lib/utils/digitalOceanSpaces';
+import { normalizeEPaperPublicationType } from '@/lib/types/epaper';
+import { shouldUseGlobalPublicationScope } from '@/lib/utils/epaperPublication';
 
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000];
 const LEASE_MS = 10 * 60_000;
@@ -128,6 +130,7 @@ async function claimJob() {
 
 function buildPageObjectKey(epaper: {
   _id?: unknown;
+  publicationType?: unknown;
   citySlug?: unknown;
   publishDate?: unknown;
   revisionNumber?: unknown;
@@ -140,9 +143,15 @@ function buildPageObjectKey(epaper: {
     1,
     Number(epaper.revisionNumber || 1)
   )}-${String(epaper._id || 'unknown')}`;
-  return `lokswami/epapers/${String(
-    epaper.citySlug || 'unknown'
-  )}/${dateFolder}/${revisionFolder}/pages/${String(pageNumber).padStart(
+  const editionFolder =
+    normalizeEPaperPublicationType(epaper.publicationType) === 'emagazine'
+      ? 'emagazines'
+      : 'epapers';
+  const baseFolder = shouldUseGlobalPublicationScope(epaper.publicationType)
+    ? `lokswami/${editionFolder}/${dateFolder}`
+    : `lokswami/${editionFolder}/${String(epaper.citySlug || 'unknown')}/${dateFolder}`;
+
+  return `${baseFolder}/${revisionFolder}/pages/${String(pageNumber).padStart(
     3,
     '0'
   )}-rendered.jpg`;

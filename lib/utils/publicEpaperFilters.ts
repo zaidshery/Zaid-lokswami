@@ -2,6 +2,14 @@ import {
   isEPaperCitySlug,
   type EPaperCitySlug,
 } from '@/lib/constants/epaperCities';
+import {
+  normalizeEPaperPublicationType,
+  type EPaperPublicationType,
+} from '@/lib/types/epaper';
+import {
+  buildPublicationTypeMongoFilter,
+  isMonthlyEPaperPublication,
+} from '@/lib/utils/epaperPublication';
 
 export type EPaperCityFilter = EPaperCitySlug | 'all';
 
@@ -13,6 +21,7 @@ export type PublicEpaperMetadata = {
 };
 
 export type PublicEpaperFilterState = {
+  publicationType: EPaperPublicationType;
   citySlug: EPaperCitySlug | '';
   date: string;
   parsedDate: Date | null;
@@ -107,19 +116,36 @@ export function resolvePublicEpaperCityFilter(value: string): EPaperCityFilter {
 
 export function parsePublicEpaperFilters(searchParams: URLSearchParams) {
   const cityValue = (searchParams.get('citySlug') || '').trim().toLowerCase();
-  const date = (searchParams.get('date') || '').trim();
-  const month = parseArchiveMonth(searchParams.get('month') || '');
+  const publicationType = normalizeEPaperPublicationType(searchParams.get('publicationType'));
+  const isMonthlyPublication = isMonthlyEPaperPublication(publicationType);
+  let date = (searchParams.get('date') || '').trim();
+  let month = parseArchiveMonth(searchParams.get('month') || '');
   const query = normalizeMetadataQuery(searchParams.get('query') || searchParams.get('q') || '');
 
-  if (cityValue && !isEPaperCitySlug(cityValue)) {
+  if (!isMonthlyPublication && cityValue && !isEPaperCitySlug(cityValue)) {
     return { error: 'Invalid citySlug' } as const;
   }
 
   let parsedDate: Date | null = null;
   if (date) {
-    parsedDate = parsePublishDate(date);
-    if (!parsedDate) {
-      return { error: 'Invalid date. Use YYYY-MM-DD.' } as const;
+    if (isMonthlyPublication) {
+      const issueMonth = parseArchiveMonth(date);
+      if (issueMonth) {
+        month = issueMonth;
+        date = '';
+      }
+    }
+
+    if (date) {
+      parsedDate = parsePublishDate(date);
+      if (!parsedDate) {
+        return { error: 'Invalid date. Use YYYY-MM-DD.' } as const;
+      }
+      if (isMonthlyPublication) {
+        month = `${parsedDate.getUTCFullYear()}-${String(parsedDate.getUTCMonth() + 1).padStart(2, '0')}`;
+        date = '';
+        parsedDate = null;
+      }
     }
   }
 
@@ -134,7 +160,8 @@ export function parsePublicEpaperFilters(searchParams: URLSearchParams) {
 
   return {
     filters: {
-      citySlug: cityValue as EPaperCitySlug | '',
+      publicationType,
+      citySlug: isMonthlyPublication ? '' : (cityValue as EPaperCitySlug | ''),
       date,
       parsedDate,
       month,
@@ -154,7 +181,10 @@ export function buildPublicEpaperMongoQuery(
   filters: PublicEpaperFilterState,
   base: Record<string, unknown> = {}
 ) {
-  const query: Record<string, unknown> = { ...base };
+  const query: Record<string, unknown> = {
+    ...base,
+    ...buildPublicationTypeMongoFilter(filters.publicationType),
+  };
 
   if (filters.citySlug) {
     query.citySlug = filters.citySlug;

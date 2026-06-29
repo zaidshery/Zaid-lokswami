@@ -14,6 +14,7 @@ import {
   matchesPublicEpaperMetadata,
   type PublicEpaperFilterState,
 } from '@/lib/utils/publicEpaperFilters';
+import { normalizeEPaperPublicationType } from '@/lib/types/epaper';
 import {
   cursorPage,
   type CursorPageResult,
@@ -21,6 +22,7 @@ import {
 
 export type PublicEpaperFeedItem = {
   _id: string;
+  publicationType: 'epaper' | 'emagazine';
   citySlug: string;
   cityName: string;
   title: string;
@@ -132,6 +134,7 @@ function mapMongoItem(raw: Record<string, unknown>): PublicEpaperFeedItem | null
 
   return {
     _id: id,
+    publicationType: normalizeEPaperPublicationType(raw.publicationType),
     citySlug: String(raw.citySlug || ''),
     cityName: String(raw.cityName || ''),
     title: String(raw.title || ''),
@@ -161,6 +164,7 @@ function mapFileItem(raw: Record<string, unknown>): PublicEpaperFeedItem | null 
 
   return {
     _id: id,
+    publicationType: 'epaper',
     citySlug: getCitySlugFromName(cityName),
     cityName,
     title: String(raw.title || ''),
@@ -178,6 +182,18 @@ function mapFileItem(raw: Record<string, unknown>): PublicEpaperFeedItem | null 
 async function listFromFileStore(
   input: PublicEpaperFeedInput
 ): Promise<CursorPageResult<PublicEpaperFeedItem>> {
+  if (input.filters.publicationType !== 'epaper') {
+    return cursorPage<PublicEpaperFeedItem>({
+      arrayItems: [],
+      limit: input.limit,
+      dateField: 'editionDate',
+      fallbackDateFields: ['publishDate', 'publishedAt'],
+      cursorPublishedAt: input.cursorPublishedAt,
+      cursorId: input.cursorId,
+      mapItem: (raw) => mapFileItem(asObject(raw)),
+    });
+  }
+
   const cityNameFilter = input.filters.citySlug
     ? getCityNameFromSlug(input.filters.citySlug)
     : '';
@@ -185,6 +201,7 @@ async function listFromFileStore(
     ? input.filters.parsedDate.toISOString().slice(0, 10)
     : '';
   const rows = await listAllStoredEPapers();
+
   const filtered = rows.filter((item) => {
     if (cityNameFilter && item.city !== cityNameFilter) return false;
     if (dateFilter && item.publishDate !== dateFilter) return false;
@@ -246,7 +263,7 @@ export async function listPublicEpaperFeed(
           isCurrentRevision: { $ne: false },
         }),
         mongoProjection:
-          '_id citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl status pageCount pages createdAt',
+          '_id publicationType citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl status pageCount pages createdAt',
         limit: input.limit,
         dateField: 'editionDate',
         fallbackDateFields: ['publishDate', 'publishedAt'],

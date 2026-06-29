@@ -186,6 +186,28 @@ describe('reader page metadata', () => {
     );
   });
 
+  it('builds monthly e-magazine metadata with month-based canonical URLs', () => {
+    const metadata = buildEpaperPageMetadata({
+      publicationType: 'emagazine',
+      city: 'indore',
+      publishDate: '2026-05-01',
+      paperId: 'magazine-1',
+      issueTitle: 'Lokswami E-Magazine - May 2026',
+      issueCityName: 'Indore',
+    });
+
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        title: 'Lokswami E-Magazine - May 2026',
+        description: expect.stringContaining('May 2026 Lokswami e-magazine'),
+        alternates: {
+          canonical:
+            'https://lokswami.com/main/e-magazine?paper=magazine-1&month=2026-05',
+        },
+      })
+    );
+  });
+
   it('marks unknown category slugs as noindex while keeping known categories indexable', () => {
     const known = buildCategoryPageMetadata('politics');
     const unknown = buildCategoryPageMetadata('custom-desk');

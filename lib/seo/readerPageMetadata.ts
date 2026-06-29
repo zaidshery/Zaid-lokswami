@@ -2,6 +2,13 @@ import type { Metadata } from 'next';
 import { COMPANY_INFO } from '@/lib/constants/company';
 import { EPAPER_CITY_OPTIONS } from '@/lib/constants/epaperCities';
 import { resolveNewsCategory } from '@/lib/constants/newsCategories';
+import {
+  formatPublicationIssueLabel,
+  getPublicationTypeLabels,
+  isMonthlyEPaperPublication,
+  normalizePublicationIssueMonth,
+} from '@/lib/utils/epaperPublication';
+import type { EPaperPublicationType } from '@/lib/types/epaper';
 
 const FALLBACK_SITE_URL = 'http://localhost:3000';
 const DEFAULT_OG_IMAGE = '/lokswami-share-preview.png';
@@ -16,6 +23,7 @@ type MetadataInput = {
 };
 
 type EpaperMetadataInput = {
+  publicationType?: EPaperPublicationType;
   city: string;
   publishDate: string;
   paperId?: string;
@@ -89,6 +97,19 @@ function buildEpaperIssueTitle(cityName: string, formattedDate: string) {
   const location = cityName ? `${cityName} ` : '';
   const date = formattedDate ? ` - ${formattedDate}` : '';
   return `Lokswami ${location}E-Paper${date}`;
+}
+
+function buildPublicationIssueTitle(
+  cityName: string,
+  formattedDate: string,
+  publicationType: EPaperPublicationType
+) {
+  if (!isMonthlyEPaperPublication(publicationType)) {
+    return buildEpaperIssueTitle(cityName, formattedDate);
+  }
+
+  const date = formattedDate ? ` - ${formattedDate}` : '';
+  return `Lokswami E-Magazine${date}`;
 }
 
 function buildMetadata(input: MetadataInput): Metadata {
@@ -229,11 +250,21 @@ export function buildVideoPageMetadata(input: VideoMetadataInput) {
 }
 
 export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
-  const cityName =
-    input.issueCityName ||
-    EPAPER_CITY_OPTIONS.find((item) => item.slug === input.city)?.name ||
-    '';
-  const formattedDate = input.publishDate ? formatMetadataDate(input.publishDate) : '';
+  const publicationType = input.publicationType || 'epaper';
+  const labels = getPublicationTypeLabels(publicationType);
+  const isMonthly = isMonthlyEPaperPublication(publicationType);
+  const titleName = labels.singular;
+  const contentName = labels.lowercase;
+  const cityName = isMonthly
+    ? ''
+    : input.issueCityName ||
+      EPAPER_CITY_OPTIONS.find((item) => item.slug === input.city)?.name ||
+      '';
+  const formattedDate = input.publishDate
+    ? isMonthly
+      ? formatPublicationIssueLabel(input.publishDate, publicationType)
+      : formatMetadataDate(input.publishDate)
+    : '';
   const query = new URLSearchParams();
   const pageNumber = Number.parseInt(String(input.page ?? input.storyPage ?? ''), 10);
   const storyToken = String(input.storyToken || '').trim();
@@ -243,11 +274,15 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
   if (input.paperId?.trim()) {
     query.set('paper', input.paperId.trim());
   }
-  if (input.city && input.city !== 'all') {
+  if (!isMonthly && input.city && input.city !== 'all') {
     query.set('city', input.city);
   }
   if (input.publishDate) {
-    query.set('date', input.publishDate);
+    if (isMonthly) {
+      query.set('month', normalizePublicationIssueMonth(input.publishDate));
+    } else {
+      query.set('date', input.publishDate);
+    }
   }
   if (Number.isFinite(pageNumber) && pageNumber > 0) {
     query.set('page', String(Math.floor(pageNumber)));
@@ -256,32 +291,40 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
     query.set('story', storyToken);
   }
 
-  let title = 'E-Paper Archive and Digital Edition';
+  let title = `${titleName} Archive and Digital Edition`;
   let description =
-    'Read the Lokswami e-paper online with archive filters, mapped stories, downloadable daily editions, and city-wise access.';
+    isMonthly
+      ? 'Read Lokswami e-magazine monthly issues online with archive filters, mapped features, downloadable issues, and story access.'
+      : 'Read the Lokswami e-paper online with archive filters, mapped stories, downloadable daily editions, and city-wise access.';
 
   if (storyTitle) {
-    title = `${storyTitle} | Lokswami E-Paper`;
+    title = `${storyTitle} | Lokswami ${titleName}`;
     description =
       storyExcerpt ||
-      `Read this ${cityName ? `${cityName} ` : ''}Lokswami e-paper story${
+      `Read this ${cityName ? `${cityName} ` : ''}Lokswami ${contentName} story${
         Number.isFinite(pageNumber) && pageNumber > 0 ? ` from page ${Math.floor(pageNumber)}` : ''
-      }${formattedDate ? ` published on ${formattedDate}` : ''}.`;
+      }${formattedDate ? ` from ${formattedDate}` : ''}.`;
   } else if (input.issueTitle && cityName && formattedDate) {
-    title = buildEpaperIssueTitle(cityName, formattedDate);
-    description = `Read the ${formattedDate} ${cityName} Lokswami e-paper edition online with the full digital newspaper thumbnail and archive access.`;
+    title = buildPublicationIssueTitle(cityName, formattedDate, publicationType);
+    description = isMonthly
+      ? `Read the ${formattedDate} ${cityName} Lokswami e-magazine issue online with full digital magazine access.`
+      : `Read the ${formattedDate} ${cityName} Lokswami e-paper edition online with the full digital newspaper thumbnail and archive access.`;
+  } else if (input.issueTitle && isMonthly && formattedDate) {
+    title = buildPublicationIssueTitle('', formattedDate, publicationType);
+    description = `Read the ${formattedDate} Lokswami e-magazine issue online with full digital magazine access.`;
   } else if (cityName && formattedDate) {
-    title = `${cityName} E-Paper for ${formattedDate}`;
-    description = `Read the ${formattedDate} ${cityName} Lokswami e-paper edition online with archive access, mapped stories, and downloadable pages.`;
+    title = `${cityName} ${titleName} for ${formattedDate}`;
+    description = `Read the ${formattedDate} ${cityName} Lokswami ${contentName} ${isMonthly ? 'issue' : 'edition'} online with archive access, mapped stories, and downloadable pages.`;
   } else if (cityName) {
-    title = `${cityName} E-Paper Archive`;
-    description = `Browse the Lokswami ${cityName} e-paper archive online with daily digital editions, mapped stories, and downloadable PDFs.`;
+    title = `${cityName} ${titleName} Archive`;
+    description = `Browse the Lokswami ${cityName} ${contentName} archive online with ${isMonthly ? 'monthly digital issues' : 'daily digital editions'}, mapped stories, and downloadable PDFs.`;
   } else if (formattedDate) {
-    title = `E-Paper for ${formattedDate}`;
-    description = `Read the Lokswami e-paper for ${formattedDate} online with digital archive access, mapped stories, and downloadable pages.`;
+    title = `${titleName} for ${formattedDate}`;
+    description = `Read the Lokswami ${contentName} for ${formattedDate} online with digital archive access, mapped stories, and downloadable pages.`;
   }
 
-  const path = query.size > 0 ? `/main/epaper?${query.toString()}` : '/main/epaper';
+  const basePath = labels.publicBasePath;
+  const path = query.size > 0 ? `${basePath}?${query.toString()}` : basePath;
 
   return buildMetadata({
     title,
@@ -289,12 +332,12 @@ export function buildEpaperPageMetadata(input: EpaperMetadataInput) {
     path,
     image: input.image,
     keywords: [
-      'lokswami epaper',
-      'hindi epaper',
+      isMonthly ? 'lokswami e-magazine' : 'lokswami epaper',
+      isMonthly ? 'lokswami e-magazine' : 'hindi epaper',
       'digital newspaper',
-      'epaper archive',
-      storyTitle ? 'epaper story' : '',
-      cityName ? `${cityName.toLowerCase()} epaper` : '',
+      isMonthly ? 'monthly magazine archive' : 'epaper archive',
+      storyTitle ? `${contentName} story` : '',
+      cityName ? `${cityName.toLowerCase()} ${contentName}` : '',
     ].filter(Boolean),
   });
 }

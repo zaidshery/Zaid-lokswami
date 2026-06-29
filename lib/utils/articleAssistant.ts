@@ -239,7 +239,6 @@ function readinessItem(
 }
 
 export function buildArticleAssistResult(input: ArticleAssistInput): ArticleAssistResult {
-  const mode = input.mode === 'edit' ? 'edit' : 'create';
   const title = cleanText(input.title);
   const summary = cleanText(input.summary);
   const content = cleanText(input.content);

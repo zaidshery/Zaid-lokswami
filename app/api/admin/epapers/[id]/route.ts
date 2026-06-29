@@ -40,6 +40,14 @@ import {
 import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
 import { assertEpaperDraftEditable } from '@/lib/server/epaperWorkflowPolicy';
 import { logEpaperMetric } from '@/lib/server/epaperObservability';
+import {
+  buildPublicationTypeMongoFilter,
+  getPublicationIssueDateRange,
+  getPublicationTypeLabels,
+  normalizePublicationCityScope,
+  normalizePublicationIssueDate,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -165,6 +173,7 @@ function mapEpaper(epaper: unknown) {
   });
   return {
     _id: String(source._id || ''),
+    publicationType: resolveEPaperPublicationType(source.publicationType),
     citySlug: String(source.citySlug || ''),
     cityName: String(source.cityName || ''),
     title: String(source.title || ''),
@@ -319,6 +328,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
       );
     }
 
+    const publicationTypeParam = req.nextUrl.searchParams.get('publicationType');
+    const publicationType = resolveEPaperPublicationType(publicationTypeParam);
     const [epaper, articles] = await Promise.all([
       EPaper.findById(id).lean(),
       EPaperArticle.find({ epaperId: id })
@@ -334,6 +345,13 @@ export async function GET(req: NextRequest, context: RouteContext) {
     }
 
     const mapped = mapEpaper(epaper);
+    if (publicationTypeParam && mapped.publicationType !== publicationType) {
+      return NextResponse.json(
+        { success: false, error: `${getPublicationTypeLabels(publicationType).singular} not found` },
+        { status: 404 }
+      );
+    }
+
     const normalizedArticles = normalizeQualityArticles(
       Array.isArray(articles) ? articles : []
     );
@@ -416,6 +434,13 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 
     const updates: Record<string, unknown> = {};
     const previousMapped = mapEpaper(current);
+    const publicationType = resolveEPaperPublicationType(current.publicationType);
+    const labels = getPublicationTypeLabels(publicationType);
+    const publicationScope = normalizePublicationCityScope({
+      publicationType,
+      citySlug: current.citySlug,
+      cityName: current.cityName,
+    });
 
     if (typeof source.title === 'string') {
       const title = source.title.trim();
@@ -438,7 +463,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       );
     }
 
-    if (typeof source.citySlug === 'string') {
+    if (publicationScope.isGlobal) {
+      if (String(current.citySlug || '') !== publicationScope.citySlug) {
+        updates.citySlug = publicationScope.citySlug;
+      }
+      if (String(current.cityName || '') !== publicationScope.cityName) {
+        updates.cityName = publicationScope.cityName;
+      }
+    } else if (typeof source.citySlug === 'string') {
       const citySlug = normalizeCitySlug(source.citySlug);
       if (!citySlug) {
         return NextResponse.json(
@@ -471,10 +503,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     }
 
     if (typeof source.publishDate === 'string') {
-      const publishDate = parsePublishDate(source.publishDate);
+      const normalizedIssueDate = normalizePublicationIssueDate(
+        source.publishDate,
+        publicationType
+      );
+      const publishDate = parsePublishDate(normalizedIssueDate);
       if (!publishDate) {
         return NextResponse.json(
-          { success: false, error: 'publishDate must be valid (YYYY-MM-DD)' },
+          { success: false, error: `${labels.issueLabel} must be valid` },
           { status: 400 }
         );
       }
@@ -488,6 +524,34 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         requestedPageCount,
         normalizePages(current.pages)
       );
+    }
+
+    if (updates.citySlug || updates.publishDate) {
+      const nextCitySlug = String(updates.citySlug || current.citySlug || '');
+      const nextPublishDate = updates.publishDate || current.publishDate;
+      const existing = await EPaper.findOne({
+        ...buildPublicationTypeMongoFilter(publicationType),
+        citySlug: nextCitySlug,
+        publishDate:
+          getPublicationIssueDateRange(nextPublishDate, publicationType) ||
+          nextPublishDate,
+        isCurrentRevision: true,
+        _id: { $ne: id },
+      })
+        .select('_id')
+        .lean();
+
+      if (existing) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: publicationScope.isGlobal
+              ? `${labels.singular} for this ${labels.issueFilterLabel.toLowerCase()} already exists`
+              : `${labels.singular} for this city/${labels.issueFilterLabel.toLowerCase()} already exists`,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const updated = await EPaper.findByIdAndUpdate(id, updates, {
@@ -527,7 +591,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       (error as { code?: unknown }).code === 11000;
     if (isDuplicateKeyError) {
       return NextResponse.json(
-        { success: false, error: 'An e-paper for this city/date already exists' },
+        { success: false, error: 'An issue of this publication type for this scope/date already exists' },
         { status: 409 }
       );
     }

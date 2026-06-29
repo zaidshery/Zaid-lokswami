@@ -1,12 +1,20 @@
 import crypto from 'crypto';
 import path from 'path';
-import { normalizeCitySlug } from '@/lib/constants/epaperCities';
 import { parsePublishDate } from '@/lib/utils/epaperStorage';
 import {
   buildDigitalOceanSpacesPublicUrl,
   createDigitalOceanSpacesBrowserUploadTarget,
   verifyDigitalOceanSpacesUploadedObject,
 } from '@/lib/utils/digitalOceanSpaces';
+import {
+  normalizeEPaperPublicationType,
+  type EPaperPublicationType,
+} from '@/lib/types/epaper';
+import {
+  normalizePublicationCityScope,
+  normalizePublicationIssueDate,
+  shouldUseGlobalPublicationScope,
+} from '@/lib/utils/epaperPublication';
 
 export const EPAPER_ASSET_STORAGE_PROVIDER = 'do-spaces' as const;
 export const EPAPER_ASSET_UPLOAD_EXPIRY_SECONDS = 10 * 60;
@@ -26,6 +34,7 @@ export type EpaperAssetKind = (typeof EPAPER_ASSET_KINDS)[number];
 
 export type EpaperAssetUploadInitInput = {
   kind: EpaperAssetKind;
+  publicationType?: EPaperPublicationType;
   fileName: string;
   fileType: string;
   fileSize: number;
@@ -101,17 +110,31 @@ function normalizePositiveInt(value: unknown) {
 }
 
 function requireEditionContext(input: EpaperAssetUploadInitInput) {
-  const citySlug = normalizeCitySlug(String(input.citySlug || ''));
-  const publishDateFolder = toPublishDateFolder(String(input.publishDate || ''));
+  const publicationType = normalizeEPaperPublicationType(input.publicationType);
+  const scope = normalizePublicationCityScope({
+    publicationType,
+    citySlug: input.citySlug,
+  });
+  const publishDateFolder = toPublishDateFolder(
+    normalizePublicationIssueDate(input.publishDate, publicationType)
+  );
 
-  if (!citySlug) {
+  if (!scope.citySlug) {
     throw new Error('Valid citySlug is required for e-paper uploads.');
   }
   if (!publishDateFolder) {
     throw new Error('Valid publishDate is required for e-paper uploads.');
   }
 
-  return { citySlug, publishDateFolder };
+  return { citySlug: scope.citySlug, publicationType, publishDateFolder };
+}
+
+function resolveEditionStorageBase(input: ReturnType<typeof requireEditionContext>) {
+  if (shouldUseGlobalPublicationScope(input.publicationType)) {
+    return `lokswami/emagazines/${input.publishDateFolder}`;
+  }
+
+  return `lokswami/epapers/${input.citySlug}/${input.publishDateFolder}`;
 }
 
 function normalizeContentType(fileName: string, fileType: string) {
@@ -219,8 +242,7 @@ export function buildEpaperAssetObjectKey(input: EpaperAssetUploadInitInput) {
     return `lokswami/tts/epaperArticle/${articleSegment}/manual/${uniqueName}`;
   }
 
-  const { citySlug, publishDateFolder } = requireEditionContext(input);
-  const base = `lokswami/epapers/${citySlug}/${publishDateFolder}`;
+  const base = resolveEditionStorageBase(requireEditionContext(input));
 
   if (input.kind === 'epaper_pdf') {
     return `${base}/pdf/${uniqueName}`;
@@ -253,7 +275,7 @@ export function assertValidEpaperAssetKey(kind: EpaperAssetKind, mediaKey: strin
         ? 'thumbnail\\/[^/]+\\.(jpg|jpeg|png|webp)'
         : 'pages\\/[^/]+\\.(jpg|jpeg|png|webp)';
   const pattern = new RegExp(
-    `^lokswami\\/epapers\\/[^/]+\\/\\d{4}-\\d{2}-\\d{2}\\/${escapedKindPattern}$`,
+    `^lokswami\\/(?:epapers\\/[^/]+|emagazines(?:\\/[^/]+)?)\\/\\d{4}-\\d{2}-\\d{2}\\/${escapedKindPattern}$`,
     'i'
   );
 

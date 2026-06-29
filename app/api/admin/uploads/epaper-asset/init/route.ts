@@ -8,6 +8,8 @@ import {
   parseEpaperAssetSize,
   validateEpaperAssetSelection,
 } from '@/lib/storage/epaperAssetUpload';
+import { normalizeEPaperPublicationType } from '@/lib/types/epaper';
+import { normalizePublicationIssueDate } from '@/lib/utils/epaperPublication';
 
 export const runtime = 'nodejs';
 
@@ -34,13 +36,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid e-paper asset kind.' }, { status: 400 });
     }
 
+    const publicationType = normalizeEPaperPublicationType(body.publicationType);
     const input = {
       kind,
+      publicationType,
       fileName: String(body.fileName || '').trim(),
       fileType: String(body.fileType || '').trim().toLowerCase(),
       fileSize: parseEpaperAssetSize(body.fileSize),
       citySlug: typeof body.citySlug === 'string' ? body.citySlug.trim() : '',
-      publishDate: typeof body.publishDate === 'string' ? body.publishDate.trim() : '',
+      publishDate: normalizePublicationIssueDate(body.publishDate, publicationType),
       pageNumber: parseEpaperAssetSize(body.pageNumber),
       articleId: typeof body.articleId === 'string' ? body.articleId.trim() : '',
     };

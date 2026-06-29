@@ -9,6 +9,13 @@ import {
   type StoredEPaper,
 } from '@/lib/storage/epapersFile';
 import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
+import {
+  buildPublicationTypeMongoFilter,
+  getPublicationIssueDateRange,
+  isMonthlyEPaperPublication,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
+import type { EPaperPublicationType } from '@/lib/types/epaper';
 
 export type PublicEpaperMetadata = {
   id: string;
@@ -30,12 +37,14 @@ export type PublicEpaperStoryMetadata = {
 };
 
 type PublicEpaperMetadataQuery = {
+  publicationType?: EPaperPublicationType;
   id?: string;
   citySlug?: string;
   publishDate?: string;
 };
 
 type PublicEpaperStoryMetadataQuery = {
+  publicationType?: EPaperPublicationType;
   epaperId?: string;
   storyToken?: string;
 };
@@ -193,22 +202,26 @@ async function getMongoEpaperMetadata(query: PublicEpaperMetadataQuery) {
     if (query.id?.trim()) {
       const requested = Types.ObjectId.isValid(query.id)
         ? await EPaper.findById(query.id)
-            .select('_id familyId status isCurrentRevision')
+            .select('_id familyId status isCurrentRevision publicationType')
             .lean()
         : await EPaper.findOne({
+            ...buildPublicationTypeMongoFilter(query.publicationType),
             familyId: query.id.trim(),
             status: 'published',
             isCurrentRevision: true,
           })
-            .select('_id familyId status isCurrentRevision')
+            .select('_id familyId status isCurrentRevision publicationType')
             .lean();
       if (!requested) return null;
+      const requestedType = resolveEPaperPublicationType(requested.publicationType);
+      if (requestedType !== query.publicationType) return null;
       const record =
         requested.status === 'published' && requested.isCurrentRevision !== false
           ? await EPaper.findById(requested._id)
               .select('_id citySlug cityName title publishDate thumbnailPath thumbnail pageCount pages')
               .lean()
           : await EPaper.findOne({
+              ...buildPublicationTypeMongoFilter(query.publicationType),
               familyId: String(requested.familyId || requested._id),
               status: 'published',
               isCurrentRevision: true,
@@ -219,11 +232,15 @@ async function getMongoEpaperMetadata(query: PublicEpaperMetadataQuery) {
     }
 
     const mongoQuery: Record<string, unknown> = {
+      ...buildPublicationTypeMongoFilter(query.publicationType),
       status: 'published',
       isCurrentRevision: { $ne: false },
     };
     if (query.citySlug?.trim()) mongoQuery.citySlug = query.citySlug.trim().toLowerCase();
-    const dateRange = query.publishDate ? getDateRange(query.publishDate) : null;
+    const dateRange = query.publishDate
+      ? getPublicationIssueDateRange(query.publishDate, query.publicationType) ||
+        getDateRange(query.publishDate)
+      : null;
     if (dateRange) mongoQuery.publishDate = dateRange;
 
     const record = await EPaper.findOne(mongoQuery)
@@ -238,6 +255,8 @@ async function getMongoEpaperMetadata(query: PublicEpaperMetadataQuery) {
 }
 
 async function getStoredEpaperMetadata(query: PublicEpaperMetadataQuery) {
+  if (query.publicationType !== 'epaper') return null;
+
   if (query.id?.trim()) {
     const record = await getStoredEPaperById(query.id.trim());
     return record ? mapStoredEpaper(record) : null;
@@ -271,6 +290,15 @@ async function getMongoEpaperStoryMetadata(query: PublicEpaperStoryMetadataQuery
 
   try {
     if (!Types.ObjectId.isValid(epaperId)) return null;
+    const parent = await EPaper.findOne({
+      ...buildPublicationTypeMongoFilter(query.publicationType),
+      _id: new Types.ObjectId(epaperId),
+      status: 'published',
+      isCurrentRevision: { $ne: false },
+    })
+      .select('_id')
+      .lean();
+    if (!parent) return null;
 
     const normalizedStoryToken = storyToken.toLowerCase();
     const storyQuery: Record<string, unknown> = {
@@ -297,6 +325,8 @@ async function getMongoEpaperStoryMetadata(query: PublicEpaperStoryMetadataQuery
 }
 
 async function getStoredEpaperStoryMetadata(query: PublicEpaperStoryMetadataQuery) {
+  if (query.publicationType !== 'epaper') return null;
+
   const epaperId = query.epaperId?.trim() || '';
   const storyToken = query.storyToken?.trim() || '';
   if (!epaperId || !storyToken) return null;
@@ -308,9 +338,13 @@ async function getStoredEpaperStoryMetadata(query: PublicEpaperStoryMetadataQuer
 }
 
 export async function getPublicEpaperForMetadata(query: PublicEpaperMetadataQuery) {
+  const publicationType = resolveEPaperPublicationType(query.publicationType);
   const normalizedQuery = {
+    publicationType,
     id: query.id?.trim() || '',
-    citySlug: query.citySlug?.trim().toLowerCase() || '',
+    citySlug: isMonthlyEPaperPublication(publicationType)
+      ? ''
+      : query.citySlug?.trim().toLowerCase() || '',
     publishDate: query.publishDate?.trim() || '',
   };
 
@@ -322,6 +356,7 @@ export async function getPublicEpaperForMetadata(query: PublicEpaperMetadataQuer
 
 export async function getPublicEpaperStoryForMetadata(query: PublicEpaperStoryMetadataQuery) {
   const normalizedQuery = {
+    publicationType: resolveEPaperPublicationType(query.publicationType),
     epaperId: query.epaperId?.trim() || '',
     storyToken: query.storyToken?.trim() || '',
   };

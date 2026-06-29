@@ -62,7 +62,7 @@ export default function Logo({ size = 'md', href }: LogoProps) {
             alt="Lokswami Logo"
             width={sizeConfig.icon}
             height={sizeConfig.icon}
-            className="relative z-[1] block object-contain transition-transform duration-300 motion-safe:group-hover/logo:rotate-[2deg] motion-safe:group-hover/logo:scale-[1.06]"
+            className="relative z-[1] block h-auto object-contain transition-transform duration-300 motion-safe:group-hover/logo:rotate-[2deg] motion-safe:group-hover/logo:scale-[1.06]"
             priority={size === 'headerCompact' || size === 'headerMobile' || size === 'headerDesktop'}
             sizes="(max-width: 639px) 36px, (max-width: 1023px) 44px, 54px"
           />
@@ -84,7 +84,7 @@ export default function Logo({ size = 'md', href }: LogoProps) {
             alt="Lokswami"
             width={sizeConfig.wordmarkW}
             height={sizeConfig.wordmarkH}
-            className={`block max-w-full object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.18)] dark:brightness-0 dark:invert ${size === 'headerCompact' ? 'max-w-[108px]' : size === 'headerMobile' ? 'max-w-[132px]' : ''}`}
+            className={`block h-auto max-w-full object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.18)] dark:brightness-0 dark:invert ${size === 'headerCompact' ? 'max-w-[108px]' : size === 'headerMobile' ? 'max-w-[132px]' : ''}`}
             priority={size === 'headerCompact' || size === 'headerMobile' || size === 'headerDesktop'}
             sizes="(max-width: 639px) 112px, (max-width: 1023px) 148px, 192px"
           />

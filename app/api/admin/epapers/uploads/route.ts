@@ -6,7 +6,6 @@ import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canCreateEpaper } from '@/lib/auth/permissions';
 import {
   getCityNameFromSlug,
-  normalizeCitySlug,
 } from '@/lib/constants/epaperCities';
 import { parsePublishDate } from '@/lib/utils/epaperStorage';
 import {
@@ -14,6 +13,14 @@ import {
   parseEpaperAssetSize,
   validateEpaperAssetSelection,
 } from '@/lib/storage/epaperAssetUpload';
+import {
+  buildPublicationTypeMongoFilter,
+  getPublicationIssueDateRange,
+  getPublicationTypeLabels,
+  normalizePublicationCityScope,
+  normalizePublicationIssueDate,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
 
 export const runtime = 'nodejs';
 
@@ -28,10 +35,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const citySlug = normalizeCitySlug(String(body.citySlug || ''));
-    const cityName = getCityNameFromSlug(citySlug);
     const title = String(body.title || '').trim();
-    const publishDate = parsePublishDate(String(body.publishDate || ''));
+    const publicationType = resolveEPaperPublicationType(body.publicationType);
+    const labels = getPublicationTypeLabels(publicationType);
+    const scope = normalizePublicationCityScope({
+      publicationType,
+      citySlug: body.citySlug,
+      cityName: getCityNameFromSlug(String(body.citySlug || '').trim().toLowerCase()),
+    });
+    const citySlug = scope.citySlug;
+    const cityName = scope.cityName;
+    const normalizedIssueDate = normalizePublicationIssueDate(
+      body.publishDate,
+      publicationType
+    );
+    const publishDate = parsePublishDate(normalizedIssueDate);
     const pageCount = Math.max(
       0,
       Math.floor(Number.parseInt(String(body.pageCount || 0), 10) || 0)
@@ -39,7 +57,12 @@ export async function POST(request: NextRequest) {
 
     if (!citySlug || !cityName || !title || !publishDate) {
       return NextResponse.json(
-        { success: false, error: 'Valid city, title, and publish date are required.' },
+        {
+          success: false,
+          error: scope.isGlobal
+            ? `Valid title and ${labels.issueLabel.toLowerCase()} are required.`
+            : 'Valid city, title, and publish date are required.',
+        },
         { status: 400 }
       );
     }
@@ -49,11 +72,12 @@ export async function POST(request: NextRequest) {
 
     const uploadInput = {
       kind: 'epaper_pdf' as const,
+      publicationType,
       fileName: String(body.fileName || '').trim(),
       fileType: String(body.fileType || '').trim(),
       fileSize: parseEpaperAssetSize(body.fileSize),
       citySlug,
-      publishDate: publishDate.toISOString().slice(0, 10),
+      publishDate: normalizedIssueDate,
     };
     const validationError = validateEpaperAssetSelection(uploadInput);
     if (validationError) {
@@ -62,15 +86,23 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
     const existing = await EPaper.findOne({
+      ...buildPublicationTypeMongoFilter(publicationType),
       citySlug,
-      publishDate,
+      publishDate:
+        getPublicationIssueDateRange(normalizedIssueDate, publicationType) ||
+        publishDate,
       isCurrentRevision: true,
     })
       .select('_id')
       .lean();
     if (existing) {
       return NextResponse.json(
-        { success: false, error: 'An edition already exists for this city and date.' },
+        {
+          success: false,
+          error: scope.isGlobal
+            ? `${labels.singular} already exists for this ${labels.issueFilterLabel.toLowerCase()}.`
+            : `${labels.singular} already exists for this city and ${labels.issueFilterLabel.toLowerCase()}.`,
+        },
         { status: 409 }
       );
     }
@@ -85,6 +117,7 @@ export async function POST(request: NextRequest) {
       reviewStatus: 'pending',
     }));
     const epaper = await EPaper.create({
+      publicationType,
       citySlug,
       cityName,
       title,
@@ -100,7 +133,7 @@ export async function POST(request: NextRequest) {
       isCurrentRevision: true,
       productionStatus: 'draft_upload',
       sourceType: 'manual-upload',
-      sourceLabel: 'Direct Spaces upload',
+      sourceLabel: `Direct Spaces upload (${labels.singular})`,
     });
     return NextResponse.json(
       {

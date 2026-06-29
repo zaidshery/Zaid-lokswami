@@ -7,7 +7,7 @@ try {
   const dotenv = require('dotenv');
   const root = path.resolve(__dirname, '..');
   for (const file of ['.env', '.env.hostinger', '.env.production', '.env.local', '.env.production.local']) {
-    dotenv.config({ path: path.join(root, file), override: false });
+    dotenv.config({ path: path.join(root, file), override: false, quiet: true });
   }
 } catch {
   // dotenv is optional for hosted environments that inject process.env.
@@ -90,6 +90,37 @@ function getConfig() {
     host: `${bucket}.${region}.digitaloceanspaces.com`,
     cdnBaseUrl: readEnv('DIGITALOCEAN_SPACES_CDN_BASE_URL'),
   };
+}
+
+function normalizeOrigin(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.origin;
+  } catch {
+    return '';
+  }
+}
+
+function getCliOrigins() {
+  return process.argv
+    .slice(2)
+    .filter((argument) => argument.startsWith('--origin='))
+    .flatMap((argument) => argument.slice('--origin='.length).split(','))
+    .map((value) => normalizeOrigin(value.trim()))
+    .filter(Boolean);
+}
+
+function getCorsOrigins() {
+  const cliOrigins = getCliOrigins();
+  if (cliOrigins.length > 0) {
+    return Array.from(new Set(cliOrigins));
+  }
+
+  const configured = readEnv('DIGITALOCEAN_SPACES_CORS_ORIGINS') || readEnv('DIGITALOCEAN_SPACES_CORS_ORIGIN');
+  const values = configured
+    ? configured.split(',')
+    : [readEnv('NEXT_PUBLIC_SITE_URL'), readEnv('NEXTAUTH_URL'), 'http://localhost:3000'];
+  return Array.from(new Set(values.map((value) => normalizeOrigin(value.trim())).filter(Boolean)));
 }
 
 function createPresignedPutUrl(config, key) {
@@ -178,6 +209,47 @@ async function expectOk(label, response, allowedStatuses = []) {
   throw new Error(`${label} failed with ${response.status}${text ? `: ${text.slice(0, 300)}` : ''}`);
 }
 
+function headerIncludesValue(headerValue, expected) {
+  return String(headerValue || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .includes(expected.toLowerCase());
+}
+
+async function verifyCorsPreflight(uploadUrl, origin) {
+  const response = await fetch(uploadUrl, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: origin,
+      'Access-Control-Request-Method': 'PUT',
+      'Access-Control-Request-Headers': 'content-type,x-amz-acl',
+    },
+  });
+  await expectOk(`CORS preflight for ${origin}`, response, [200, 204]);
+
+  const allowOrigin = response.headers.get('access-control-allow-origin') || '';
+  const allowMethods = response.headers.get('access-control-allow-methods') || '';
+  const allowHeaders = response.headers.get('access-control-allow-headers') || '';
+  const originAllowed = allowOrigin === '*' || allowOrigin === origin;
+  const methodAllowed = headerIncludesValue(allowMethods, 'PUT');
+  const contentTypeAllowed =
+    allowHeaders === '*' || headerIncludesValue(allowHeaders, 'content-type');
+  const aclAllowed =
+    allowHeaders === '*' || headerIncludesValue(allowHeaders, 'x-amz-acl');
+
+  if (!originAllowed || !methodAllowed || !contentTypeAllowed || !aclAllowed) {
+    throw new Error(
+      [
+        `CORS preflight for ${origin} returned incomplete headers.`,
+        `access-control-allow-origin: ${allowOrigin || '(missing)'}`,
+        `access-control-allow-methods: ${allowMethods || '(missing)'}`,
+        `access-control-allow-headers: ${allowHeaders || '(missing)'}`,
+        'Required: allow this origin, PUT, and headers content-type,x-amz-acl.',
+      ].join('\n')
+    );
+  }
+}
+
 async function main() {
   assertEnv();
 
@@ -188,7 +260,17 @@ async function main() {
   console.log(`Testing bucket ${config.bucket} in ${config.region}`);
   console.log(`Test key: ${key}`);
 
-  const putResponse = await fetch(createPresignedPutUrl(config, key), {
+  const uploadUrl = createPresignedPutUrl(config, key);
+  const corsOrigins = getCorsOrigins();
+  if (corsOrigins.length > 0) {
+    for (const origin of corsOrigins) {
+      await verifyCorsPreflight(uploadUrl, origin);
+    }
+  } else {
+    console.log('SKIP CORS preflight: no DIGITALOCEAN_SPACES_CORS_ORIGINS, NEXT_PUBLIC_SITE_URL, or NEXTAUTH_URL configured.');
+  }
+
+  const putResponse = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
       'Content-Type': 'text/plain',

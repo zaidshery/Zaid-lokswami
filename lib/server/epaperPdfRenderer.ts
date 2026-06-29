@@ -24,7 +24,8 @@ export async function downloadVerifiedEpaperPdf(pdfUrl: string) {
     parsed.protocol === 'https:' &&
     (parsed.hostname.endsWith('.digitaloceanspaces.com') ||
       parsed.hostname.endsWith('.cdn.digitaloceanspaces.com')) &&
-    parsed.pathname.includes('/lokswami/epapers/');
+    (parsed.pathname.includes('/lokswami/epapers/') ||
+      parsed.pathname.includes('/lokswami/emagazines/'));
 
   if (!isSpacesAsset) {
     throw new Error('Only verified DigitalOcean Spaces e-paper PDFs can be processed.');

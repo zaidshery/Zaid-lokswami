@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { FormEvent, useMemo, useState } from 'react';
 import { ArrowLeft, Link2, Loader2, UploadCloud } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
@@ -11,6 +11,12 @@ import {
   type EPaperCitySlug,
 } from '@/lib/constants/epaperCities';
 import { uploadFileToSignedUrl } from '@/lib/utils/epaperDirectUploadClient';
+import {
+  getPublicationTypeLabels,
+  normalizePublicationIssueDate,
+  normalizePublicationIssueMonth,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
 
 type UploadTarget = {
   mediaKey: string;
@@ -36,6 +42,15 @@ type BasicResponse = {
 
 export default function NewEPaperPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const publicationType = resolveEPaperPublicationType(
+    pathname.startsWith('/admin/emagazines') ? 'emagazine' : 'epaper'
+  );
+  const labels = useMemo(
+    () => getPublicationTypeLabels(publicationType),
+    [publicationType]
+  );
+  const isMonthlyPublication = publicationType === 'emagazine';
   const [createMode, setCreateMode] = useState<'upload' | 'import'>('upload');
   const [citySlugs, setCitySlugs] = useState<EPaperCitySlug[]>([
     EPAPER_CITY_OPTIONS[0].slug
@@ -51,13 +66,18 @@ export default function NewEPaperPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const submitDirectUpload = async (slug: EPaperCitySlug) => {
+  const submitDirectUpload = async (slug: string) => {
     if (!pdfFile) {
       throw new Error('Choose a PDF to upload.');
     }
 
     const authHeaders = getAuthHeader();
-    setNotice(`Creating the draft edition for ${slug}...`);
+    const issueDate = normalizePublicationIssueDate(publishDate, publicationType);
+    setNotice(
+      isMonthlyPublication
+        ? `Creating the draft ${labels.lowercase} issue...`
+        : `Creating the draft ${labels.lowercase} for ${slug}...`
+    );
     const initializeResponse = await fetch('/api/admin/epapers/uploads', {
       method: 'POST',
       headers: {
@@ -65,9 +85,10 @@ export default function NewEPaperPage() {
         ...authHeaders,
       },
       body: JSON.stringify({
-        citySlug: slug,
+        publicationType,
+        citySlug: isMonthlyPublication ? undefined : slug,
         title: title.trim(),
-        publishDate,
+        publishDate: issueDate,
         fileName: pdfFile.name,
         fileType: pdfFile.type || 'application/pdf',
         fileSize: pdfFile.size,
@@ -85,7 +106,7 @@ export default function NewEPaperPage() {
       !target.uploadUrl
     ) {
       throw new Error(
-        initializePayload.error || 'Failed to initialize the e-paper upload.'
+        initializePayload.error || `Failed to initialize the ${labels.lowercase} upload.`
       );
     }
 
@@ -126,12 +147,17 @@ export default function NewEPaperPage() {
     return epaperId;
   };
 
-  const submitRemoteImport = async (slug: EPaperCitySlug) => {
+  const submitRemoteImport = async (slug: string) => {
     if (!pdfUrl.trim()) {
       throw new Error('A PDF link is required for URL import.');
     }
 
-    setNotice(`Downloading and validating the remote assets for ${slug}...`);
+    const issueDate = normalizePublicationIssueDate(publishDate, publicationType);
+    setNotice(
+      isMonthlyPublication
+        ? `Downloading and validating the remote ${labels.lowercase} assets...`
+        : `Downloading and validating the remote ${labels.lowercase} assets for ${slug}...`
+    );
     const resolvedCityName = EPAPER_CITY_OPTIONS.find((item) => item.slug === slug)?.name || '';
     const response = await fetch('/api/admin/epapers/import', {
       method: 'POST',
@@ -140,10 +166,11 @@ export default function NewEPaperPage() {
         ...getAuthHeader(),
       },
       body: JSON.stringify({
-        citySlug: slug,
-        cityName: resolvedCityName,
+        publicationType,
+        citySlug: isMonthlyPublication ? undefined : slug,
+        cityName: isMonthlyPublication ? undefined : resolvedCityName,
         title: title.trim(),
-        publishDate,
+        publishDate: issueDate,
         pdfUrl: pdfUrl.trim(),
         thumbnailUrl: thumbnailUrl.trim(),
         pageImageUrls: pageImageUrlInput
@@ -156,7 +183,7 @@ export default function NewEPaperPage() {
     const payload = (await response.json().catch(() => ({}))) as BasicResponse;
     const epaperId = payload.data?._id;
     if (!response.ok || !payload.success || !epaperId) {
-      throw new Error(payload.error || 'Failed to import the e-paper.');
+      throw new Error(payload.error || `Failed to import the ${labels.lowercase}.`);
     }
     if (payload.warning) {
       setNotice(payload.warning);
@@ -169,28 +196,34 @@ export default function NewEPaperPage() {
     setError('');
     setNotice('');
 
-    if (citySlugs.length === 0 || !title.trim() || !publishDate) {
-      setError('At least one city, title, and publish date are required.');
+    const issueDate = normalizePublicationIssueDate(publishDate, publicationType);
+    const targetCitySlugs = isMonthlyPublication ? [''] : citySlugs;
+    if ((!isMonthlyPublication && citySlugs.length === 0) || !title.trim() || !issueDate) {
+      setError(
+        isMonthlyPublication
+          ? `Title and ${labels.issueLabel.toLowerCase()} are required.`
+          : `At least one city, title, and ${labels.issueLabel.toLowerCase()} are required.`
+      );
       return;
     }
 
     setLoading(true);
     try {
       let lastEpaperId = '';
-      for (const slug of citySlugs) {
+      for (const slug of targetCitySlugs) {
         lastEpaperId =
           createMode === 'upload'
             ? await submitDirectUpload(slug)
             : await submitRemoteImport(slug);
       }
       
-      if (citySlugs.length === 1 && lastEpaperId) {
-        router.push(`/admin/epapers/${lastEpaperId}`);
+      if (targetCitySlugs.length === 1 && lastEpaperId) {
+        router.push(`${labels.adminBasePath}/${lastEpaperId}`);
       } else {
-        router.push(`/admin/epapers`);
+        router.push(labels.adminBasePath);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create e-paper.');
+      setError(err instanceof Error ? err.message : `Failed to create ${labels.lowercase}.`);
     } finally {
       setLoading(false);
     }
@@ -199,17 +232,17 @@ export default function NewEPaperPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <Link
-        href="/admin/epapers"
+        href={labels.adminBasePath}
         className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to E-Papers
+        Back to {labels.plural}
       </Link>
 
       <div className="mx-auto max-w-3xl rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">Upload E-Paper</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Upload {labels.singular}</h1>
         <p className="mt-1 text-sm text-gray-600">
-          New editions are always created as drafts. PDF pages are converted in
+          New {isMonthlyPublication ? 'monthly issues' : 'editions'} are always created as drafts. PDF pages are converted in
           the background at 3000px width, and page one becomes the cover.
         </p>
 
@@ -250,59 +283,72 @@ export default function NewEPaperPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="flex flex-col">
-              <span className="mb-1 block text-xs font-semibold text-gray-600">
-                Cities
-              </span>
-              <div className="flex flex-wrap gap-2">
-                <label className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={citySlugs.length === EPAPER_CITY_OPTIONS.length}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setCitySlugs(EPAPER_CITY_OPTIONS.map((c) => c.slug));
-                      } else {
-                        setCitySlugs([]);
-                      }
-                    }}
-                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
-                  />
-                  <span className="font-medium text-gray-900">All Cities</span>
-                </label>
-                {EPAPER_CITY_OPTIONS.map((city) => (
-                  <label
-                    key={city.slug}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                  >
+          <div className={`grid grid-cols-1 gap-4 ${isMonthlyPublication ? '' : 'md:grid-cols-2'}`}>
+            {!isMonthlyPublication ? (
+              <div className="flex flex-col">
+                <span className="mb-1 block text-xs font-semibold text-gray-600">
+                  Cities
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50">
                     <input
                       type="checkbox"
-                      checked={citySlugs.includes(city.slug)}
+                      checked={citySlugs.length === EPAPER_CITY_OPTIONS.length}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setCitySlugs([...citySlugs, city.slug]);
+                          setCitySlugs(EPAPER_CITY_OPTIONS.map((c) => c.slug));
                         } else {
-                          setCitySlugs(citySlugs.filter((s) => s !== city.slug));
+                          setCitySlugs([]);
                         }
                       }}
                       className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
                     />
-                    <span className="text-gray-700">{city.name}</span>
+                    <span className="font-medium text-gray-900">All Cities</span>
                   </label>
-                ))}
+                  {EPAPER_CITY_OPTIONS.map((city) => (
+                    <label
+                      key={city.slug}
+                      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={citySlugs.includes(city.slug)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setCitySlugs([...citySlugs, city.slug]);
+                          } else {
+                            setCitySlugs(citySlugs.filter((s) => s !== city.slug));
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
+                      />
+                      <span className="text-gray-700">{city.name}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
             <label>
               <span className="mb-1 block text-xs font-semibold text-gray-600">
-                Publish Date
+                {labels.issueLabel}
               </span>
-              <DateInputField
-                value={publishDate}
-                onChange={setPublishDate}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                required
-              />
+              {isMonthlyPublication ? (
+                <input
+                  type="month"
+                  value={normalizePublicationIssueMonth(publishDate)}
+                  onChange={(event) => setPublishDate(event.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  required
+                />
+              ) : (
+                <DateInputField
+                  value={publishDate}
+                  onChange={setPublishDate}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  required
+                />
+              )}
+              <p className="mt-1 text-xs text-gray-500">{labels.issueHelp}</p>
             </label>
           </div>
 
@@ -314,7 +360,7 @@ export default function NewEPaperPage() {
               type="text"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Indore Edition - 16 Feb 2026"
+              placeholder={`${labels.singular} - ${isMonthlyPublication ? 'May 2026' : '16 Feb 2026'}`}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               required
             />
@@ -405,7 +451,7 @@ export default function NewEPaperPage() {
               ? 'Processing...'
               : createMode === 'upload'
                 ? 'Upload and Queue PDF'
-                : 'Import E-Paper'}
+                : `Import ${labels.singular}`}
           </button>
         </form>
       </div>

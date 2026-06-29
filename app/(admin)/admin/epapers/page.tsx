@@ -1,13 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, Eye, Search } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import { EPAPER_CITY_OPTIONS } from '@/lib/constants/epaperCities';
 import type { EPaperRecord } from '@/lib/types/epaper';
-import { formatUiDate } from '@/lib/utils/dateFormat';
+import {
+  formatPublicationIssueLabel,
+  getPublicationTypeLabels,
+  normalizePublicationIssueMonth,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
 
 type ApiResponse = {
   success: boolean;
@@ -43,6 +49,15 @@ function productionTone(status: string | null | undefined) {
 }
 
 export default function AdminEPaperListPage() {
+  const pathname = usePathname();
+  const publicationType = resolveEPaperPublicationType(
+    pathname.startsWith('/admin/emagazines') ? 'emagazine' : 'epaper'
+  );
+  const labels = useMemo(
+    () => getPublicationTypeLabels(publicationType),
+    [publicationType]
+  );
+  const isMonthlyPublication = publicationType === 'emagazine';
   const [epapers, setEpapers] = useState<EPaperRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,11 +68,15 @@ export default function AdminEPaperListPage() {
   const [dateFilter, setDateFilter] = useState('');
   const [deleteId, setDeleteId] = useState('');
 
-  const fetchEpapers = async () => {
+  const fetchEpapers = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/admin/epapers?limit=all', {
+      const query = new URLSearchParams({
+        limit: 'all',
+        publicationType,
+      });
+      const response = await fetch(`/api/admin/epapers?${query.toString()}`, {
         headers: {
           ...getAuthHeader(),
         },
@@ -65,38 +84,43 @@ export default function AdminEPaperListPage() {
       const payload = (await response.json()) as ApiResponse;
 
       if (!response.ok || !payload.success) {
-        throw new Error(payload.error || 'Failed to load e-papers');
+        throw new Error(payload.error || `Failed to load ${labels.lowercase}s`);
       }
 
       setEpapers(Array.isArray(payload.data) ? payload.data : []);
     } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to load e-papers'));
+      setError(toErrorMessage(err, `Failed to load ${labels.lowercase}s`));
       setEpapers([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [labels.lowercase, publicationType]);
 
   useEffect(() => {
     void fetchEpapers();
-  }, []);
+  }, [fetchEpapers]);
 
   const filtered = useMemo(() => {
     const searchValue = search.trim().toLowerCase();
     return epapers.filter((item) => {
-      const cityMatch = cityFilter === 'all' || item.citySlug === cityFilter;
+      const cityMatch =
+        isMonthlyPublication || cityFilter === 'all' || item.citySlug === cityFilter;
       const statusMatch = statusFilter === 'all' || item.status === statusFilter;
       const productionMatch =
         productionFilter === 'all' || item.productionStatus === productionFilter;
-      const dateMatch = !dateFilter || item.publishDate === dateFilter;
+      const dateMatch =
+        !dateFilter ||
+        (isMonthlyPublication
+          ? normalizePublicationIssueMonth(item.publishDate) === dateFilter
+          : item.publishDate === dateFilter);
       const textMatch =
         !searchValue ||
         item.title.toLowerCase().includes(searchValue) ||
-        item.cityName.toLowerCase().includes(searchValue);
+        (!isMonthlyPublication && item.cityName.toLowerCase().includes(searchValue));
 
       return cityMatch && statusMatch && productionMatch && dateMatch && textMatch;
     });
-  }, [epapers, search, cityFilter, statusFilter, productionFilter, dateFilter]);
+  }, [dateFilter, epapers, isMonthlyPublication, search, cityFilter, statusFilter, productionFilter]);
 
   const summary = useMemo(() => {
     return {
@@ -120,13 +144,13 @@ export default function AdminEPaperListPage() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to delete e-paper');
+        throw new Error(payload?.error || `Failed to delete ${labels.lowercase}`);
       }
 
       setEpapers((current) => current.filter((item) => item._id !== id));
       setDeleteId('');
     } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to delete e-paper'));
+      setError(toErrorMessage(err, `Failed to delete ${labels.lowercase}`));
     }
   };
 
@@ -134,15 +158,17 @@ export default function AdminEPaperListPage() {
     <div className="space-y-6">
       <div className="admin-shell-surface-strong rounded-[28px] p-5 sm:rounded-[36px] sm:p-8">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-600">Edition Workflow</p>
-          <h1 className="mt-3 text-3xl font-black text-[color:var(--admin-shell-text)] sm:text-5xl">E-Paper Desk</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-600">
+            {isMonthlyPublication ? 'Issue Workflow' : 'Edition Workflow'}
+          </p>
+          <h1 className="mt-3 text-3xl font-black text-[color:var(--admin-shell-text)] sm:text-5xl">{labels.desk}</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-            Review pages, hotspot readiness, OCR status, and editions moving toward admin release.
+            Review pages, hotspot readiness, OCR status, and {isMonthlyPublication ? 'monthly issues' : 'editions'} moving toward admin release.
           </p>
         </div>
 
         <Link
-          href="/admin/epapers/new"
+          href={`${labels.adminBasePath}/new`}
           className="admin-shell-toolbar-btn mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold"
         >
           <Plus className="h-4 w-4" />
@@ -152,19 +178,21 @@ export default function AdminEPaperListPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div className="admin-shell-surface rounded-[22px] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Total editions</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">
+            {isMonthlyPublication ? 'Total issues' : 'Total editions'}
+          </p>
           <p className="mt-2 text-2xl font-bold text-[color:var(--admin-shell-text)]">{summary.total}</p>
-          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">All draft and published e-paper records.</p>
+          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">All draft and published {isMonthlyPublication ? 'monthly issue' : labels.lowercase} records.</p>
         </div>
         <div className="admin-shell-surface rounded-[22px] p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Ready</p>
           <p className="mt-2 text-2xl font-bold text-blue-700">{summary.readyToPublish}</p>
-          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">Editions that cleared the production desk.</p>
+          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">{isMonthlyPublication ? 'Issues' : 'Editions'} that cleared the production desk.</p>
         </div>
         <div className="admin-shell-surface rounded-[22px] p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Hotspot mapping</p>
           <p className="mt-2 text-2xl font-bold text-amber-700">{summary.hotspotMapping}</p>
-          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">Editions still mapping clickable stories.</p>
+          <p className="mt-1 hidden text-xs text-[color:var(--admin-shell-text-muted)] sm:block">{isMonthlyPublication ? 'Issues' : 'Editions'} still mapping clickable stories.</p>
         </div>
         <div className="admin-shell-surface rounded-[22px] p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-shell-text-muted)]">Blocked</p>
@@ -173,7 +201,11 @@ export default function AdminEPaperListPage() {
         </div>
       </div>
 
-      <div className="admin-shell-surface-strong grid grid-cols-1 gap-3 rounded-[24px] p-4 md:grid-cols-5">
+      <div
+        className={`admin-shell-surface-strong grid grid-cols-1 gap-3 rounded-[24px] p-4 ${
+          isMonthlyPublication ? 'md:grid-cols-4' : 'md:grid-cols-5'
+        }`}
+      >
         <label className="md:col-span-2">
           <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">Search</span>
           <span className="relative block">
@@ -182,27 +214,29 @@ export default function AdminEPaperListPage() {
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by title or city"
+              placeholder={isMonthlyPublication ? 'Search by title' : 'Search by title or city'}
               className="w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] py-2 pl-9 pr-3 text-sm text-[color:var(--admin-shell-text)] outline-none focus:border-red-500"
             />
           </span>
         </label>
 
-        <label>
-          <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">City</span>
-          <select
-            value={cityFilter}
-            onChange={(event) => setCityFilter(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-          >
-            <option value="all">All cities</option>
-            {EPAPER_CITY_OPTIONS.map((city) => (
-              <option key={city.slug} value={city.slug}>
-                {city.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!isMonthlyPublication ? (
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">City</span>
+            <select
+              value={cityFilter}
+              onChange={(event) => setCityFilter(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+            >
+              <option value="all">All cities</option>
+              {EPAPER_CITY_OPTIONS.map((city) => (
+                <option key={city.slug} value={city.slug}>
+                  {city.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <label>
           <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">Status</span>
@@ -236,12 +270,21 @@ export default function AdminEPaperListPage() {
         </label>
 
         <label>
-          <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">Date</span>
-          <DateInputField
-            value={dateFilter}
-            onChange={setDateFilter}
-            className="w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-3 py-2 text-sm text-[color:var(--admin-shell-text)] outline-none focus:border-red-500"
-          />
+          <span className="mb-1 block text-xs font-semibold text-[color:var(--admin-shell-text-muted)]">{labels.issueFilterLabel}</span>
+          {isMonthlyPublication ? (
+            <input
+              type="month"
+              value={dateFilter}
+              onChange={(event) => setDateFilter(event.target.value)}
+              className="w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-3 py-2 text-sm text-[color:var(--admin-shell-text)] outline-none focus:border-red-500"
+            />
+          ) : (
+            <DateInputField
+              value={dateFilter}
+              onChange={setDateFilter}
+              className="w-full rounded-2xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] px-3 py-2 text-sm text-[color:var(--admin-shell-text)] outline-none focus:border-red-500"
+            />
+          )}
         </label>
       </div>
 
@@ -257,7 +300,7 @@ export default function AdminEPaperListPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="admin-shell-surface-strong rounded-[24px] px-5 py-12 text-center text-[color:var(--admin-shell-text-muted)]">
-          No e-papers found.
+          No {labels.plural.toLowerCase()} found.
         </div>
       ) : (
         <div className="space-y-3">
@@ -265,6 +308,10 @@ export default function AdminEPaperListPage() {
             const pagesWithImage = epaper.pages.filter((page) => Boolean(page.imagePath)).length;
             const missingPages = Math.max(0, epaper.pageCount - pagesWithImage);
             const canOpenPublicView = epaper.status === 'published';
+            const publicViewParams = new URLSearchParams({ paper: epaper._id });
+            if (!isMonthlyPublication && epaper.citySlug) {
+              publicViewParams.set('city', epaper.citySlug);
+            }
             const readiness = epaper.readiness;
             const readinessLabel =
               readiness?.status === 'ready'
@@ -282,7 +329,9 @@ export default function AdminEPaperListPage() {
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-lg font-semibold text-[color:var(--admin-shell-text)]">{epaper.title}</h2>
                     <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
-                      {epaper.cityName} ({epaper.citySlug}) | {formatUiDate(epaper.publishDate, epaper.publishDate)}
+                      {isMonthlyPublication
+                        ? formatPublicationIssueLabel(epaper.publishDate, publicationType, epaper.publishDate)
+                        : `${epaper.cityName} (${epaper.citySlug}) | ${formatPublicationIssueLabel(epaper.publishDate, publicationType, epaper.publishDate)}`}
                     </p>
                     <p className="mt-1 text-xs text-[color:var(--admin-shell-text-muted)]">
                       {epaper.pageCount} pages | {pagesWithImage} with image | {missingPages} missing
@@ -339,7 +388,7 @@ export default function AdminEPaperListPage() {
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link
-                    href={`/admin/epapers/${epaper._id}`}
+                    href={`${labels.adminBasePath}/${epaper._id}`}
                     className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -347,7 +396,7 @@ export default function AdminEPaperListPage() {
                   </Link>
 
                   <Link
-                    href={`/main/epaper?paper=${encodeURIComponent(epaper._id)}&city=${encodeURIComponent(epaper.citySlug)}`}
+                    href={`${labels.publicBasePath}?${publicViewParams.toString()}`}
                     target="_blank"
                     rel="noreferrer"
                     className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold ${

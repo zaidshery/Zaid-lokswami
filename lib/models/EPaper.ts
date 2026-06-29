@@ -8,9 +8,11 @@ import {
   EPAPER_PAGE_PROCESSING_STATUSES,
   EPAPER_PAGE_REVIEW_STATUSES,
   EPAPER_PAGE_TYPES,
+  EPAPER_PUBLICATION_TYPES,
   type EPaperPageProcessingStatus,
   type EPaperPageReviewStatus,
   type EPaperPageType,
+  type EPaperPublicationType,
 } from '@/lib/types/epaper';
 import type { EPaperProductionStatus, WorkflowActorRef, WorkflowComment } from '@/lib/workflow/types';
 
@@ -34,6 +36,7 @@ export interface IEPaperPage {
 
 export interface IEPaper {
   _id?: string;
+  publicationType: EPaperPublicationType;
   citySlug: string;
   cityName: string;
   title: string;
@@ -100,6 +103,12 @@ const EPaperPageSchema = new mongoose.Schema<IEPaperPage>(
 
 const EPaperSchema = new mongoose.Schema<IEPaper>(
   {
+    publicationType: {
+      type: String,
+      enum: EPAPER_PUBLICATION_TYPES,
+      default: 'epaper',
+      index: true,
+    },
     citySlug: { type: String, required: true, trim: true, lowercase: true, maxlength: 80 },
     cityName: { type: String, required: true, trim: true, maxlength: 120 },
     title: { type: String, required: true, trim: true, maxlength: 220 },
@@ -150,7 +159,7 @@ EPaperSchema.index(
   }
 );
 EPaperSchema.index(
-  { citySlug: 1, publishDate: 1, isCurrentRevision: 1 },
+  { publicationType: 1, citySlug: 1, publishDate: 1, isCurrentRevision: 1 },
   {
     unique: true,
     partialFilterExpression: {
@@ -160,11 +169,12 @@ EPaperSchema.index(
   }
 );
 EPaperSchema.index({ status: 1, publishDate: -1 });
-EPaperSchema.index({ productionStatus: 1, publishDate: -1 });
+EPaperSchema.index({ publicationType: 1, status: 1, publishDate: -1, _id: -1 });
+EPaperSchema.index({ publicationType: 1, productionStatus: 1, publishDate: -1 });
 EPaperSchema.index({ 'productionAssignee.id': 1, productionStatus: 1, updatedAt: -1 });
 // Cursor pagination maps logical editionDate to publishDate in this schema.
 EPaperSchema.index({ publishDate: -1, _id: -1 });
-EPaperSchema.index({ status: 1, citySlug: 1, publishDate: -1, _id: -1 });
+EPaperSchema.index({ publicationType: 1, status: 1, citySlug: 1, publishDate: -1, _id: -1 });
 EPaperSchema.index({ status: 1, publishDate: -1, createdAt: -1 });
 EPaperSchema.index({ updatedAt: -1, _id: -1 });
 

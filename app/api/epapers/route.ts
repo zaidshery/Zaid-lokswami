@@ -12,6 +12,7 @@ import {
   parsePublicEpaperFilters,
 } from '@/lib/utils/publicEpaperFilters';
 import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
+import { normalizeEPaperPublicationType } from '@/lib/types/epaper';
 
 type EpaperPage = {
   pageNumber: number;
@@ -96,6 +97,7 @@ function mapStoredRecord(record: Record<string, unknown>) {
 
   return {
     _id: String(record._id || ''),
+    publicationType: 'epaper',
     citySlug: citySlug || '',
     cityName,
     title: String(record.title || ''),
@@ -139,7 +141,9 @@ export async function GET(req: NextRequest) {
     const publishDate = filters.parsedDate
       ? filters.parsedDate.toISOString().slice(0, 10)
       : null;
-    const storedRows = await listAllStoredEPapers();
+    const storedRows = filters.publicationType === 'epaper'
+      ? await listAllStoredEPapers()
+      : [];
     const filteredRows = storedRows.filter((row) => {
       if (cityName && row.city !== cityName) return false;
       if (publishDate && row.publishDate !== publishDate) return false;
@@ -218,6 +222,7 @@ export async function GET(req: NextRequest) {
 
         return {
           _id: String(item._id),
+          publicationType: normalizeEPaperPublicationType(item.publicationType),
           citySlug: String(item.citySlug || ''),
           cityName: String(item.cityName || ''),
           title: String(item.title || ''),

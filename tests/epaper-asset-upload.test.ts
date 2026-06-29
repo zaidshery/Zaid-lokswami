@@ -85,6 +85,21 @@ describe('e-paper direct Spaces asset uploads', () => {
     expect(
       buildEpaperAssetObjectKey({
         kind: 'epaper_page_image',
+        publicationType: 'emagazine',
+        fileName: 'Magazine Page 2.jpg',
+        fileType: 'image/jpeg',
+        fileSize: 2048,
+        citySlug: 'indore',
+        publishDate: '2026-05-05',
+        pageNumber: 2,
+      })
+    ).toMatch(
+      /^lokswami\/emagazines\/2026-05-01\/pages\/002-\d{8}T\d{6}Z-[a-f0-9-]+-magazine-page-2\.jpg$/
+    );
+
+    expect(
+      buildEpaperAssetObjectKey({
+        kind: 'epaper_page_image',
         fileName: 'Page 2.webp',
         fileType: 'image/webp',
         fileSize: 2048,

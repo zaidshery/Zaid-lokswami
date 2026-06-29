@@ -8,7 +8,6 @@ import {
   EPAPER_CITY_OPTIONS,
   getCityNameFromSlug,
   normalizeCityName,
-  normalizeCitySlug,
 } from '@/lib/constants/epaperCities';
 import {
   EPAPER_IMAGE_MAX_BYTES,
@@ -27,6 +26,15 @@ import {
   queueEpaperPageProcessing,
 } from '@/lib/server/epaperProcessingJobs';
 import { buildEpaperImageAutomationUpdates } from '@/lib/server/epaperImageAutomation';
+import {
+  buildPublicationTypeMongoFilter,
+  getPublicationIssueDateRange,
+  getPublicationTypeLabels,
+  normalizePublicationCityScope,
+  normalizePublicationIssueDate,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
+import type { EPaperPublicationType } from '@/lib/types/epaper';
 
 type AdminSourceType = 'manual-upload' | 'drive-import' | 'remote-import';
 
@@ -40,7 +48,8 @@ type RemoteAssetInput = {
 };
 
 type RemoteImportPayload = {
-  citySlug: string;
+  publicationType?: EPaperPublicationType;
+  citySlug?: string;
   cityName?: string;
   title: string;
   publishDate: string;
@@ -53,7 +62,8 @@ type RemoteImportPayload = {
 };
 
 type CreateEPaperInput = {
-  citySlug: string;
+  publicationType?: EPaperPublicationType;
+  citySlug?: string;
   cityName?: string;
   title: string;
   publishDateInput: string;
@@ -389,10 +399,20 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
   const uploadedAssetRefs: UploadedAssetRef[] = [];
 
   try {
-    const citySlug = normalizeCitySlug(String(input.citySlug || ''));
+    const publicationType = resolveEPaperPublicationType(input.publicationType);
+    const labels = getPublicationTypeLabels(publicationType);
     const rawCityName = String(input.cityName || '').trim();
+    const scope = normalizePublicationCityScope({
+      publicationType,
+      citySlug: input.citySlug,
+      cityName: rawCityName,
+    });
+    const citySlug = scope.citySlug;
     const title = String(input.title || '').trim();
-    const publishDateInput = String(input.publishDateInput || '').trim();
+    const publishDateInput = normalizePublicationIssueDate(
+      input.publishDateInput,
+      publicationType
+    );
     const optionalPageCount = Math.max(0, Number(input.optionalPageCount || 0));
     const statusInput = String(input.statusInput || '').trim().toLowerCase();
     const pageImageFiles = Array.isArray(input.pageImageFiles)
@@ -406,7 +426,7 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
       throw new Error('title is required');
     }
     if (!publishDateInput) {
-      throw new Error('publishDate is required');
+      throw new Error(`${labels.issueLabel} is required`);
     }
     if (!isPdfFile(input.pdfFile)) {
       throw new Error('E-paper file must be PDF');
@@ -446,10 +466,10 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
 
     const publishDate = parsePublishDate(publishDateInput);
     if (!publishDate) {
-      throw new Error('publishDate must be valid (YYYY-MM-DD or DD-MM-YYYY)');
+      throw new Error(`${labels.issueLabel} must be valid`);
     }
 
-    const cityName = resolveCityName(citySlug, rawCityName);
+    const cityName = scope.isGlobal ? scope.cityName : resolveCityName(citySlug, rawCityName);
     if (!cityName) {
       throw new Error(
         `cityName is required for "${citySlug}". Known slugs: ${EPAPER_CITY_OPTIONS.map((item) => item.slug).join(', ')}`
@@ -457,20 +477,28 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
     }
 
     const existing = await EPaper.findOne({
+      ...buildPublicationTypeMongoFilter(publicationType),
       citySlug,
-      publishDate,
+      publishDate:
+        getPublicationIssueDateRange(publishDate, publicationType) ||
+        publishDate,
       isCurrentRevision: true,
     })
       .select('_id')
       .lean();
     if (existing) {
+      const scopeMessage = scope.isGlobal
+        ? labels.issueFilterLabel.toLowerCase()
+        : `${citySlug} in ${labels.issueFilterLabel.toLowerCase()}`;
       throw new Error(
-        `E-paper already exists for ${citySlug} on ${publishDate.toISOString().slice(0, 10)}`
+        `${labels.singular} already exists for ${scopeMessage} ${publishDate.toISOString().slice(0, 10)}`
       );
     }
 
     const publishDateFolder = formatPublishDateFolder(publishDate);
-    const baseFolder = `lokswami/epapers/${citySlug}/${publishDateFolder}`;
+    const baseFolder = scope.isGlobal
+      ? `lokswami/${labels.storageFolder}/${publishDateFolder}`
+      : `lokswami/${labels.storageFolder}/${citySlug}/${publishDateFolder}`;
 
     const inferredPageCount = await inferPdfPageCount(input.pdfFile);
     const pageCount = Math.max(
@@ -567,6 +595,7 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
       currentStatus: 'draft',
     });
     const epaper = await EPaper.create({
+      publicationType,
       citySlug,
       cityName,
       title,
@@ -597,7 +626,7 @@ export async function createAdminEpaperFromFiles(input: CreateEPaperInput) {
     let processingWarning = '';
     if (missingPageNumbers.length > 0) {
       try {
-        if (!isEpaperBackgroundProcessingEnabled(citySlug)) {
+        if (!isEpaperBackgroundProcessingEnabled(scope.isGlobal ? undefined : citySlug)) {
           throw new Error('Background PDF processing is not enabled for this city.');
         }
         await queueEpaperPageProcessing({
@@ -670,6 +699,7 @@ export async function createAdminEpaperFromRemoteImport(input: RemoteImportPaylo
     (sourceType === 'drive-import' ? 'Google Drive import' : 'Remote import');
 
   return createAdminEpaperFromFiles({
+    publicationType: input.publicationType,
     citySlug: input.citySlug,
     cityName: input.cityName,
     title: input.title,
@@ -691,6 +721,7 @@ export function mapAdminEpaper(epaper: unknown) {
   const publishDate = new Date(String(source.publishDate || ''));
   return {
     _id: String(source._id || ''),
+    publicationType: resolveEPaperPublicationType(source.publicationType),
     citySlug: String(source.citySlug || ''),
     cityName: String(source.cityName || ''),
     title: String(source.title || ''),

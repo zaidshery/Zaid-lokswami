@@ -3,7 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Home, PlayCircle, Newspaper, Zap, Menu } from 'lucide-react';
+import {
+  BookOpen,
+  Home,
+  PlayCircle,
+  Newspaper,
+  Zap,
+  Menu,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 
 interface BottomNavProps {
@@ -12,9 +20,28 @@ interface BottomNavProps {
   isOverlayDark?: boolean;
 }
 
-const navItems = [
+type BottomNavItem = {
+  icon: LucideIcon;
+  label: string;
+  labelEn: string;
+  href: string;
+  ariaLabel?: string;
+  ariaLabelEn?: string;
+  isCenter?: boolean;
+  isMenu?: boolean;
+};
+
+const navItems: BottomNavItem[] = [
   { icon: Home, label: '\u0939\u094b\u092e', labelEn: 'Home', href: '/main' },
   { icon: Newspaper, label: '\u0908-\u092a\u0947\u092a\u0930', labelEn: 'E-Paper', href: '/main/epaper', isCenter: true },
+  {
+    icon: BookOpen,
+    label: '\u0908-\u092e\u0948\u0917',
+    labelEn: 'E-Mag',
+    ariaLabel: '\u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928',
+    ariaLabelEn: 'E-Magazine',
+    href: '/main/e-magazine',
+  },
   { icon: PlayCircle, label: '\u0935\u0940\u0921\u093f\u092f\u094b', labelEn: 'Videos', href: '/main/videos' },
   { icon: Zap, label: '\u095e\u091f\u093e\u095e\u091f', labelEn: 'Quick', href: '/main/ftaftaf' },
   { icon: Menu, label: '\u092e\u0947\u0928\u0942', labelEn: 'Menu', href: '#', isMenu: true },
@@ -45,10 +72,14 @@ export default function BottomNav({
       aria-label="Bottom Navigation"
       className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur xl:hidden ${shellTone}`}
     >
-      <div className="mx-auto grid min-h-[var(--bottom-nav-height)] w-full max-w-xl grid-cols-5 items-center gap-x-1 px-2 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1 sm:gap-x-2 sm:px-3">
+      <div className="mx-auto grid min-h-[var(--bottom-nav-height)] w-full max-w-xl grid-cols-6 items-center gap-x-0.5 px-1.5 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1 sm:gap-x-1 sm:px-3">
         {navItems.map((item) => {
           const Icon = item.icon;
           const label = language === 'hi' ? item.label : item.labelEn;
+          const ariaLabel = language === 'hi'
+            ? item.ariaLabel || item.label
+            : item.ariaLabelEn || item.labelEn;
+          const explicitAriaLabel = ariaLabel === label ? undefined : ariaLabel;
           const href = item.href;
           const isActive = href !== '#' && (pathname === href || pathname.startsWith(`${href}/`));
 
@@ -63,13 +94,13 @@ export default function BottomNav({
                     ? `bg-red-500/15 ${activeTone}`
                     : inactiveTone
                 }`}
-                aria-label={label}
+                aria-label={explicitAriaLabel}
                 aria-controls="mobile-drawer"
                 aria-expanded={isMenuOpen}
                 type="button"
               >
                 <Icon size={22} strokeWidth={2} />
-                <span className="text-[10px] font-semibold leading-none min-[380px]:text-[11px]">{label}</span>
+                <span className="max-w-full truncate text-[9px] font-semibold leading-none min-[380px]:text-[10px] sm:text-[11px]">{label}</span>
               </motion.button>
             );
           }
@@ -78,6 +109,7 @@ export default function BottomNav({
             <Link
               key={item.href}
               href={href}
+              aria-label={explicitAriaLabel}
               aria-current={isActive ? 'page' : undefined}
               className="reader-touch-link reader-focus-ring touch-target-compact relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5"
             >
@@ -95,7 +127,7 @@ export default function BottomNav({
                 className={`cnp-motion relative z-10 ${isActive ? activeTone : inactiveTone}`}
               />
               <span
-                className={`cnp-motion relative z-10 text-[10px] font-semibold leading-none min-[380px]:text-[11px] ${
+                className={`cnp-motion relative z-10 max-w-full truncate text-[9px] font-semibold leading-none min-[380px]:text-[10px] sm:text-[11px] ${
                   isActive ? activeTone : inactiveTone
                 }`}
               >

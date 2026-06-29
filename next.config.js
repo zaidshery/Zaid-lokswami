@@ -178,6 +178,21 @@ const nextConfig = {
         headers: publicPageCache,
       },
       {
+        source: '/main/e-magazine',
+        missing: appRouterFlightRequestSignals,
+        headers: publicPageCache,
+      },
+      {
+        source: '/main/e-magazine/:path*',
+        missing: appRouterFlightRequestSignals,
+        headers: publicPageCache,
+      },
+      {
+        source: '/main/epaper',
+        missing: appRouterFlightRequestSignals,
+        headers: publicPageCache,
+      },
+      {
         source: '/main/epaper/:path*',
         missing: appRouterFlightRequestSignals,
         headers: publicPageCache,

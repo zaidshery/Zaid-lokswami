@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -28,6 +28,13 @@ import type {
   EPaperRecord,
 } from '@/lib/types/epaper';
 import { formatUiDate, formatUiDateTime } from '@/lib/utils/dateFormat';
+import {
+  formatPublicationIssueLabel,
+  getPublicationTypeLabels,
+  normalizePublicationIssueDate,
+  normalizePublicationIssueMonth,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
 import { buildEpaperEditionQualitySummary } from '@/lib/utils/epaperQualitySignals';
 import { getAllowedEpaperProductionTransitions } from '@/lib/workflow/transitions';
 import type { EPaperProductionStatus } from '@/lib/workflow/types';
@@ -189,8 +196,26 @@ function pageChipTone(kind: 'good' | 'warn' | 'danger' | 'neutral' | 'publish') 
 
 export default function AdminEPaperDetailPage() {
   const params = useParams();
+  const pathname = usePathname();
   const router = useRouter();
   const epaperId = String(params.id || '');
+  const publicationType = resolveEPaperPublicationType(
+    pathname.startsWith('/admin/emagazines') ? 'emagazine' : 'epaper'
+  );
+  const labels = useMemo(
+    () => getPublicationTypeLabels(publicationType),
+    [publicationType]
+  );
+  const isMonthlyPublication = publicationType === 'emagazine';
+  const workspaceNoun = isMonthlyPublication ? 'Issue' : 'Edition';
+  const productionActionLabels = useMemo<Partial<Record<EPaperProductionStatus, string>>>(
+    () => ({
+      ...PRODUCTION_ACTION_LABELS,
+      published: `Publish ${workspaceNoun}`,
+      archived: `Archive ${workspaceNoun}`,
+    }),
+    [workspaceNoun]
+  );
 
   const [epaper, setEpaper] = useState<EPaperRecord | null>(null);
   const [articles, setArticles] = useState<EPaperArticleRecord[]>([]);
@@ -239,10 +264,13 @@ export default function AdminEPaperDetailPage() {
         status === 'cancelled';
 
       if (isTerminal) {
-        const editionResponse = await fetch(`/api/admin/epapers/${epaperId}`, {
-          headers: { ...getAuthHeader() },
-          cache: 'no-store',
-        });
+        const editionResponse = await fetch(
+          `/api/admin/epapers/${epaperId}?publicationType=${publicationType}`,
+          {
+            headers: { ...getAuthHeader() },
+            cache: 'no-store',
+          }
+        );
         const editionPayload = (await editionResponse
           .json()
           .catch(() => ({}))) as EpaperResponse;
@@ -269,7 +297,7 @@ export default function AdminEPaperDetailPage() {
     } catch {
       return null;
     }
-  }, [epaperId]);
+  }, [epaperId, publicationType]);
 
   const loadEpaperTtsAssets = useCallback(async () => {
     if (!epaperId) {
@@ -361,7 +389,7 @@ export default function AdminEPaperDetailPage() {
     setError('');
     try {
       const [epaperRes, articlesRes] = await Promise.all([
-        fetch(`/api/admin/epapers/${epaperId}`, {
+        fetch(`/api/admin/epapers/${epaperId}?publicationType=${publicationType}`, {
           headers: { ...getAuthHeader() },
         }),
         fetch(`/api/admin/epapers/${epaperId}/articles`, {
@@ -396,7 +424,7 @@ export default function AdminEPaperDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [epaperId, loadEpaperTtsAssets, loadProcessing, loadProductionActivity]);
+  }, [epaperId, loadEpaperTtsAssets, loadProcessing, loadProductionActivity, publicationType]);
 
   useEffect(() => {
     if (!epaperId) return;
@@ -526,7 +554,7 @@ export default function AdminEPaperDetailPage() {
         },
         body: JSON.stringify({
           title: title.trim(),
-          publishDate,
+          publishDate: normalizePublicationIssueDate(publishDate, publicationType),
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -534,10 +562,10 @@ export default function AdminEPaperDetailPage() {
         throw new Error(payload?.error || 'Failed to save metadata');
       }
 
-      setNotice('E-paper metadata updated');
+      setNotice(`${labels.singular} metadata updated`);
       await fetchData();
     } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to save metadata'));
+      setError(toErrorMessage(err, `Failed to save ${labels.lowercase} metadata`));
     } finally {
       setSavingMeta(false);
     }
@@ -558,6 +586,7 @@ export default function AdminEPaperDetailPage() {
         kind: 'epaper_page_image',
         file: normalized.file,
         authHeaders,
+        publicationType,
         citySlug: epaper.citySlug,
         publishDate: epaper.publishDate,
         pageNumber,
@@ -613,11 +642,11 @@ export default function AdminEPaperDetailPage() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to delete e-paper');
+        throw new Error(payload?.error || `Failed to delete ${labels.lowercase}`);
       }
-      router.push('/admin/epapers');
+      router.push(labels.adminBasePath);
     } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to delete e-paper'));
+      setError(toErrorMessage(err, `Failed to delete ${labels.lowercase}`));
       setDeleting(false);
     }
   };
@@ -671,7 +700,7 @@ export default function AdminEPaperDetailPage() {
       if ((!response.ok && response.status !== 409) || !revisionId) {
         throw new Error(payload?.error || 'Failed to create draft revision.');
       }
-      router.push(`/admin/epapers/${revisionId}`);
+      router.push(`${labels.adminBasePath}/${revisionId}`);
     } catch (err) {
       setError(toErrorMessage(err, 'Failed to create draft revision.'));
       setCreatingRevision(false);
@@ -833,14 +862,14 @@ export default function AdminEPaperDetailPage() {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <Link
-          href="/admin/epapers"
+          href={labels.adminBasePath}
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to E-Papers
+          Back to {labels.plural}
         </Link>
         <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error || 'E-paper not found'}
+          {error || `${labels.singular} not found`}
         </div>
       </div>
     );
@@ -913,11 +942,11 @@ export default function AdminEPaperDetailPage() {
       <div className="mx-auto max-w-[1600px]">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <Link
-            href="/admin/epapers"
+            href={labels.adminBasePath}
             className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to E-Papers
+            Back to {labels.plural}
           </Link>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -969,14 +998,15 @@ export default function AdminEPaperDetailPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Edition workspace
+                    {workspaceNoun} workspace
                   </p>
                   <h1 className="mt-2 break-words text-2xl font-bold text-gray-900">
                     {epaper.title}
                   </h1>
                   <p className="mt-1 text-sm text-gray-600">
-                    {epaper.cityName} ({epaper.citySlug}) |{' '}
-                    {formatUiDate(epaper.publishDate, epaper.publishDate)}
+                    {isMonthlyPublication
+                      ? formatPublicationIssueLabel(epaper.publishDate, publicationType, epaper.publishDate)
+                      : `${epaper.cityName} (${epaper.citySlug}) | ${formatPublicationIssueLabel(epaper.publishDate, publicationType, epaper.publishDate)}`}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1173,7 +1203,7 @@ export default function AdminEPaperDetailPage() {
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Edition pages
+                    {workspaceNoun} pages
                   </p>
                   <h2 className="mt-2 text-lg font-semibold text-gray-900">
                     {epaper.pageCount} pages
@@ -1223,7 +1253,7 @@ export default function AdminEPaperDetailPage() {
                   const hasImage = Boolean(page?.imagePath);
                   const isUploading = uploadingPage === pageNumber;
                   const isSelected = selectedPageNumbers.includes(pageNumber);
-                  const editHref = `/admin/epapers/${epaper._id}/page/${pageNumber}`;
+                  const editHref = `${labels.adminBasePath}/${epaper._id}/page/${pageNumber}`;
                     const statusChips = [
                     {
                       label: hasImage ? 'Uploaded' : 'Image Missing',
@@ -1462,7 +1492,7 @@ export default function AdminEPaperDetailPage() {
                     {epaper.title}
                   </h2>
                   <p className="mt-1 text-sm text-gray-600">
-                    {formatUiDate(epaper.publishDate, epaper.publishDate)}
+                    {formatPublicationIssueLabel(epaper.publishDate, publicationType, epaper.publishDate)}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span
@@ -1519,7 +1549,7 @@ export default function AdminEPaperDetailPage() {
                           ) : (
                             <PencilRuler className="h-3.5 w-3.5" />
                           )}
-                          {PRODUCTION_ACTION_LABELS[nextStatus] ||
+                          {productionActionLabels[nextStatus] ||
                             formatProductionStatusLabel(nextStatus)}
                         </button>
                       );
@@ -1597,7 +1627,7 @@ export default function AdminEPaperDetailPage() {
                 ) : (
                   <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
                     <p className="font-semibold">No critical blockers</p>
-                    <p className="mt-1">Edition checks are clear for the current stage.</p>
+                    <p className="mt-1">{workspaceNoun} checks are clear for the current stage.</p>
                   </div>
                 )}
 
@@ -1672,13 +1702,23 @@ export default function AdminEPaperDetailPage() {
                   </label>
                   <label>
                     <span className="mb-1 block text-xs font-semibold text-gray-600">
-                      Publish Date
+                      {labels.issueLabel}
                     </span>
-                    <DateInputField
-                      value={publishDate}
-                      onChange={setPublishDate}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                    />
+                    {isMonthlyPublication ? (
+                      <input
+                        type="month"
+                        value={normalizePublicationIssueMonth(publishDate)}
+                        onChange={(event) => setPublishDate(event.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                      />
+                    ) : (
+                      <DateInputField
+                        value={publishDate}
+                        onChange={setPublishDate}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                      />
+                    )}
+                    <p className="mt-1 text-xs text-gray-500">{labels.issueHelp}</p>
                   </label>
                   <button
                     type="button"
@@ -1755,7 +1795,7 @@ export default function AdminEPaperDetailPage() {
                     isLoading={isLoadingProductionActivity}
                     onRefresh={loadProductionActivity}
                     emptyMessage="No production activity yet."
-                    fallbackMessage="E-paper activity recorded."
+                    fallbackMessage={`${labels.singular} activity recorded.`}
                     actionLabel={(action) => formatProductionStatusLabel(action)}
                     formatTimestamp={(value) =>
                       formatUiDateTime(value, formatUiDate(value, '')) || 'Unknown time'
@@ -1776,7 +1816,7 @@ export default function AdminEPaperDetailPage() {
                     ) : (
                       <Trash2 className="h-3.5 w-3.5" />
                     )}
-                    Delete E-Paper
+                    Delete {labels.singular}
                   </button>
                 </div>
               </details>

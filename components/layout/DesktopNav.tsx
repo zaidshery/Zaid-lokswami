@@ -9,6 +9,7 @@ import { NEWS_CATEGORIES, getNewsCategoryHref } from '@/lib/constants/newsCatego
 const primaryLinks = [
   { name: '\u0939\u094b\u092e', nameEn: 'Home', href: '/main' },
   { name: '\u0908-\u092a\u0947\u092a\u0930', nameEn: 'E-Paper', href: '/main/epaper' },
+  { name: '\u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928', nameEn: 'E-Magazine', href: '/main/e-magazine' },
   { name: '\u0921\u093f\u091c\u093f\u091f\u0932 \u0928\u094d\u092f\u0942\u091c\u0930\u0942\u092e', nameEn: 'Digital Newsroom', href: '/main/digital-newsroom' },
 ];
 

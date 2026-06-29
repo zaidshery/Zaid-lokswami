@@ -6,6 +6,10 @@ import {
   createAdminEpaperFromRemoteImport,
   mapAdminEpaper,
 } from '@/lib/utils/adminEpaperIngestion';
+import {
+  getPublicationTypeLabels,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
 
 function normalizePageImageUrls(value: unknown) {
   if (Array.isArray(value)) {
@@ -36,8 +40,11 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => ({}));
     const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
+    const publicationType = resolveEPaperPublicationType(source.publicationType);
+    const labels = getPublicationTypeLabels(publicationType);
 
     const result = await createAdminEpaperFromRemoteImport({
+      publicationType,
       citySlug: String(source.citySlug || ''),
       cityName: typeof source.cityName === 'string' ? source.cityName : '',
       title: String(source.title || ''),
@@ -53,7 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: 'E-paper imported successfully',
+        message: `${labels.singular} imported successfully`,
         warning: result.warning,
         data: mapAdminEpaper(result.epaper.toObject()),
       },

@@ -10,7 +10,6 @@ import {
   getCityNameFromSlug,
   getCitySlugFromName,
   isEPaperCitySlug,
-  normalizeCitySlug,
 } from '@/lib/constants/epaperCities';
 import { listStoredEPapers } from '@/lib/storage/epapersFile';
 import { parsePublishDate } from '@/lib/utils/epaperStorage';
@@ -25,7 +24,18 @@ import {
 } from '@/lib/utils/epaperAdminReadiness';
 import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
 import { resolveEpaperProduction } from '@/lib/workflow/epaper';
-import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
+import {
+  isEPaperPageReviewStatus,
+  normalizeEPaperPublicationType,
+} from '@/lib/types/epaper';
+import {
+  buildPublicationTypeMongoFilter,
+  getPublicationIssueDateRange,
+  getPublicationTypeLabels,
+  normalizePublicationCityScope,
+  normalizePublicationIssueDate,
+  resolveEPaperPublicationType,
+} from '@/lib/utils/epaperPublication';
 
 type EpaperPage = {
   pageNumber: number;
@@ -138,6 +148,7 @@ function mapCreatedEpaper(epaper: unknown) {
   const pages = normalizePages(source.pages);
   return {
     _id: String(source._id || ''),
+    publicationType: normalizeEPaperPublicationType(source.publicationType),
     citySlug: String(source.citySlug || ''),
     cityName: String(source.cityName || ''),
     title: String(source.title || ''),
@@ -238,15 +249,19 @@ export async function GET(req: NextRequest) {
     const citySlug = (searchParams.get('citySlug') || '').trim().toLowerCase();
     const status = (searchParams.get('status') || '').trim().toLowerCase();
     const date = (searchParams.get('date') || '').trim();
+    const month = (searchParams.get('month') || '').trim();
+    const publicationType = resolveEPaperPublicationType(searchParams.get('publicationType'));
     const limit = parseListLimit(searchParams.get('limit'), 20, 200);
     const page = parsePageParam(searchParams.get('page'), 1, 500);
     const isUnbounded = limit === null;
     const effectivePage = isUnbounded ? 1 : page;
     const effectiveLimit = isUnbounded ? 0 : limit;
 
-    const query: Record<string, unknown> = {};
+    const query: Record<string, unknown> = {
+      ...buildPublicationTypeMongoFilter(publicationType),
+    };
 
-    if (citySlug) {
+    if (citySlug && publicationType !== 'emagazine') {
       if (!isEPaperCitySlug(citySlug)) {
         return NextResponse.json(
           { success: false, error: 'Invalid city slug' },
@@ -266,22 +281,31 @@ export async function GET(req: NextRequest) {
       query.status = status;
     }
 
-    if (date) {
-      const parsedDate = parsePublishDate(date);
+    const issueDateFilter = month || date;
+    if (issueDateFilter) {
+      const normalizedIssueDate = normalizePublicationIssueDate(
+        issueDateFilter,
+        publicationType
+      );
+      const parsedDate = parsePublishDate(normalizedIssueDate);
       if (!parsedDate) {
         return NextResponse.json(
-          { success: false, error: 'Invalid date. Use YYYY-MM-DD.' },
+          { success: false, error: `Invalid ${getPublicationTypeLabels(publicationType).issueFilterLabel.toLowerCase()}.` },
           { status: 400 }
         );
       }
 
-      const next = new Date(parsedDate);
-      next.setUTCDate(next.getUTCDate() + 1);
-      query.publishDate = { $gte: parsedDate, $lt: next };
+      query.publishDate =
+        getPublicationIssueDateRange(normalizedIssueDate, publicationType) ||
+        (() => {
+          const next = new Date(parsedDate);
+          next.setUTCDate(next.getUTCDate() + 1);
+          return { $gte: parsedDate, $lt: next };
+        })();
     }
 
     const fileResult =
-      !status || status === 'all' || status === 'published'
+      publicationType === 'epaper' && (!status || status === 'all' || status === 'published')
         ? await listStoredEPapers({
             city: citySlug ? getCityNameFromSlug(citySlug) : null,
             publishDate: date || null,
@@ -312,6 +336,7 @@ export async function GET(req: NextRequest) {
             sourceUrl: row.pdfUrl,
             createdAt: row.publishedAt,
             updatedAt: row.updatedAt,
+            publicationType: 'epaper' as const,
           };
           const production = resolveEpaperProduction({
             status: 'published',
@@ -373,6 +398,7 @@ export async function GET(req: NextRequest) {
 
         return {
           _id: String(item._id),
+          publicationType: normalizeEPaperPublicationType(item.publicationType),
           citySlug: String(item.citySlug || ''),
           cityName: String(item.cityName || ''),
           title: String(item.title || ''),
@@ -533,15 +559,34 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => ({}));
     const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
-    const citySlug = normalizeCitySlug(String(source.citySlug || ''));
-    const cityName = firstNonEmptyString(source.cityName, getCityNameFromSlug(citySlug));
+    const publicationType = resolveEPaperPublicationType(source.publicationType);
+    const labels = getPublicationTypeLabels(publicationType);
+    const scope = normalizePublicationCityScope({
+      publicationType,
+      citySlug: source.citySlug,
+      cityName: source.cityName,
+    });
+    const citySlug = scope.citySlug;
+    const cityName = scope.cityName;
     const title = String(source.title || '').trim();
-    const publishDate = parsePublishDate(String(source.publishDate || ''));
+    const normalizedIssueDate = normalizePublicationIssueDate(
+      source.publishDate,
+      publicationType
+    );
+    const publishDate = parsePublishDate(normalizedIssueDate);
     const statusInput = String(source.status || '').trim().toLowerCase();
     const requestedPageCount = toPositiveInt(source.pageCount);
 
     if (!citySlug) {
-      return NextResponse.json({ success: false, error: 'citySlug is required and must be valid' }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: scope.isGlobal
+            ? `${labels.issueLabel} scope is invalid`
+            : 'citySlug is required and must be valid',
+        },
+        { status: 400 }
+      );
     }
     if (!cityName) {
       return NextResponse.json({ success: false, error: 'cityName is required' }, { status: 400 });
@@ -550,7 +595,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'title is required' }, { status: 400 });
     }
     if (!publishDate) {
-      return NextResponse.json({ success: false, error: 'publishDate must be valid (YYYY-MM-DD or DD-MM-YYYY)' }, { status: 400 });
+      return NextResponse.json({ success: false, error: `${labels.issueLabel} must be valid` }, { status: 400 });
     }
     if (requestedPageCount > 1000) {
       return NextResponse.json({ success: false, error: 'pageCount is too high (max 1000)' }, { status: 400 });
@@ -585,15 +630,23 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
     const existing = await EPaper.findOne({
+      ...buildPublicationTypeMongoFilter(publicationType),
       citySlug,
-      publishDate,
+      publishDate:
+        getPublicationIssueDateRange(normalizedIssueDate, publicationType) ||
+        publishDate,
       isCurrentRevision: true,
     })
       .select('_id')
       .lean();
     if (existing) {
       return NextResponse.json(
-        { success: false, error: `E-paper already exists for ${citySlug} on ${publishDate.toISOString().slice(0, 10)}` },
+        {
+          success: false,
+          error: scope.isGlobal
+            ? `${labels.singular} already exists for ${labels.issueFilterLabel.toLowerCase()} ${normalizedIssueDate}`
+            : `${labels.singular} already exists for ${citySlug} in ${labels.issueFilterLabel.toLowerCase()} ${normalizedIssueDate}`,
+        },
         { status: 409 }
       );
     }
@@ -639,6 +692,7 @@ export async function POST(req: NextRequest) {
     const pdfFormat = pdfAsset.mediaKey.split('.').pop()?.toLowerCase() || 'pdf';
 
     const epaper = await EPaper.create({
+      publicationType,
       citySlug,
       cityName,
       title,
@@ -655,14 +709,14 @@ export async function POST(req: NextRequest) {
       isCurrentRevision: true,
       productionStatus: automationUpdates.productionStatus || 'draft_upload',
       sourceType: 'manual-upload',
-      sourceLabel: 'Direct Spaces upload',
+      sourceLabel: `Direct Spaces upload (${labels.singular})`,
       sourceUrl: pdfAsset.mediaUrl,
     });
 
     return NextResponse.json(
       {
         success: true,
-        message: 'E-paper created successfully',
+        message: `${labels.singular} created successfully`,
         data: mapCreatedEpaper(epaper.toObject()),
       },
       { status: 201 }
@@ -675,7 +729,7 @@ export async function POST(req: NextRequest) {
       (error as { code?: unknown }).code === 11000;
     if (isDuplicateKeyError) {
       return NextResponse.json(
-        { success: false, error: 'An e-paper for this city/date already exists' },
+        { success: false, error: 'An issue of this publication type for this scope/date already exists' },
         { status: 409 }
       );
     }

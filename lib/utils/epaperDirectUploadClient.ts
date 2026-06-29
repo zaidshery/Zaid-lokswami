@@ -22,6 +22,7 @@ type UploadOptions = {
   kind: EpaperAssetKind;
   file: File;
   authHeaders?: Record<string, string>;
+  publicationType?: 'epaper' | 'emagazine';
   citySlug?: string;
   publishDate?: string;
   pageNumber?: number;
@@ -45,8 +46,13 @@ type UploadCompleteResponse = {
   data?: DirectEpaperUploadResult;
 };
 
-const DIRECT_UPLOAD_CORS_HELP =
-  'Direct e-paper upload to DigitalOcean Spaces was blocked. Add this admin site origin to the Spaces CORS rules and allow PUT, GET, HEAD, and OPTIONS with the Content-Type and x-amz-acl headers.';
+function getDirectUploadCorsHelp() {
+  const origin =
+    typeof window !== 'undefined' && window.location.origin
+      ? ` (${window.location.origin})`
+      : '';
+  return `Direct e-paper upload to DigitalOcean Spaces was blocked. Add this admin site origin${origin} to the Spaces CORS rules and allow PUT, GET, HEAD, and OPTIONS with the Content-Type and x-amz-acl headers.`;
+}
 
 export async function getImageDimensionsFromFile(file: File) {
   if (typeof window === 'undefined') return null;
@@ -88,7 +94,7 @@ export function uploadFileToSignedUrl(options: {
       }
 
       if (request.status === 0) {
-        reject(new Error(DIRECT_UPLOAD_CORS_HELP));
+        reject(new Error(getDirectUploadCorsHelp()));
         return;
       }
 
@@ -103,7 +109,7 @@ export function uploadFileToSignedUrl(options: {
     });
 
     request.addEventListener('error', () => {
-      reject(new Error(DIRECT_UPLOAD_CORS_HELP));
+      reject(new Error(getDirectUploadCorsHelp()));
     });
 
     request.addEventListener('abort', () => {
@@ -125,6 +131,7 @@ export async function uploadEpaperAssetDirect(options: UploadOptions) {
     headers,
     body: JSON.stringify({
       kind: options.kind,
+      publicationType: options.publicationType,
       fileName: options.file.name,
       fileType: options.file.type,
       fileSize: options.file.size,

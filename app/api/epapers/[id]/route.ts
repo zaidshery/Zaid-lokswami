@@ -6,6 +6,8 @@ import EPaperArticle from '@/lib/models/EPaperArticle';
 import { getCitySlugFromName } from '@/lib/constants/epaperCities';
 import { getStoredEPaperById } from '@/lib/storage/epapersFile';
 import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
+import { normalizeEPaperPublicationType } from '@/lib/types/epaper';
+import { buildPublicationTypeMongoFilter } from '@/lib/utils/epaperPublication';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -114,8 +116,18 @@ function toFraction(value: unknown) {
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
+    const publicationType = normalizeEPaperPublicationType(
+      req.nextUrl.searchParams.get('publicationType')
+    );
 
     if (await shouldUseFileStore()) {
+      if (publicationType !== 'epaper') {
+        return NextResponse.json(
+          { success: false, error: 'E-magazine not found' },
+          { status: 404 }
+        );
+      }
+
       const stored = await getStoredEPaperById(id);
       if (!stored) {
         return NextResponse.json(
@@ -174,6 +186,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
           citySlug: getCitySlugFromName(String(stored.city || '')),
           cityName: String(stored.city || ''),
           title: String(stored.title || ''),
+          publicationType: 'epaper',
           publishDate: toDateLabel(stored.publishDate),
           pdfPath: firstNonEmptyString(storedSource.pdfPath, storedSource.pdfUrl),
           thumbnailPath: firstNonEmptyString(storedSource.thumbnailPath, storedSource.thumbnail),
@@ -190,6 +203,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     let epaper = Types.ObjectId.isValid(id)
       ? await EPaper.findById(id).lean()
       : await EPaper.findOne({
+          ...buildPublicationTypeMongoFilter(publicationType),
           familyId: id,
           status: 'published',
           isCurrentRevision: true,
@@ -200,8 +214,15 @@ export async function GET(req: NextRequest, context: RouteContext) {
         { status: 404 }
       );
     }
+    if (normalizeEPaperPublicationType(epaper.publicationType) !== publicationType) {
+      return NextResponse.json(
+        { success: false, error: 'E-paper not found' },
+        { status: 404 }
+      );
+    }
     if (epaper.status !== 'published' || epaper.isCurrentRevision === false) {
       epaper = await EPaper.findOne({
+        ...buildPublicationTypeMongoFilter(publicationType),
         familyId: String(epaper.familyId || epaper._id),
         status: 'published',
         isCurrentRevision: true,
@@ -236,6 +257,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         citySlug: String(epaper.citySlug || ''),
         cityName: String(epaper.cityName || ''),
         title: String(epaper.title || ''),
+        publicationType,
         publishDate: toDateLabel(epaper.publishDate),
         pdfPath: firstNonEmptyString(epaperSource.pdfPath, epaperSource.pdfUrl),
         thumbnailPath: resolveEpaperCoverImagePath({

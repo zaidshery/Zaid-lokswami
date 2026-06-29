@@ -13,6 +13,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Bookmark,
+  CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -49,7 +50,6 @@ import {
   buildEpaperStoryWhatsAppShareUrl,
   toAbsoluteShareUrl,
 } from '@/lib/utils/articleShare';
-import { formatUiDate } from '@/lib/utils/dateFormat';
 import {
   readSavedEpaperPapers,
   readSavedEpaperStories,
@@ -69,7 +69,18 @@ import { renderPdfPagePreviewFromUrl } from '@/lib/utils/pdfThumbnailClient';
 import {
   type EPaperCityFilter,
 } from '@/lib/utils/publicEpaperFilters';
-import type { EPaperArticleRecord, EPaperRecord } from '@/lib/types/epaper';
+import type {
+  EPaperArticleRecord,
+  EPaperPublicationType,
+  EPaperRecord,
+} from '@/lib/types/epaper';
+import {
+  formatPublicationIssueLabel,
+  getPublicationTypeLabels,
+  isMonthlyEPaperPublication,
+  normalizePublicationIssueDate,
+  normalizePublicationIssueMonth,
+} from '@/lib/utils/epaperPublication';
 import { buildTtsAudioSource, requestEpaperStoryTtsAudio } from '@/lib/ai/ttsClient';
 
 export type PublicCursor = {
@@ -79,6 +90,7 @@ export type PublicCursor = {
 
 export type PublicEPaperListItem = {
   _id: string;
+  publicationType?: EPaperPublicationType;
   citySlug: string;
   cityName: string;
   title: string;
@@ -113,6 +125,8 @@ type EPaperPageClientProps = {
   initialNextCursor: PublicCursor | null;
   initialCity: EPaperCityFilter;
   initialPublishDate: string;
+  publicationType?: EPaperPublicationType;
+  publicBasePath?: string;
 };
 
 const COPY = {
@@ -664,14 +678,49 @@ function buildSavedStoryInput(
   };
 }
 
+function formatPublicationMetaLine(options: {
+  cityName?: string;
+  publishDate: string;
+  publicationType: EPaperPublicationType;
+  pageCount?: number;
+  pagesLabel?: string;
+}) {
+  const issueLabel = formatPublicationIssueLabel(
+    options.publishDate,
+    options.publicationType,
+    options.publishDate
+  );
+  const parts = isMonthlyEPaperPublication(options.publicationType)
+    ? [issueLabel]
+    : [String(options.cityName || '').trim(), issueLabel];
+
+  if (options.pageCount && options.pagesLabel) {
+    parts.push(`${options.pageCount} ${options.pagesLabel}`);
+  }
+
+  return parts.filter(Boolean).join(' | ');
+}
+
+function getPublicationLocationLabel(
+  publicationType: EPaperPublicationType,
+  cityName: string
+) {
+  return isMonthlyEPaperPublication(publicationType) ? '' : cityName;
+}
+
 function buildStoryTextDownload(
   paper: EPaperRecord & { articles: EPaperArticleRecord[] },
   story: EPaperArticleRecord,
-  readableText: string
+  readableText: string,
+  publicationType: EPaperPublicationType
 ) {
   const lines = [
     story.title || paper.title,
-    `${paper.cityName} | ${formatUiDate(paper.publishDate, paper.publishDate)}`,
+    formatPublicationMetaLine({
+      cityName: paper.cityName,
+      publishDate: paper.publishDate,
+      publicationType,
+    }),
     `Page ${story.pageNumber || 1}`,
     '',
     readableText.trim(),
@@ -682,6 +731,7 @@ function buildStoryTextDownload(
 
 function buildStoryPrintHtml(options: {
   title: string;
+  surfaceLabel: string;
   metaLine: string;
   excerpt: string;
   contentHtml: string;
@@ -709,7 +759,7 @@ function buildStoryPrintHtml(options: {
   </head>
   <body style="margin:0;background:#ffffff;color:#111827;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
     <main style="max-width:760px;margin:0 auto;padding:2rem 1.25rem 3rem;">
-      <p style="margin:0 0 0.75rem;color:#b91c1c;font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Lokswami e-paper</p>
+      <p style="margin:0 0 0.75rem;color:#b91c1c;font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">${escapeHtml(options.surfaceLabel)}</p>
       <h1 style="margin:0 0 0.75rem;font-size:2rem;line-height:1.2;">${escapeHtml(options.title)}</h1>
       <p style="margin:0 0 1.25rem;color:#6b7280;font-size:0.95rem;">${escapeHtml(options.metaLine)}</p>
       ${
@@ -803,18 +853,24 @@ function mergeUniquePapers(
 function buildReaderSearchParams(options: {
   city: EPaperCityFilter;
   publishDate: string;
+  publicationType?: EPaperPublicationType;
   paperId?: string;
   page?: number;
   story?: string;
 }) {
   const params = new URLSearchParams();
+  const isMonthly = isMonthlyEPaperPublication(options.publicationType);
 
-  if (options.city !== 'all') {
+  if (!isMonthly && options.city !== 'all') {
     params.set('city', options.city);
   }
 
   if (options.publishDate) {
-    params.set('date', options.publishDate);
+    if (isMonthly) {
+      params.set('month', normalizePublicationIssueMonth(options.publishDate));
+    } else {
+      params.set('date', normalizePublicationIssueDate(options.publishDate, 'epaper'));
+    }
   }
 
   const paperId = String(options.paperId || '').trim();
@@ -833,6 +889,52 @@ function buildReaderSearchParams(options: {
   }
 
   return params;
+}
+
+function IssueMonthPicker({
+  value,
+  onChange,
+  onClear,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+  placeholder: string;
+}) {
+  const monthValue = normalizePublicationIssueMonth(value);
+  const label = monthValue
+    ? formatPublicationIssueLabel(monthValue, 'emagazine', monthValue)
+    : placeholder;
+
+  return (
+    <div className="flex w-full items-center gap-1.5">
+      <label className="reader-focus-ring flex h-12 w-full items-center gap-2.5 rounded-full border border-gray-300 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-900/95 dark:text-zinc-200 dark:hover:bg-zinc-800/80 sm:h-11 sm:text-sm">
+        <CalendarDays className="h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
+        <span className="sr-only">{placeholder}</span>
+        <input
+          type="month"
+          value={monthValue}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
+          aria-label={placeholder}
+        />
+        <span className="pointer-events-none hidden truncate text-zinc-500 dark:text-zinc-400 min-[420px]:inline">
+          {label}
+        </span>
+      </label>
+      {monthValue ? (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Clear month"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-zinc-500 transition hover:bg-gray-50 hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:h-11 sm:w-11"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -855,13 +957,22 @@ export default function EPaperPageClient({
   initialNextCursor,
   initialCity,
   initialPublishDate,
+  publicationType = 'epaper',
+  publicBasePath = '/main/epaper',
 }: EPaperPageClientProps) {
   const language = useAppStore((state) => state.language);
   const theme = useAppStore((state) => state.theme);
   const setEpaperReaderOpen = useAppStore((state) => state.setEpaperReaderOpen);
   const prefersReducedMotion = useReducedMotion();
   const t = COPY[language];
-  const [selectedCity, setSelectedCity] = useState<EPaperCityFilter>(initialCity);
+  const publicationLabels = useMemo(
+    () => getPublicationTypeLabels(publicationType),
+    [publicationType]
+  );
+  const isMonthlyPublication = isMonthlyEPaperPublication(publicationType);
+  const [selectedCity, setSelectedCity] = useState<EPaperCityFilter>(
+    isMonthlyPublication ? 'all' : initialCity
+  );
   const [selectedPublishDate, setSelectedPublishDate] = useState(initialPublishDate);
   const [epapers, setEpapers] = useState<PublicEPaperListItem[]>(
     Array.isArray(initialItems) ? initialItems : []
@@ -950,7 +1061,8 @@ export default function EPaperPageClient({
   const articleAudioRef = useRef<HTMLAudioElement | null>(null);
   const canUseSpreadMode = Boolean(activePaper && activePaper.pageCount > 1);
   const shouldShowSpreadMode = canUseSpreadMode && readerDisplayMode === 'spread' && isWideScreen;
-  const hasArchiveFilters = selectedCity !== 'all' || Boolean(selectedPublishDate);
+  const hasArchiveFilters =
+    (!isMonthlyPublication && selectedCity !== 'all') || Boolean(selectedPublishDate);
   const syncSavedLibrary = useCallback(() => {
     setSavedPapers(readSavedEpaperPapers());
     setSavedStories(readSavedEpaperStories());
@@ -964,12 +1076,17 @@ export default function EPaperPageClient({
       const query = new URLSearchParams({
         limit: String(listLimit),
       });
+      query.set('publicationType', publicationType);
 
-      if (selectedCity !== 'all') {
+      if (!isMonthlyPublication && selectedCity !== 'all') {
         query.set('citySlug', selectedCity);
       }
       if (selectedPublishDate) {
-        query.set('date', selectedPublishDate);
+        if (isMonthlyPublication) {
+          query.set('month', normalizePublicationIssueMonth(selectedPublishDate));
+        } else {
+          query.set('date', normalizePublicationIssueDate(selectedPublishDate, publicationType));
+        }
       }
       if (cursor?.publishedAt && cursor.id) {
         query.set('cursorPublishedAt', cursor.publishedAt);
@@ -978,12 +1095,14 @@ export default function EPaperPageClient({
 
       return query;
     },
-    [listLimit, selectedCity, selectedPublishDate]
+    [isMonthlyPublication, listLimit, publicationType, selectedCity, selectedPublishDate]
   );
 
   const onPublishDateChange = useCallback((nextValue: string) => {
-    setSelectedPublishDate(nextValue);
-  }, []);
+    setSelectedPublishDate(
+      isMonthlyPublication ? normalizePublicationIssueMonth(nextValue) : nextValue
+    );
+  }, [isMonthlyPublication]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1096,7 +1215,7 @@ export default function EPaperPageClient({
         );
         const payload = (await response.json()) as LatestListResponse;
         if (!response.ok) {
-          throw new Error(payload.error || 'Failed to load e-papers');
+          throw new Error(payload.error || `Failed to load ${publicationLabels.plural.toLowerCase()}`);
         }
         if (cancelled) return;
 
@@ -1112,7 +1231,7 @@ export default function EPaperPageClient({
         );
       } catch (err: unknown) {
         if (cancelled || isAbortError(err)) return;
-        setError(toErrorMessage(err, 'Failed to load e-papers'));
+        setError(toErrorMessage(err, `Failed to load ${publicationLabels.plural.toLowerCase()}`));
         setEpapers([]);
         setHasMoreList(false);
         setNextCursor(null);
@@ -1130,6 +1249,7 @@ export default function EPaperPageClient({
   }, [
     hasInitializedListEffect,
     buildListQueryParams,
+    publicationLabels.plural,
   ]);
 
   const loadMorePapers = useCallback(async () => {
@@ -1144,7 +1264,7 @@ export default function EPaperPageClient({
       );
       const payload = (await response.json()) as LatestListResponse;
       if (!response.ok) {
-        throw new Error(payload.error || 'Failed to load more e-papers');
+        throw new Error(payload.error || `Failed to load more ${publicationLabels.plural.toLowerCase()}`);
       }
 
       const incoming = Array.isArray(payload.items) ? payload.items : [];
@@ -1161,13 +1281,13 @@ export default function EPaperPageClient({
       );
     } catch (err: unknown) {
       if (!isAbortError(err)) {
-        setError(toErrorMessage(err, 'Failed to load more e-papers'));
+        setError(toErrorMessage(err, `Failed to load more ${publicationLabels.plural.toLowerCase()}`));
       }
     } finally {
       setIsLoadingMore(false);
       loadMoreLockRef.current = false;
     }
-  }, [buildListQueryParams, hasMoreList, isLoadingMore, nextCursor]);
+  }, [buildListQueryParams, hasMoreList, isLoadingMore, nextCursor, publicationLabels.plural]);
 
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
@@ -1198,25 +1318,33 @@ export default function EPaperPageClient({
     setError('');
     try {
       let payload: DetailResponse | null = null;
+      const detailPath = `/api/epapers/${encodeURIComponent(
+        paperId
+      )}?publicationType=${encodeURIComponent(publicationType)}`;
 
       try {
-        const response = await fetch(`/api/epapers/${paperId}`);
+        const response = await fetch(detailPath);
         const parsed = (await response.json()) as DetailResponse;
         if (!response.ok || !parsed.success || !parsed.data) {
-          throw new Error(parsed.error || 'Failed to open e-paper');
+          throw new Error(parsed.error || `Failed to open ${publicationLabels.lowercase}`);
         }
         payload = parsed;
       } catch (networkError) {
-        const cachedPayload = await readCachedJson<DetailResponse>(`/api/epapers/${paperId}`);
+        const cachedPayload = await readCachedJson<DetailResponse>(detailPath);
         if (!cachedPayload?.success || !cachedPayload.data) {
           throw networkError;
         }
         payload = cachedPayload;
-        showReaderNotice('info', t.offlineCachedNotice);
+        showReaderNotice(
+          'info',
+          isMonthlyPublication
+            ? 'Loaded this issue from your offline cache.'
+            : t.offlineCachedNotice
+        );
       }
 
       if (!payload?.data) {
-        throw new Error('Failed to open e-paper');
+        throw new Error(`Failed to open ${publicationLabels.lowercase}`);
       }
 
       const explicitInitialPage =
@@ -1240,9 +1368,16 @@ export default function EPaperPageClient({
       setFallbackError('');
       setIsOverflowOpen(false);
     } catch (err: unknown) {
-      setError(toErrorMessage(err, 'Failed to open e-paper'));
+      setError(toErrorMessage(err, `Failed to open ${publicationLabels.lowercase}`));
     }
-  }, [savedPapers, showReaderNotice, t.offlineCachedNotice]);
+  }, [
+    isMonthlyPublication,
+    publicationLabels.lowercase,
+    publicationType,
+    savedPapers,
+    showReaderNotice,
+    t.offlineCachedNotice,
+  ]);
 
   useEffect(() => {
     if (!pendingPaperId) return;
@@ -1381,6 +1516,7 @@ export default function EPaperPageClient({
     const params = buildReaderSearchParams({
       city: selectedCity,
       publishDate: selectedPublishDate,
+      publicationType,
       paperId: effectivePaperId,
       page: effectivePage,
       story: effectiveStoryToken,
@@ -1397,6 +1533,7 @@ export default function EPaperPageClient({
     activePaper?._id,
     pendingPaperId,
     pendingStorySlug,
+    publicationType,
     selectedCity,
     selectedPublishDate,
   ]);
@@ -1640,12 +1777,12 @@ export default function EPaperPageClient({
     });
     const shareUrl = toAbsoluteShareUrl(sharePath, window.location.origin);
     const dateLabel = activePaper.publishDate
-      ? formatUiDate(activePaper.publishDate, activePaper.publishDate)
+      ? formatPublicationIssueLabel(activePaper.publishDate, publicationType, activePaper.publishDate)
       : selectedPublishDate;
     const shareText = buildEpaperIssueShareText({
       title: activePaper.title,
       issueUrl: shareUrl,
-      cityLabel: activePaper.cityName,
+      cityLabel: getPublicationLocationLabel(publicationType, activePaper.cityName),
       dateLabel,
       includeUrl: false,
     });
@@ -1666,7 +1803,7 @@ export default function EPaperPageClient({
     const whatsappUrl = buildEpaperIssueWhatsAppShareUrl({
       title: activePaper.title,
       issueUrl: shareUrl,
-      cityLabel: activePaper.cityName,
+      cityLabel: getPublicationLocationLabel(publicationType, activePaper.cityName),
       dateLabel,
     });
     const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
@@ -1762,16 +1899,21 @@ export default function EPaperPageClient({
     setIsPreparingOfflinePaper(true);
     try {
       const urlSet = new Set<string>();
-      urlSet.add('/main/epaper');
+      urlSet.add(publicBasePath);
       urlSet.add(
-        `/main/epaper?${buildReaderSearchParams({
+        `${publicBasePath}?${buildReaderSearchParams({
           city: selectedCity,
           publishDate: selectedPublishDate,
+          publicationType,
           paperId: activePaper._id,
           page: activePage,
         }).toString()}`
       );
-      urlSet.add(`/api/epapers/${activePaper._id}`);
+      urlSet.add(
+        `/api/epapers/${encodeURIComponent(
+          activePaper._id
+        )}?publicationType=${encodeURIComponent(publicationType)}`
+      );
       urlSet.add(`/api/public/epapers/${activePaper._id}/pdf`);
 
       if (activePaper.thumbnailPath) {
@@ -1799,7 +1941,11 @@ export default function EPaperPageClient({
 
       showReaderNotice(
         result.failedCount > 0 ? 'info' : 'success',
-        result.failedCount > 0 ? t.offlinePartialNotice : t.offlineReadyNotice
+        result.failedCount > 0
+          ? t.offlinePartialNotice
+          : isMonthlyPublication
+            ? 'This issue is ready for offline reading.'
+            : t.offlineReadyNotice
       );
     } catch (error) {
       const message =
@@ -1815,7 +1961,10 @@ export default function EPaperPageClient({
     activePage,
     activePaper,
     activePaperLibraryInput,
+    isMonthlyPublication,
     isPreparingOfflinePaper,
+    publicBasePath,
+    publicationType,
     selectedCity,
     selectedPublishDate,
     showReaderNotice,
@@ -1898,16 +2047,28 @@ export default function EPaperPageClient({
 
     const context = [
       activeArticle.title || t.story,
-      `${activePaper.cityName} e-paper`,
+      isMonthlyPublication
+        ? publicationLabels.singular
+        : `${activePaper.cityName} ${publicationLabels.lowercase}`,
       `${t.page} ${activeArticle.pageNumber || activePage}`,
       activePaper.publishDate
-        ? formatUiDate(activePaper.publishDate, activePaper.publishDate)
+        ? formatPublicationIssueLabel(activePaper.publishDate, publicationType, activePaper.publishDate)
         : '',
     ]
       .filter(Boolean)
       .join('. ');
     return context.trim();
-  }, [activeArticle, activePage, activePaper, t.page, t.story]);
+  }, [
+    activeArticle,
+    activePage,
+    activePaper,
+    isMonthlyPublication,
+    publicationLabels.lowercase,
+    publicationLabels.singular,
+    publicationType,
+    t.page,
+    t.story,
+  ]);
   const activeArticleParagraphs = useMemo(
     () => splitTextParagraphs(activeArticlePlainText),
     [activeArticlePlainText]
@@ -1968,12 +2129,18 @@ export default function EPaperPageClient({
     }
 
     const filename = `${slugifyDownloadName(activeArticle.title || activePaper.title)}.txt`;
-    const content = buildStoryTextDownload(activePaper, activeArticle, activeArticlePlainText);
+    const content = buildStoryTextDownload(
+      activePaper,
+      activeArticle,
+      activeArticlePlainText,
+      publicationType
+    );
     triggerTextDownload(filename, content);
   }, [
     activeArticle,
     activeArticlePlainText,
     activePaper,
+    publicationType,
     showReaderNotice,
     t.textDownloadUnavailable,
   ]);
@@ -1987,8 +2154,11 @@ export default function EPaperPageClient({
     }
 
     const metaLine = [
-      activePaper.cityName,
-      formatUiDate(activePaper.publishDate, activePaper.publishDate),
+      formatPublicationMetaLine({
+        cityName: activePaper.cityName,
+        publishDate: activePaper.publishDate,
+        publicationType,
+      }),
       `${t.page} ${activeArticle.pageNumber || activePage}`,
     ]
       .filter(Boolean)
@@ -1996,6 +2166,7 @@ export default function EPaperPageClient({
 
     const html = buildStoryPrintHtml({
       title: activeArticle.title || activePaper.title,
+      surfaceLabel: `Lokswami ${publicationLabels.lowercase}`,
       metaLine,
       excerpt: String(activeArticle.excerpt || '').trim(),
       contentHtml: activeArticle.contentHtml || '',
@@ -2015,6 +2186,8 @@ export default function EPaperPageClient({
     activeArticleParagraphs,
     activePage,
     activePaper,
+    publicationLabels.lowercase,
+    publicationType,
     showReaderNotice,
     t.page,
     t.printBlocked,
@@ -2540,7 +2713,16 @@ export default function EPaperPageClient({
     selectedCity === 'all'
       ? t.allCities
       : EPAPER_CITY_OPTIONS.find((city) => city.slug === selectedCity)?.name || selectedCity;
-  const emptyStateMessage = hasArchiveFilters ? t.noPaperFiltered : t.noPaper;
+  const selectedIssueDateLabel = selectedPublishDate
+    ? formatPublicationIssueLabel(selectedPublishDate, publicationType, selectedPublishDate)
+    : '';
+  const emptyStateMessage = isMonthlyPublication
+    ? hasArchiveFilters
+      ? 'No e-magazine matched these archive filters.'
+      : 'No published e-magazine issue available right now.'
+    : hasArchiveFilters
+      ? t.noPaperFiltered
+      : t.noPaper;
   const readerPageLabel = shouldShowSpreadMode && spreadCompanionPage
     ? `${activePage}-${spreadCompanionPage.pageNumber} / ${maxReaderPage}`
     : `${activePage} / ${maxReaderPage}`;
@@ -2601,19 +2783,34 @@ export default function EPaperPageClient({
 
       <section className="cnp-surface p-3.5 sm:p-4 md:p-5">
         <div className="mb-4 border-b border-zinc-200/80 pb-4 dark:border-zinc-800">
-          <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-            <EPaperCityPicker
-              value={selectedCity}
-              onChange={setSelectedCity}
-              language={language}
-            />
+          <div
+            className={`grid gap-2 sm:gap-2.5 ${
+              isMonthlyPublication ? 'grid-cols-1' : 'grid-cols-2'
+            }`}
+          >
+            {!isMonthlyPublication ? (
+              <EPaperCityPicker
+                value={selectedCity}
+                onChange={setSelectedCity}
+                language={language}
+              />
+            ) : null}
 
-            <EPaperDatePicker
+            {isMonthlyPublication ? (
+              <IssueMonthPicker
+                value={selectedPublishDate}
+                onChange={onPublishDateChange}
+                onClear={() => setSelectedPublishDate('')}
+                placeholder="Choose issue month"
+              />
+            ) : (
+              <EPaperDatePicker
               value={selectedPublishDate}
               onChange={onPublishDateChange}
               onClear={() => setSelectedPublishDate('')}
               placeholder="तारीख चुनें"
-            />
+              />
+            )}
           </div>
         </div>
 
@@ -2625,7 +2822,7 @@ export default function EPaperPageClient({
 
         {hasArchiveFilters ? (
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            {selectedCity !== 'all' ? (
+            {!isMonthlyPublication && selectedCity !== 'all' ? (
               <span className="inline-flex items-center rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
                 {selectedCityLabel}
               </span>
@@ -2633,7 +2830,7 @@ export default function EPaperPageClient({
 
             {selectedPublishDate ? (
               <span className="inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300">
-                {t.showingDate}: {formatUiDate(selectedPublishDate, selectedPublishDate)}
+                {publicationLabels.issueFilterLabel}: {selectedIssueDateLabel}
               </span>
             ) : null}
           </div>
@@ -2694,7 +2891,11 @@ export default function EPaperPageClient({
                           {paper.title}
                         </p>
                         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                          {paper.cityName} | {formatUiDate(paper.publishDate, paper.publishDate)}
+                          {formatPublicationMetaLine({
+                            cityName: paper.cityName,
+                            publishDate: paper.publishDate,
+                            publicationType,
+                          })}
                         </p>
                         <p className="mt-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
                           {t.page} {paper.lastOpenedPage}
@@ -2796,7 +2997,13 @@ export default function EPaperPageClient({
                   <div className="p-2.5 sm:p-3">
                     <h2 className="line-clamp-2 text-xs font-semibold text-gray-900 dark:text-zinc-100 sm:text-sm">{paper.title}</h2>
                     <p className="mt-1 line-clamp-2 text-[11px] text-gray-600 dark:text-zinc-400 sm:text-xs">
-                      {paper.cityName} | {formatUiDate(paper.publishDate, paper.publishDate)} | {paper.pageCount} {t.pages}
+                      {formatPublicationMetaLine({
+                        cityName: paper.cityName,
+                        publishDate: paper.publishDate,
+                        publicationType,
+                        pageCount: paper.pageCount,
+                        pagesLabel: t.pages,
+                      })}
                     </p>
                   </div>
                 </button>
@@ -2818,7 +3025,9 @@ export default function EPaperPageClient({
                 </button>
               </div>
             ) : (
-              <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">{t.noMore}</p>
+              <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
+                {isMonthlyPublication ? 'No more issues' : t.noMore}
+              </p>
             )}
           </div>
         )}
@@ -2869,17 +3078,17 @@ export default function EPaperPageClient({
               </div>
 
               <div className="hidden items-center justify-between gap-4 sm:flex py-1">
-                {/* Brand & Edition */}
+                {/* Brand and issue */}
                 <div className="flex items-center gap-2 min-w-0 shrink-0">
                   <span className="inline-flex items-center rounded-full bg-primary-100 px-2 py-0.5 text-[9px] font-bold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">
-                    Lokswami E-Paper
+                    Lokswami {publicationLabels.singular}
                   </span>
                   <span className="text-xs text-gray-300 dark:text-zinc-700">|</span>
                   <p className="truncate text-xs font-bold text-gray-900 dark:text-zinc-100">
-                    {activePaper.cityName} Edition
+                    {isMonthlyPublication ? 'Monthly Issue' : `${activePaper.cityName} Edition`}
                   </p>
                   <span className="text-[10px] text-gray-400 dark:text-zinc-500">
-                    ({formatUiDate(activePaper.publishDate, activePaper.publishDate)})
+                    ({formatPublicationIssueLabel(activePaper.publishDate, publicationType, activePaper.publishDate)})
                   </span>
                 </div>
 
@@ -3334,7 +3543,13 @@ export default function EPaperPageClient({
                   <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-lg dark:border-white/10 dark:bg-zinc-950/90">
                     <div className="mb-2.5 flex items-center justify-between gap-2 px-0.5">
                       <span className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
-                        {language === 'hi' ? 'संस्करण के पृष्ठ' : 'Edition Pages'}
+                        {isMonthlyPublication
+                          ? language === 'hi'
+                            ? 'अंक के पृष्ठ'
+                            : 'Issue Pages'
+                          : language === 'hi'
+                            ? 'संस्करण के पृष्ठ'
+                            : 'Edition Pages'}
                       </span>
                       <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
                         {pageSummaries.length} {language === 'hi' ? 'पृष्ठ' : 'Pages'}
@@ -3435,7 +3650,11 @@ export default function EPaperPageClient({
                       </button>
                     </div>
                     <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                      {readerSidebarView === 'pages' ? t.pageStories : t.editionContents}
+                      {readerSidebarView === 'pages'
+                        ? t.pageStories
+                        : isMonthlyPublication
+                          ? 'Issue contents'
+                          : t.editionContents}
                     </p>
                     <p className="mt-1 text-xs font-medium text-gray-700 dark:text-zinc-300">{readerSidebarSummary}</p>
                   </div>
@@ -3488,7 +3707,9 @@ export default function EPaperPageClient({
                       )
                     ) : editionArticlesByPage.length === 0 ? (
                       <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-600 dark:border-zinc-700 dark:text-zinc-400">
-                        {t.noStoriesEdition}
+                        {isMonthlyPublication
+                          ? 'No mapped stories in this issue yet.'
+                          : t.noStoriesEdition}
                       </p>
                     ) : (
                       <div className="space-y-3">

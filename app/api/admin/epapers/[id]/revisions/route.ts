@@ -10,6 +10,8 @@ import {
   buildEpaperActivityMessage,
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
+import { normalizeEPaperPublicationType } from '@/lib/types/epaper';
+import { normalizePublicationCityScope } from '@/lib/utils/epaperPublication';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -40,11 +42,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const familyId = String(source.familyId || source._id);
+  const publicationType = normalizeEPaperPublicationType(source.publicationType);
+  const scope = normalizePublicationCityScope({
+    publicationType,
+    citySlug: source.citySlug,
+    cityName: source.cityName,
+  });
   await EPaper.updateOne(
     { _id: source._id, familyId: { $in: ['', null] } },
     { familyId, revisionNumber: Number(source.revisionNumber || 1) }
   );
   const existingDraft = await EPaper.findOne({
+    publicationType,
     familyId,
     status: 'draft',
     productionStatus: { $ne: 'archived' },
@@ -60,7 +69,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const latest = await EPaper.findOne({ familyId })
+  const latest = await EPaper.findOne({ publicationType, familyId })
     .sort({ revisionNumber: -1 })
     .select('revisionNumber')
     .lean();
@@ -73,8 +82,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     reviewedBy: null,
   }));
   const revision = await EPaper.create({
-    citySlug: source.citySlug,
-    cityName: source.cityName,
+    publicationType,
+    citySlug: scope.citySlug,
+    cityName: scope.cityName,
     title: source.title,
     publishDate: source.publishDate,
     pdfPath: source.pdfPath,

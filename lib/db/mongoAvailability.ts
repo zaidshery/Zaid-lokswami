@@ -8,7 +8,7 @@ type MongoAvailabilityState = {
   lastLogAt: number;
 };
 
-const DEFAULT_PROBE_TIMEOUT_MS = 1500;
+const DEFAULT_PROBE_TIMEOUT_MS = 3000;
 const DEFAULT_AVAILABLE_TTL_MS = 15_000;
 const DEFAULT_UNAVAILABLE_TTL_MS = 45_000;
 const LOG_THROTTLE_MS = 60_000;

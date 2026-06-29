@@ -9,7 +9,7 @@ function read(relativePath: string) {
 
 describe('e-paper loading performance', () => {
   it('uses a smaller cached first page without an internal HTTP round trip', () => {
-    const page = read('app/(reader)/main/epaper/page.tsx');
+    const page = read('app/(reader)/main/epaper/EPaperPageServer.tsx');
 
     expect(page).toContain('const EPAPER_LIMIT = 12');
     expect(page).toContain('unstable_cache');
@@ -39,9 +39,22 @@ describe('e-paper loading performance', () => {
 
   it('bounds a stalled public MongoDB query before using fallback storage', () => {
     const feed = read('lib/server/publicEpaperFeed.ts');
+    const availability = read('lib/db/mongoAvailability.ts');
+    const model = read('lib/models/EPaper.ts');
 
     expect(feed).toContain('const DEFAULT_QUERY_TIMEOUT_MS = 2000');
     expect(feed).toContain('MONGODB_PUBLIC_QUERY_TIMEOUT_MS');
     expect(feed).toContain('reportMongoUnavailable');
+    expect(availability).toContain('const DEFAULT_PROBE_TIMEOUT_MS = 3000');
+    expect(model).toContain('publicationType: 1, status: 1, publishDate: -1, _id: -1');
+  });
+
+  it('includes a browser CORS preflight check for DigitalOcean direct uploads', () => {
+    const script = read('scripts/test-digitalocean-spaces.js');
+
+    expect(script).toContain("method: 'OPTIONS'");
+    expect(script).toContain("'Access-Control-Request-Method': 'PUT'");
+    expect(script).toContain("'Access-Control-Request-Headers': 'content-type,x-amz-acl'");
+    expect(script).toContain('DIGITALOCEAN_SPACES_CORS_ORIGINS');
   });
 });

@@ -104,6 +104,7 @@ describe('e-paper direct upload admin routes', () => {
       fileName: 'edition.pdf',
       fileType: 'application/pdf',
       fileSize: 1024,
+      publicationType: 'epaper',
       citySlug: 'indore',
       publishDate: '2026-05-05',
       pageNumber: 0,

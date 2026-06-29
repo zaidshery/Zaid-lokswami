@@ -49,6 +49,7 @@
     "migrate:epapers": "ts-node scripts/migrate-epapers-to-v2.ts",
     "migrate:epaper-workflow-v3": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/migrate-epaper-workflow-v3.ts",
     "migrate:epaper-workflow-v3:write": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/migrate-epaper-workflow-v3.ts --write",
+    "migrate:epaper-workflow-v3:indexes": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/migrate-epaper-workflow-v3.ts --indexes-only",
     "migrate:four-role-admin": "node scripts/migrate-four-role-admin.js",
     "migrate:four-role-admin:write": "node scripts/migrate-four-role-admin.js --write"
   },
@@ -78,6 +79,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/line-clamp": "^0.4.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
