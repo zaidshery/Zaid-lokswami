@@ -65,7 +65,6 @@ import {
   resolveEpaperPreviewMaxZoom,
   resolveEpaperTouchPreviewMaxZoom,
 } from '@/lib/utils/epaperPageImage';
-import { renderPdfPagePreviewFromUrl } from '@/lib/utils/pdfThumbnailClient';
 import {
   type EPaperCityFilter,
 } from '@/lib/utils/publicEpaperFilters';
@@ -1710,6 +1709,9 @@ export default function EPaperPageClient({
         if (!pdfProxyUrl) {
           throw new Error('PDF URL is missing');
         }
+        const { renderPdfPagePreviewFromUrl } = await import(
+          '@/lib/utils/pdfThumbnailClient'
+        );
         const rendered = await renderPdfPagePreviewFromUrl(pdfProxyUrl, {
           page: activePage,
           targetWidth: 1600,

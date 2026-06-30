@@ -188,6 +188,8 @@ describe('e-paper page image quality profile', () => {
 
   it('queues direct PDF uploads for background conversion', () => {
     const createPage = read('app/(admin)/admin/epapers/new/page.tsx');
+    const detailPage = read('app/(admin)/admin/epapers/[id]/page.tsx');
+    const uploadsRoute = read('app/api/admin/epapers/uploads/route.ts');
     const finalizeRoute = read(
       'app/api/admin/epapers/[id]/uploads/finalize/route.ts'
     );
@@ -195,10 +197,34 @@ describe('e-paper page image quality profile', () => {
 
     expect(createPage).toContain('/api/admin/epapers/uploads');
     expect(createPage).toContain('/uploads/finalize');
+    expect(detailPage).toContain('/api/admin/uploads/epaper-asset/init');
+    expect(detailPage).toContain('/uploads/finalize');
+    expect(detailPage).toContain('Upload PDF');
+    expect(detailPage).toContain('PDF uploaded');
+    expect(detailPage).toContain('Page conversion progress');
+    expect(uploadsRoute).toContain('canResumeDraftUpload');
+    expect(uploadsRoute).toContain('resumed: true');
     expect(createPage).not.toContain('renderPdfFilePages');
     expect(finalizeRoute).toContain('queueEpaperPageProcessing');
+    expect(finalizeRoute).toContain('deleteDigitalOceanSpacesAssetByPublicId');
+    expect(uploadsRoute).toContain('deleteDigitalOceanSpacesAssetByPublicId');
     expect(renderer).toContain('const TARGET_WIDTH = 3000');
     expect(renderer).toContain('const JPEG_QUALITY = 90');
+  });
+
+  it('treats monthly e-magazine processing as a global publication scope', () => {
+    const finalizeRoute = read(
+      'app/api/admin/epapers/[id]/uploads/finalize/route.ts'
+    );
+    const retryRoute = read(
+      'app/api/admin/epapers/[id]/processing/retry/route.ts'
+    );
+
+    expect(finalizeRoute).toContain('shouldUseGlobalPublicationScope(epaper.publicationType)');
+    expect(finalizeRoute).toContain('? undefined');
+    expect(finalizeRoute).toContain(': epaper.citySlug');
+    expect(retryRoute).toContain('_id publicationType citySlug status pageCount pages');
+    expect(retryRoute).toContain('shouldUseGlobalPublicationScope(epaper.publicationType)');
   });
 
   it('uses rendered PDF page one as the cover without a thumbnail upload', () => {

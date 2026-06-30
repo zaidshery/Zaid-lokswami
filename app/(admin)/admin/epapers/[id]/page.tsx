@@ -17,7 +17,10 @@ import {
 } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
-import { uploadEpaperAssetDirect } from '@/lib/utils/epaperDirectUploadClient';
+import {
+  uploadEpaperAssetDirect,
+  uploadFileToSignedUrl,
+} from '@/lib/utils/epaperDirectUploadClient';
 import {
   buildEpaperLowResolutionWarning,
   normalizeEpaperPageImage,
@@ -83,6 +86,22 @@ type ProcessingResponse = {
   success?: boolean;
   error?: string;
   data?: ProcessingData;
+};
+
+type PdfUploadTargetResponse = {
+  success?: boolean;
+  error?: string;
+  data?: {
+    mediaKey?: string;
+    uploadUrl?: string;
+    uploadHeaders?: Record<string, string>;
+  };
+};
+
+type BasicResponse = {
+  success?: boolean;
+  error?: string;
+  message?: string;
 };
 
 type TtsStatus = 'pending' | 'ready' | 'failed' | 'stale';
@@ -224,6 +243,7 @@ export default function AdminEPaperDetailPage() {
   const [notice, setNotice] = useState('');
   const [pageImageWarning, setPageImageWarning] = useState('');
   const [savingMeta, setSavingMeta] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadingPage, setUploadingPage] = useState<number | null>(null);
   const [generatingPages, setGeneratingPages] = useState(false);
   const [runningOcrAutomation, setRunningOcrAutomation] = useState(false);
@@ -629,6 +649,93 @@ export default function AdminEPaperDetailPage() {
     }
   };
 
+  const onPdfUpload = async (file: File | null) => {
+    if (!epaper || !file) return;
+
+    setUploadingPdf(true);
+    setError('');
+    setNotice('');
+    setPageImageWarning('');
+
+    try {
+      const authHeaders = getAuthHeader();
+      const initResponse = await fetch('/api/admin/uploads/epaper-asset/init', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          kind: 'epaper_pdf',
+          publicationType,
+          fileName: file.name,
+          fileType: file.type || 'application/pdf',
+          fileSize: file.size,
+          citySlug: epaper.citySlug,
+          publishDate: normalizePublicationIssueDate(
+            epaper.publishDate,
+            publicationType
+          ),
+        }),
+      });
+      const initPayload =
+        (await initResponse.json().catch(() => ({}))) as PdfUploadTargetResponse;
+      const target = initPayload.data;
+
+      if (
+        !initResponse.ok ||
+        !initPayload.success ||
+        !target?.mediaKey ||
+        !target.uploadUrl
+      ) {
+        throw new Error(initPayload.error || 'Failed to initialize PDF upload.');
+      }
+
+      setNotice('Uploading the PDF to DigitalOcean Spaces...');
+      await uploadFileToSignedUrl({
+        file,
+        uploadUrl: target.uploadUrl,
+        uploadHeaders: target.uploadHeaders || {
+          'Content-Type': file.type || 'application/pdf',
+        },
+      });
+
+      setNotice('Verifying the PDF and queuing background conversion...');
+      const finalizeResponse = await fetch(
+        `/api/admin/epapers/${encodeURIComponent(epaper._id)}/uploads/finalize`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
+          body: JSON.stringify({
+            mediaKey: target.mediaKey,
+            expectedSize: file.size,
+            expectedFileType: file.type || 'application/pdf',
+            expectedFileName: file.name,
+          }),
+        }
+      );
+      const finalizePayload =
+        (await finalizeResponse.json().catch(() => ({}))) as BasicResponse;
+
+      if (!finalizeResponse.ok || !finalizePayload.success) {
+        throw new Error(finalizePayload.error || 'Failed to queue PDF conversion.');
+      }
+
+      setNotice(
+        finalizePayload.message ||
+          'PDF verified and queued for background conversion.'
+      );
+      await fetchData();
+    } catch (err: unknown) {
+      setError(toErrorMessage(err, 'Failed to upload PDF.'));
+    } finally {
+      setUploadingPdf(false);
+    }
+  };
+
   const deletePaper = async () => {
     if (!epaper) return;
     setDeleting(true);
@@ -891,6 +998,8 @@ export default function AdminEPaperDetailPage() {
   const readiness = epaper.readiness;
   const automation = epaper.automation;
   const activeProductionStatus = productionStatus || epaper.productionStatus || 'draft_upload';
+  const hasPdf = Boolean(String(epaper.pdfPath || '').trim());
+  const canUploadPdf = epaper.status !== 'published';
   const allowedProductionTransitions = getAllowedEpaperProductionTransitions(activeProductionStatus);
   const publishBlockers = Array.from(
     new Set([...(readiness?.blockers || []), ...editionQualitySummary.publishBlockers])
@@ -902,6 +1011,7 @@ export default function AdminEPaperDetailPage() {
   const hotspotCoverage = readiness?.hotspotCoveragePercent ?? 0;
   const textCoverage = readiness?.textCoveragePercent ?? 0;
   const pageNumbers = pages.map((entry) => entry.pageNumber);
+  const convertedPageCount = pages.filter(({ page }) => Boolean(page?.imagePath)).length;
   const allPagesSelected = pageNumbers.length > 0 && selectedPageNumbers.length === pageNumbers.length;
   const missingImagePages = new Set(readiness?.missingImagePages || []);
   const missingHotspotPages = new Set(readiness?.missingHotspotPages || []);
@@ -965,14 +1075,41 @@ export default function AdminEPaperDetailPage() {
                 Create Draft Revision
               </button>
             ) : null}
-            <a
-              href={`/api/public/epapers/${encodeURIComponent(String(epaper._id || ''))}/pdf`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-10 items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
-            >
-              Open PDF
-            </a>
+            {canUploadPdf ? (
+              <label className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700 hover:bg-primary-100">
+                {uploadingPdf ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-3.5 w-3.5" />
+                )}
+                {hasPdf ? 'Replace PDF' : 'Upload PDF'}
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                    const file = event.target.files?.[0] || null;
+                    void onPdfUpload(file);
+                    event.target.value = '';
+                  }}
+                  disabled={uploadingPdf}
+                />
+              </label>
+            ) : null}
+            {hasPdf ? (
+              <a
+                href={`/api/public/epapers/${encodeURIComponent(String(epaper._id || ''))}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-10 items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+              >
+                Open PDF
+              </a>
+            ) : (
+              <span className="inline-flex min-h-10 items-center rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                PDF Missing
+              </span>
+            )}
           </div>
         </div>
 
@@ -1058,6 +1195,40 @@ export default function AdminEPaperDetailPage() {
               </div>
             </section>
 
+            {!hasPdf && canUploadPdf ? (
+              <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                      PDF upload pending
+                    </p>
+                    <p className="mt-1 text-sm text-amber-900">
+                      Attach the issue PDF to start page conversion and continue the workflow.
+                    </p>
+                  </div>
+                  <label className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100">
+                    {uploadingPdf ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <UploadCloud className="h-3.5 w-3.5" />
+                    )}
+                    Upload PDF
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="hidden"
+                      onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                        const file = event.target.files?.[0] || null;
+                        void onPdfUpload(file);
+                        event.target.value = '';
+                      }}
+                      disabled={uploadingPdf}
+                    />
+                  </label>
+                </div>
+              </section>
+            ) : null}
+
             {processingData?.job ? (
               <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1069,8 +1240,9 @@ export default function AdminEPaperDetailPage() {
                       {formatProductionStatusLabel(processingData.job.status)}
                     </h2>
                     <p className="mt-1 text-sm text-blue-800">
-                      {processingData.job.processedItems || 0}/
-                      {processingData.job.totalItems || epaper.pageCount} pages completed
+                      PDF uploaded. Page conversion progress:{' '}
+                      {processingData.job.processedItems || convertedPageCount}/
+                      {processingData.job.totalItems || epaper.pageCount} pages converted
                       {processingData.job.failedItems
                         ? `, ${processingData.job.failedItems} failed`
                         : ''}
@@ -1126,6 +1298,28 @@ export default function AdminEPaperDetailPage() {
                     {processingData.stuckWarning}
                   </p>
                 ) : null}
+              </section>
+            ) : null}
+
+            {hasPdf && !processingData?.job ? (
+              <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                      PDF uploaded
+                    </p>
+                    <p className="mt-1 text-sm text-emerald-900">
+                      Page conversion progress: {convertedPageCount}/{epaper.pageCount} pages converted.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void loadProcessing()}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                  >
+                    Refresh Status
+                  </button>
+                </div>
               </section>
             ) : null}
 

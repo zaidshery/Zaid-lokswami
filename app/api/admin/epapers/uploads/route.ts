@@ -13,6 +13,7 @@ import {
   parseEpaperAssetSize,
   validateEpaperAssetSelection,
 } from '@/lib/storage/epaperAssetUpload';
+import { deleteDigitalOceanSpacesAssetByPublicId } from '@/lib/utils/digitalOceanSpaces';
 import {
   buildPublicationTypeMongoFilter,
   getPublicationIssueDateRange,
@@ -93,9 +94,70 @@ export async function POST(request: NextRequest) {
         publishDate,
       isCurrentRevision: true,
     })
-      .select('_id')
+      .select('_id familyId status productionStatus pdfPath pdfPublicId')
       .lean();
     if (existing) {
+      const canResumeDraftUpload =
+        String(existing.status || '') === 'draft' &&
+        String(existing.productionStatus || '') === 'draft_upload' &&
+        !String(existing.pdfPath || '').trim();
+
+      if (canResumeDraftUpload) {
+        const familyId = String(existing.familyId || crypto.randomUUID());
+        const previousPdfPublicId = String(existing.pdfPublicId || '').trim();
+        const uploadTarget = createEpaperAssetUploadTarget(uploadInput);
+        const pages = Array.from({ length: pageCount }, (_, index) => ({
+          pageNumber: index + 1,
+          imagePath: '',
+          pageType: 'editorial',
+          processingStatus: 'pending',
+          reviewStatus: 'pending',
+        }));
+        await EPaper.updateOne(
+          { _id: existing._id },
+          {
+            $set: {
+              publicationType,
+              citySlug,
+              cityName,
+              title,
+              publishDate,
+              pdfPath: '',
+              pdfPublicId: uploadTarget.mediaKey,
+              thumbnailPath: '',
+              pageCount,
+              pages,
+              status: 'draft',
+              familyId,
+              isCurrentRevision: true,
+              productionStatus: 'draft_upload',
+              sourceType: 'manual-upload',
+              sourceLabel: `Direct Spaces upload (${labels.singular})`,
+            },
+          }
+        );
+        if (previousPdfPublicId && previousPdfPublicId !== uploadTarget.mediaKey) {
+          void deleteDigitalOceanSpacesAssetByPublicId(previousPdfPublicId, 'raw').catch(
+            (cleanupError) => {
+              console.warn('Failed to cleanup abandoned e-paper PDF asset:', cleanupError);
+            }
+          );
+        }
+
+        return NextResponse.json(
+          {
+            success: true,
+            data: {
+              epaperId: String(existing._id),
+              familyId,
+              uploadTarget,
+              resumed: true,
+            },
+          },
+          { status: 200 }
+        );
+      }
+
       return NextResponse.json(
         {
           success: false,

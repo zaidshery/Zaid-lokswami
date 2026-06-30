@@ -93,6 +93,7 @@ function validateProductionEnv(env = process.env) {
   const adminPasswordHash = readEnv('ADMIN_PASSWORD_HASH', env);
   const uploadsBaseDir = readEnv('EPAPER_STORAGE_UPLOADS_BASE_DIR', env);
   const forceStorage = readEnv('EPAPER_FORCE_STORAGE', env);
+  const epaperCronSecret = readEnv('ADMIN_CRON_SECRET', env) || readEnv('CRON_SECRET', env);
 
   if (!mongodbUri) {
     errors.push('Missing required env: MONGODB_URI');
@@ -189,6 +190,12 @@ function validateProductionEnv(env = process.env) {
   if (forceStorage !== '1') {
     warnings.push(
       'EPAPER_FORCE_STORAGE is not set to 1. Hostinger GitHub releases should keep runtime-generated uploads out of public/uploads.'
+    );
+  }
+
+  if (!epaperCronSecret) {
+    errors.push(
+      'Missing required env: ADMIN_CRON_SECRET or CRON_SECRET. Hostinger cron needs this to run E-paper/E-magazine PDF conversion jobs.'
     );
   }
 

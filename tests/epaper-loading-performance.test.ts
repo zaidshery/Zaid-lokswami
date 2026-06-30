@@ -41,12 +41,15 @@ describe('e-paper loading performance', () => {
     const feed = read('lib/server/publicEpaperFeed.ts');
     const availability = read('lib/db/mongoAvailability.ts');
     const model = read('lib/models/EPaper.ts');
+    const articles = read('lib/content/serverArticles.ts');
 
     expect(feed).toContain('const DEFAULT_QUERY_TIMEOUT_MS = 2000');
     expect(feed).toContain('MONGODB_PUBLIC_QUERY_TIMEOUT_MS');
     expect(feed).toContain('reportMongoUnavailable');
     expect(availability).toContain('const DEFAULT_PROBE_TIMEOUT_MS = 3000');
     expect(model).toContain('publicationType: 1, status: 1, publishDate: -1, _id: -1');
+    expect(articles).toContain("isMongoAvailable({ label: 'sitemap articles lookup' })");
+    expect(articles).toContain("isMongoAvailable({ label: 'news sitemap articles lookup' })");
   });
 
   it('includes a browser CORS preflight check for DigitalOcean direct uploads', () => {
@@ -56,5 +59,14 @@ describe('e-paper loading performance', () => {
     expect(script).toContain("'Access-Control-Request-Method': 'PUT'");
     expect(script).toContain("'Access-Control-Request-Headers': 'content-type,x-amz-acl'");
     expect(script).toContain('DIGITALOCEAN_SPACES_CORS_ORIGINS');
+  });
+
+  it('lazy-loads PDF page fallback rendering outside the initial reader bundle', () => {
+    const client = read('app/(reader)/main/epaper/EPaperPageClient.tsx');
+
+    expect(client).not.toContain(
+      "import { renderPdfPagePreviewFromUrl } from '@/lib/utils/pdfThumbnailClient'"
+    );
+    expect(client).toContain("await import(\n          '@/lib/utils/pdfThumbnailClient'");
   });
 });

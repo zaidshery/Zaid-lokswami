@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import connectDB from '@/lib/db/mongoose';
+import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 import Article from '@/lib/models/Article';
 import type { ArticleSeo, StoredArticle } from '@/lib/storage/articlesFile';
@@ -203,9 +204,8 @@ function toSitemapItem(input: unknown): ServerArticleSitemapItem | null {
 }
 
 export async function listArticlesForSitemap(limit = 500) {
-  if (process.env.MONGODB_URI) {
+  if (await isMongoAvailable({ label: 'sitemap articles lookup' })) {
     try {
-      await connectDB();
       const records = await Article.find({})
         .select('_id slug updatedAt publishedAt workflow')
         .sort({ updatedAt: -1 })
@@ -263,9 +263,8 @@ export async function listNewsArticlesForSitemap(limit = 1000, now = new Date())
   const filterRecent = (item: ServerNewsArticleSitemapItem) =>
     item.includeInNewsSitemap && new Date(item.publishedAt).getTime() >= cutoff;
 
-  if (process.env.MONGODB_URI) {
+  if (await isMongoAvailable({ label: 'news sitemap articles lookup' })) {
     try {
-      await connectDB();
       const records = await Article.find({})
         .select('_id slug title publishedAt updatedAt workflow seo')
         .sort({ publishedAt: -1 })

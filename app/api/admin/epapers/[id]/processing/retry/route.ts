@@ -9,6 +9,7 @@ import {
   queueEpaperPageProcessing,
   resolveRetryableEpaperPageNumbers,
 } from '@/lib/server/epaperProcessingJobs';
+import { shouldUseGlobalPublicationScope } from '@/lib/utils/epaperPublication';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -28,17 +29,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   await connectDB();
   const epaper = await EPaper.findById(id)
-    .select('_id citySlug status pageCount pages')
+    .select('_id publicationType citySlug status pageCount pages')
     .lean();
   if (!epaper) {
     return NextResponse.json({ success: false, error: 'E-paper not found.' }, { status: 404 });
   }
   // Published editions are no longer strictly immutable
-  if (!isEpaperBackgroundProcessingEnabled(epaper.citySlug)) {
+  const processingCitySlug = shouldUseGlobalPublicationScope(epaper.publicationType)
+    ? undefined
+    : epaper.citySlug;
+  if (!isEpaperBackgroundProcessingEnabled(processingCitySlug)) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Background PDF processing is not enabled for this city.',
+        error: 'Background PDF processing is not enabled for this publication scope.',
       },
       { status: 409 }
     );

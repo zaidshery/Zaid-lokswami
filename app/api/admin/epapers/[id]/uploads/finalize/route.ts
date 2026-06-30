@@ -5,6 +5,7 @@ import EPaper from '@/lib/models/EPaper';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
 import { canCreateEpaper } from '@/lib/auth/permissions';
 import { verifyEpaperAssetUpload } from '@/lib/storage/epaperAssetUpload';
+import { deleteDigitalOceanSpacesAssetByPublicId } from '@/lib/utils/digitalOceanSpaces';
 import {
   isEpaperBackgroundProcessingEnabled,
   queueEpaperPageProcessing,
@@ -17,6 +18,7 @@ import {
   buildEpaperActivityMessage,
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
+import { shouldUseGlobalPublicationScope } from '@/lib/utils/epaperPublication';
 
 export const runtime = 'nodejs';
 
@@ -59,16 +61,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: 'E-paper not found.' }, { status: 404 });
     }
     // Published editions are no longer strictly immutable
-    if (!isEpaperBackgroundProcessingEnabled(epaper.citySlug)) {
+    const processingCitySlug = shouldUseGlobalPublicationScope(epaper.publicationType)
+      ? undefined
+      : epaper.citySlug;
+    if (!isEpaperBackgroundProcessingEnabled(processingCitySlug)) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Background PDF processing is not enabled for this city.',
+          error: 'Background PDF processing is not enabled for this publication scope.',
         },
         { status: 409 }
       );
     }
 
+    const previousPdfPublicId = String(epaper.pdfPublicId || '').trim();
     epaper.pdfPath = asset.mediaUrl;
     epaper.pdfPublicId = asset.mediaKey;
     epaper.pdfFormat = 'pdf';
@@ -93,6 +99,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       };
     });
     await epaper.save();
+    if (previousPdfPublicId && previousPdfPublicId !== asset.mediaKey) {
+      void deleteDigitalOceanSpacesAssetByPublicId(previousPdfPublicId, 'raw').catch(
+        (cleanupError) => {
+          console.warn('Failed to cleanup replaced e-paper PDF asset:', cleanupError);
+        }
+      );
+    }
 
     const job = await queueEpaperPageProcessing({
       epaperId: id,
