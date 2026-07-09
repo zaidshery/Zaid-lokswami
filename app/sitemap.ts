@@ -55,7 +55,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: '/main', changeFrequency: 'hourly', priority: 1 },
     { path: '/main/latest', changeFrequency: 'hourly', priority: 0.9 },
     { path: '/main/videos', changeFrequency: 'daily', priority: 0.8 },
-    { path: '/main/stories', changeFrequency: 'daily', priority: 0.75 },
     { path: '/main/ftaftaf', changeFrequency: 'daily', priority: 0.7 },
     { path: '/main/epaper', changeFrequency: 'daily', priority: 0.85 },
     { path: '/main/e-magazine', changeFrequency: 'monthly', priority: 0.7 },

@@ -171,7 +171,15 @@ function normalizeStaticRelativePath(requestUrl) {
   let pathname = '';
 
   try {
-    pathname = new URL(requestUrl, 'http://127.0.0.1').pathname;
+    const rawPath = String(requestUrl || '').split(/[?#]/)[0];
+    const decodedRawPath = decodeURIComponent(rawPath);
+    if (decodedRawPath.split('/').includes('..')) {
+      return '';
+    }
+
+    pathname = decodeURIComponent(
+      new URL(decodedRawPath, 'http://127.0.0.1').pathname
+    );
   } catch {
     return '';
   }
@@ -188,7 +196,11 @@ function normalizeStaticRelativePath(requestUrl) {
     ? relativePath.slice('static/'.length)
     : relativePath;
 
-  if (!normalizedPath || normalizedPath.includes('\0')) {
+  if (
+    !normalizedPath ||
+    normalizedPath.includes('\0') ||
+    normalizedPath.split('/').includes('..')
+  ) {
     return '';
   }
 
@@ -507,7 +519,15 @@ async function main() {
   });
 }
 
-main().catch((error) => {
-  console.error('Failed to start Hostinger proxy:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('Failed to start Hostinger proxy:', error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  getContentType,
+  isStaticAssetRequest,
+  normalizeStaticRelativePath,
+};

@@ -1,5 +1,5 @@
 const DEFAULT_TIMEOUT_MS = 15000;
-const ASSET_INTEGRITY_ROUTES = ['/signin', '/main', '/main/epaper'];
+const ASSET_INTEGRITY_ROUTES = ['/signin', '/main', '/main/epaper', '/main/sitemap'];
 const ASSET_INTEGRITY_HTML_SAMPLES = 3;
 const JAVASCRIPT_CONTENT_TYPE_PATTERN =
   /\b(?:application|text)\/(?:javascript|x-javascript|ecmascript)\b/i;

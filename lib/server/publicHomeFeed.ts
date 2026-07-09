@@ -1,18 +1,20 @@
 import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
-import { normalizeStoryMediaAssets } from '@/lib/content/storyMedia';
 import { getCitySlugFromName } from '@/lib/constants/epaperCities';
 import Article from '@/lib/models/Article';
 import EPaper from '@/lib/models/EPaper';
-import Story from '@/lib/models/Story';
 import Video from '@/lib/models/Video';
 import { resolveReusableBreakingTts } from '@/lib/server/breakingTts';
 import { listAllStoredArticles } from '@/lib/storage/articlesFile';
 import { listAllStoredEPapers } from '@/lib/storage/epapersFile';
-import { listAllStoredStories } from '@/lib/storage/storiesFile';
 import { listAllStoredVideos } from '@/lib/storage/videosFile';
 import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import { resolveEpaperCoverImagePath } from '@/lib/utils/epaperCover';
+import { type EPaperPublicationType } from '@/lib/types/epaper';
+import {
+  buildPublicationTypeMongoFilter,
+  normalizePublicationIssueMonth,
+} from '@/lib/utils/epaperPublication';
 
 export type PublicHomeFeedSource = 'mongo' | 'file';
 
@@ -42,20 +44,6 @@ export type PublicHomeFeedBreakingItem = {
   ttsReady?: boolean;
 };
 
-export type PublicHomeFeedStory = {
-  id: string;
-  title: string;
-  caption: string;
-  thumbnail: string;
-  mediaType: 'image' | 'video';
-  mediaUrl: string;
-  linkUrl: string;
-  category: string;
-  publishedAt: string;
-  priority: number;
-  mediaAssets: ReturnType<typeof normalizeStoryMediaAssets>;
-};
-
 export type PublicHomeFeedVideo = {
   id: string;
   title: string;
@@ -71,6 +59,7 @@ export type PublicHomeFeedVideo = {
 
 export type PublicHomeFeedEPaper = {
   id: string;
+  publicationType: EPaperPublicationType;
   citySlug: string;
   cityName: string;
   title: string;
@@ -87,10 +76,10 @@ export type PublicHomeFeed = {
   latest: PublicHomeFeedArticle[];
   trending: PublicHomeFeedArticle[];
   breaking: PublicHomeFeedBreakingItem[];
-  stories: PublicHomeFeedStory[];
   videos: PublicHomeFeedVideo[];
   shorts: PublicHomeFeedVideo[];
   epaper: PublicHomeFeedEPaper | null;
+  emagazine: PublicHomeFeedEPaper | null;
 };
 
 export type PublicHomeFeedLimits = {
@@ -98,7 +87,6 @@ export type PublicHomeFeedLimits = {
   latest?: number;
   trending?: number;
   breaking?: number;
-  stories?: number;
   videos?: number;
   shorts?: number;
 };
@@ -112,10 +100,10 @@ export type PublicHomeFeedResult = {
 type LoadedHomeFeedData = {
   articles: PublicHomeFeedArticle[];
   breaking: PublicHomeFeedBreakingItem[];
-  stories: PublicHomeFeedStory[];
   videos: PublicHomeFeedVideo[];
   shorts: PublicHomeFeedVideo[];
   epaper: PublicHomeFeedEPaper | null;
+  emagazine: PublicHomeFeedEPaper | null;
 };
 
 const DEFAULT_LIMITS: Required<PublicHomeFeedLimits> = {
@@ -123,7 +111,6 @@ const DEFAULT_LIMITS: Required<PublicHomeFeedLimits> = {
   latest: 12,
   trending: 5,
   breaking: 10,
-  stories: 10,
   videos: 6,
   shorts: 8,
 };
@@ -133,7 +120,6 @@ const HOMEPAGE_INITIAL_LIMITS: Required<PublicHomeFeedLimits> = {
   latest: 6,
   trending: 3,
   breaking: 0,
-  stories: 6,
   videos: 0,
   shorts: 0,
 };
@@ -217,7 +203,6 @@ function resolveLimits(
     latest: normalizeLimit(input.latest, DEFAULT_LIMITS.latest, options),
     trending: normalizeLimit(input.trending, DEFAULT_LIMITS.trending, options),
     breaking: normalizeLimit(input.breaking, DEFAULT_LIMITS.breaking, options),
-    stories: normalizeLimit(input.stories, DEFAULT_LIMITS.stories, options),
     videos: normalizeLimit(input.videos, DEFAULT_LIMITS.videos, options),
     shorts: normalizeLimit(input.shorts, DEFAULT_LIMITS.shorts, options),
   };
@@ -301,33 +286,6 @@ function compareBreakingItems(
   return getSortTime(b) - getSortTime(a);
 }
 
-function mapStory(raw: unknown): PublicHomeFeedStory | null {
-  const input = asObject(raw);
-  const id = toId(input._id || input.id);
-  const title = String(input.title || '').trim();
-  const thumbnail = String(input.thumbnail || '').trim();
-  if (!id || !title || !thumbnail) return null;
-
-  return {
-    id,
-    title,
-    caption: String(input.caption || '').trim(),
-    thumbnail,
-    mediaType: input.mediaType === 'video' ? 'video' : 'image',
-    mediaUrl: String(input.mediaUrl || '').trim(),
-    linkUrl: String(input.linkUrl || '').trim(),
-    category: String(input.category || '').trim() || 'General',
-    publishedAt: toIsoDate(input.publishedAt),
-    priority: Math.floor(toNumber(input.priority, 0)),
-    mediaAssets: normalizeStoryMediaAssets(input.mediaAssets),
-  };
-}
-
-function compareStories(a: PublicHomeFeedStory, b: PublicHomeFeedStory) {
-  if (b.priority !== a.priority) return b.priority - a.priority;
-  return compareByPublishedAtDesc(a, b);
-}
-
 function mapVideo(raw: unknown, forceShort?: boolean): PublicHomeFeedVideo | null {
   const input = asObject(raw);
   const id = toId(input._id || input.id);
@@ -358,9 +316,14 @@ function mapMongoEPaper(raw: unknown): PublicHomeFeedEPaper | null {
 
   const publishDate = toDateLabel(input.publishDate);
   const citySlug = String(input.citySlug || '').trim();
+  const publicationType =
+    String(input.publicationType || '').trim() === 'emagazine'
+      ? 'emagazine'
+      : 'epaper';
 
   return {
     id,
+    publicationType,
     citySlug,
     cityName: String(input.cityName || '').trim(),
     title: String(input.title || '').trim(),
@@ -372,7 +335,7 @@ function mapMongoEPaper(raw: unknown): PublicHomeFeedEPaper | null {
     }),
     pdfPath: firstNonEmptyString(input.pdfPath, input.pdfUrl),
     pageCount: Math.max(1, Math.floor(toNumber(input.pageCount, 1))),
-    href: buildEpaperHref(citySlug, publishDate),
+    href: buildEpaperHref(citySlug, publishDate, publicationType),
   };
 }
 
@@ -387,6 +350,7 @@ function mapFileEPaper(raw: unknown): PublicHomeFeedEPaper | null {
 
   return {
     id,
+    publicationType: 'epaper',
     citySlug,
     cityName,
     title: String(input.title || '').trim(),
@@ -394,11 +358,20 @@ function mapFileEPaper(raw: unknown): PublicHomeFeedEPaper | null {
     thumbnailPath: firstNonEmptyString(input.thumbnailPath, input.thumbnail),
     pdfPath: firstNonEmptyString(input.pdfPath, input.pdfUrl),
     pageCount: Math.max(1, Math.floor(toNumber(input.pages || input.pageCount, 1))),
-    href: buildEpaperHref(citySlug, publishDate),
+    href: buildEpaperHref(citySlug, publishDate, 'epaper'),
   };
 }
 
-function buildEpaperHref(citySlug: string, publishDate: string) {
+function buildEpaperHref(
+  citySlug: string,
+  publishDate: string,
+  publicationType: EPaperPublicationType = 'epaper'
+) {
+  if (publicationType === 'emagazine') {
+    const month = normalizePublicationIssueMonth(publishDate);
+    return month ? `/main/e-magazine?month=${encodeURIComponent(month)}` : '/main/e-magazine';
+  }
+
   const params = new URLSearchParams();
   if (citySlug) params.set('city', citySlug);
   if (publishDate) params.set('date', publishDate);
@@ -422,7 +395,7 @@ async function loadMongoFeed(
     articleCandidateMinimum
   );
 
-  const [articleDocs, storyDocs, videoDocs, shortDocs, epaperDocs] = await Promise.all([
+  const [articleDocs, videoDocs, shortDocs, epaperDocs, emagazineDocs] = await Promise.all([
     Article.find({})
       .select(
         '_id slug title summary image category author publishedAt updatedAt views isBreaking isTrending workflow reporterMeta breakingTts'
@@ -430,15 +403,6 @@ async function loadMongoFeed(
       .sort({ publishedAt: -1, _id: -1 })
       .limit(articleLimit)
       .lean(),
-    limits.stories > 0
-      ? Story.find({ isPublished: true })
-          .select(
-            '_id title caption thumbnail mediaType mediaUrl linkUrl category priority publishedAt mediaAssets'
-          )
-          .sort({ priority: -1, publishedAt: -1, _id: -1 })
-          .limit(limits.stories)
-          .lean()
-      : Promise.resolve([]),
     limits.videos > 0
       ? Video.find({ isPublished: true, isShort: { $ne: true } })
           .select('_id title description thumbnail videoUrl duration category isShort views publishedAt createdAt')
@@ -453,8 +417,21 @@ async function loadMongoFeed(
           .limit(limits.shorts)
           .lean()
       : Promise.resolve([]),
-    EPaper.find({ status: 'published', isCurrentRevision: { $ne: false } })
-      .select('_id citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl pageCount pages')
+    EPaper.find({
+      status: 'published',
+      isCurrentRevision: { $ne: false },
+      ...buildPublicationTypeMongoFilter('epaper'),
+    })
+      .select('_id publicationType citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl pageCount pages')
+      .sort({ publishDate: -1, _id: -1 })
+      .limit(1)
+      .lean(),
+    EPaper.find({
+      status: 'published',
+      isCurrentRevision: { $ne: false },
+      ...buildPublicationTypeMongoFilter('emagazine'),
+    })
+      .select('_id publicationType citySlug cityName title publishDate thumbnailPath thumbnail pdfPath pdfUrl pageCount pages')
       .sort({ publishDate: -1, _id: -1 })
       .limit(1)
       .lean(),
@@ -479,11 +456,6 @@ async function loadMongoFeed(
   return {
     articles,
     breaking,
-    stories: storyDocs
-      .map((item) => mapStory(item))
-      .filter((item): item is PublicHomeFeedStory => Boolean(item))
-      .sort(compareStories)
-      .slice(0, limits.stories),
     videos: videoDocs
       .map((item) => mapVideo(item, false))
       .filter((item): item is PublicHomeFeedVideo => Boolean(item))
@@ -495,13 +467,13 @@ async function loadMongoFeed(
       .sort(compareByPublishedAtDesc)
       .slice(0, limits.shorts),
     epaper: mapMongoEPaper(epaperDocs[0]) || null,
+    emagazine: mapMongoEPaper(emagazineDocs[0]) || null,
   };
 }
 
 async function loadFileFeed(limits: Required<PublicHomeFeedLimits>) {
-  const [articleRows, storyRows, videoRows, epaperRows] = await Promise.all([
+  const [articleRows, videoRows, epaperRows] = await Promise.all([
     listAllStoredArticles(),
-    limits.stories > 0 ? listAllStoredStories() : Promise.resolve([]),
     limits.videos > 0 || limits.shorts > 0 ? listAllStoredVideos() : Promise.resolve([]),
     listAllStoredEPapers(),
   ]);
@@ -530,12 +502,6 @@ async function loadFileFeed(limits: Required<PublicHomeFeedLimits>) {
   return {
     articles,
     breaking,
-    stories: storyRows
-      .filter((item) => item.isPublished !== false)
-      .map((item) => mapStory(item))
-      .filter((item): item is PublicHomeFeedStory => Boolean(item))
-      .sort(compareStories)
-      .slice(0, limits.stories),
     videos: videoRows
       .filter((item) => item.isPublished !== false && !item.isShort)
       .map((item) => mapVideo(item, false))
@@ -549,6 +515,7 @@ async function loadFileFeed(limits: Required<PublicHomeFeedLimits>) {
       .sort(compareByPublishedAtDesc)
       .slice(0, limits.shorts),
     epaper: latestEPaper,
+    emagazine: null,
   };
 }
 
@@ -565,10 +532,10 @@ function buildFeed(input: LoadedHomeFeedData, limits: Required<PublicHomeFeedLim
     latest,
     trending,
     breaking: input.breaking,
-    stories: input.stories,
     videos: input.videos,
     shorts: input.shorts,
     epaper: input.epaper,
+    emagazine: input.emagazine,
   };
 }
 

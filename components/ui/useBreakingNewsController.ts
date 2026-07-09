@@ -14,10 +14,10 @@ import { fetchTtsStatus } from '@/lib/ai/ttsClient';
 
 const BREAKING_LIMIT = 10;
 const POLL_INTERVAL_MS = 90_000;
-const SILENT_ROTATION_MS = 4_000;
+const SILENT_ROTATION_MS = 3_200;
 const SPOKEN_HEADLINE_PAUSE_MS = 800;
 const TTS_FAILURE_HOLD_MS = 3_000;
-const TRANSITION_MS = 350;
+const TRANSITION_MS = 300;
 
 type UseBreakingNewsControllerOptions = {
   items?: BreakingNewsItem[];
@@ -33,27 +33,59 @@ type PreparedHeadlineAudio = {
 
 type PlaybackOutcome = 'ended' | 'error' | 'cancelled';
 
+function normalizeDedupText(value: string | undefined) {
+  return (value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getBreakingDedupKey(item: BreakingNewsItem) {
+  const hrefKey = normalizeDedupText(item.href);
+  if (hrefKey) {
+    return `href:${hrefKey}`;
+  }
+
+  return [
+    `title:${normalizeDedupText(item.title)}`,
+    `city:${normalizeDedupText(item.city)}`,
+    `category:${normalizeDedupText(item.category)}`,
+  ].join('|');
+}
+
+function dedupeBreakingNewsItems(items: BreakingNewsItem[]) {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    const key = getBreakingDedupKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function normalizeBreakingList(value: unknown) {
   if (!Array.isArray(value)) return [];
-  return sortBreakingNewsItems(
-    value
-      .map((item) => normalizeBreakingNewsItem(item))
-      .filter((item): item is BreakingNewsItem => Boolean(item))
+  return dedupeBreakingNewsItems(
+    sortBreakingNewsItems(
+      value
+        .map((item) => normalizeBreakingNewsItem(item))
+        .filter((item): item is BreakingNewsItem => Boolean(item))
+    )
   );
 }
 
 function buildFallbackItems() {
-  return sortBreakingNewsItems(
-    mockBreakingNews
-      .map((item) =>
-        normalizeBreakingNewsItem({
-          id: item.id,
-          title: item.title,
-          priority: item.priority,
-          href: `/main/article/${encodeURIComponent(item.id)}`,
-        })
-      )
-      .filter((item): item is BreakingNewsItem => Boolean(item))
+  return dedupeBreakingNewsItems(
+    sortBreakingNewsItems(
+      mockBreakingNews
+        .map((item) =>
+          normalizeBreakingNewsItem({
+            id: item.id,
+            title: item.title,
+            priority: item.priority,
+            href: `/main/article/${encodeURIComponent(item.id)}`,
+          })
+        )
+        .filter((item): item is BreakingNewsItem => Boolean(item))
+    )
   );
 }
 
@@ -485,12 +517,9 @@ export function useBreakingNewsController({
         const nextQueue = bufferedQueue?.length ? bufferedQueue : activeQueue;
         const nextIndex = bufferedQueue?.length ? 0 : isLastHeadline ? 0 : workingIndex + 1;
         const nextItem = nextQueue[nextIndex];
-        const nextPreparedPromise =
-          nextItem && nextItem.id !== currentItem.id
-            ? prepareHeadlineAudio(nextItem)
-            : nextItem
-              ? prepareHeadlineAudio(nextItem)
-              : Promise.resolve<PreparedHeadlineAudio | null>(null);
+        const nextPreparedPromise = nextItem
+          ? prepareHeadlineAudio(nextItem)
+          : Promise.resolve<PreparedHeadlineAudio | null>(null);
 
         commitVisibleHeadline(workingIndex, {
           animate: currentIndexRef.current !== workingIndex,

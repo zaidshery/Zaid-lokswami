@@ -6,7 +6,6 @@ const CACHEABLE_PUBLIC_READ_ROUTES = [
   /^\/api\/articles\/latest\/?$/,
   /^\/api\/epapers(?:\/|$)/,
   /^\/api\/videos\/latest\/?$/,
-  /^\/api\/stories\/latest\/?$/,
   /^\/api\/shorts\/latest\/?$/,
 ];
 

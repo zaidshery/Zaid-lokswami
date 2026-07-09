@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const connectDBMock = vi.fn();
 const listAllStoredArticlesMock = vi.fn();
-const listAllStoredStoriesMock = vi.fn();
 const listAllStoredVideosMock = vi.fn();
 const listAllStoredEPapersMock = vi.fn();
 
@@ -11,12 +10,6 @@ vi.mock('@/lib/db/mongoose', () => ({
 }));
 
 vi.mock('@/lib/models/Article', () => ({
-  default: {
-    find: vi.fn(),
-  },
-}));
-
-vi.mock('@/lib/models/Story', () => ({
   default: {
     find: vi.fn(),
   },
@@ -36,10 +29,6 @@ vi.mock('@/lib/models/EPaper', () => ({
 
 vi.mock('@/lib/storage/articlesFile', () => ({
   listAllStoredArticles: listAllStoredArticlesMock,
-}));
-
-vi.mock('@/lib/storage/storiesFile', () => ({
-  listAllStoredStories: listAllStoredStoriesMock,
 }));
 
 vi.mock('@/lib/storage/videosFile', () => ({
@@ -96,18 +85,6 @@ describe('public home feed service', () => {
         workflow: { status: 'published' },
       },
     ]);
-    listAllStoredStoriesMock.mockResolvedValue([
-      {
-        _id: 'story-1',
-        title: 'Visual Story',
-        caption: 'Caption',
-        thumbnail: '/story.jpg',
-        mediaType: 'image',
-        publishedAt: '2026-05-09T10:30:00.000Z',
-        priority: 4,
-        isPublished: true,
-      },
-    ]);
     listAllStoredVideosMock.mockResolvedValue([
       {
         _id: 'video-1',
@@ -161,16 +138,17 @@ describe('public home feed service', () => {
     expect(result.feed.latest.map((item) => item.id)).toEqual(['article-2']);
     expect(result.feed.trending.map((item) => item.id)).toEqual(['article-1']);
     expect(result.feed.breaking.map((item) => item.id)).toEqual(['article-1']);
-    expect(result.feed.stories[0]?.id).toBe('story-1');
     expect(result.feed.videos[0]?.id).toBe('video-1');
     expect(result.feed.shorts[0]?.id).toBe('short-1');
     expect(result.feed.epaper).toEqual(
       expect.objectContaining({
         id: 'paper-1',
+        publicationType: 'epaper',
         citySlug: 'indore',
         href: '/main/epaper?city=indore&date=2026-05-09',
       })
     );
+    expect(result.feed.emagazine).toBeNull();
   });
 
   it('builds a lightweight homepage initial feed without unused media sections', async () => {
@@ -200,18 +178,6 @@ describe('public home feed service', () => {
         publishedAt: '2026-05-09T09:00:00.000Z',
         views: 5,
         workflow: { status: 'published' },
-      },
-    ]);
-    listAllStoredStoriesMock.mockResolvedValue([
-      {
-        _id: 'story-1',
-        title: 'Visual Story',
-        caption: 'Caption',
-        thumbnail: '/story.jpg',
-        mediaType: 'image',
-        publishedAt: '2026-05-09T10:30:00.000Z',
-        priority: 4,
-        isPublished: true,
       },
     ]);
     listAllStoredVideosMock.mockResolvedValue([
@@ -248,7 +214,6 @@ describe('public home feed service', () => {
       latest: 6,
       trending: 3,
       breaking: 0,
-      stories: 6,
       videos: 0,
       shorts: 0,
     });
@@ -256,7 +221,7 @@ describe('public home feed service', () => {
     expect(result.feed.breaking).toEqual([]);
     expect(result.feed.videos).toEqual([]);
     expect(result.feed.shorts).toEqual([]);
-    expect(result.feed.stories.map((item) => item.id)).toEqual(['story-1']);
     expect(result.feed.epaper?.id).toBe('paper-1');
+    expect(result.feed.emagazine).toBeNull();
   });
 });

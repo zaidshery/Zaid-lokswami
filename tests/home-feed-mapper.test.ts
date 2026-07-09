@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mapHomeFeedToHomePageState } from '@/lib/content/homeFeed';
 
 describe('home feed mapper', () => {
-  it('maps the v1 home-feed envelope into homepage article, story, and e-paper state', () => {
+  it('maps the v1 home-feed envelope into homepage article and e-paper state', () => {
     const result = mapHomeFeedToHomePageState({
       success: true,
       data: {
@@ -47,20 +47,6 @@ describe('home feed mapper', () => {
             isTrending: true,
           },
         ],
-        stories: [
-          {
-            id: 'story-1',
-            title: 'Visual Story',
-            caption: 'Story caption',
-            thumbnail: '/story.jpg',
-            mediaType: 'image',
-            mediaUrl: '/story.jpg',
-            linkUrl: '/main/article/lead-story',
-            category: 'Regional',
-            publishedAt: '2026-05-09T10:30:00.000Z',
-            priority: 5,
-          },
-        ],
         epaper: {
           id: 'paper-1',
           citySlug: 'indore',
@@ -69,6 +55,16 @@ describe('home feed mapper', () => {
           publishDate: '2026-05-09',
           thumbnailPath: '/paper.jpg',
           pageCount: 12,
+        },
+        emagazine: {
+          id: 'magazine-1',
+          publicationType: 'emagazine',
+          citySlug: 'global',
+          cityName: 'Lokswami',
+          title: 'Lokswami E-Magazine - May 2026',
+          publishDate: '2026-05-01',
+          thumbnailPath: '/magazine.jpg',
+          pageCount: 36,
         },
       },
     });
@@ -85,18 +81,42 @@ describe('home feed mapper', () => {
         author: expect.objectContaining({ name: 'News Desk' }),
       })
     );
-    expect(result?.stories[0]).toEqual(
-      expect.objectContaining({
-        id: 'story-1',
-        title: 'Visual Story',
-        href: '/main/article/lead-story',
-      })
-    );
     expect(result?.epaper).toEqual(
       expect.objectContaining({
         _id: 'paper-1',
         citySlug: 'indore',
         pageCount: 12,
+      })
+    );
+    expect(result?.emagazine).toEqual(
+      expect.objectContaining({
+        _id: 'magazine-1',
+        publicationType: 'emagazine',
+        pageCount: 36,
+      })
+    );
+  });
+
+  it('maps legacy e-paper thumbnail fields into the homepage cover path', () => {
+    const result = mapHomeFeedToHomePageState({
+      success: true,
+      data: {
+        epaper: {
+          id: 'paper-legacy',
+          citySlug: 'indore',
+          cityName: 'Indore',
+          title: 'Legacy Indore Edition',
+          publishDate: '2026-05-10',
+          thumbnail: '/legacy-paper-cover.jpg',
+          pageCount: 8,
+        },
+      },
+    });
+
+    expect(result?.epaper).toEqual(
+      expect.objectContaining({
+        _id: 'paper-legacy',
+        thumbnailPath: '/legacy-paper-cover.jpg',
       })
     );
   });

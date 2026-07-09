@@ -157,7 +157,7 @@ export function getOpenApiDocument() {
           responses: {
             '200': {
               description:
-                'Grouped home feed sections for reader website and mobile app clients',
+                'Grouped home feed sections for reader website and mobile app clients, including current e-paper and e-magazine promos',
             },
           },
         },
@@ -195,22 +195,6 @@ export function getOpenApiDocument() {
           responses: {
             '200': { description: 'Published article detail response' },
             '404': { description: 'Article not found' },
-          },
-        },
-      },
-      '/api/v1/public/stories/latest': {
-        get: {
-          tags: ['Public Content'],
-          summary: 'API v1 latest visual stories feed',
-          parameters: [
-            {
-              name: 'limit',
-              in: 'query',
-              schema: { type: 'integer', minimum: 5, maximum: 100 },
-            },
-          ],
-          responses: {
-            '200': { description: 'Latest stories response' },
           },
         },
       },

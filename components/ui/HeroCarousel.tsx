@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import HeroCard from "./HeroCard";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Article } from '@/lib/mock/data';
+import HeroCard from "./HeroCard";
 
 interface HeroCarouselProps {
   articles: Article[];
@@ -113,8 +112,8 @@ export default function HeroCarousel({
         ref={containerRef}
         className={`relative h-full overflow-hidden select-none ${
           variant === 'editorial'
-            ? 'rounded-2xl shadow-lg ring-1 ring-zinc-200/70 dark:ring-zinc-800'
-            : 'rounded-3xl shadow-2xl ring-1 ring-black/10 dark:ring-white/10'
+            ? 'rounded-lg shadow-lg ring-1 ring-zinc-200/70 dark:ring-zinc-800'
+            : 'rounded-[28px] shadow-[0_22px_52px_rgba(15,23,42,0.14)] ring-1 ring-zinc-200/75 dark:ring-zinc-800/80'
         }`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -127,19 +126,8 @@ export default function HeroCarousel({
         aria-roledescription="carousel"
         aria-label="Top stories carousel"
       >
-        <div className={`relative h-full overflow-hidden ${variant === 'editorial' ? 'rounded-2xl' : 'rounded-3xl'}`}>
-          <AnimatePresence initial={false} mode="wait">
-            <motion.div
-              key={articles[index].id}
-              initial={{ opacity: 0, scale: 1.1 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
-              className="relative h-full"
-            >
-              <HeroCard article={articles[index]} parallax={parallax} variant={variant} />
-            </motion.div>
-          </AnimatePresence>
+        <div className="relative h-full overflow-hidden rounded-[inherit]">
+          <HeroCard article={articles[index]} parallax={parallax} variant={variant} />
 
           {/* ARIA Live for screen readers */}
           <div className="sr-only" aria-live="polite">
@@ -173,35 +161,6 @@ export default function HeroCarousel({
           </div>
         </div>
 
-        {/* Dots (overlay) - Modern Pills */}
-        <div className={`absolute left-0 right-0 z-30 flex items-center justify-center ${variant === 'editorial' ? 'hidden' : 'bottom-6 gap-2'}`}>
-          {articles.map((_, i) => (
-            <motion.button
-              key={i}
-              onClick={() => {
-                stopAutoPlay();
-                setIndex(i);
-                startAutoPlay();
-              }}
-              animate={
-                variant === 'editorial'
-                  ? { width: i === index ? 22 : 5, opacity: i === index ? 1 : 0.5 }
-                  : { width: i === index ? 32 : 8, opacity: i === index ? 1 : 0.5 }
-              }
-              transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-              className={`rounded-full cnp-motion ${
-                variant === 'editorial'
-                  ? i === index
-                    ? 'h-1 bg-white'
-                    : 'h-1 bg-white/45 hover:bg-white/65'
-                  : i === index
-                    ? "h-1.5 bg-white shadow-lg"
-                    : "h-1.5 bg-white/40 hover:bg-white/60"
-              }`}
-              aria-label={`Go to slide ${i + 1}`}
-            />
-          ))}
-        </div>
       </div>
     </div>
   );

@@ -12,20 +12,19 @@ import {
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
-  TrendingUp,
   ArrowRight,
+  BookOpen,
+  CalendarDays,
+  Clock3,
+  Eye,
   Flame,
 } from 'lucide-react';
 import HeroCarousel from '@/components/ui/HeroCarousel';
 import NewsCard from '@/components/ui/NewsCard';
 import ReaderImage from '@/components/ui/ReaderImage';
+import DesktopHeroEpaperCard from '@/components/ui/DesktopHeroEpaperCard';
 import { articles as mockArticles, type Article } from '@/lib/mock/data';
 import { categoryMatches, fetchMergedLiveArticles } from '@/lib/content/liveArticles';
-import {
-  buildVisualStoriesFromArticles,
-  type VisualStory,
-} from '@/lib/content/visualStories';
-import { fetchLiveStories } from '@/lib/content/liveStories';
 import {
   fetchHomeFeedForHomePage,
   type HomePageEpaperPreview,
@@ -47,6 +46,7 @@ import {
 } from '@/lib/utils/articleMedia';
 import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import { formatUiDate } from '@/lib/utils/dateFormat';
+import { normalizePublicationIssueMonth } from '@/lib/utils/epaperPublication';
 
 function hexToRgba(hex: string, alpha: number) {
   const cleaned = hex.replace('#', '').trim();
@@ -77,11 +77,33 @@ function formatDesktopHeroDate(value: string | undefined, language: 'en' | 'hi')
   }).format(parsed);
 }
 
+function formatMagazineIssueLabel(value: string | undefined, language: 'en' | 'hi') {
+  if (!value) return '';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatUiDate(value, value);
+  }
+
+  return new Intl.DateTimeFormat(language === 'hi' ? 'hi-IN' : 'en-IN', {
+    month: 'long',
+    year: 'numeric',
+  }).format(parsed);
+}
+
 function getLocalDateKey(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
 }
 
 function getPublishedTimestamp(article: Article) {
@@ -103,7 +125,7 @@ const HI_EPAPER_CITY_LABELS: Record<string, string> = {
 };
 
 type HomeEpaperResponse = {
-  items?: HomePageEpaperPreview[];
+  items?: Array<HomePageEpaperPreview & { thumbnail?: string }>;
 };
 
 type HomePageProps = {
@@ -117,52 +139,251 @@ type CategorySectionViewModel = {
   accent: string;
 };
 
-const StoriesRail = dynamic(() => import('@/components/ui/StoriesRail'), {
-  ssr: false,
-  loading: StoriesRailFallback,
-});
+type ArticleTileProps = {
+  article: Article;
+  language: 'en' | 'hi';
+  priority?: boolean;
+};
 
-const DesktopHeroEpaperCard = dynamic(
-  () => import('@/components/ui/DesktopHeroEpaperCard'),
-  {
-    ssr: false,
-    loading: DesktopHeroEpaperCardFallback,
-  }
-);
+type PublicationPromoCard = {
+  href: string;
+  dateLabel?: string;
+  thumbnailSrc: string;
+  thumbnailAlt: string;
+  eyebrowLabel: string;
+  title: string;
+  editionLabel: string;
+  supportLabel?: string;
+  ctaLabel: string;
+  ariaLabel: string;
+};
+
+function formatCompactViews(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0';
+
+  return new Intl.NumberFormat('en-IN', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function getSectionCopy(language: 'en' | 'hi', hi: string, en: string) {
+  return language === 'hi' ? hi : en;
+}
+
+function NewsroomSectionHeader({
+  title,
+  href,
+  cta,
+}: {
+  title: string;
+  href?: string;
+  cta?: string;
+}) {
+  return (
+    <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+      <h2 className="hi-heading newsroom-heading flex min-w-0 items-center gap-2 text-[0.98rem] font-semibold leading-snug sm:text-[1.08rem]">
+        <span className="h-5 w-1 rounded-sm bg-red-600 shadow-[0_0_0_3px_rgba(220,38,38,0.12)]" />
+        <span className="truncate">{title}</span>
+      </h2>
+      {href && cta ? (
+        <Link
+          href={href}
+          className="reader-touch-link reader-focus-ring inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-bold text-red-600 transition hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+        >
+          {cta}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function LiveUpdateStory({
+  article,
+  language,
+}: {
+  article: Article;
+  language: 'en' | 'hi';
+}) {
+  const href = buildArticlePublicPath({ id: article.id, slug: article.slug });
+  const timeLabel = formatDesktopHeroDate(article.publishedAt, language);
+
+  return (
+    <Link
+      href={href}
+      className="reader-focus-ring newsroom-soft-card group grid min-h-[84px] grid-cols-[82px_minmax(0,1fr)] items-center gap-2.5 rounded-lg border p-2.5 transition hover:-translate-y-0.5 sm:min-h-[86px] sm:grid-cols-[86px_minmax(0,1fr)] xl:grid-cols-[88px_minmax(0,1fr)]"
+    >
+      <div className="newsroom-image-bg relative h-[72px] w-[82px] overflow-hidden rounded-md bg-zinc-100 dark:bg-zinc-950 sm:h-[76px] sm:w-[86px] xl:h-[78px] xl:w-[88px]">
+        <ReaderImage
+          src={buildArticleImageVariantUrl(article.image, 'thumb')}
+          alt={article.title}
+          fill
+          className="object-cover object-center"
+          sizes="88px"
+        />
+      </div>
+      <div className="flex min-w-0 flex-col">
+        <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
+          <span className="max-w-[8.75rem] truncate text-[9px] font-black uppercase leading-none text-red-500 dark:text-red-400">
+            {article.category}
+          </span>
+          <span className="newsroom-dot h-1 w-1 rounded-full" />
+          <span className="newsroom-muted truncate text-[9px] font-semibold">
+            {timeLabel}
+          </span>
+        </div>
+        <p className="newsroom-card-title-match-sm newsroom-heading line-clamp-2 transition group-hover:text-red-600 dark:group-hover:text-white">
+          {article.title}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+function HeadlineImageCard({
+  article,
+  language,
+  priority = false,
+}: ArticleTileProps) {
+  const href = buildArticlePublicPath({ id: article.id, slug: article.slug });
+  const timeLabel = formatDesktopHeroDate(article.publishedAt, language);
+
+  return (
+    <Link
+      href={href}
+      className="reader-focus-ring newsroom-card group block h-full overflow-hidden rounded-lg border transition hover:-translate-y-0.5"
+    >
+      <div className="newsroom-image-bg relative aspect-[16/9] overflow-hidden">
+        <ReaderImage
+          src={buildArticleImageVariantUrl(article.image, 'card')}
+          alt={article.title}
+          fill
+          priority={priority}
+          className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
+          sizes="(max-width: 767px) 100vw, (max-width: 1279px) 33vw, 360px"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/12 to-transparent" />
+        <span className="absolute right-2 top-2 max-w-[8.5rem] truncate rounded bg-red-700 px-2 py-1 text-[10px] font-black leading-none text-white">
+          {article.category}
+        </span>
+      </div>
+      <div className="flex min-h-[112px] flex-col p-3">
+        <h3 className="newsroom-card-title-match newsroom-heading line-clamp-2 min-h-[2.65rem] transition group-hover:text-red-600 dark:group-hover:text-white">
+          {article.title}
+        </h3>
+        <div className="newsroom-muted mt-auto flex min-w-0 items-center justify-between gap-2 pt-2 text-[11px] font-semibold">
+          <span className="inline-flex min-w-0 items-center gap-1">
+            <Clock3 className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{timeLabel}</span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1">
+            <Eye className="h-3.5 w-3.5" />
+            {formatCompactViews(article.views)}
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function RankedStoryList({
+  articles,
+  language,
+}: {
+  articles: Article[];
+  language: 'en' | 'hi';
+}) {
+  return (
+    <div className="newsroom-panel newsroom-right-rail rounded-lg border p-3">
+      <NewsroomSectionHeader
+        title={getSectionCopy(language, '\u0932\u094b\u0915\u092a\u094d\u0930\u093f\u092f \u0916\u092c\u0930\u0947\u0902', 'Popular News')}
+        href="/main/latest"
+        cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
+      />
+      <div className="space-y-2">
+        {articles.slice(0, 6).map((article) => (
+          <Link
+            key={article.id}
+            href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
+            className="reader-focus-ring group grid min-h-[78px] grid-cols-[98px_minmax(0,1fr)] items-center gap-2.5 rounded-md border border-transparent p-1.5 transition hover:border-red-500/30 hover:bg-red-500/5 dark:hover:bg-white/[0.045]"
+          >
+            <div className="newsroom-image-bg relative h-[62px] overflow-hidden rounded-md">
+              <ReaderImage
+                src={buildArticleImageVariantUrl(article.image, 'thumb')}
+                alt={article.title}
+                fill
+                className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                sizes="98px"
+              />
+            </div>
+            <div className="min-w-0">
+              <p className="newsroom-card-title-match-sm newsroom-heading line-clamp-2 group-hover:text-red-600 dark:group-hover:text-white">
+                {article.title}
+              </p>
+              <span className="newsroom-muted mt-1 inline-flex items-center gap-1 text-[10px] font-semibold">
+                <Clock3 className="h-3 w-3" />
+                {formatDesktopHeroDate(article.publishedAt, language)}
+              </span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FeaturedStoryBand({
+  articles,
+  language,
+}: {
+  articles: Article[];
+  language: 'en' | 'hi';
+}) {
+  const feature = articles[0];
+  const support = articles[1];
+
+  if (!feature) return null;
+
+  return (
+    <Link
+      href={buildArticlePublicPath({ id: feature.id, slug: feature.slug })}
+      className="reader-focus-ring newsroom-feature-band group relative grid min-h-[112px] overflow-hidden rounded-lg border p-4 transition hover:border-red-500/45 sm:grid-cols-[minmax(0,1fr)_220px] sm:p-5"
+    >
+      <div className="relative z-10 min-w-0">
+        <span className="mb-2 inline-flex items-center gap-1.5 rounded bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white">
+          <Flame className="h-3 w-3" />
+          {getSectionCopy(language, '\u0935\u093f\u0936\u0947\u0937 \u0930\u093f\u092a\u094b\u0930\u094d\u091f', 'Lead Story')}
+        </span>
+        <h2 className="newsroom-feature-title-match newsroom-heading line-clamp-2">
+          {feature.title}
+        </h2>
+        <p className="newsroom-card-summary-match newsroom-muted mt-2 line-clamp-1">
+          {support?.title || feature.summary}
+        </p>
+      </div>
+      <div className="pointer-events-none absolute bottom-0 right-0 hidden h-full w-[260px] opacity-70 sm:block">
+        <ReaderImage
+          src={buildArticleImageVariantUrl(feature.image, 'featured')}
+          alt={feature.title}
+          fill
+          className="object-cover object-center grayscale transition duration-500 group-hover:scale-105 group-hover:grayscale-0 dark:mix-blend-screen"
+          sizes="260px"
+        />
+        <div className="newsroom-feature-image-fade absolute inset-0" />
+      </div>
+      <span className="relative z-10 mt-4 inline-flex w-fit items-center gap-1 rounded-md bg-red-600 px-3 py-2 text-xs font-black text-white shadow-[0_16px_30px_rgba(185,28,28,0.28)] sm:mt-0 sm:self-end">
+        {getSectionCopy(language, '\u092a\u0922\u093c\u0947\u0902', 'Read')}
+        <ArrowRight className="h-3.5 w-3.5" />
+      </span>
+    </Link>
+  );
+}
 
 const NewsPoll = dynamic(() => import('@/components/ui/NewsPoll'), {
   ssr: false,
   loading: NewsPollFallback,
 });
-
-function StoriesRailFallback() {
-  return (
-    <div className="flex gap-3 overflow-hidden py-1 sm:gap-4 sm:py-1.5">
-      {[0, 1, 2, 3, 4].map((item) => (
-        <div
-          key={item}
-          className="h-[10.7rem] w-24 shrink-0 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800 md:w-28"
-        />
-      ))}
-    </div>
-  );
-}
-
-function DesktopHeroEpaperCardFallback() {
-  return (
-    <div className="h-full animate-pulse rounded-[1.6rem] border border-zinc-200/90 bg-zinc-100 dark:border-white/10 dark:bg-zinc-900">
-      <div className="grid h-full grid-cols-[150px_minmax(0,1fr)] items-center gap-3 px-3.5 py-2">
-        <div className="mx-auto aspect-[3/4] w-[136px] rounded-[1.35rem] bg-zinc-200 dark:bg-zinc-800" />
-        <div className="space-y-3">
-          <div className="h-5 w-24 rounded-full bg-zinc-200 dark:bg-zinc-800" />
-          <div className="h-5 w-11/12 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-          <div className="h-4 w-8/12 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-          <div className="h-7 w-32 rounded-full bg-zinc-200 dark:bg-zinc-800" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function NewsPollFallback() {
   return (
@@ -184,13 +405,13 @@ function TopSideStoriesFallback({ count }: { count: number }) {
       {Array.from({ length: count }, (_, index) => (
         <div
           key={index}
-          className="h-full animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"
+          className="newsroom-skeleton-card h-full animate-pulse rounded-lg border"
         >
           <div className="flex h-full items-center gap-3 p-3">
-            <div className="h-[72px] w-[108px] flex-none rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+            <div className="newsroom-skeleton-block h-[74px] w-[82px] flex-none rounded-md" />
             <div className="min-w-0 flex-1 space-y-2">
-              <div className="h-4 w-11/12 rounded bg-zinc-200 dark:bg-zinc-800" />
-              <div className="h-4 w-7/12 rounded bg-zinc-200 dark:bg-zinc-800" />
+              <div className="newsroom-skeleton-block h-4 w-11/12 rounded" />
+              <div className="newsroom-skeleton-block h-4 w-7/12 rounded" />
             </div>
           </div>
         </div>
@@ -205,16 +426,85 @@ function CategoryStoriesSkeleton() {
       {[0, 1].map((item) => (
         <div
           key={item}
-          className="min-h-24 animate-pulse rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+          className="newsroom-skeleton-card min-h-24 animate-pulse rounded-lg border"
         >
           <div className="space-y-2 p-4">
-            <div className="h-3 w-20 rounded bg-zinc-200 dark:bg-zinc-800" />
-            <div className="h-4 w-11/12 rounded bg-zinc-200 dark:bg-zinc-800" />
-            <div className="h-4 w-8/12 rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="newsroom-skeleton-block h-3 w-20 rounded" />
+            <div className="newsroom-skeleton-block h-4 w-11/12 rounded" />
+            <div className="newsroom-skeleton-block h-4 w-8/12 rounded" />
           </div>
         </div>
       ))}
     </div>
+  );
+}
+
+function MagazinePromoTile({ promo }: { promo: PublicationPromoCard }) {
+  return (
+    <Link
+      href={promo.href}
+      aria-label={promo.ariaLabel}
+      className="reader-focus-ring newsroom-magazine-card group relative grid min-h-[184px] overflow-hidden rounded-lg border border-red-500/25 transition hover:-translate-y-0.5 hover:border-red-500/45 lg:min-h-[180px]"
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-[linear-gradient(90deg,rgba(239,68,68,0.92)_0%,rgba(249,115,22,0.78)_58%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),transparent_38%,rgba(239,68,68,0.1))]" />
+
+      <div className="relative grid h-full grid-cols-[118px_minmax(0,1fr)] items-center gap-3 p-3 sm:grid-cols-[136px_minmax(0,1fr)] lg:grid-cols-[112px_minmax(0,1fr)] xl:grid-cols-[124px_minmax(0,1fr)]">
+        <div className="flex items-center justify-center">
+          <div className="relative w-full max-w-[118px] sm:max-w-[128px] lg:max-w-[106px] xl:max-w-[118px]">
+            <div className="pointer-events-none absolute inset-x-4 top-3 aspect-[3/4] rotate-[5deg] rounded-lg border border-white/10 bg-white/8" />
+            <div className="pointer-events-none absolute inset-x-2 top-1 aspect-[3/4] -rotate-[4deg] rounded-lg border border-white/10 bg-black/20" />
+            <div className="relative rounded-lg border border-white/12 bg-white/8 p-1.5 shadow-[0_16px_28px_rgba(0,0,0,0.22)]">
+              <div className="relative aspect-[3/4] overflow-hidden rounded-md bg-[#f6f1e8]">
+                <ReaderImage
+                  src={promo.thumbnailSrc}
+                  alt={promo.thumbnailAlt}
+                  fill
+                  fallbackSrc="/placeholders/epaper-3x4.svg"
+                  className="object-contain p-1 transition-transform duration-500 group-hover:scale-[1.025]"
+                  sizes="128px"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 py-1">
+          <span className="inline-flex max-w-full items-center gap-1.5 rounded bg-red-600 px-2.5 py-1 text-[8.5px] font-black uppercase text-white shadow-sm">
+            <BookOpen className="h-3 w-3 shrink-0 text-white" />
+            <span className="truncate">{promo.eyebrowLabel}</span>
+          </span>
+
+          <h3 className="newsroom-card-title-match newsroom-heading mt-2 line-clamp-2">
+            <span>{promo.title}</span>
+            <span className="newsroom-muted mx-1.5 font-medium">-</span>
+            <span className="newsroom-body font-semibold">
+              {promo.editionLabel}
+            </span>
+          </h3>
+
+          {promo.supportLabel ? (
+            <p className="newsroom-card-summary-match newsroom-muted mt-1.5 line-clamp-2">
+              {promo.supportLabel}
+            </p>
+          ) : null}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {promo.dateLabel ? (
+              <span className="newsroom-pill-muted inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[9px] font-bold shadow-sm">
+                <CalendarDays className="h-3 w-3 text-red-300" />
+                <span className="whitespace-nowrap">{promo.dateLabel}</span>
+              </span>
+            ) : null}
+
+            <span className="inline-flex h-8 items-center gap-1 rounded-md bg-red-600 px-3 text-[9px] font-black text-white shadow-[0_12px_24px_rgba(127,29,29,0.22)] transition group-hover:bg-red-500">
+              <span>{promo.ctaLabel}</span>
+              <ArrowRight className="h-3 w-3" />
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
   );
 }
 
@@ -297,15 +587,15 @@ function LazyCategorySection({
     <div
       ref={ref}
       style={headerStyle}
-      className="cnp-surface overflow-hidden border px-3 py-4 sm:px-5 sm:py-5 md:px-6"
+      className="newsroom-panel overflow-hidden rounded-lg border px-3 py-4 sm:px-5 sm:py-5 md:px-6"
     >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-3 dark:border-zinc-800 sm:mb-4 sm:pb-4">
+      <div className="newsroom-divider mb-3 flex flex-wrap items-center justify-between gap-2 border-b pb-3 sm:mb-4 sm:pb-4">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-[1.05rem] font-black tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
-            <span style={accentStyle} className="h-5 w-1 rounded-full sm:h-6 sm:w-1.5" />
+          <h2 className="newsroom-heading flex items-center gap-2 text-[1.05rem] font-black sm:text-2xl">
+            <span style={accentStyle} className="h-5 w-1 rounded-sm sm:h-6 sm:w-1.5" />
             <span className="truncate">{categoryLabel}</span>
           </h2>
-          <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">
+          <p className="newsroom-muted mt-1 text-xs font-medium sm:text-sm">
             {language === 'hi'
               ? '\u0938\u092c\u0938\u0947 \u0928\u0908 \u092a\u094d\u0930\u0915\u093e\u0936\u093f\u0924 \u0916\u092c\u0930\u0947\u0902'
               : 'Top latest published stories'}
@@ -313,7 +603,7 @@ function LazyCategorySection({
         </div>
         <Link
           href={categoryHref}
-          className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-1 rounded-full border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-800 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:text-sm"
+          className="reader-touch-link reader-focus-ring newsroom-soft-button inline-flex min-h-10 items-center gap-1 rounded-md border px-3 py-2 text-[11px] font-semibold transition sm:text-sm"
         >
           {language === 'hi' ? '\u0936\u094d\u0930\u0947\u0923\u0940 \u0926\u0947\u0916\u0947\u0902' : 'View Category'}
           <ArrowRight className="h-3.5 w-3.5" />
@@ -329,7 +619,7 @@ function LazyCategorySection({
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center text-sm font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-400">
+        <div className="newsroom-empty rounded-lg border border-dashed px-4 py-8 text-center text-sm font-medium">
           {language === 'hi'
             ? '\u0907\u0938 \u0936\u094d\u0930\u0947\u0923\u0940 \u092e\u0947\u0902 \u0905\u092d\u0940 \u0915\u094b\u0908 \u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948.'
             : 'No latest stories are published in this category yet.'}
@@ -341,7 +631,7 @@ function LazyCategorySection({
           <button
             type="button"
             onClick={() => onShowMore(section.slug, section.items.length)}
-            className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-6 py-3 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:w-auto sm:px-8 sm:text-sm"
+            className="reader-touch-button reader-focus-ring newsroom-soft-button min-h-12 w-full rounded-md border px-6 py-3 text-[13px] font-semibold transition-all hover:-translate-y-0.5 sm:w-auto sm:px-8 sm:text-sm"
           >
             Load more Stories
           </button>
@@ -351,9 +641,15 @@ function LazyCategorySection({
   );
 }
 
-async function fetchLatestEpaperPreview(): Promise<HomePageEpaperPreview | null> {
+async function fetchLatestPublicationPreview(
+  publicationType: 'epaper' | 'emagazine'
+): Promise<HomePageEpaperPreview | null> {
   try {
-    const response = await fetch('/api/v1/public/epapers/latest?limit=1');
+    const query = new URLSearchParams({
+      limit: '1',
+      publicationType,
+    });
+    const response = await fetch(`/api/v1/public/epapers/latest?${query.toString()}`);
     const payload = (await response.json().catch(() => ({}))) as HomeEpaperResponse;
     if (!response.ok) return null;
 
@@ -362,11 +658,12 @@ async function fetchLatestEpaperPreview(): Promise<HomePageEpaperPreview | null>
 
     return {
       _id: String(first._id || ''),
+      publicationType,
       citySlug: String(first.citySlug || ''),
       cityName: String(first.cityName || ''),
       title: String(first.title || ''),
       publishDate: String(first.publishDate || ''),
-      thumbnailPath: String(first.thumbnailPath || ''),
+      thumbnailPath: firstNonEmptyString(first.thumbnailPath, first.thumbnail),
       pageCount: Number(first.pageCount || 0),
     };
   } catch {
@@ -374,22 +671,29 @@ async function fetchLatestEpaperPreview(): Promise<HomePageEpaperPreview | null>
   }
 }
 
+function fetchLatestEpaperPreview() {
+  return fetchLatestPublicationPreview('epaper');
+}
+
+function fetchLatestEmagazinePreview() {
+  return fetchLatestPublicationPreview('emagazine');
+}
+
 export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const { language } = useAppStore();
-  const topStoriesVariant: 'editorial' | 'modern' = 'editorial';
   const [isClientReady, setIsClientReady] = useState(false);
   const [feedArticles, setFeedArticles] = useState<Article[]>(
     () => initialHomeFeed?.articles.length ? initialHomeFeed.articles : mockArticles
   );
-  const [cmsStories, setCmsStories] = useState<VisualStory[]>(
-    () => initialHomeFeed?.stories || []
-  );
   const [latestEpaper, setLatestEpaper] = useState<HomePageEpaperPreview | null>(
     () => initialHomeFeed?.epaper || null
   );
+  const [latestEmagazine, setLatestEmagazine] = useState<HomePageEpaperPreview | null>(
+    () => initialHomeFeed?.emagazine || null
+  );
   const hasInitialArticles = Boolean(initialHomeFeed?.articles.length);
-  const hasInitialStories = Boolean(initialHomeFeed?.stories.length);
   const hasInitialEpaper = Boolean(initialHomeFeed?.epaper);
+  const hasInitialEmagazine = Boolean(initialHomeFeed?.emagazine);
   const [visibleLatestNewsCount, setVisibleLatestNewsCount] = useState(
     HOME_LATEST_INITIAL_COUNT
   );
@@ -399,25 +703,17 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const categoryRequestGenerationRef = useRef(0);
   const heroArticles = feedArticles.slice(0, 5);
   const trendingArticles = feedArticles.filter((article) => article.isTrending);
-  const spotlightTablet = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 3);
+  const liveUpdateStories = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 4);
   const latestNews = feedArticles.slice(5);
   const visibleLatestNews = latestNews.slice(0, visibleLatestNewsCount);
   const hasMoreLatestNews = visibleLatestNewsCount < latestNews.length;
-  const featuredSidebar: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 3);
-  const desktopHeroSidebarStories: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 2);
+  const featuredSidebar: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 6);
   const latestPublishedArticles = useMemo(
     () =>
       [...feedArticles].sort(
         (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
       ),
     [feedArticles]
-  );
-  const visualStories = useMemo(
-    () =>
-      cmsStories.length
-        ? cmsStories.slice(0, 10)
-        : buildVisualStoriesFromArticles(feedArticles, 10),
-    [cmsStories, feedArticles]
   );
   const categorySections = useMemo(() => {
     return NEWS_CATEGORY_DEFINITIONS.map((definition) => {
@@ -481,10 +777,10 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
     let active = true;
     const load = async () => {
       let hasArticles = hasInitialArticles;
-      let hasStories = hasInitialStories;
       let hasEpaper = hasInitialEpaper;
+      let hasEmagazine = hasInitialEmagazine;
 
-      if (!hasArticles || !hasStories || !hasEpaper) {
+      if (!hasArticles || !hasEpaper || !hasEmagazine) {
         const homeFeed = await fetchHomeFeedForHomePage();
 
         if (active && homeFeed) {
@@ -492,21 +788,21 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
             setFeedArticles(homeFeed.articles);
             hasArticles = true;
           }
-          if (!hasStories && homeFeed.stories.length) {
-            setCmsStories(homeFeed.stories);
-            hasStories = true;
-          }
           if (!hasEpaper && homeFeed.epaper) {
             setLatestEpaper(homeFeed.epaper);
             hasEpaper = true;
           }
+          if (!hasEmagazine && homeFeed.emagazine) {
+            setLatestEmagazine(homeFeed.emagazine);
+            hasEmagazine = true;
+          }
         }
       }
 
-      const [fallbackArticles, fallbackStories, fallbackEpaper] = await Promise.all([
+      const [fallbackArticles, fallbackEpaper, fallbackEmagazine] = await Promise.all([
         hasArticles ? Promise.resolve(null) : fetchMergedLiveArticles(100),
-        hasStories ? Promise.resolve(null) : fetchLiveStories(20),
         hasEpaper ? Promise.resolve(null) : fetchLatestEpaperPreview(),
+        hasEmagazine ? Promise.resolve(null) : fetchLatestEmagazinePreview(),
       ]);
 
       if (!active) return;
@@ -514,22 +810,22 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       if (fallbackArticles?.length) {
         setFeedArticles(fallbackArticles);
       }
-      if (fallbackStories?.length) {
-        setCmsStories(fallbackStories);
-      }
       if (fallbackEpaper) {
         setLatestEpaper(fallbackEpaper);
       }
+      if (fallbackEmagazine) {
+        setLatestEmagazine(fallbackEmagazine);
+      }
     };
 
-    if (!hasInitialArticles || !hasInitialStories || !hasInitialEpaper) {
+    if (!hasInitialArticles || !hasInitialEpaper || !hasInitialEmagazine) {
       void load();
     }
 
     return () => {
       active = false;
     };
-  }, [hasInitialArticles, hasInitialStories, hasInitialEpaper]);
+  }, [hasInitialArticles, hasInitialEpaper, hasInitialEmagazine]);
 
   useEffect(() => {
     setVisibleLatestNewsCount(HOME_LATEST_INITIAL_COUNT);
@@ -602,98 +898,97 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       : isDesktopHeroEpaperToday
         ? 'Fresh news, full digital edition'
         : 'Latest available digital edition';
-  const desktopHeroEpaperCta =
-    language === 'hi' ? '\u0905\u092d\u0940 \u092a\u0922\u093c\u0947\u0902' : 'Read Now';
   const desktopHeroEpaperAriaLabel =
     language === 'hi' ? '\u0905\u092d\u0940 \u0908-\u092a\u0947\u092a\u0930 \u092a\u0922\u093c\u0947\u0902' : "Read today's e-paper";
+  const desktopHeroEpaperPrimaryCta =
+    language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930 \u092a\u0922\u093c\u0947\u0902' : 'Read E-Paper';
+  const emagazineIssueMonth = normalizePublicationIssueMonth(latestEmagazine?.publishDate);
+  const emagazineHref = emagazineIssueMonth
+    ? `/main/e-magazine?month=${encodeURIComponent(emagazineIssueMonth)}`
+    : '/main/e-magazine';
+  const emagazineIssueLabel = formatMagazineIssueLabel(
+    latestEmagazine?.publishDate,
+    language
+  );
+  const emagazineEditionLabel = emagazineIssueLabel
+    ? language === 'hi'
+      ? `${emagazineIssueLabel} \u0905\u0902\u0915`
+      : `${emagazineIssueLabel} Issue`
+    : language === 'hi'
+      ? '\u092e\u093e\u0938\u093f\u0915 \u0905\u0902\u0915'
+      : 'Monthly Issue';
+  const emagazineThumbnail = latestEmagazine?.thumbnailPath || '/placeholders/epaper-3x4.svg';
+  const emagazinePromo: PublicationPromoCard = {
+    href: emagazineHref,
+    dateLabel: emagazineIssueLabel || undefined,
+    thumbnailSrc: emagazineThumbnail,
+    thumbnailAlt:
+      language === 'hi'
+        ? '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940 \u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928 \u0915\u0935\u0930'
+        : 'Lokswami e-magazine cover',
+    eyebrowLabel:
+      language === 'hi'
+        ? '\u0924\u093e\u091c\u093c\u093e \u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928'
+        : 'Latest E-Magazine',
+    title: language === 'hi' ? '\u0932\u094b\u0915\u0938\u094d\u0935\u093e\u092e\u0940' : 'Lokswami',
+    editionLabel: emagazineEditionLabel,
+    supportLabel:
+      language === 'hi'
+        ? '\u0939\u0930 \u092e\u0939\u0940\u0928\u0947 \u092a\u094d\u0930\u0915\u093e\u0936\u093f\u0924 \u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928 \u0905\u0902\u0915'
+        : 'Published monthly as an e-magazine issue',
+    ctaLabel:
+      language === 'hi'
+        ? '\u092e\u0948\u0917\u091c\u093c\u0940\u0928 \u092a\u0922\u093c\u0947\u0902'
+        : 'Read Magazine',
+    ariaLabel:
+      language === 'hi'
+        ? '\u0924\u093e\u091c\u093c\u093e \u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928 \u092a\u0922\u093c\u0947\u0902'
+        : 'Read latest e-magazine',
+  };
 
   return (
-    <div className="relative pb-3 [--section-gap:1rem] sm:[--section-gap:1.25rem] lg:[--section-gap:1.5rem]">
-      <div className="pointer-events-none absolute -top-16 right-0 h-60 w-60 rounded-full bg-orange-200/45 blur-3xl dark:bg-orange-900/20" />
-      <div className="pointer-events-none absolute top-[26rem] -left-16 h-64 w-64 rounded-full bg-cyan-200/35 blur-3xl dark:bg-cyan-900/20" />
-
-      <section
-        className={`relative overflow-hidden cnp-surface [--ts-pad:0.45rem] [--ts-gap:0.55rem] [--ts-toolbar-gap:0.35rem] max-[360px]:[--ts-pad:0.34rem] max-[360px]:[--ts-gap:0.4rem] max-[360px]:[--ts-toolbar-gap:0.22rem] p-[var(--ts-pad)] sm:[--ts-pad:0.875rem] sm:[--ts-gap:0.875rem] md:[--ts-pad:1.125rem] md:[--ts-gap:1rem] lg:[--ts-pad:1.25rem] ${
-          topStoriesVariant === 'editorial'
-            ? 'bg-white/95 dark:bg-zinc-950/90'
-            : 'bg-gradient-to-br from-orange-50 via-white to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black'
-        }`}
-      >
-        <div className="mb-[var(--ts-gap)] flex flex-wrap items-center justify-between gap-[var(--ts-toolbar-gap)] sm:gap-3">
-          <div
-            className={`cnp-pill px-3 py-1 text-[11px] max-[360px]:px-2 max-[360px]:py-0.5 max-[360px]:text-[10px] sm:text-xs ${
-              topStoriesVariant === 'editorial'
-                ? ''
-                : 'border-orange-200 bg-white/80 dark:border-zinc-700 dark:bg-zinc-900'
-            }`}
-          >
-            Top Stories
-          </div>
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[9px] font-bold tracking-[0.06em] max-[360px]:px-2 max-[360px]:py-0.5 max-[360px]:text-[8px] sm:px-3 sm:py-1 sm:text-xs ${
-              topStoriesVariant === 'editorial'
-                ? 'bg-red-600 text-white shadow-sm'
-                : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-            }`}
-          >
-            <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-white/95 animate-pulse" />
-            LIVE UPDATES
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 gap-[var(--ts-gap)] md:grid-cols-12 md:items-stretch md:[--tablet-top-h:460px] lg:[--tablet-top-h:500px] xl:gap-5 xl:[--spot-card-h:100px] xl:[--spot-gap:4px] xl:[--top-stories-h:calc(var(--spot-card-h)*4+var(--spot-gap)*3)]">
-          <div className="md:col-span-8 md:h-[var(--tablet-top-h)] xl:col-span-8 xl:h-[var(--top-stories-h)]">
-            <HeroCarousel articles={heroArticles} variant={topStoriesVariant} className="h-full" />
+    <div className="newsroom-home relative -mx-3 -mt-4 pb-6 [--section-gap:0.9rem] sm:-mx-5 sm:[--section-gap:1rem] lg:-mx-6 lg:[--section-gap:1.1rem] xl:-mx-8">
+      <div className="mx-auto w-full max-w-[98rem] px-3 py-3 sm:px-4 lg:px-5">
+        <section className="newsroom-top-package rounded-[28px] border p-2 sm:p-3 lg:p-3.5">
+          <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[minmax(0,1fr)_minmax(17rem,20rem)_minmax(15.5rem,17.5rem)] xl:items-stretch 2xl:grid-cols-[minmax(0,1fr)_minmax(18rem,20.5rem)_minmax(16.5rem,18rem)]">
+          <div className="newsroom-panel newsroom-hero-shell overflow-hidden rounded-[28px] p-1.5 sm:p-2 lg:p-2.5">
+            <div className="mb-1.5 flex items-center justify-start gap-2">
+              <span className="inline-flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white">
+                <Flame className="h-3 w-3" />
+                {getSectionCopy(language, '\u091f\u0949\u092a \u0938\u094d\u091f\u094b\u0930\u0940', 'Top Story')}
+              </span>
+            </div>
+            <div className="sm:h-[clamp(430px,64vw,470px)] lg:h-[460px] xl:h-[450px] 2xl:h-[470px]">
+              <HeroCarousel articles={heroArticles} variant="modern" className="sm:h-full" />
+            </div>
           </div>
 
-          <div className="hidden md:col-span-4 md:grid md:h-[var(--tablet-top-h)] md:grid-rows-3 md:gap-3 xl:hidden">
-            {isClientReady ? (
-              spotlightTablet.map((article, index) => (
-                <motion.div
-                  key={article.id}
-                  initial={{ opacity: 0, x: 14 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.06 }}
-                  className="h-full"
-                >
-                  <Link
-                    href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
-                    className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 p-3 dark:from-zinc-900 dark:to-zinc-900/70"
+          <aside className="newsroom-panel newsroom-live-rail rounded-lg p-3 lg:p-3.5">
+            <NewsroomSectionHeader
+              title={getSectionCopy(language, '\u0932\u093e\u0907\u0935 \u0905\u092a\u0921\u0947\u091f\u094d\u0938', 'Live Updates')}
+              href="/main/latest"
+              cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
+            />
+            <div className="grid gap-2.5">
+              {isClientReady ? (
+                liveUpdateStories.map((article, index) => (
+                  <motion.div
+                    key={article.id}
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.28, delay: index * 0.05 }}
                   >
-                    <div className="flex h-full items-center gap-2.5">
-                      <div className="relative h-[74px] w-[112px] flex-none overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-950">
-                        <ReaderImage
-                          src={buildArticleImageVariantUrl(article.image, 'thumb')}
-                          alt={article.title}
-                          fill
-                          className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
-                          sizes="(max-width: 1023px) 112px, 112px"
-                        />
-                        <span className="absolute left-1.5 top-1.5 inline-flex max-w-[72px] items-center rounded-full bg-red-600/95 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white shadow-sm">
-                          <span className="truncate">{article.category}</span>
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="hi-heading line-clamp-2 text-[1rem] font-semibold leading-[1.34] text-zinc-900 transition-colors group-hover:text-red-600 dark:text-zinc-100 dark:group-hover:text-red-400">
-                          {article.title}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))
-            ) : (
-              <TopSideStoriesFallback count={3} />
-            )}
-          </div>
+                    <LiveUpdateStory article={article} language={language} />
+                  </motion.div>
+                ))
+              ) : (
+                <TopSideStoriesFallback count={4} />
+              )}
+            </div>
+          </aside>
 
-          <div className="hidden xl:col-span-4 xl:grid xl:h-[var(--top-stories-h)] xl:grid-rows-[minmax(0,1.55fr)_repeat(2,minmax(0,0.725fr))] xl:gap-3">
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.35 }}
-              className="h-full"
-            >
+          <aside className="newsroom-panel newsroom-edition-rail hidden rounded-lg p-3 xl:block xl:p-3.5">
+            <div className="min-h-[280px] xl:min-h-0">
               <DesktopHeroEpaperCard
                 href={epaperHref}
                 dateLabel={desktopHeroEpaperDateLabel}
@@ -703,145 +998,107 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
                 title={desktopHeroEpaperTitle}
                 editionLabel={desktopHeroEpaperEdition}
                 supportLabel={desktopHeroEpaperSupport}
-                ctaLabel={desktopHeroEpaperCta}
                 ariaLabel={desktopHeroEpaperAriaLabel}
+                primaryCtaLabel={desktopHeroEpaperPrimaryCta}
+                shareLabel="WhatsApp"
               />
-            </motion.div>
-
-            {isClientReady ? (
-              desktopHeroSidebarStories.map((article, index) => (
-                <motion.div
-                  key={article.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.35, delay: 0.08 + index * 0.07 }}
-                  className="h-full"
-                >
-                  <Link
-                    href={buildArticlePublicPath({ id: article.id, slug: article.slug })}
-                    className="cnp-card cnp-card-hover group block h-full rounded-2xl bg-gradient-to-b from-white to-zinc-50 px-3 py-2 dark:from-zinc-900 dark:to-zinc-900/70"
-                  >
-                    <div className="flex h-full items-center gap-3">
-                      <div className="relative h-[72px] w-[108px] flex-none overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-950">
-                        <ReaderImage
-                          src={buildArticleImageVariantUrl(article.image, 'thumb')}
-                          alt={article.title}
-                          fill
-                          className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
-                          sizes="108px"
-                        />
-                        <span className="absolute left-1.5 top-1.5 inline-flex max-w-[80px] items-center rounded-full bg-red-600/95 px-2 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
-                          <span className="truncate">{article.category}</span>
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex h-full flex-1 flex-col justify-center">
-                        <p className="hi-heading line-clamp-2 pt-0.5 text-[1.01rem] font-semibold leading-[1.34] text-zinc-900 transition-colors group-hover:text-red-600 dark:text-zinc-100 dark:group-hover:text-red-400">
-                          {article.title}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))
-            ) : (
-              <TopSideStoriesFallback count={2} />
-            )}
+            </div>
+          </aside>
           </div>
-        </div>
+        </section>
 
-      </section>
-
-      <section className="relative mt-[var(--section-gap)] cnp-surface px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-3.5 md:px-6 md:py-4 lg:py-[1.1rem] xl:py-[1.2rem]">
-        <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-2 sm:gap-2.5 md:mb-2 md:gap-3">
-          <h2 className="text-base font-black tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-[1.05rem] md:text-[1.25rem] lg:text-[1.35rem] xl:text-[1.4rem]">
-            Mojo Stories
-          </h2>
-          <div className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-400 sm:gap-1.5 sm:text-xs">
-            <Flame className="h-4 w-4" />
-            Swipe to Explore
-          </div>
-        </div>
-        <StoriesRail stories={visualStories} showHeader={false} />
-      </section>
-
-      <div className="mt-[var(--section-gap)] grid grid-cols-1 items-start gap-3.5 lg:grid-cols-12 lg:gap-6">
-        <div className="lg:col-span-8">
-          <div className="mb-3 flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-800 sm:mb-4 sm:pb-4">
-            <h2 className="flex items-center gap-2 text-[1.05rem] font-black tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
-              <span className="h-5 w-1 rounded-full bg-orange-500 sm:h-6 sm:w-1.5"></span>
-              Latest News
-            </h2>
-            <Link
+        <section className="mt-[var(--section-gap)] grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,0.42fr)]">
+          <div>
+            <NewsroomSectionHeader
+              title={getSectionCopy(language, '\u0924\u093e\u091c\u093e \u0914\u0930 \u092e\u0941\u0916\u094d\u092f \u0916\u092c\u0930\u0947\u0902', 'Top Story')}
               href="/main/latest"
-              className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-1 rounded-full px-2 text-[11px] font-semibold text-orange-600 transition-colors hover:text-orange-500 sm:text-sm"
-            >
-              View All <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-
-          <div className="space-y-2.5 sm:space-y-3">
-            {visibleLatestNews.map((article, index) => (
-              <NewsCard 
-                key={article.id} 
-                article={article} 
-                variant="horizontal" 
-                index={index}
-              />
-            ))}
-          </div>
-
-          {hasMoreLatestNews ? (
-            <div className="flex justify-center pt-3.5 sm:pt-5">
-              <button
-                type="button"
-                onClick={() =>
-                  setVisibleLatestNewsCount((current) =>
-                    Math.min(current + HOME_LATEST_PAGE_STEP, latestNews.length)
-                  )
-                }
-                className="reader-touch-button reader-focus-ring min-h-12 w-full rounded-full border border-zinc-300 bg-white px-6 py-3 text-[13px] font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-orange-700 dark:hover:bg-zinc-800 sm:w-auto sm:px-8 sm:text-sm"
-              >
-                Load More Stories
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        <aside className="space-y-3 lg:col-span-4 lg:sticky lg:top-24 lg:self-start lg:space-y-4">
-          <div className="cnp-surface p-2.5 sm:p-4">
-            <div className="mb-3.5 flex items-center gap-2">
-              <TrendingUp className="h-[18px] w-[18px] text-orange-500" />
-              <h3 className="text-[1.05rem] font-black text-zinc-900 dark:text-zinc-100 sm:text-lg">Trending Now</h3>
-            </div>
-
-            <div className="space-y-2.5">
-              {featuredSidebar.map((article, index) => (
-                <div key={article.id}>
-                  <NewsCard article={article} variant="compact" index={index} />
-                </div>
+              cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {latestPublishedArticles.slice(0, 6).map((article, index) => (
+                <HeadlineImageCard
+                  key={article.id}
+                  article={article}
+                  language={language}
+                  priority={index < 2}
+                />
               ))}
             </div>
           </div>
 
-          <NewsPoll />
-        </aside>
-      </div>
-      {categorySections.length ? (
-        <section className="relative mt-[var(--section-gap)] space-y-4 sm:space-y-5">
-          {categorySections.map((section) => (
-            <LazyCategorySection
-              key={section.slug}
-              section={section}
-              language={language}
-              visibleCount={
-                visibleCategoryStoryCounts[section.slug] || CATEGORY_INITIAL_STORIES_COUNT
-              }
-              onVisible={loadCategoryStories}
-              onShowMore={showMoreCategoryStories}
-            />
-          ))}
+          <aside className="space-y-3 lg:sticky lg:top-24 lg:self-start">
+            <RankedStoryList articles={featuredSidebar} language={language} />
+            <NewsPoll />
+          </aside>
         </section>
-      ) : null}
+
+        <div className="mt-[var(--section-gap)]">
+          <FeaturedStoryBand articles={latestPublishedArticles.slice(1, 4)} language={language} />
+        </div>
+
+        <section className="mt-[var(--section-gap)] grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.36fr)]">
+          <div>
+            <NewsroomSectionHeader
+              title={getSectionCopy(language, '\u0932\u0947\u091f\u0947\u0938\u094d\u091f \u0928\u094d\u092f\u0942\u091c', 'Latest News')}
+              href="/main/latest"
+              cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
+            />
+
+            <div className="space-y-2.5 sm:space-y-3">
+              {visibleLatestNews.map((article, index) => (
+                <NewsCard
+                  key={article.id}
+                  article={article}
+                  variant="horizontal"
+                  index={index}
+                />
+              ))}
+            </div>
+
+            {hasMoreLatestNews ? (
+              <div className="flex justify-center pt-3.5 sm:pt-5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleLatestNewsCount((current) =>
+                      Math.min(current + HOME_LATEST_PAGE_STEP, latestNews.length)
+                    )
+                  }
+                  className="reader-touch-button reader-focus-ring newsroom-soft-button min-h-12 w-full rounded-md border px-6 py-3 text-[13px] font-semibold transition-all hover:-translate-y-0.5 sm:w-auto sm:px-8 sm:text-sm"
+                >
+                  {getSectionCopy(language, '\u0914\u0930 \u0916\u092c\u0930\u0947\u0902', 'Load More Stories')}
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <aside className="newsroom-panel hidden rounded-lg border p-3 xl:block">
+            <NewsroomSectionHeader
+              title={getSectionCopy(language, '\u092e\u093e\u0938\u093f\u0915 \u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928', 'Monthly E-Magazine')}
+              href={emagazineHref}
+              cta={getSectionCopy(language, '\u092e\u0948\u0917\u091c\u093c\u0940\u0928 \u092a\u0922\u093c\u0947\u0902', 'Read Magazine')}
+            />
+            <MagazinePromoTile promo={emagazinePromo} />
+          </aside>
+        </section>
+
+        {categorySections.length ? (
+          <section className="relative mt-[var(--section-gap)] space-y-4 sm:space-y-5">
+            {categorySections.map((section) => (
+              <LazyCategorySection
+                key={section.slug}
+                section={section}
+                language={language}
+                visibleCount={
+                  visibleCategoryStoryCounts[section.slug] || CATEGORY_INITIAL_STORIES_COUNT
+                }
+                onVisible={loadCategoryStories}
+                onShowMore={showMoreCategoryStories}
+              />
+            ))}
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }

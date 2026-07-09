@@ -61,7 +61,7 @@ const ASSET_RECOVERY_SCRIPT = `
   var RECOVERY_SUCCESS_DELAY_MS = 15000;
   var MAX_ATTEMPTS = 1;
   var chunkErrorPattern =
-    /ChunkLoadError|Loading chunk [0-9]+ failed|CSS_CHUNK_LOAD_FAILED|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Failed to load module script|MIME type.*text\\/html/i;
+    /ChunkLoadError|Loading chunk [0-9]+ failed|CSS_CHUNK_LOAD_FAILED|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Failed to load module script|MIME type.*text\\/(?:html|plain)|strict MIME type checking/i;
   var recoveryInFlight = false;
 
   function readState() {
@@ -220,7 +220,8 @@ const ASSET_RECOVERY_SCRIPT = `
         var assetUrl = target.src || target.href || '';
         if (
           assetUrl.indexOf('/_next/static/') !== -1 ||
-          assetUrl.indexOf('/next/static/') !== -1
+          assetUrl.indexOf('/next/static/') !== -1 ||
+          assetUrl.indexOf('/__next_static__/') !== -1
         ) {
           recoverFromStaleAssets();
           return;
@@ -231,7 +232,9 @@ const ASSET_RECOVERY_SCRIPT = `
       var filename = String(event.filename || '');
       if (
         chunkErrorPattern.test(message) ||
-        filename.indexOf('/_next/static/') !== -1
+        filename.indexOf('/_next/static/') !== -1 ||
+        filename.indexOf('/next/static/') !== -1 ||
+        filename.indexOf('/__next_static__/') !== -1
       ) {
         recoverFromStaleAssets();
       }
@@ -319,6 +322,12 @@ export default function RootLayout({
     <html lang="hi" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800;900&display=swap"
+          rel="stylesheet"
+        />
         <script id="lokswami-theme-init" dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <script
           id="lokswami-asset-recovery"

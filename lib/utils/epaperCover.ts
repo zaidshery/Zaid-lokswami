@@ -11,6 +11,23 @@ function firstNonEmptyString(...values: unknown[]) {
   return '';
 }
 
+function isPdfCoverAsset(value: unknown) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.startsWith('data:application/pdf')) return true;
+
+  const withoutQuery = normalized.split('?')[0].split('#')[0];
+  return withoutQuery.endsWith('.pdf');
+}
+
+function firstNonPdfImageString(...values: unknown[]) {
+  for (const value of values) {
+    const text = firstNonEmptyString(value);
+    if (text && !isPdfCoverAsset(text)) return text;
+  }
+  return '';
+}
+
 export function getFirstEpaperPageImagePath(pages: unknown) {
   if (!Array.isArray(pages)) return '';
 
@@ -19,9 +36,9 @@ export function getFirstEpaperPageImagePath(pages: unknown) {
     .filter((page): page is EpaperCoverPageLike => Boolean(page))
     .sort((left, right) => Number(left.pageNumber || 0) - Number(right.pageNumber || 0));
 
-  return firstNonEmptyString(
+  return firstNonPdfImageString(
     sortedPages.find((page) => Number(page.pageNumber || 0) === 1)?.imagePath,
-    sortedPages.find((page) => firstNonEmptyString(page.imagePath))?.imagePath
+    sortedPages.find((page) => firstNonPdfImageString(page.imagePath))?.imagePath
   );
 }
 
@@ -32,8 +49,7 @@ export function resolveEpaperCoverImagePath(input: {
 }) {
   return firstNonEmptyString(
     getFirstEpaperPageImagePath(input.pages),
-    input.thumbnailPath,
-    input.thumbnail
+    firstNonPdfImageString(input.thumbnailPath, input.thumbnail)
   );
 }
 

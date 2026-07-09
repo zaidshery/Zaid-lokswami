@@ -163,11 +163,6 @@ const nextConfig = {
         headers: shortPublicPageCache,
       },
       {
-        source: '/main/stories/:path*',
-        missing: appRouterFlightRequestSignals,
-        headers: shortPublicPageCache,
-      },
-      {
         source: '/main/category/:path*',
         missing: appRouterFlightRequestSignals,
         headers: publicPageCache,

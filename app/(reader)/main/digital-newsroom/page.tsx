@@ -7,14 +7,8 @@ import { ArrowRight, Clock3, Flame, Radio } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import { articles as mockArticles, type Article } from '@/lib/mock/data';
 import { fetchMergedLiveArticles } from '@/lib/content/liveArticles';
-import {
-  buildVisualStoriesFromArticles,
-  type VisualStory,
-} from '@/lib/content/visualStories';
-import { fetchLiveStories } from '@/lib/content/liveStories';
 import HeroCard from '@/components/ui/HeroCard';
 import NewsCard from '@/components/ui/NewsCard';
-import StoriesRail from '@/components/ui/StoriesRail';
 
 type SortMode = 'latest' | 'trending';
 
@@ -35,8 +29,6 @@ const COPY = {
     streamTitle: 'Newsroom Stream',
     streamSubtitle: 'Fast updates from the digital desk.',
     popularNow: 'Popular In Desk',
-    storiesTitle: 'Visual Bulletin',
-    storiesSubtitle: 'Tap into quick visual stories from the newsroom.',
     quickLinksTitle: 'Quick Access',
     epaperLink: 'Open E-Paper',
     videoLink: 'Watch Videos',
@@ -77,7 +69,6 @@ export default function DigitalNewsroomPage() {
   const { language } = useAppStore();
   const t = COPY[language];
   const [articlesData, setArticlesData] = useState<Article[]>(mockArticles);
-  const [cmsStories, setCmsStories] = useState<VisualStory[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>('latest');
   const [activeCategory, setActiveCategory] = useState('all');
 
@@ -91,19 +82,6 @@ export default function DigitalNewsroomPage() {
     };
 
     load();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const loadStories = async () => {
-      const rows = await fetchLiveStories(30);
-      if (active) setCmsStories(rows);
-    };
-
-    loadStories();
     return () => {
       active = false;
     };
@@ -153,14 +131,6 @@ export default function DigitalNewsroomPage() {
     const trendingPool = sortedArticles.filter((item) => item.isTrending);
     return (trendingPool.length ? trendingPool : sortedArticles).slice(0, 4);
   }, [sortedArticles]);
-  const visualStories = useMemo(
-    () =>
-      cmsStories.length
-        ? cmsStories.slice(0, 10)
-        : buildVisualStoriesFromArticles(sortedArticles, 10),
-    [cmsStories, sortedArticles]
-  );
-
   return (
     <div className="space-y-6 pb-3">
       <motion.section
@@ -280,18 +250,6 @@ export default function DigitalNewsroomPage() {
           {t.empty}
         </div>
       )}
-
-      <section className="cnp-surface px-4 py-4 sm:px-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-black tracking-tight text-zinc-900 dark:text-zinc-100">
-              {t.storiesTitle}
-            </h2>
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">{t.storiesSubtitle}</p>
-          </div>
-        </div>
-        <StoriesRail stories={visualStories} showHeader={false} />
-      </section>
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="space-y-3 lg:col-span-8">

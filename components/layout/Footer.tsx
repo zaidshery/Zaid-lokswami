@@ -168,6 +168,7 @@ function FooterSection({
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={false}
                   className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
                 >
                   <ChevronRight className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
@@ -188,6 +189,7 @@ function FooterSection({
             <li key={item.href}>
               <Link
                 href={item.href}
+                prefetch={false}
                 className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-[14px] font-medium leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400 md:text-[15px]"
               >
                 <ChevronRight className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
@@ -440,6 +442,7 @@ export default function Footer() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className="reader-touch-link reader-focus-ring inline-flex min-h-10 items-center rounded-lg text-[14px] leading-6 text-zinc-600 transition hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400 md:text-[15px]"
                 >
                   {language === 'hi' ? item.hi : item.en}

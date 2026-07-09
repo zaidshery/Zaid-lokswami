@@ -10,7 +10,6 @@ const DEFAULT_ROUTES = [
   { path: '/api/v1/public/articles?limit=10', accept: 'application/json' },
   { path: '/api/v1/public/epapers?limit=10', accept: 'application/json' },
   { path: '/api/videos/latest?limit=6', accept: 'application/json' },
-  { path: '/api/stories/latest?limit=6', accept: 'application/json' },
   { path: '/api/v1/public/search?q=indore&limit=10', accept: 'application/json' },
 ];
 

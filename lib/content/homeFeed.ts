@@ -1,13 +1,11 @@
 import type { Article } from '@/lib/mock/data';
-import {
-  mapLiveStoriesToVisualStories,
-  type VisualStory,
-} from '@/lib/content/visualStories';
+import type { EPaperPublicationType } from '@/lib/types/epaper';
 
 const DEFAULT_AVATAR = '/logo-icon-final.png';
 
 export type HomePageEpaperPreview = {
   _id: string;
+  publicationType?: EPaperPublicationType;
   citySlug: string;
   cityName: string;
   title: string;
@@ -18,8 +16,8 @@ export type HomePageEpaperPreview = {
 
 export type HomePageFeedState = {
   articles: Article[];
-  stories: VisualStory[];
   epaper: HomePageEpaperPreview | null;
+  emagazine: HomePageEpaperPreview | null;
 };
 
 type PublicHomeFeedArticle = {
@@ -38,34 +36,16 @@ type PublicHomeFeedArticle = {
   seo?: Article['seo'];
 };
 
-type PublicHomeFeedStory = {
-  id?: string;
-  _id?: string;
-  title?: string;
-  caption?: string;
-  thumbnail?: string;
-  mediaType?: 'image' | 'video' | string;
-  mediaUrl?: string;
-  linkUrl?: string;
-  linkLabel?: string;
-  category?: string;
-  author?: string;
-  durationSeconds?: number;
-  priority?: number;
-  views?: number;
-  publishedAt?: string;
-  isPublished?: boolean;
-  mediaAssets?: unknown;
-};
-
 type PublicHomeFeedEPaper = {
   id?: string;
   _id?: string;
+  publicationType?: EPaperPublicationType;
   citySlug?: string;
   cityName?: string;
   title?: string;
   publishDate?: string;
   thumbnailPath?: string;
+  thumbnail?: string;
   pageCount?: number;
 };
 
@@ -73,8 +53,8 @@ type PublicHomeFeedData = {
   hero?: PublicHomeFeedArticle[];
   latest?: PublicHomeFeedArticle[];
   trending?: PublicHomeFeedArticle[];
-  stories?: PublicHomeFeedStory[];
   epaper?: PublicHomeFeedEPaper | null;
+  emagazine?: PublicHomeFeedEPaper | null;
 };
 
 type PublicHomeFeedEnvelope = {
@@ -101,6 +81,14 @@ function normalizeDate(value: unknown) {
 function normalizeNumber(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
 }
 
 function normalizeAuthor(value: PublicHomeFeedArticle['author']) {
@@ -165,17 +153,19 @@ function mergeUniqueArticles(sections: PublicHomeFeedArticle[][]) {
 
 function mapHomeFeedEPaper(raw: PublicHomeFeedEPaper | null | undefined) {
   if (!raw) return null;
-  const id = String(raw.id || raw._id || '').trim();
+  const input = asObject(raw) as PublicHomeFeedEPaper;
+  const id = String(input.id || input._id || '').trim();
   if (!id) return null;
 
   return {
     _id: id,
-    citySlug: String(raw.citySlug || '').trim(),
-    cityName: String(raw.cityName || '').trim(),
-    title: String(raw.title || '').trim(),
-    publishDate: String(raw.publishDate || '').trim(),
-    thumbnailPath: String(raw.thumbnailPath || '').trim(),
-    pageCount: Math.max(0, Math.floor(normalizeNumber(raw.pageCount))),
+    publicationType: input.publicationType === 'emagazine' ? 'emagazine' : 'epaper',
+    citySlug: String(input.citySlug || '').trim(),
+    cityName: String(input.cityName || '').trim(),
+    title: String(input.title || '').trim(),
+    publishDate: String(input.publishDate || '').trim(),
+    thumbnailPath: firstNonEmptyString(input.thumbnailPath, input.thumbnail),
+    pageCount: Math.max(0, Math.floor(normalizeNumber(input.pageCount))),
   } satisfies HomePageEpaperPreview;
 }
 
@@ -197,18 +187,15 @@ export function mapHomeFeedToHomePageState(payload: unknown): HomePageFeedState 
     Array.isArray(data.latest) ? data.latest : [],
     Array.isArray(data.trending) ? data.trending : [],
   ]);
-  const stories = mapLiveStoriesToVisualStories(
-    Array.isArray(data.stories) ? data.stories : [],
-    10
-  );
   const epaper = mapHomeFeedEPaper(data.epaper);
+  const emagazine = mapHomeFeedEPaper(data.emagazine);
 
-  if (!articles.length && !stories.length && !epaper) return null;
+  if (!articles.length && !epaper && !emagazine) return null;
 
   return {
     articles,
-    stories,
     epaper,
+    emagazine,
   };
 }
 

@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   fetchHomeFeedForHomePage: vi.fn(),
   fetchMergedLiveArticles: vi.fn(),
-  fetchLiveStories: vi.fn(),
   fetchPublicArticlesPage: vi.fn(),
 }));
 
@@ -76,10 +75,6 @@ vi.mock('@/lib/content/liveArticles', async () => {
   };
 });
 
-vi.mock('@/lib/content/liveStories', () => ({
-  fetchLiveStories: mocks.fetchLiveStories,
-}));
-
 vi.mock('@/lib/content/publicArticles', async () => {
   const actual = await vi.importActual<typeof import('@/lib/content/publicArticles')>(
     '@/lib/content/publicArticles'
@@ -105,23 +100,28 @@ vi.mock('@/components/ui/HeroCarousel', () => ({
     ),
 }));
 
-vi.mock('@/components/ui/StoriesRail', () => ({
-  default: ({ stories }: { stories: Array<{ title: string }> }) =>
-    createElement(
-      'div',
-      { 'data-testid': 'stories-rail' },
-      stories.map((story) => story.title).join('|')
-    ),
-}));
-
 vi.mock('@/components/ui/NewsCard', () => ({
   default: ({ article }: { article: { title: string } }) =>
     createElement('article', { 'data-testid': 'news-card' }, article.title),
 }));
 
 vi.mock('@/components/ui/DesktopHeroEpaperCard', () => ({
-  default: ({ editionLabel }: { editionLabel: string }) =>
-    createElement('div', { 'data-testid': 'epaper-card' }, editionLabel),
+  default: ({
+    editionLabel,
+    ariaLabel,
+  }: {
+    editionLabel: string;
+    ariaLabel: string;
+  }) =>
+    createElement(
+      'div',
+      {
+        'data-testid': ariaLabel.toLowerCase().includes('magazine')
+          ? 'emagazine-card'
+          : 'epaper-card',
+      },
+      editionLabel
+    ),
 }));
 
 vi.mock('@/components/ui/NewsPoll', () => ({
@@ -136,7 +136,6 @@ describe('HomePageClient v1 home-feed integration', () => {
     intersectionCallbacks.length = 0;
     mocks.fetchHomeFeedForHomePage.mockResolvedValue(null);
     mocks.fetchMergedLiveArticles.mockResolvedValue([]);
-    mocks.fetchLiveStories.mockResolvedValue([]);
     mocks.fetchPublicArticlesPage.mockResolvedValue(null);
     vi.stubGlobal(
       'fetch',
@@ -259,16 +258,6 @@ describe('HomePageClient v1 home-feed integration', () => {
               views: 4,
             },
           ],
-          stories: [
-            {
-              id: 'story-1',
-              title: 'Story From Feed',
-              thumbnail: '/story.jpg',
-              mediaType: 'image',
-              mediaUrl: '/story.jpg',
-              mediaAssets: [],
-            },
-          ],
           epaper: {
             _id: 'paper-1',
             citySlug: 'indore',
@@ -278,6 +267,16 @@ describe('HomePageClient v1 home-feed integration', () => {
             thumbnailPath: '/paper.jpg',
             pageCount: 12,
           },
+          emagazine: {
+            _id: 'magazine-1',
+            publicationType: 'emagazine',
+            citySlug: 'global',
+            cityName: 'Lokswami',
+            title: 'Lokswami E-Magazine',
+            publishDate: '2026-05-01',
+            thumbnailPath: '/magazine.jpg',
+            pageCount: 36,
+          },
         },
       })
     );
@@ -285,14 +284,17 @@ describe('HomePageClient v1 home-feed integration', () => {
     expect(screen.getByTestId('hero-carousel')).toHaveTextContent(
       'Lead Story From Feed'
     );
-    expect(await screen.findByTestId('stories-rail')).toHaveTextContent('Story From Feed');
     expect(screen.getAllByTestId('news-card').some((node) =>
       node.textContent?.includes('Latest Story From Feed')
     )).toBe(true);
     expect(await screen.findByTestId('epaper-card')).toHaveTextContent('Indore Edition');
+    const emagazineLink = screen.getByRole('link', {
+      name: /read latest e-magazine/i,
+    });
+    expect(emagazineLink).toHaveAttribute('href', '/main/e-magazine?month=2026-05');
+    expect(emagazineLink).toHaveTextContent('May 2026 Issue');
     expect(mocks.fetchHomeFeedForHomePage).not.toHaveBeenCalled();
     expect(mocks.fetchMergedLiveArticles).not.toHaveBeenCalled();
-    expect(mocks.fetchLiveStories).not.toHaveBeenCalled();
   });
 
   it('loads category stories only when a category section nears the viewport', async () => {
@@ -387,7 +389,6 @@ describe('HomePageClient v1 home-feed integration', () => {
               views: 4,
             },
           ],
-          stories: [],
           epaper: {
             _id: 'paper-1',
             citySlug: 'indore',
@@ -396,6 +397,16 @@ describe('HomePageClient v1 home-feed integration', () => {
             publishDate: '2026-05-09',
             thumbnailPath: '/paper.jpg',
             pageCount: 12,
+          },
+          emagazine: {
+            _id: 'magazine-1',
+            publicationType: 'emagazine',
+            citySlug: 'global',
+            cityName: 'Lokswami',
+            title: 'Lokswami E-Magazine',
+            publishDate: '2026-05-01',
+            thumbnailPath: '/magazine.jpg',
+            pageCount: 36,
           },
         },
       })

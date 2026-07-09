@@ -67,7 +67,7 @@ export default function BreakingNews({
   }, [queue, visibleItem]);
 
   const queueProgressLabel =
-    queue.length > 0
+    queue.length > 1
       ? `${String(currentIndex + 1).padStart(2, '0')}/${String(queue.length).padStart(2, '0')}`
       : '';
 
@@ -77,10 +77,10 @@ export default function BreakingNews({
     }, 0);
 
     if (Number.isFinite(speedSeconds) && typeof speedSeconds === 'number') {
-      return Math.max(16, Math.min(160, speedSeconds));
+      return Math.max(12, Math.min(120, speedSeconds));
     }
 
-    return Math.max(22, Math.min(84, Math.round(totalCharacters * 0.26)));
+    return Math.max(14, Math.min(42, Math.round(totalCharacters * 0.14)));
   }, [marqueeItems, speedSeconds]);
 
   const buttonTitle = isPreparingAudio

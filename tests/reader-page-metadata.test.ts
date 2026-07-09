@@ -3,8 +3,6 @@ import {
   buildCategoryPageMetadata,
   buildEpaperPageMetadata,
   buildLatestPageMetadata,
-  buildStoriesPageMetadata,
-  buildStoryPageMetadata,
   buildVideoPageMetadata,
   buildVideosPageMetadata,
 } from '@/lib/seo/readerPageMetadata';
@@ -50,46 +48,6 @@ describe('reader page metadata', () => {
         alternates: {
           canonical: 'https://lokswami.com/main/videos',
         },
-      })
-    );
-  });
-
-  it('builds stories page metadata on the production domain', () => {
-    const metadata = buildStoriesPageMetadata();
-
-    expect(metadata).toEqual(
-      expect.objectContaining({
-        title: 'Visual Stories and Quick Updates | Lokswami',
-        alternates: {
-          canonical: 'https://lokswami.com/main/stories',
-        },
-      })
-    );
-  });
-
-  it('builds story-specific metadata with a deep-link canonical URL', () => {
-    const metadata = buildStoryPageMetadata({
-      storyId: 'story-123',
-      title: 'City monsoon visual update',
-      description: 'Swipe through the latest Lokswami visual monsoon update.',
-      category: 'Weather',
-      image: '/uploads/stories/monsoon.jpg',
-    });
-
-    expect(metadata).toEqual(
-      expect.objectContaining({
-        title: 'City monsoon visual update | Lokswami Story',
-        description: 'Swipe through the latest Lokswami visual monsoon update.',
-        alternates: {
-          canonical: 'https://lokswami.com/main/stories?story=story-123',
-        },
-        openGraph: expect.objectContaining({
-          images: [
-            expect.objectContaining({
-              url: 'https://lokswami.com/uploads/stories/monsoon.jpg',
-            }),
-          ],
-        }),
       })
     );
   });

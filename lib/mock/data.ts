@@ -42,25 +42,6 @@ export interface BreakingNews {
   priority: number;
 }
 
-export interface Story {
-  id: string;
-  title: string;
-  caption?: string;
-  thumbnail: string;
-  mediaType?: 'image' | 'video';
-  mediaUrl?: string;
-  linkUrl?: string;
-  linkLabel?: string;
-  category?: string;
-  author?: string;
-  durationSeconds?: number;
-  priority?: number;
-  views?: number;
-  isPublished?: boolean;
-  publishedAt?: string;
-  viewed?: boolean;
-}
-
 export interface Video {
   id: string;
   title: string;
@@ -123,18 +104,6 @@ export const breakingNews: BreakingNews[] = [
   { id: '2', title: 'मुंबई: Local Train Services disrupted due to heavy rains', priority: 2 },
   { id: '3', title: 'IND vs AUS: भारत ने जीता पहला टेस्ट मैच', priority: 3 },
   { id: '4', title: 'Petrol-Diesel Price: आज फिर बढ़े तेल के दाम', priority: 4 },
-];
-
-// Stories
-export const stories: Story[] = [
-  { id: '1', title: 'Breaking News', thumbnail: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=300&h=500&fit=crop' },
-  { id: '2', title: 'राजनीति', thumbnail: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=300&h=500&fit=crop' },
-  { id: '3', title: 'खेल', thumbnail: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=300&h=500&fit=crop' },
-  { id: '4', title: 'मनोरंजन', thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&h=500&fit=crop', viewed: true },
-  { id: '5', title: 'टेक्नोलॉजी', thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&h=500&fit=crop' },
-  { id: '6', title: 'व्यापार', thumbnail: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=300&h=500&fit=crop', viewed: true },
-  { id: '7', title: 'शिक्षा', thumbnail: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=300&h=500&fit=crop' },
-  { id: '8', title: 'स्वास्थ्य', thumbnail: 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=300&h=500&fit=crop' },
 ];
 
 // Articles
@@ -376,7 +345,6 @@ const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
 const LOCAL_MOCK_ASSETS = {
   avatar: '/placeholders/avatar.svg',
   media: '/placeholders/news-16x9.svg',
-  story: '/placeholders/story-9x16.svg',
   epaper: '/placeholders/epaper-3x4.svg',
 };
 
@@ -385,10 +353,6 @@ const resolveMockImage = (src: string, fallback: string) =>
 
 authors.forEach((author) => {
   author.avatar = resolveMockImage(author.avatar, LOCAL_MOCK_ASSETS.avatar);
-});
-
-stories.forEach((story) => {
-  story.thumbnail = resolveMockImage(story.thumbnail, LOCAL_MOCK_ASSETS.story);
 });
 
 articles.forEach((article) => {

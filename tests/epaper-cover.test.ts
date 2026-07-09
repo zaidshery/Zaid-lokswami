@@ -30,6 +30,23 @@ describe('e-paper cover selection', () => {
     ).toBe('https://cdn.example.com/thumbnail.jpg');
   });
 
+  it('does not use PDF paths as visible cover images', () => {
+    expect(
+      resolveEpaperCoverImagePath({
+        thumbnailPath: 'https://cdn.example.com/daily-indore.pdf',
+        thumbnail: 'https://cdn.example.com/cover.webp',
+        pages: [],
+      })
+    ).toBe('https://cdn.example.com/cover.webp');
+
+    expect(
+      resolveEpaperCoverImagePath({
+        thumbnailPath: 'https://cdn.example.com/daily-indore.pdf?download=1',
+        pages: [],
+      })
+    ).toBe('');
+  });
+
   it('detects direct Spaces thumbnail objects that can be replaced by page one', () => {
     expect(
       isDirectEpaperThumbnailPath(

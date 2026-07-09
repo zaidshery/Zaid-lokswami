@@ -229,8 +229,8 @@ export default function DailyEpaperAlert() {
   const shouldShowInstallForAlerts = notificationCapability.requiresAppInstall;
 
   return (
-    <div className="pointer-events-none fixed bottom-[var(--reader-floating-toast-bottom)] right-3 z-[95] w-[min(92vw,24rem)] sm:bottom-6 sm:right-5">
-      <div className="pointer-events-auto relative overflow-hidden rounded-2xl border border-primary-200/70 bg-white/95 p-3.5 shadow-[0_22px_52px_rgba(199,29,36,0.16)] backdrop-blur-md dark:border-primary-900/40 dark:bg-zinc-900/95">
+    <div className="pointer-events-none fixed left-3 right-3 bottom-[calc(var(--reader-bottom-nav-space)+0.75rem)] z-[95] sm:left-auto sm:right-5 sm:top-auto sm:bottom-6 sm:w-[min(92vw,24rem)]">
+      <div className="pointer-events-auto relative max-h-[calc(100dvh-var(--reader-top-chrome-height)-var(--reader-bottom-nav-space)-2rem)] overflow-y-auto rounded-2xl border border-primary-200/70 bg-white/95 p-3 shadow-[0_22px_52px_rgba(199,29,36,0.16)] backdrop-blur-md dark:border-primary-900/40 dark:bg-zinc-900/95 sm:max-h-[18rem] sm:p-3.5">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#8b141a_0%,#e72129_55%,#c61d24_100%)]" />
         <div className="mb-2 flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
