@@ -4,7 +4,7 @@ import path from 'node:path';
 const root = process.cwd();
 
 function read(relativePath: string) {
-  return fs.readFileSync(path.join(root, relativePath), 'utf8');
+  return fs.readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n');
 }
 
 describe('e-paper loading performance', () => {

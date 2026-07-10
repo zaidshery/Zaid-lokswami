@@ -8,6 +8,7 @@ import { getAdminSession } from '@/lib/auth/admin';
 import {
   canDeleteEpaper,
   canEditEpaper,
+  canManageEpaperAssignments,
   canPrepareEpaperForPublish,
   canPublishEpaper,
   canViewPage,
@@ -620,7 +621,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       );
     }
 
-    await connectDB();
     const { id } = await context.params;
     if (!Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -631,6 +631,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const body = await req.json().catch(() => ({}));
     const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
+    const hasAssigneeField = Object.prototype.hasOwnProperty.call(source, 'assignedToId');
+
+    if (hasAssigneeField && !canManageEpaperAssignments(admin.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Only admins can assign publication desk ownership.' },
+        { status: 403 }
+      );
+    }
+
+    await connectDB();
 
     const [current, articles] = await Promise.all([
       EPaper.findById(id).lean(),
@@ -693,8 +703,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         : typeof source.productionNote === 'string'
           ? source.productionNote.trim()
           : '';
-    const hasAssigneeField = Object.prototype.hasOwnProperty.call(source, 'assignedToId');
-
     if (!nextStatus && !note && !hasAssigneeField) {
       return NextResponse.json(
         { success: false, error: 'No production updates were provided' },

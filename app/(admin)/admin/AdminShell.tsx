@@ -174,6 +174,8 @@ const COPY_EDITOR_ITEMS: SidebarItem[] = [
   { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
   { icon: Video, labelEn: 'Videos', labelHi: HI.videos, href: '/admin/videos' },
   { icon: Share2, labelEn: 'Social Posts', labelHi: HI.socialPosts, href: '/admin/social-posts' },
+  { icon: Newspaper, labelEn: 'E-Papers', labelHi: HI.epapers, href: '/admin/epapers' },
+  { icon: BookOpen, labelEn: 'E-Magazines', labelHi: HI.emagazines, href: '/admin/emagazines' },
   { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
 ];
 
@@ -295,7 +297,15 @@ function getSidebarSections(
       {
         labelEn: 'Content',
         labelHi: '\u0915\u0902\u091f\u0947\u0902\u091f',
-        items: pick(['/admin/articles', '/admin/stories', '/admin/videos', '/admin/social-posts', '/admin/media']),
+        items: pick([
+          '/admin/articles',
+          '/admin/stories',
+          '/admin/videos',
+          '/admin/social-posts',
+          '/admin/epapers',
+          '/admin/emagazines',
+          '/admin/media',
+        ]),
       },
     ].filter((section) => section.items.length > 0);
   }

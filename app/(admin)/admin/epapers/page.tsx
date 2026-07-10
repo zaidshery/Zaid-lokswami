@@ -2,10 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, Eye, Search } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import { canCreateEpaper, canDeleteEpaper } from '@/lib/auth/permissions';
+import { normalizeAdminRole } from '@/lib/auth/roles';
 import { EPAPER_CITY_OPTIONS } from '@/lib/constants/epaperCities';
 import type { EPaperRecord } from '@/lib/types/epaper';
 import {
@@ -50,6 +53,10 @@ function productionTone(status: string | null | undefined) {
 
 export default function AdminEPaperListPage() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const role = normalizeAdminRole(session?.user?.role);
+  const canCreatePublication = canCreateEpaper(role);
+  const canDeletePublication = canDeleteEpaper(role);
   const publicationType = resolveEPaperPublicationType(
     pathname.startsWith('/admin/emagazines') ? 'emagazine' : 'epaper'
   );
@@ -167,13 +174,20 @@ export default function AdminEPaperListPage() {
           </p>
         </div>
 
-        <Link
-          href={`${labels.adminBasePath}/new`}
-          className="admin-shell-toolbar-btn mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold"
-        >
-          <Plus className="h-4 w-4" />
-          New Upload
-        </Link>
+        {canCreatePublication ? (
+          <Link
+            href={`${labels.adminBasePath}/new`}
+            className="admin-shell-toolbar-btn mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold"
+          >
+            <Plus className="h-4 w-4" />
+            New Upload
+          </Link>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200">
+            Your copy-desk role can review pages, OCR, hotspots, and readiness. An Admin creates,
+            publishes, archives, or deletes {isMonthlyPublication ? 'monthly issues' : 'editions'}.
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -413,7 +427,7 @@ export default function AdminEPaperListPage() {
                     {canOpenPublicView ? 'View' : 'Publish to View'}
                   </Link>
 
-                  {deleteId === epaper._id ? (
+                  {canDeletePublication && deleteId === epaper._id ? (
                     <>
                       <button
                         type="button"
@@ -430,7 +444,7 @@ export default function AdminEPaperListPage() {
                         Cancel
                       </button>
                     </>
-                  ) : (
+                  ) : canDeletePublication ? (
                     <button
                       type="button"
                       onClick={() => setDeleteId(epaper._id)}
@@ -439,7 +453,7 @@ export default function AdminEPaperListPage() {
                       <Trash2 className="h-3.5 w-3.5" />
                       Delete
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             );

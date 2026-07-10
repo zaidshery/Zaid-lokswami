@@ -5,6 +5,7 @@ import {
   canDeleteEpaper,
   canEditContent,
   canEditEpaper,
+  canManageEpaperAssignments,
   canManageLeadershipReports,
   canManageSettings,
   canManageTeam,
@@ -165,10 +166,13 @@ describe('governance permission helpers', () => {
     expect(canCreateEpaper(copyEditor.role)).toBe(false);
     expect(canEditEpaper(copyEditor.role)).toBe(true);
     expect(canPrepareEpaperForPublish(copyEditor.role)).toBe(true);
+    expect(canManageEpaperAssignments(copyEditor.role)).toBe(false);
     expect(canPublishEpaper(copyEditor.role)).toBe(false);
     expect(canDeleteEpaper(copyEditor.role)).toBe(false);
 
     expect(canCreateEpaper(admin.role)).toBe(true);
+    expect(canManageEpaperAssignments(admin.role)).toBe(true);
+    expect(canManageEpaperAssignments(superAdmin.role)).toBe(true);
     expect(canPublishEpaper(admin.role)).toBe(true);
     expect(canDeleteEpaper(superAdmin.role)).toBe(true);
   });

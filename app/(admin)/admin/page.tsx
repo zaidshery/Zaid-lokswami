@@ -28,6 +28,10 @@ import {
   normalizeNewsroomPipelineFilters,
   type NewsroomPipelineAnalytics,
 } from '@/lib/admin/newsroomPipeline';
+import {
+  getRoleWorkflowGuide,
+  type RoleWorkflowGuide,
+} from '@/lib/admin/roleWorkflowGuide';
 import type { TeamHealthSummary } from '@/lib/admin/teamHealth';
 import { getAdminSession } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
@@ -165,6 +169,70 @@ function QuickActionCard({
         {action.description}
       </p>
     </Link>
+  );
+}
+
+function RoleWorkflowGuidePanel({ guide }: { guide: RoleWorkflowGuide }) {
+  return (
+    <section className="admin-shell-surface-strong overflow-hidden rounded-[24px] p-4 sm:rounded-[32px] sm:p-6">
+      <div className="grid gap-5 xl:grid-cols-[1.2fr,0.8fr] xl:items-start">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-600 sm:text-xs">
+            {guide.eyebrow}
+          </p>
+          <h2 className="mt-2 text-xl font-black text-[color:var(--admin-shell-text)] sm:text-2xl">
+            {guide.title}
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+            {guide.summary}
+          </p>
+        </div>
+
+        <div className="rounded-[20px] border border-blue-200/80 bg-blue-50/80 p-4 text-sm leading-6 text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
+            Your authority
+          </p>
+          <p className="mt-2">{guide.authority}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        {guide.steps.map((step, index) => (
+          <div
+            key={step.label}
+            className="admin-shell-surface-muted rounded-[18px] p-4 sm:rounded-[22px]"
+          >
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-black text-white dark:bg-zinc-100 dark:text-zinc-950">
+                {index + 1}
+              </span>
+              <p className="text-sm font-bold text-[color:var(--admin-shell-text)]">
+                {step.label}
+              </p>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-[color:var(--admin-shell-text-muted)] sm:text-sm sm:leading-6">
+              {step.detail}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {[guide.primaryAction, guide.secondaryAction].map((action, index) => (
+          <Link
+            key={action.href}
+            href={action.href}
+            className={cx(
+              SECTION_LINK_CLASS,
+              index === 0 && 'border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950'
+            )}
+          >
+            {action.label}
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -753,6 +821,13 @@ function getQuickActions(role: string): QuickAction[] {
           icon: Newspaper,
           tone: 'bg-orange-500/10 text-orange-600',
         },
+        {
+          label: 'E-Magazine Desk',
+          description: 'Prepare monthly issues, OCR, hotspots, and publish readiness for admin release.',
+          href: '/admin/emagazines',
+          icon: Newspaper,
+          tone: 'bg-rose-500/10 text-rose-600',
+        },
       ];
     case 'admin':
       return [
@@ -876,6 +951,7 @@ export default async function AdminDashboardPage({
   const epaperInsights = superAdminDashboard?.epaperInsights ?? null;
   const teamHealth = superAdminDashboard?.teamHealth ?? null;
   const quickActions = getQuickActions(admin.role);
+  const roleWorkflowGuide = getRoleWorkflowGuide(admin.role);
   const myItems = myWork?.items || [];
   const reviewItems = reviewQueue?.items || [];
   const superAdminMetrics = superAdminDashboard?.metrics || null;
@@ -1151,6 +1227,8 @@ export default async function AdminDashboardPage({
           ) : null}
         </>
       )}
+
+      <RoleWorkflowGuidePanel guide={roleWorkflowGuide} />
 
       <section
         className={cx(

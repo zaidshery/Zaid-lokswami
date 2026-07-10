@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -17,6 +18,12 @@ import {
 } from 'lucide-react';
 import DateInputField from '@/components/ui/DateInputField';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import {
+  canDeleteEpaper,
+  canManageEpaperAssignments,
+  canPublishEpaper,
+} from '@/lib/auth/permissions';
+import { normalizeAdminRole } from '@/lib/auth/roles';
 import {
   uploadEpaperAssetDirect,
   uploadFileToSignedUrl,
@@ -217,6 +224,11 @@ export default function AdminEPaperDetailPage() {
   const params = useParams();
   const pathname = usePathname();
   const router = useRouter();
+  const { data: session } = useSession();
+  const role = normalizeAdminRole(session?.user?.role);
+  const canManageAssignments = canManageEpaperAssignments(role);
+  const canPublishPublication = canPublishEpaper(role);
+  const canDeletePublication = canDeleteEpaper(role);
   const epaperId = String(params.id || '');
   const publicationType = resolveEPaperPublicationType(
     pathname.startsWith('/admin/emagazines') ? 'emagazine' : 'epaper'
@@ -353,7 +365,7 @@ export default function AdminEPaperDetailPage() {
   }, [epaperId]);
 
   const loadAssignableUsers = useCallback(async () => {
-    if (!epaperId) {
+    if (!epaperId || !canManageAssignments) {
       setAssignableUsers([]);
       return;
     }
@@ -376,7 +388,7 @@ export default function AdminEPaperDetailPage() {
     } finally {
       setIsLoadingAssignableUsers(false);
     }
-  }, [epaperId]);
+  }, [canManageAssignments, epaperId]);
 
   const loadProductionActivity = useCallback(async () => {
     if (!epaperId) {
@@ -880,7 +892,7 @@ export default function AdminEPaperDetailPage() {
         },
         body: JSON.stringify({
           ...(nextStatus ? { productionStatus: nextStatus } : {}),
-          assignedToId: productionAssigneeId,
+          ...(canManageAssignments ? { assignedToId: productionAssigneeId } : {}),
           note,
         }),
       });
@@ -1000,13 +1012,19 @@ export default function AdminEPaperDetailPage() {
   const activeProductionStatus = productionStatus || epaper.productionStatus || 'draft_upload';
   const hasPdf = Boolean(String(epaper.pdfPath || '').trim());
   const canUploadPdf = epaper.status !== 'published';
-  const allowedProductionTransitions = getAllowedEpaperProductionTransitions(activeProductionStatus);
+  const allowedProductionTransitions = getAllowedEpaperProductionTransitions(
+    activeProductionStatus
+  ).filter(
+    (nextStatus) =>
+      canPublishPublication || (nextStatus !== 'published' && nextStatus !== 'archived')
+  );
   const publishBlockers = Array.from(
     new Set([...(readiness?.blockers || []), ...editionQualitySummary.publishBlockers])
   );
   const hasDeskChanges =
     productionNote.trim().length > 0 ||
-    productionAssigneeId !== String(epaper.productionAssignee?.id || '');
+    (canManageAssignments &&
+      productionAssigneeId !== String(epaper.productionAssignee?.id || ''));
   const pageCoverage = readiness?.pageImageCoveragePercent ?? 0;
   const hotspotCoverage = readiness?.hotspotCoveragePercent ?? 0;
   const textCoverage = readiness?.textCoveragePercent ?? 0;
@@ -1832,24 +1850,39 @@ export default function AdminEPaperDetailPage() {
                   Workflow actions
                 </p>
                 <div className="mt-3 space-y-3">
-                  <label>
-                    <span className="mb-1 block text-xs font-semibold text-gray-600">
-                      Production assignee
-                    </span>
-                    <select
-                      value={productionAssigneeId}
-                      onChange={(event) => setProductionAssigneeId(event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
-                      disabled={isLoadingAssignableUsers || isUpdatingProduction}
-                    >
-                      <option value="">Unassigned</option>
-                      {assignableUsers.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name} ({user.role})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {canManageAssignments ? (
+                    <label>
+                      <span className="mb-1 block text-xs font-semibold text-gray-600">
+                        Production assignee
+                      </span>
+                      <select
+                        value={productionAssigneeId}
+                        onChange={(event) => setProductionAssigneeId(event.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-600"
+                        disabled={isLoadingAssignableUsers || isUpdatingProduction}
+                      >
+                        <option value="">Unassigned</option>
+                        {assignableUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.name} ({user.role})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                      <p className="font-semibold">Desk preparation role</p>
+                      <p className="mt-1">
+                        You can add production notes and move work to ready-to-publish. Admin owns
+                        assignment, publication, archiving, and deletion.
+                      </p>
+                      {epaper.productionAssignee?.name ? (
+                        <p className="mt-2 font-semibold">
+                          Current owner: {epaper.productionAssignee.name}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
 
                   <label>
                     <span className="mb-1 block text-xs font-semibold text-gray-600">
@@ -1999,19 +2032,21 @@ export default function AdminEPaperDetailPage() {
                     itemClassName="bg-gray-50"
                   />
 
-                  <button
-                    type="button"
-                    onClick={() => void deletePaper()}
-                    disabled={deleting}
-                    className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {deleting ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                    Delete {labels.singular}
-                  </button>
+                  {canDeletePublication ? (
+                    <button
+                      type="button"
+                      onClick={() => void deletePaper()}
+                      disabled={deleting}
+                      className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {deleting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                      Delete {labels.singular}
+                    </button>
+                  ) : null}
                 </div>
               </details>
             </div>

@@ -401,6 +401,12 @@ export function canPrepareEpaperForPublish(
   return canEditEpaper(role);
 }
 
+export function canManageEpaperAssignments(
+  role: AdminRole | null | undefined
+): boolean {
+  return role === 'admin' || isSuperAdminRole(role);
+}
+
 export function canPublishEpaper(role: AdminRole | null | undefined): boolean {
   return role === 'admin' || isSuperAdminRole(role);
 }

@@ -43,6 +43,7 @@
     "test:tts-smoke": "node scripts/test-tts-deploy.js",
     "load:test:public": "node scripts/load-test-public.js",
     "verify:prod-env": "node scripts/validate-production-env.js",
+    "verify:dependency-security": "node scripts/validate-dependency-security.js",
     "verify:deploy": "node scripts/verify-deploy.js",
     "seed": "node scripts/seed.js",
     "hash-password": "ts-node --files scripts/hash-password.ts",
@@ -65,10 +66,10 @@
     "lucide-react": "^0.400.0",
     "mongodb": "^6.21.0",
     "mongoose": "^8.23.0",
-    "next": "15.5.12",
+    "next": "15.5.20",
     "next-auth": "^5.0.0-beta.30",
     "pdfjs-dist": "^4.10.38",
-    "postcss": "^8.4.0",
+    "postcss": "8.5.16",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-swipeable": "^7.0.2",
@@ -90,11 +91,17 @@
     "@types/testing-library__jest-dom": "^5.14.9",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.39.0",
-    "eslint-config-next": "15.5.12",
+    "eslint-config-next": "15.5.20",
     "jsdom": "^29.0.1",
     "tailwindcss-animate": "^1.0.7",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0",
     "vitest": "^4.1.1"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.16"
+    },
+    "picomatch@2.3.1": "2.3.2"
   }
 }

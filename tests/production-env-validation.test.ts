@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- This validator is also a CommonJS CLI.
 const { validateProductionEnv } = require('../scripts/validate-production-env.js') as {
   validateProductionEnv: (env: Record<string, string>) => {
     ok: boolean;
