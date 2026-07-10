@@ -86,6 +86,14 @@ const searchPageCache = [
 const nextConfig = {
   distDir: isDevelopment ? '.next-dev' : '.next',
   output: 'standalone',
+  // GitHub CI runs lint and typecheck before the build. Hostinger installs
+  // production dependencies only, so its build must not require dev tooling.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist'],
   outputFileTracingIncludes: {
     '/api/admin/epapers/**/*': [
