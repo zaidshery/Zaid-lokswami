@@ -5,7 +5,9 @@ import type {
 } from '@/lib/workflow/types';
 
 const WORKFLOW_TRANSITIONS: Record<WorkflowStatus, readonly WorkflowStatus[]> = {
-  draft: ['submitted', 'archived'],
+  // Desk admins may publish or schedule a ready draft directly. Role
+  // permissions still gate those actions before this transition is applied.
+  draft: ['submitted', 'scheduled', 'published', 'archived'],
   submitted: ['assigned', 'in_review', 'changes_requested', 'rejected'],
   assigned: ['assigned', 'in_review', 'changes_requested', 'rejected'],
   in_review: ['assigned', 'copy_edit', 'ready_for_approval', 'changes_requested', 'rejected'],

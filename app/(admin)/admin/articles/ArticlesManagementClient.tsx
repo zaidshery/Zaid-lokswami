@@ -51,6 +51,7 @@ type WorkflowComment = {
 
 type Article = {
   _id: string;
+  version?: number;
   title: string;
   summary: string;
   category: string;
@@ -685,15 +686,26 @@ export default function ArticlesManagement() {
         },
         body: JSON.stringify({
           action,
+          expectedVersion: article.version || 1,
         }),
       });
       const data = (await response.json().catch(() => ({}))) as {
         success?: boolean;
         error?: string;
+        data?: Article;
       };
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to update article workflow');
+      }
+
+      const updatedArticle = data.data;
+      if (updatedArticle?._id) {
+        setArticles((current) =>
+          current.map((entry) =>
+            entry._id === updatedArticle._id ? { ...entry, ...updatedArticle } : entry
+          )
+        );
       }
 
       await fetchArticles();
@@ -723,7 +735,11 @@ export default function ArticlesManagement() {
     setError('');
 
     try {
-      const response = await fetch(`/api/admin/articles/${encodeURIComponent(article._id)}/breaking-tts?force=1`, {
+      const params = new URLSearchParams({
+        force: '1',
+        expectedVersion: String(article.version || 1),
+      });
+      const response = await fetch(`/api/admin/articles/${encodeURIComponent(article._id)}/breaking-tts?${params.toString()}`, {
         method: 'POST',
         headers: {
           ...getAuthHeader(),
@@ -732,10 +748,28 @@ export default function ArticlesManagement() {
       const data = (await response.json().catch(() => ({}))) as {
         success?: boolean;
         error?: string;
+        data?: {
+          version?: number;
+          updatedAt?: string;
+        };
       };
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to update TTS audio');
+      }
+
+      if (Number.isInteger(data.data?.version) && Number(data.data?.version) > 0) {
+        setArticles((current) =>
+          current.map((entry) =>
+            entry._id === article._id
+              ? {
+                  ...entry,
+                  version: Number(data.data?.version),
+                  updatedAt: data.data?.updatedAt || entry.updatedAt,
+                }
+              : entry
+          )
+        );
       }
 
       await loadTtsAssets(articles);
@@ -748,14 +782,20 @@ export default function ArticlesManagement() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (article: Article) => {
     try {
-      const response = await fetch(`/api/admin/articles/${id}`, {
+      const params = new URLSearchParams({
+        expectedVersion: String(article.version || 1),
+      });
+      const response = await fetch(
+        `/api/admin/articles/${encodeURIComponent(article._id)}?${params.toString()}`,
+        {
         method: 'DELETE',
         headers: {
           ...getAuthHeader(),
         },
-      });
+        }
+      );
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
@@ -763,10 +803,10 @@ export default function ArticlesManagement() {
         return;
       }
 
-      setArticles((current) => current.filter((article) => article._id !== id));
+      setArticles((current) => current.filter((entry) => entry._id !== article._id));
       setArticleTtsById((current) => {
         const next = { ...current };
-        delete next[id];
+        delete next[article._id];
         return next;
       });
       setDeleteConfirm(null);
@@ -1197,7 +1237,7 @@ export default function ArticlesManagement() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => void handleDelete(article._id)}
+                        onClick={() => void handleDelete(article)}
                         className={cx(DANGER_BUTTON_CLASS, 'px-3 py-2 text-xs')}
                       >
                         Delete

@@ -195,6 +195,7 @@ describe('article workflow overview', () => {
     listAllStoredArticlesMock.mockResolvedValue([
       {
         _id: 'article-review',
+        version: 6,
         title: 'Needs desk review',
         category: 'Politics',
         author: 'Desk',
@@ -280,6 +281,7 @@ describe('article workflow overview', () => {
       'story-copy',
       'video-approved',
     ]);
+    expect(overview.items[0]?.version).toBe(6);
 
     const highPriorityOverview = await getReviewQueueOverview({
       maxItems: null,

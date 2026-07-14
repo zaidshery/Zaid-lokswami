@@ -216,6 +216,12 @@
   }
 }
 
+.admin-article-workspace,
+.admin-article-workspace [data-article-field],
+.admin-article-workspace :where(input, textarea, select, button, [contenteditable='true']) {
+  scroll-margin-top: 7rem;
+}
+
 @layer components {
   .touch-target {
     min-height: 44px;

@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
+import { READER_NAVIGATION, isReaderNavigationActive } from '@/lib/constants/readerNavigation';
 
 interface BottomNavProps {
   onMenuClick: () => void;
@@ -32,17 +33,17 @@ type BottomNavItem = {
 };
 
 const navItems: BottomNavItem[] = [
-  { icon: Home, label: '\u0939\u094b\u092e', labelEn: 'Home', href: '/main' },
-  { icon: Newspaper, label: '\u0908-\u092a\u0947\u092a\u0930', labelEn: 'E-Paper', href: '/main/epaper', isCenter: true },
+  { icon: Home, label: READER_NAVIGATION.home.name, labelEn: READER_NAVIGATION.home.nameEn, href: READER_NAVIGATION.home.href },
+  { icon: Newspaper, label: READER_NAVIGATION.epaper.name, labelEn: READER_NAVIGATION.epaper.nameEn, href: READER_NAVIGATION.epaper.href, isCenter: true },
   {
     icon: BookOpen,
     label: '\u0908-\u092e\u0948\u0917',
     labelEn: 'E-Mag',
     ariaLabel: '\u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928',
     ariaLabelEn: 'E-Magazine',
-    href: '/main/e-magazine',
+    href: READER_NAVIGATION.emagazine.href,
   },
-  { icon: PlayCircle, label: '\u0935\u0940\u0921\u093f\u092f\u094b', labelEn: 'Videos', href: '/main/videos' },
+  { icon: PlayCircle, label: READER_NAVIGATION.videos.name, labelEn: READER_NAVIGATION.videos.nameEn, href: READER_NAVIGATION.videos.href },
   { icon: Zap, label: '\u095e\u091f\u093e\u095e\u091f', labelEn: 'Quick', href: '/main/ftaftaf' },
   { icon: Menu, label: '\u092e\u0947\u0928\u0942', labelEn: 'Menu', href: '#', isMenu: true },
 ];
@@ -81,7 +82,7 @@ export default function BottomNav({
             : item.ariaLabelEn || item.labelEn;
           const explicitAriaLabel = ariaLabel === label ? undefined : ariaLabel;
           const href = item.href;
-          const isActive = href !== '#' && (pathname === href || pathname.startsWith(`${href}/`));
+          const isActive = href !== '#' && isReaderNavigationActive(pathname, href);
 
           if (item.isMenu) {
             return (

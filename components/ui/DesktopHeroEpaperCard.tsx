@@ -2,13 +2,10 @@
 
 import Link from 'next/link';
 import { CalendarDays, Newspaper } from 'lucide-react';
-import type { MouseEvent } from 'react';
-import {
-  buildEpaperIssueWhatsAppShareUrl,
-  toAbsoluteShareUrl,
-} from '@/lib/utils/articleShare';
+import { buildEpaperIssueShareText } from '@/lib/utils/articleShare';
 import { isPdfAsset } from '@/lib/constants/epaperCities';
 import ReaderImage from './ReaderImage';
+import ShareMenu from './ShareMenu';
 
 type DesktopHeroEpaperCardProps = {
   href: string;
@@ -22,6 +19,7 @@ type DesktopHeroEpaperCardProps = {
   ariaLabel: string;
   primaryCtaLabel: string;
   shareLabel?: string;
+  language?: 'hi' | 'en';
 };
 
 export default function DesktopHeroEpaperCard({
@@ -35,29 +33,21 @@ export default function DesktopHeroEpaperCard({
   supportLabel,
   ariaLabel,
   primaryCtaLabel,
-  shareLabel = 'WhatsApp',
+  shareLabel = 'Share',
+  language = 'en',
 }: DesktopHeroEpaperCardProps) {
   const fallbackThumbnailSrc = '/placeholders/epaper-3x4.svg';
   const coverThumbnailSrc =
     thumbnailSrc && !isPdfAsset(thumbnailSrc) ? thumbnailSrc : fallbackThumbnailSrc;
 
-  const shareOnWhatsApp = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-
-    if (typeof window === 'undefined') return;
-
-    const issueUrl = toAbsoluteShareUrl(href, window.location.origin);
-    const whatsappUrl = buildEpaperIssueWhatsAppShareUrl({
-      title: `${title} - ${editionLabel}`,
-      issueUrl,
-      cityLabel: editionLabel,
-      dateLabel,
-    });
-    const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-    if (!opened) {
-      window.location.href = whatsappUrl;
-    }
-  };
+  const shareTitle = `${title} - ${editionLabel}`;
+  const brandedShareText = buildEpaperIssueShareText({
+    title: shareTitle,
+    issueUrl: href,
+    cityLabel: editionLabel,
+    dateLabel,
+    includeUrl: false,
+  });
 
   return (
     <article
@@ -119,15 +109,19 @@ export default function DesktopHeroEpaperCard({
                 <span />
               )}
 
-              <button
-                type="button"
-                onClick={shareOnWhatsApp}
-                aria-label="Share e-paper on WhatsApp"
-                className="reader-focus-ring inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-emerald-400/30 bg-emerald-600/90 px-2 text-[9px] font-black text-white shadow-[0_10px_22px_rgba(5,150,105,0.16)] transition hover:bg-emerald-500 sm:px-3 sm:text-[9.5px]"
-              >
-                <WhatsAppIcon className="h-3.5 w-3.5" />
-                <span>{shareLabel}</span>
-              </button>
+              <ShareMenu
+                title={shareTitle}
+                url={href}
+                text={brandedShareText}
+                whatsappText={brandedShareText}
+                contentType="epaper"
+                contentId={href}
+                placement="home_epaper_rail"
+                language={language}
+                triggerLabel={shareLabel}
+                ariaLabel={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930 \u0936\u0947\u092f\u0930 \u0915\u0930\u0928\u0947 \u0915\u093e \u0924\u0930\u0940\u0915\u093e \u091a\u0941\u0928\u0947\u0902' : 'Choose how to share e-paper'}
+                buttonClassName="reader-focus-ring inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-sky-400/30 bg-sky-600/90 px-2 text-[9px] font-black text-white shadow-[0_10px_22px_rgba(2,132,199,0.16)] transition hover:bg-sky-500 sm:px-3 sm:text-[9.5px]"
+              />
             </div>
             <Link
               href={href}
@@ -141,18 +135,5 @@ export default function DesktopHeroEpaperCard({
         </div>
       </div>
     </article>
-  );
-}
-
-function WhatsAppIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 32 32"
-      aria-hidden="true"
-      className={className}
-      fill="currentColor"
-    >
-      <path d="M16.04 3C8.82 3 2.99 8.82 3 16.02c0 2.3.6 4.55 1.74 6.53L3 29l6.63-1.72a12.95 12.95 0 0 0 6.4 1.63H16c7.2 0 13.03-5.82 13.04-13.02A13.01 13.01 0 0 0 16.04 3zm0 23.72h-.01a10.84 10.84 0 0 1-5.52-1.5l-.4-.24-3.94 1.02 1.05-3.84-.26-.4a10.86 10.86 0 1 1 9.08 4.96zm5.95-8.12c-.33-.17-1.95-.96-2.25-1.07-.3-.11-.52-.17-.74.17-.22.33-.85 1.07-1.05 1.29-.19.22-.39.25-.72.08-.33-.17-1.38-.51-2.64-1.62-.98-.88-1.64-1.97-1.84-2.3-.19-.33-.02-.51.15-.68.15-.15.33-.39.5-.58.17-.19.22-.33.33-.55.11-.22.06-.41-.03-.58-.08-.17-.74-1.79-1.01-2.45-.26-.64-.53-.55-.74-.56h-.63c-.22 0-.58.08-.88.41-.3.33-1.16 1.13-1.16 2.75 0 1.62 1.19 3.19 1.35 3.41.17.22 2.34 3.57 5.68 5 .79.34 1.41.54 1.89.69.79.25 1.5.22 2.07.13.63-.09 1.95-.8 2.23-1.57.27-.77.27-1.43.19-1.57-.08-.14-.3-.22-.63-.38z" />
-    </svg>
   );
 }

@@ -7,6 +7,25 @@ import {
 } from '@/lib/utils/articleAssistant';
 
 describe('article assistant helpers', () => {
+  it('offers an editor-approved tightened summary without adding facts', () => {
+    const longSummary = `${'Council members reviewed the documented route and public comments. '.repeat(4)}No additional claim.`;
+    const result = buildArticleAssistResult({
+      mode: 'edit',
+      title: 'Council route review continues',
+      summary: longSummary,
+      content: '<p>Council members reviewed the documented route and public comments.</p>',
+      category: 'City',
+      author: 'Desk',
+      image: '/uploads/route.webp',
+      seo: {},
+    });
+    const patch = result.patches.find((item) => item.field === 'summary');
+
+    expect(patch?.suggestedValue.length).toBeLessThanOrEqual(180);
+    expect(patch?.suggestedValue).toContain('Council members reviewed');
+    expect(patch?.currentValue).toBe(longSummary.trim());
+  });
+
   it('suggests deterministic packaging fields for Hindi copy', () => {
     const result = buildArticleAssistResult({
       mode: 'create',
@@ -181,6 +200,81 @@ describe('article assistant helpers', () => {
     expect(suggestArticleFocusKeyword('Metro route metro station airport update')).toBe('Metro');
     expect(suggestArticleSecondaryKeywords('Metro route station airport update', 'Metro')).toBe(
       'route, station, airport, update'
+    );
+  });
+
+  it('creates three evidence-bound headline options and insertable internal links', () => {
+    const result = buildArticleAssistResult({
+      title: 'Indore metro work changes airport traffic',
+      summary:
+        'Officials announced a revised airport traffic route while metro construction continues.',
+      content:
+        '<p>Officials said the revised route begins Monday and affects two junctions near the airport.</p>',
+      category: 'City',
+      author: 'Desk',
+      image: '/uploads/metro.webp',
+      relatedArticles: [
+        { title: 'Earlier Indore metro airport route update', slug: 'indore-metro-airport-route' },
+      ],
+    });
+
+    expect(result.suggestions.filter((item) => item.kind === 'headline')).toHaveLength(3);
+    expect(result.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'internal_link',
+          targetField: 'content',
+          insertValue: expect.stringContaining('/main/article/indore-metro-airport-route'),
+        }),
+      ])
+    );
+  });
+
+  it('adds story-specific blockers for an investigation without evidence review', () => {
+    const result = buildArticleAssistResult({
+      title: 'Investigation examines public contract award',
+      summary:
+        'The investigation examines records, decisions, and public spending connected with the contract award.',
+      content: `<p>${'Reporting details and document context. '.repeat(30)}</p>`,
+      category: 'Investigation',
+      author: 'Investigations desk',
+      image: '/uploads/contracts.webp',
+      editorial: { storyType: 'investigation' },
+    });
+    const summary = summarizeArticleReadiness(result.readiness);
+
+    expect(summary.blockers.map((item) => item.id)).toEqual(
+      expect.arrayContaining([
+        'headline-support',
+        'duplicate-check',
+        'evidence',
+        'fact-check',
+        'image-rights',
+        'legal-review',
+        'sensitivity-review',
+      ])
+    );
+  });
+
+  it('flags numeric or absolute claims for source review without inventing evidence', () => {
+    const result = buildArticleAssistResult({
+      title: 'City project update',
+      summary: 'The project update covers the latest construction phase and public timetable.',
+      content:
+        '<p>The project is the largest in the city and will serve 100 percent of residents.</p>',
+      category: 'City',
+      author: 'Desk',
+      image: '/uploads/project.webp',
+    });
+
+    expect(result.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'unsupported-claim-review',
+          kind: 'claim_review',
+          value: expect.stringContaining('100 percent'),
+        }),
+      ])
     );
   });
 });

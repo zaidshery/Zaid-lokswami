@@ -12,6 +12,7 @@ import type {
   ArticleAssistField,
   ArticleAssistPatch,
   ArticleAssistResult,
+  ArticleAssistSuggestion,
   ArticleReadinessItem,
 } from '@/lib/utils/articleAssistant';
 
@@ -25,6 +26,7 @@ type ArticleWorkbenchAssistantProps = {
   onApplyAll?: (patches: ArticleAssistPatch[]) => void;
   onRejectPatch: (patch: ArticleAssistPatch) => void;
   onFocusField?: (field: ArticleAssistField) => void;
+  onInsertSuggestion?: (suggestion: ArticleAssistSuggestion) => void;
   title?: string;
 };
 
@@ -78,6 +80,7 @@ export default function ArticleWorkbenchAssistant({
   onApplyAll,
   onRejectPatch,
   onFocusField,
+  onInsertSuggestion,
   title = 'Assistant & readiness',
 }: ArticleWorkbenchAssistantProps) {
   const patches = (result?.patches || []).filter(
@@ -190,7 +193,20 @@ export default function ArticleWorkbenchAssistant({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-zinc-950 dark:text-zinc-50">{fieldLabel(patch.field)}</p>
-                    <p className="mt-1 line-clamp-3 text-xs text-zinc-700 dark:text-zinc-300">{patch.suggestedValue}</p>
+                    <div className="mt-2 grid gap-2">
+                      <div className="rounded border border-red-100 bg-red-50/70 px-2 py-1.5 dark:border-red-400/20 dark:bg-red-500/10">
+                        <span className="block text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-200">Before</span>
+                        <p className="mt-0.5 line-clamp-3 text-xs text-zinc-700 dark:text-zinc-300">
+                          {patch.currentValue || '(empty)'}
+                        </p>
+                      </div>
+                      <div className="rounded border border-emerald-100 bg-emerald-50/70 px-2 py-1.5 dark:border-emerald-400/20 dark:bg-emerald-500/10">
+                        <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">After</span>
+                        <p className="mt-0.5 line-clamp-3 text-xs text-zinc-700 dark:text-zinc-300">
+                          {patch.suggestedValue}
+                        </p>
+                      </div>
+                    </div>
                     <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">{patch.reason}</p>
                   </div>
                   <button
@@ -230,6 +246,19 @@ export default function ArticleWorkbenchAssistant({
                 <p className="text-xs font-bold text-zinc-950 dark:text-zinc-50">{suggestion.label}</p>
                 <p className="mt-1 text-xs leading-5 text-zinc-700 dark:text-zinc-300">{suggestion.value}</p>
                 <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">{suggestion.reason}</p>
+                {suggestion.insertValue && suggestion.targetField && onInsertSuggestion ? (
+                  <button
+                    type="button"
+                    onClick={() => onInsertSuggestion(suggestion)}
+                    className="mt-2 inline-flex min-h-9 items-center rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 transition-colors hover:border-zinc-500 dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-100"
+                  >
+                    {suggestion.kind === 'headline'
+                      ? 'Use headline'
+                      : suggestion.kind === 'internal_link'
+                        ? 'Insert link'
+                        : 'Insert'}
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>

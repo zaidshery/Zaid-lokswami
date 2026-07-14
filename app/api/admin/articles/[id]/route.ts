@@ -18,6 +18,16 @@ import {
 } from '@/lib/content/newsroomMetadata';
 import { normalizeArticleSourceType } from '@/lib/content/newsroomPublishing';
 import {
+  normalizeArticleEditorialMeta,
+  normalizeArticleEditorialMetaPartial,
+  validateArticleEditorialMeta,
+} from '@/lib/content/articleEditorial';
+import {
+  normalizeArticleMediaMetadata,
+  validateArticleMediaMetadata,
+} from '@/lib/content/articleMediaMetadata';
+import { normalizeArticleDocument } from '@/lib/content/articleDocument';
+import {
   canDeleteContent,
   canEditEpaper,
   canEditContent,
@@ -28,12 +38,12 @@ import {
 } from '@/lib/auth/permissions';
 import {
   deleteStoredBreakingAudio,
-  ensureBreakingTtsForArticle,
   resolveReusableBreakingTts,
 } from '@/lib/server/breakingTts';
 import {
   deleteStoredArticle,
   getStoredArticleById,
+  isArticleVersionConflictError,
   listAllStoredArticles,
   updateStoredArticle,
 } from '@/lib/storage/articlesFile';
@@ -58,10 +68,15 @@ import {
 import { isAllowedAssetPath } from '@/lib/utils/epaperStorage';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
+  buildArticleAssistResult,
+  summarizeArticleReadiness,
+} from '@/lib/utils/articleAssistant';
+import {
   isValidArticleSlug,
   normalizeArticleSeo,
   normalizeArticleSlug,
   resolveUniqueArticleSlug,
+  type ArticleSeoFields,
 } from '@/lib/seo/articleSeo';
 import {
   applyArticleWorkflowAction,
@@ -89,6 +104,7 @@ type RouteContext = {
 };
 
 type LeanArticleRecord = Record<string, unknown> & {
+  version?: number;
   author?: string;
   breakingTts?: { audioUrl?: string } | null;
   isBreaking?: boolean;
@@ -162,6 +178,53 @@ function isBreakingArticleMissingAudio(article: unknown) {
   return Boolean((source as Record<string, unknown>).isBreaking) && !resolveReusableBreakingTts(source);
 }
 
+function validateWorkflowReadiness(
+  article: unknown,
+  action: ContentTransitionAction
+) {
+  if (action !== 'submit' && action !== 'schedule' && action !== 'publish') {
+    return null;
+  }
+
+  const plain = toPlainArticleRecord(article);
+  const source =
+    plain && typeof plain === 'object' ? (plain as Record<string, unknown>) : {};
+  const reporterMeta =
+    source.reporterMeta && typeof source.reporterMeta === 'object'
+      ? (source.reporterMeta as Record<string, unknown>)
+      : {};
+  const result = buildArticleAssistResult({
+    mode: 'edit',
+    title: typeof source.title === 'string' ? source.title : '',
+    summary: typeof source.summary === 'string' ? source.summary : '',
+    content: typeof source.content === 'string' ? source.content : '',
+    category: typeof source.category === 'string' ? source.category : '',
+    author: typeof source.author === 'string' ? source.author : '',
+    image: typeof source.image === 'string' ? source.image : '',
+    seoSlug: typeof source.slug === 'string' ? source.slug : '',
+    seo:
+      source.seo && typeof source.seo === 'object'
+        ? (source.seo as Partial<ArticleSeoFields>)
+        : undefined,
+    isBreaking: Boolean(source.isBreaking),
+    isTrending: Boolean(source.isTrending),
+    language: 'hi',
+    breakingAudioReady:
+      !Boolean(source.isBreaking) || Boolean(resolveReusableBreakingTts(source)),
+    requireBreakingAudio: action === 'publish' && Boolean(source.isBreaking),
+    sourceInfo:
+      typeof reporterMeta.sourceInfo === 'string' ? reporterMeta.sourceInfo : '',
+    locationTag:
+      typeof reporterMeta.locationTag === 'string' ? reporterMeta.locationTag : '',
+    sourceStoryId:
+      typeof source.sourceStoryId === 'string' ? source.sourceStoryId : '',
+    editorial: normalizeArticleEditorialMeta(source.editorial),
+  });
+  const summary = summarizeArticleReadiness(result.readiness);
+  if (summary.canSend) return null;
+  return `Article is not ready: ${summary.blockers.map((item) => item.label).join(', ')}`;
+}
+
 function resolveArticleResponse(
   article: (Record<string, unknown> & {
     author?: string;
@@ -209,6 +272,80 @@ function parseOptionalDate(value: unknown) {
   if (!value) return null;
   const parsed = value instanceof Date ? value : new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseExpectedVersion(value: unknown) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function hasPersistedArticleVersion(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function resolveArticleVersion(value: unknown) {
+  return hasPersistedArticleVersion(value) ? value : 1;
+}
+
+function buildArticleVersionMatch(expectedVersion: number) {
+  return expectedVersion === 1
+    ? { $or: [{ version: 1 }, { version: { $exists: false } }] }
+    : { version: expectedVersion };
+}
+
+function resolveNextBreakingTts(
+  currentArticle: Record<string, unknown>,
+  updates: Record<string, unknown>
+) {
+  const currentReporterMeta =
+    currentArticle.reporterMeta && typeof currentArticle.reporterMeta === 'object'
+      ? (currentArticle.reporterMeta as Record<string, unknown>)
+      : {};
+  const reporterMetaUpdates =
+    updates.reporterMeta && typeof updates.reporterMeta === 'object'
+      ? (updates.reporterMeta as Record<string, unknown>)
+      : {};
+  const nextArticle: Record<string, unknown> = {
+    ...currentArticle,
+    ...updates,
+    reporterMeta: {
+      ...currentReporterMeta,
+      ...reporterMetaUpdates,
+    },
+    breakingTts: currentArticle.breakingTts,
+  };
+
+  return nextArticle.isBreaking ? resolveReusableBreakingTts(nextArticle) : null;
+}
+
+function resolveBreakingAudioUrl(article: Record<string, unknown>) {
+  const breakingTts =
+    article.breakingTts && typeof article.breakingTts === 'object'
+      ? (article.breakingTts as Record<string, unknown>)
+      : null;
+  return typeof breakingTts?.audioUrl === 'string' ? breakingTts.audioUrl : '';
+}
+
+function articleVersionConflictResponse(input: {
+  currentVersion: number;
+  updatedAt?: unknown;
+}) {
+  return NextResponse.json(
+    {
+      success: false,
+      code: 'ARTICLE_VERSION_CONFLICT',
+      error: 'This draft changed in another session. Reload or compare changes before saving.',
+      currentVersion: input.currentVersion,
+      updatedAt:
+        input.updatedAt instanceof Date
+          ? input.updatedAt.toISOString()
+          : typeof input.updatedAt === 'string'
+            ? input.updatedAt
+            : null,
+    },
+    { status: 409 }
+  );
 }
 
 function toStoredWorkflowUpdate(workflow: ReturnType<typeof resolveArticleWorkflow>) {
@@ -310,12 +447,23 @@ function normalizePartialInput(body: unknown) {
   const hasSeo = Object.keys(seo).length > 0;
   const reporterMeta = normalizeReporterMetaPartial(source.reporterMeta);
   const copyEditorMeta = normalizeCopyEditorMetaPartial(source.copyEditorMeta);
+  const editorial = normalizeArticleEditorialMetaPartial(source.editorial);
+  delete editorial.flagApprovedBy;
+  const media =
+    typeof source.media === 'object' && source.media
+      ? normalizeArticleMediaMetadata(source.media)
+      : null;
+  const content = typeof source.content === 'string' ? source.content.trim() : undefined;
+  const hasContentDocument = source.contentJson !== undefined || content !== undefined;
   return {
     ...(typeof source.title === 'string' ? { title: source.title.trim() } : {}),
     ...(typeof source.slug === 'string' ? { slug: source.slug.trim() } : {}),
     ...(Array.isArray(source.previousSlugs) ? { previousSlugs: source.previousSlugs } : {}),
     ...(typeof source.summary === 'string' ? { summary: source.summary.trim() } : {}),
-    ...(typeof source.content === 'string' ? { content: source.content.trim() } : {}),
+    ...(content !== undefined ? { content } : {}),
+    ...(hasContentDocument
+      ? { contentJson: normalizeArticleDocument(source.contentJson, content || '') }
+      : {}),
     ...(typeof source.image === 'string' ? { image: source.image.trim() } : {}),
     ...(typeof source.category === 'string' ? { category: source.category.trim() } : {}),
     ...(typeof source.author === 'string' ? { author: source.author.trim() } : {}),
@@ -324,7 +472,36 @@ function normalizePartialInput(body: unknown) {
     ...(hasSeo ? { seo } : {}),
     ...(Object.keys(reporterMeta).length > 0 ? { reporterMeta } : {}),
     ...(Object.keys(copyEditorMeta).length > 0 ? { copyEditorMeta } : {}),
+    ...(Object.keys(editorial).length > 0 ? { editorial } : {}),
+    ...(media ? { media } : {}),
   };
+}
+
+function applyEditorialFlagApproval(
+  updates: Record<string, unknown>,
+  current: Record<string, unknown>,
+  approver: string
+) {
+  const hasEditorialUpdate =
+    typeof updates.editorial === 'object' && updates.editorial !== null;
+  const hasFlagUpdate =
+    typeof updates.isBreaking === 'boolean' || typeof updates.isTrending === 'boolean';
+  if (!hasEditorialUpdate && !hasFlagUpdate) return;
+
+  const editorial = normalizeArticleEditorialMeta({
+    ...(typeof current.editorial === 'object' && current.editorial ? current.editorial : {}),
+    ...(hasEditorialUpdate ? (updates.editorial as Record<string, unknown>) : {}),
+  });
+  const isBreaking =
+    typeof updates.isBreaking === 'boolean'
+      ? updates.isBreaking
+      : Boolean(current.isBreaking);
+  const isTrending =
+    typeof updates.isTrending === 'boolean'
+      ? updates.isTrending
+      : Boolean(current.isTrending);
+  editorial.flagApprovedBy = isBreaking || isTrending ? approver : '';
+  updates.editorial = editorial;
 }
 
 function validateLengths(input: Record<string, unknown>) {
@@ -362,9 +539,10 @@ function validateLengths(input: Record<string, unknown>) {
     if (
       typeof seo.authorProfileUrl === 'string' &&
       seo.authorProfileUrl &&
+      !seo.authorProfileUrl.startsWith('/') &&
       !isValidAbsoluteHttpUrl(seo.authorProfileUrl)
     ) {
-      return 'Author profile URL must be a valid absolute URL';
+      return 'Author profile URL must be a valid absolute URL or local path';
     }
     if (
       typeof seo.ogImage === 'string' &&
@@ -404,6 +582,24 @@ function validateLengths(input: Record<string, unknown>) {
     }
   }
 
+  if (typeof input.editorial === 'object' && input.editorial) {
+    const editorialError = validateArticleEditorialMeta(
+      normalizeArticleEditorialMeta(input.editorial)
+    );
+    if (editorialError) {
+      return editorialError;
+    }
+  }
+
+  if (typeof input.media === 'object' && input.media) {
+    const mediaError = validateArticleMediaMetadata(
+      normalizeArticleMediaMetadata(input.media)
+    );
+    if (mediaError) {
+      return mediaError;
+    }
+  }
+
   return null;
 }
 
@@ -415,12 +611,14 @@ function normalizeFullInput(body: unknown) {
     seo.ogImage = resolveArticleOgImageUrl({ image });
   }
 
+  const content = typeof source.content === 'string' ? source.content.trim() : '';
   return {
     title: typeof source.title === 'string' ? source.title.trim() : '',
     slug: typeof source.slug === 'string' ? source.slug.trim() : '',
     previousSlugs: Array.isArray(source.previousSlugs) ? source.previousSlugs : [],
     summary: typeof source.summary === 'string' ? source.summary.trim() : '',
-    content: typeof source.content === 'string' ? source.content.trim() : '',
+    content,
+    contentJson: normalizeArticleDocument(source.contentJson, content),
     image,
     category: typeof source.category === 'string' ? source.category.trim() : '',
     author: typeof source.author === 'string' ? source.author.trim() : '',
@@ -429,6 +627,8 @@ function normalizeFullInput(body: unknown) {
     seo,
     reporterMeta: normalizeReporterMeta(source.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(source.copyEditorMeta),
+    editorial: normalizeArticleEditorialMeta(source.editorial),
+    media: normalizeArticleMediaMetadata(source.media),
   };
 }
 
@@ -456,6 +656,10 @@ function buildRevisionSnapshot(article: Record<string, unknown>) {
     title: typeof article.title === 'string' ? article.title : '',
     summary: typeof article.summary === 'string' ? article.summary : '',
     content: typeof article.content === 'string' ? article.content : '',
+    contentJson: normalizeArticleDocument(
+      article.contentJson,
+      typeof article.content === 'string' ? article.content : ''
+    ),
     image: typeof article.image === 'string' ? article.image : '',
     category: typeof article.category === 'string' ? article.category : '',
     author: typeof article.author === 'string' ? article.author : '',
@@ -468,6 +672,8 @@ function buildRevisionSnapshot(article: Record<string, unknown>) {
     seo,
     reporterMeta: normalizeReporterMeta(article.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(article.copyEditorMeta),
+    editorial: normalizeArticleEditorialMeta(article.editorial),
+    media: normalizeArticleMediaMetadata(article.media),
     savedAt: new Date(),
   };
 }
@@ -837,6 +1043,10 @@ export async function PATCH(
 
     // Read body FIRST
     const body = await req.json();
+    const bodyRecord =
+      typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
+    const expectedVersion = parseExpectedVersion(bodyRecord.expectedVersion);
+    const isAutosave = bodyRecord.autosave === true;
 
     const user = await getAdminSessionFromReq(req);
     if (!user) {
@@ -882,6 +1092,29 @@ export async function PATCH(
           return NextResponse.json(
             { success: false, error: 'Forbidden' },
             { status: 403 }
+          );
+        }
+
+        const currentVersion = resolveArticleVersion(currentArticle.version);
+        if (expectedVersion !== null && expectedVersion !== currentVersion) {
+          return articleVersionConflictResponse({
+            currentVersion,
+            updatedAt: currentArticle.updatedAt,
+          });
+        }
+
+        if (action === 'publish' && isBreakingArticleMissingAudio(currentArticle)) {
+          return NextResponse.json(
+            { success: false, error: BREAKING_AUDIO_REQUIRED_ERROR },
+            { status: 400 }
+          );
+        }
+
+        const readinessError = validateWorkflowReadiness(currentArticle, action);
+        if (readinessError) {
+          return NextResponse.json(
+            { success: false, error: readinessError },
+            { status: 400 }
           );
         }
 
@@ -932,7 +1165,7 @@ export async function PATCH(
                 ? { publishedAt: new Date().toISOString() }
                 : {}),
             },
-            { skipRevision: true }
+            { skipRevision: true, expectedVersion: currentVersion }
           );
 
           if (!article) {
@@ -980,6 +1213,12 @@ export async function PATCH(
             message: `Article moved to ${toStatus}.`,
           });
         } catch (workflowError) {
+          if (isArticleVersionConflictError(workflowError)) {
+            return articleVersionConflictResponse({
+              currentVersion: workflowError.currentVersion,
+              updatedAt: currentArticle.updatedAt,
+            });
+          }
           return NextResponse.json(
             {
               success: false,
@@ -1020,6 +1259,29 @@ export async function PATCH(
         );
       }
 
+      const currentVersion = resolveArticleVersion(current.version);
+      if (expectedVersion !== null && expectedVersion !== currentVersion) {
+        return articleVersionConflictResponse({
+          currentVersion,
+          updatedAt: current.updatedAt,
+        });
+      }
+
+      if (action === 'publish' && isBreakingArticleMissingAudio(current)) {
+        return NextResponse.json(
+          { success: false, error: BREAKING_AUDIO_REQUIRED_ERROR },
+          { status: 400 }
+        );
+      }
+
+      const readinessError = validateWorkflowReadiness(current, action);
+      if (readinessError) {
+        return NextResponse.json(
+          { success: false, error: readinessError },
+          { status: 400 }
+        );
+      }
+
       let assignedTo = null;
       if (action === 'assign') {
         assignedTo = await resolveAssignee(String(actionBody.assignedToId || ''));
@@ -1051,19 +1313,29 @@ export async function PATCH(
           );
         }
 
-        const article = await Article.findByIdAndUpdate(
-          id,
+        const initializesLegacyVersion = !hasPersistedArticleVersion(current.version);
+        const article = await Article.findOneAndUpdate(
+          { _id: id, ...buildArticleVersionMatch(currentVersion) },
           {
             $set: {
               workflow: nextWorkflow,
               updatedAt: new Date(),
               ...(toStatus === 'published' ? { publishedAt: new Date() } : {}),
+              ...(initializesLegacyVersion ? { version: currentVersion + 1 } : {}),
             },
+            ...(!initializesLegacyVersion ? { $inc: { version: 1 } } : {}),
           },
           { new: true, runValidators: true }
         );
 
         if (!article) {
+          const latest = (await Article.findById(id).lean()) as LeanArticleRecord | null;
+          if (latest) {
+            return articleVersionConflictResponse({
+              currentVersion: resolveArticleVersion(latest.version),
+              updatedAt: latest.updatedAt,
+            });
+          }
           return NextResponse.json(
             { success: false, error: 'Article not found' },
             { status: 404 }
@@ -1145,6 +1417,20 @@ export async function PATCH(
         );
       }
 
+      applyEditorialFlagApproval(
+        updates as unknown as Record<string, unknown>,
+        currentArticle as unknown as Record<string, unknown>,
+        user.name || user.email
+      );
+
+      const currentVersion = resolveArticleVersion(currentArticle.version);
+      if (expectedVersion !== null && expectedVersion !== currentVersion) {
+        return articleVersionConflictResponse({
+          currentVersion,
+          updatedAt: currentArticle.updatedAt,
+        });
+      }
+
       if (typeof updates.slug === 'string' || !currentArticle.slug) {
         const existingArticles = await listAllStoredArticles();
         const resolvedSlug = await resolveUniqueArticleSlug(
@@ -1168,7 +1454,38 @@ export async function PATCH(
         updates.previousSlugs = Array.from(previousSlugs).filter((item) => item !== resolvedSlug);
       }
 
-      const article = await updateStoredArticle(id, updates);
+      const previousBreakingAudioUrl = resolveBreakingAudioUrl(
+        currentArticle as unknown as Record<string, unknown>
+      );
+      const updatesWithBreakingTts = {
+        ...updates,
+        breakingTts: resolveNextBreakingTts(
+          currentArticle as unknown as Record<string, unknown>,
+          updates as unknown as Record<string, unknown>
+        ),
+      };
+
+      let article;
+      try {
+        article = await updateStoredArticle(
+          id,
+          updatesWithBreakingTts,
+          isAutosave || expectedVersion !== null
+            ? {
+                skipRevision: isAutosave,
+                ...(expectedVersion !== null ? { expectedVersion } : {}),
+              }
+            : undefined
+        );
+      } catch (updateError) {
+        if (isArticleVersionConflictError(updateError)) {
+          return articleVersionConflictResponse({
+            currentVersion: updateError.currentVersion,
+            updatedAt: currentArticle.updatedAt,
+          });
+        }
+        throw updateError;
+      }
       if (!article) {
         return NextResponse.json(
           { success: false, error: 'Article not found' },
@@ -1176,37 +1493,8 @@ export async function PATCH(
         );
       }
 
-      try {
-        if (!article.isBreaking) {
-          if (article.breakingTts?.audioUrl) {
-            await deleteStoredBreakingAudio(article.breakingTts.audioUrl).catch(() => undefined);
-          }
-          const cleared = await updateStoredArticle(id, { breakingTts: null }, { skipRevision: true });
-          article.breakingTts = cleared?.breakingTts ?? null;
-        } else {
-          const breakingTts = await ensureBreakingTtsForArticle(article);
-          if (breakingTts) {
-            const synced = await updateStoredArticle(
-              id,
-              { breakingTts },
-              { skipRevision: true }
-            );
-            if (synced) {
-              article.breakingTts = synced.breakingTts ?? breakingTts;
-            } else {
-              article.breakingTts = breakingTts;
-            }
-          } else if (article.breakingTts) {
-            const synced = await updateStoredArticle(
-              id,
-              { breakingTts: null },
-              { skipRevision: true }
-            );
-            article.breakingTts = synced?.breakingTts ?? null;
-          }
-        }
-      } catch (ttsError) {
-        console.error('Failed to cache breaking TTS after article patch:', ttsError);
+      if (previousBreakingAudioUrl && !article.breakingTts) {
+        await deleteStoredBreakingAudio(previousBreakingAudioUrl).catch(() => undefined);
       }
 
       const changedFields = Object.keys(updates);
@@ -1250,6 +1538,18 @@ export async function PATCH(
         { status: 403 }
       );
     }
+    applyEditorialFlagApproval(
+      updates as unknown as Record<string, unknown>,
+      current as Record<string, unknown>,
+      user.name || user.email
+    );
+    const currentVersion = resolveArticleVersion(current.version);
+    if (expectedVersion !== null && expectedVersion !== currentVersion) {
+      return articleVersionConflictResponse({
+        currentVersion,
+        updatedAt: current.updatedAt,
+      });
+    }
 
     if (typeof updates.slug === 'string' || !normalizeArticleSlug(String(current.slug || ''))) {
       const currentSlug = normalizeArticleSlug(String(current.slug || ''));
@@ -1277,49 +1577,59 @@ export async function PATCH(
       updates.previousSlugs = Array.from(previousSlugs).filter((item) => item && item !== resolvedSlug);
     }
 
+    const previousBreakingAudioUrl = resolveBreakingAudioUrl(
+      current as Record<string, unknown>
+    );
+    const nextBreakingTts = resolveNextBreakingTts(
+      current as Record<string, unknown>,
+      updates as unknown as Record<string, unknown>
+    );
     const revision = buildRevisionSnapshot(current as Record<string, unknown>);
-    const article = await Article.findByIdAndUpdate(
+    const initializesLegacyVersion = !hasPersistedArticleVersion(current.version);
+    const mongoUpdate = {
+      $set: {
+        ...updates,
+        breakingTts: nextBreakingTts,
+        updatedAt: new Date(),
+        ...(initializesLegacyVersion ? { version: currentVersion + 1 } : {}),
+      },
+      ...(!initializesLegacyVersion ? { $inc: { version: 1 } } : {}),
+      ...(!isAutosave
+        ? { $push: { revisions: { $each: [revision], $slice: -30 } } }
+        : {}),
+    };
+    const article = expectedVersion !== null
+      ? await Article.findOneAndUpdate(
+          { _id: id, ...buildArticleVersionMatch(expectedVersion) },
+          mongoUpdate,
+          { new: true, runValidators: true }
+        )
+      : await Article.findByIdAndUpdate(
       id,
       {
-        $set: { ...updates, updatedAt: new Date() },
-        $push: { revisions: { $each: [revision], $slice: -30 } },
+        ...mongoUpdate,
       },
       { new: true, runValidators: true }
     );
 
     if (!article) {
+      if (expectedVersion !== null) {
+        const latest = (await Article.findById(id).lean()) as LeanArticleRecord | null;
+        if (latest) {
+          return articleVersionConflictResponse({
+            currentVersion: resolveArticleVersion(latest.version),
+            updatedAt: latest.updatedAt,
+          });
+        }
+      }
       return NextResponse.json(
         { success: false, error: 'Article not found' },
         { status: 404 }
       );
     }
 
-    try {
-      if (!article.isBreaking) {
-        const previousAudioUrl =
-          article.breakingTts && typeof article.breakingTts.audioUrl === 'string'
-            ? article.breakingTts.audioUrl
-            : '';
-        if (previousAudioUrl) {
-          await deleteStoredBreakingAudio(previousAudioUrl).catch(() => undefined);
-        }
-        article.breakingTts = null;
-        await article.save();
-      } else {
-        const breakingTts = await ensureBreakingTtsForArticle(article.toObject());
-        if (breakingTts) {
-          article.breakingTts = {
-            ...breakingTts,
-            generatedAt: new Date(breakingTts.generatedAt),
-          };
-          await article.save();
-        } else if (article.breakingTts) {
-          article.breakingTts = null;
-          await article.save();
-        }
-      }
-    } catch (ttsError) {
-      console.error('Failed to cache breaking TTS after article patch:', ttsError);
+    if (previousBreakingAudioUrl && !nextBreakingTts) {
+      await deleteStoredBreakingAudio(previousBreakingAudioUrl).catch(() => undefined);
     }
 
     const changedFields = Object.keys(updates);
@@ -1355,6 +1665,9 @@ export async function PUT(
 
     // Read body FIRST
     const body = await req.json();
+    const bodyRecord =
+      typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
+    const expectedVersion = parseExpectedVersion(bodyRecord.expectedVersion);
 
     const user = await getAdminSessionFromReq(req);
     if (!user) {
@@ -1383,6 +1696,8 @@ export async function PUT(
     }
 
     const input = normalizeFullInput(body);
+    input.editorial.flagApprovedBy =
+      input.isBreaking || input.isTrending ? user.name || user.email : '';
     const validationError = validateRequired(input);
     if (validationError) {
       return NextResponse.json(
@@ -1406,6 +1721,14 @@ export async function PUT(
         );
       }
 
+      const currentVersion = resolveArticleVersion(currentArticle.version);
+      if (expectedVersion !== null && expectedVersion !== currentVersion) {
+        return articleVersionConflictResponse({
+          currentVersion,
+          updatedAt: currentArticle.updatedAt,
+        });
+      }
+
       {
         const existingArticles = await listAllStoredArticles();
         const resolvedSlug = await resolveUniqueArticleSlug(
@@ -1425,7 +1748,32 @@ export async function PUT(
         input.previousSlugs = Array.from(previousSlugs).filter((item) => item !== resolvedSlug);
       }
 
-      const article = await updateStoredArticle(id, input);
+      const previousBreakingAudioUrl = resolveBreakingAudioUrl(
+        currentArticle as unknown as Record<string, unknown>
+      );
+      const inputWithBreakingTts = {
+        ...input,
+        breakingTts: resolveNextBreakingTts(
+          currentArticle as unknown as Record<string, unknown>,
+          input as unknown as Record<string, unknown>
+        ),
+      };
+
+      let article;
+      try {
+        article =
+          expectedVersion !== null
+            ? await updateStoredArticle(id, inputWithBreakingTts, { expectedVersion })
+            : await updateStoredArticle(id, inputWithBreakingTts);
+      } catch (updateError) {
+        if (isArticleVersionConflictError(updateError)) {
+          return articleVersionConflictResponse({
+            currentVersion: updateError.currentVersion,
+            updatedAt: currentArticle.updatedAt,
+          });
+        }
+        throw updateError;
+      }
       if (!article) {
         return NextResponse.json(
           { success: false, error: 'Article not found' },
@@ -1433,37 +1781,8 @@ export async function PUT(
         );
       }
 
-      try {
-        if (!article.isBreaking) {
-          if (article.breakingTts?.audioUrl) {
-            await deleteStoredBreakingAudio(article.breakingTts.audioUrl).catch(() => undefined);
-          }
-          const cleared = await updateStoredArticle(id, { breakingTts: null }, { skipRevision: true });
-          article.breakingTts = cleared?.breakingTts ?? null;
-        } else {
-          const breakingTts = await ensureBreakingTtsForArticle(article);
-          if (breakingTts) {
-            const synced = await updateStoredArticle(
-              id,
-              { breakingTts },
-              { skipRevision: true }
-            );
-            if (synced) {
-              article.breakingTts = synced.breakingTts ?? breakingTts;
-            } else {
-              article.breakingTts = breakingTts;
-            }
-          } else if (article.breakingTts) {
-            const synced = await updateStoredArticle(
-              id,
-              { breakingTts: null },
-              { skipRevision: true }
-            );
-            article.breakingTts = synced?.breakingTts ?? null;
-          }
-        }
-      } catch (ttsError) {
-        console.error('Failed to cache breaking TTS after article put:', ttsError);
+      if (previousBreakingAudioUrl && !article.breakingTts) {
+        await deleteStoredBreakingAudio(previousBreakingAudioUrl).catch(() => undefined);
       }
 
       await recordArticleActivity({
@@ -1531,49 +1850,63 @@ export async function PUT(
       input.previousSlugs = Array.from(previousSlugs).filter((item) => item && item !== resolvedSlug);
     }
 
-    const revision = buildRevisionSnapshot(current as Record<string, unknown>);
-    const article = await Article.findByIdAndUpdate(
-      id,
-      {
-        $set: { ...input, updatedAt: new Date() },
-        $push: { revisions: { $each: [revision], $slice: -30 } },
-      },
-      { new: true, runValidators: true }
+    const currentVersion = resolveArticleVersion(current.version);
+    if (expectedVersion !== null && expectedVersion !== currentVersion) {
+      return articleVersionConflictResponse({
+        currentVersion,
+        updatedAt: current.updatedAt,
+      });
+    }
+
+    const previousBreakingAudioUrl = resolveBreakingAudioUrl(
+      current as Record<string, unknown>
     );
+    const nextBreakingTts = resolveNextBreakingTts(
+      current as Record<string, unknown>,
+      input as unknown as Record<string, unknown>
+    );
+    const revision = buildRevisionSnapshot(current as Record<string, unknown>);
+    const initializesLegacyVersion = !hasPersistedArticleVersion(current.version);
+    const mongoUpdate = {
+      $set: {
+        ...input,
+        breakingTts: nextBreakingTts,
+        updatedAt: new Date(),
+        ...(initializesLegacyVersion ? { version: currentVersion + 1 } : {}),
+      },
+      ...(!initializesLegacyVersion ? { $inc: { version: 1 } } : {}),
+      $push: { revisions: { $each: [revision], $slice: -30 } },
+    };
+    const article =
+      expectedVersion !== null
+        ? await Article.findOneAndUpdate(
+            { _id: id, ...buildArticleVersionMatch(expectedVersion) },
+            mongoUpdate,
+            { new: true, runValidators: true }
+          )
+        : await Article.findByIdAndUpdate(id, mongoUpdate, {
+            new: true,
+            runValidators: true,
+          });
 
     if (!article) {
+      if (expectedVersion !== null) {
+        const latest = (await Article.findById(id).lean()) as LeanArticleRecord | null;
+        if (latest) {
+          return articleVersionConflictResponse({
+            currentVersion: resolveArticleVersion(latest.version),
+            updatedAt: latest.updatedAt,
+          });
+        }
+      }
       return NextResponse.json(
         { success: false, error: 'Article not found' },
         { status: 404 }
       );
     }
 
-    try {
-      if (!article.isBreaking) {
-        const previousAudioUrl =
-          article.breakingTts && typeof article.breakingTts.audioUrl === 'string'
-            ? article.breakingTts.audioUrl
-            : '';
-        if (previousAudioUrl) {
-          await deleteStoredBreakingAudio(previousAudioUrl).catch(() => undefined);
-        }
-        article.breakingTts = null;
-        await article.save();
-      } else {
-        const breakingTts = await ensureBreakingTtsForArticle(article.toObject());
-        if (breakingTts) {
-          article.breakingTts = {
-            ...breakingTts,
-            generatedAt: new Date(breakingTts.generatedAt),
-          };
-          await article.save();
-        } else if (article.breakingTts) {
-          article.breakingTts = null;
-          await article.save();
-        }
-      }
-    } catch (ttsError) {
-      console.error('Failed to cache breaking TTS after article put:', ttsError);
+    if (previousBreakingAudioUrl && !nextBreakingTts) {
+      await deleteStoredBreakingAudio(previousBreakingAudioUrl).catch(() => undefined);
     }
 
     await recordArticleActivity({
@@ -1607,6 +1940,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
+    const requestedExpectedVersion = parseExpectedVersion(
+      req.nextUrl.searchParams.get('expectedVersion')
+    );
 
     const user = await getAdminSessionFromReq(req);
     if (!user) {
@@ -1707,7 +2043,28 @@ export async function DELETE(
           { status: 404 }
         );
       }
-      const deleted = await deleteStoredArticle(id);
+      const currentVersion = resolveArticleVersion(existing.version);
+      if (
+        requestedExpectedVersion !== null &&
+        requestedExpectedVersion !== currentVersion
+      ) {
+        return articleVersionConflictResponse({
+          currentVersion,
+          updatedAt: existing.updatedAt,
+        });
+      }
+      let deleted;
+      try {
+        deleted = await deleteStoredArticle(id, { expectedVersion: currentVersion });
+      } catch (deleteError) {
+        if (isArticleVersionConflictError(deleteError)) {
+          return articleVersionConflictResponse({
+            currentVersion: deleteError.currentVersion,
+            updatedAt: existing.updatedAt,
+          });
+        }
+        throw deleteError;
+      }
       if (!deleted) {
         return NextResponse.json(
           { success: false, error: 'Article not found' },
@@ -1737,7 +2094,28 @@ export async function DELETE(
       );
     }
 
-    const article = await Article.findByIdAndDelete(id).lean();
+    const current = (await Article.findById(id).lean()) as LeanArticleRecord | null;
+    if (!current) {
+      return NextResponse.json(
+        { success: false, error: 'Article not found' },
+        { status: 404 }
+      );
+    }
+    const currentVersion = resolveArticleVersion(current.version);
+    if (
+      requestedExpectedVersion !== null &&
+      requestedExpectedVersion !== currentVersion
+    ) {
+      return articleVersionConflictResponse({
+        currentVersion,
+        updatedAt: current.updatedAt,
+      });
+    }
+
+    const article = await Article.findOneAndDelete({
+      _id: id,
+      ...buildArticleVersionMatch(currentVersion),
+    }).lean();
     if (article) {
       const deletedArticle =
         typeof article === 'object' && article && !Array.isArray(article)
@@ -1767,6 +2145,14 @@ export async function DELETE(
       return NextResponse.json({
         success: true,
         message: 'Article deleted successfully',
+      });
+    }
+
+    const latest = (await Article.findById(id).lean()) as LeanArticleRecord | null;
+    if (latest) {
+      return articleVersionConflictResponse({
+        currentVersion: resolveArticleVersion(latest.version),
+        updatedAt: latest.updatedAt,
       });
     }
 

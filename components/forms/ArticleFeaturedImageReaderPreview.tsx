@@ -1,6 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
+import { useState } from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 
 type ArticleFeaturedImageReaderPreviewProps = {
@@ -11,7 +12,18 @@ type ArticleFeaturedImageReaderPreviewProps = {
   credit?: string;
   alt?: string;
   category?: string;
+  focalPointX?: number;
+  focalPointY?: number;
 };
+
+type PreviewMode = 'desktop' | 'mobile' | 'google' | 'social';
+
+const PREVIEW_MODES: Array<{ id: PreviewMode; label: string }> = [
+  { id: 'desktop', label: 'Desktop' },
+  { id: 'mobile', label: 'Mobile' },
+  { id: 'google', label: 'Google News' },
+  { id: 'social', label: 'Social' },
+];
 
 const HINDI_IMAGE_PREVIEW_FONT_STYLE = {
   fontFamily:
@@ -30,7 +42,10 @@ export default function ArticleFeaturedImageReaderPreview({
   credit = '',
   alt = '',
   category = '',
+  focalPointX = 50,
+  focalPointY = 50,
 }: ArticleFeaturedImageReaderPreviewProps) {
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
   const displayTitle = title.trim() || 'Untitled article';
   const displayCaption = caption.trim() || summary.trim();
   const displayCredit = credit.trim();
@@ -39,6 +54,13 @@ export default function ArticleFeaturedImageReaderPreview({
   const isHindiPreview = hasDevanagariText(
     `${displayTitle} ${displayCaption} ${displayCredit}`
   );
+  const imageRatioClass =
+    previewMode === 'desktop'
+      ? 'aspect-video'
+      : previewMode === 'social'
+        ? 'aspect-square'
+        : 'aspect-[4/3]';
+  const previewWidthClass = previewMode === 'mobile' ? 'mx-auto max-w-[260px]' : 'w-full';
 
   return (
     <div
@@ -57,38 +79,53 @@ export default function ArticleFeaturedImageReaderPreview({
             {displayCategory}
           </span>
           <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-            Reader image preview
+            Packaging preview
           </span>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4" role="tablist" aria-label="Article image packaging previews">
+          {PREVIEW_MODES.map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              role="tab"
+              aria-selected={previewMode === mode.id}
+              onClick={() => setPreviewMode(mode.id)}
+              className={`min-h-9 rounded-md border px-2 py-1.5 text-[11px] font-semibold ${
+                previewMode === mode.id
+                  ? 'border-spanish-red bg-red-50 text-spanish-red'
+                  : 'border-zinc-200 bg-white text-zinc-600'
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={alt.trim() || displayTitle}
-          className="aspect-[16/9] w-full bg-zinc-950 object-contain"
-        />
-      ) : (
-        <div className="flex aspect-[16/9] items-center justify-center bg-zinc-100 text-zinc-500">
-          <div className="text-center">
-            <ImageIcon className="mx-auto h-6 w-6" />
-            <p className="mt-2 text-xs font-semibold">Image appears here</p>
+      <div className="bg-zinc-100 p-3" role="tabpanel" aria-label={`${PREVIEW_MODES.find((mode) => mode.id === previewMode)?.label} preview`}>
+        <div className={`overflow-hidden rounded-md bg-white ${previewWidthClass}`}>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={alt.trim() || displayTitle}
+              className={`${imageRatioClass} w-full bg-zinc-950 object-cover`}
+              style={{ objectPosition: `${focalPointX}% ${focalPointY}%` }}
+            />
+          ) : (
+            <div className={`flex ${imageRatioClass} items-center justify-center bg-zinc-100 text-zinc-500`}>
+              <div className="text-center">
+                <ImageIcon className="mx-auto h-6 w-6" />
+                <p className="mt-2 text-xs font-semibold">Image appears here</p>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2 px-3 py-3">
+            <p className="line-clamp-2 text-sm font-bold leading-5 text-zinc-950">{displayTitle}</p>
+            {displayCaption ? <p className="line-clamp-3 text-xs leading-5 text-zinc-600">{displayCaption}</p> : null}
+            {displayCredit ? <p className="text-[11px] font-semibold text-zinc-500">{displayCredit}</p> : null}
           </div>
         </div>
-      )}
-
-      <div className="space-y-2 px-3 py-3">
-        <p className="line-clamp-2 text-sm font-bold leading-5 text-zinc-950">
-          {displayTitle}
-        </p>
-        {displayCaption ? (
-          <p className="line-clamp-3 text-xs leading-5 text-zinc-600">
-            {displayCaption}
-          </p>
-        ) : null}
-        {displayCredit ? (
-          <p className="text-[11px] font-semibold text-zinc-500">{displayCredit}</p>
-        ) : null}
       </div>
     </div>
   );

@@ -40,6 +40,47 @@ function getArticleLocation(article: unknown) {
     : '';
 }
 
+function parseExpectedVersion(value: unknown) {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function hasPersistedVersion(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function resolveArticleVersion(value: unknown) {
+  return hasPersistedVersion(value) ? value : 1;
+}
+
+function buildVersionMatch(expectedVersion: number) {
+  return expectedVersion === 1
+    ? { $or: [{ version: 1 }, { version: { $exists: false } }] }
+    : { version: expectedVersion };
+}
+
+function serializeDate(value: unknown) {
+  return value instanceof Date
+    ? value.toISOString()
+    : typeof value === 'string'
+      ? value
+      : new Date().toISOString();
+}
+
+function versionConflictResponse(currentVersion: number, updatedAt?: unknown) {
+  return NextResponse.json(
+    {
+      success: false,
+      code: 'ARTICLE_VERSION_CONFLICT',
+      error:
+        'The article changed after this breaking audio upload started. Review the latest headline and location, then upload the matching audio again.',
+      currentVersion,
+      updatedAt: updatedAt ? serializeDate(updatedAt) : null,
+    },
+    { status: 409 }
+  );
+}
+
 async function loadEditableBreakingArticle(
   admin: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>,
   articleId: string
@@ -52,7 +93,7 @@ async function loadEditableBreakingArticle(
   }
 
   const article = await Article.findById(articleId).select(
-    '_id title author workflow reporterMeta isBreaking breakingTts updatedAt publishedAt'
+    '_id version title author workflow reporterMeta isBreaking breakingTts updatedAt publishedAt'
   );
   if (!article) {
     return {
@@ -105,6 +146,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const articleId = String(body.articleId || '').trim();
     const mediaKey = String(body.mediaKey || '').trim();
+    const expectedVersion = parseExpectedVersion(body.expectedVersion);
     if (!articleId) {
       return NextResponse.json(
         { success: false, error: 'articleId is required for breaking audio uploads.' },
@@ -117,6 +159,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (expectedVersion === null) {
+      return NextResponse.json(
+        { success: false, error: 'A valid expectedVersion is required for breaking audio uploads.' },
+        { status: 400 }
+      );
+    }
 
     const articleResult = await loadEditableBreakingArticle(admin, articleId);
     if (!articleResult.ok) {
@@ -124,6 +172,10 @@ export async function POST(req: NextRequest) {
     }
 
     const article = articleResult.article;
+    const currentVersion = resolveArticleVersion(article.version);
+    if (expectedVersion !== currentVersion) {
+      return versionConflictResponse(currentVersion, article.updatedAt);
+    }
     const articleObject =
       typeof article.toObject === 'function' ? article.toObject() : article;
     const script = buildBreakingTtsRecordingScript(articleObject);
@@ -144,21 +196,6 @@ export async function POST(req: NextRequest) {
       expectedFileName: typeof body.expectedFileName === 'string' ? body.expectedFileName.trim() : '',
     });
 
-    const ttsAsset = await saveManualTtsAsset({
-      sourceType: 'article',
-      sourceId: String(article._id),
-      variant: 'breaking_headline',
-      title: String(article.title || ''),
-      text: script,
-      audioUrl: asset.mediaUrl,
-      mimeType: asset.mediaMimeType,
-      mediaKey: asset.mediaKey,
-      actor: admin,
-      metadata: {
-        source: 'admin-manual-breaking-audio-upload',
-      },
-    });
-
     const breakingTts = await saveBreakingTtsMetadata({
       title: String(article.title || ''),
       city: getArticleLocation(articleObject),
@@ -166,12 +203,67 @@ export async function POST(req: NextRequest) {
       mimeType: asset.mediaMimeType,
     });
 
-    article.breakingTts = {
+    const storedBreakingTts = {
       ...breakingTts,
       generatedAt: new Date(breakingTts.generatedAt),
     };
-    article.updatedAt = new Date();
-    await article.save();
+    const updatedAt = new Date();
+    const initializesLegacyVersion = !hasPersistedVersion(article.version);
+    const updatedArticle = await Article.findOneAndUpdate(
+      {
+        _id: articleId,
+        isBreaking: true,
+        ...buildVersionMatch(expectedVersion),
+      },
+      {
+        $set: {
+          breakingTts: storedBreakingTts,
+          updatedAt,
+          ...(initializesLegacyVersion ? { version: currentVersion + 1 } : {}),
+        },
+        ...(!initializesLegacyVersion ? { $inc: { version: 1 } } : {}),
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedArticle) {
+      const latest = (await Article.findById(articleId)
+        .select('version updatedAt')
+        .lean()) as { version?: unknown; updatedAt?: unknown } | null;
+      if (latest) {
+        return versionConflictResponse(
+          resolveArticleVersion(latest.version),
+          latest.updatedAt
+        );
+      }
+      return NextResponse.json(
+        { success: false, error: 'Article not found' },
+        { status: 404 }
+      );
+    }
+
+    let ttsAsset: Awaited<ReturnType<typeof saveManualTtsAsset>> | null = null;
+    try {
+      ttsAsset = await saveManualTtsAsset({
+        sourceType: 'article',
+        sourceId: String(article._id),
+        variant: 'breaking_headline',
+        title: String(article.title || ''),
+        text: script,
+        audioUrl: asset.mediaUrl,
+        mimeType: asset.mediaMimeType,
+        mediaKey: asset.mediaKey,
+        actor: admin,
+        metadata: {
+          source: 'admin-manual-breaking-audio-upload',
+        },
+      });
+    } catch (assetError) {
+      console.error('Breaking audio attached, but managed TTS indexing failed:', assetError);
+    }
+
+    const nextVersion = resolveArticleVersion(updatedArticle.version);
+    const nextUpdatedAt = serializeDate(updatedArticle.updatedAt || updatedAt);
 
     return NextResponse.json({
       success: true,
@@ -181,6 +273,8 @@ export async function POST(req: NextRequest) {
         ttsAsset: serializeManagedTtsAsset(ttsAsset),
         breakingTts,
         script,
+        version: nextVersion,
+        updatedAt: nextUpdatedAt,
       },
     });
   } catch (error) {

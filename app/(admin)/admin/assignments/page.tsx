@@ -148,6 +148,7 @@ export default async function AssignmentsPage() {
                     role={admin.role}
                     contentType={item.contentType}
                     contentId={item.id}
+                    version={item.version}
                     status={item.status}
                     editHref={item.editHref}
                     assignedToName={item.assignedToName}

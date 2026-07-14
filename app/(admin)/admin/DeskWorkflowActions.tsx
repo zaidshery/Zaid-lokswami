@@ -31,6 +31,7 @@ type DeskWorkflowActionsProps = {
   role: AdminRole;
   contentType: SupportedDeskContentType;
   contentId: string;
+  version?: number;
   status: WorkflowStatus | string;
   editHref: string;
   hasAssignment?: boolean;
@@ -87,6 +88,7 @@ export default function DeskWorkflowActions({
   role,
   contentType,
   contentId,
+  version,
   status,
   editHref,
   hasAssignment,
@@ -104,6 +106,9 @@ export default function DeskWorkflowActions({
   const [priority, setPriority] = useState<WorkflowPriority>('normal');
   const [scheduledFor, setScheduledFor] = useState('');
   const [reason, setReason] = useState('');
+  const [articleVersion, setArticleVersion] = useState(
+    typeof version === 'number' && version > 0 ? version : 1
+  );
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(
     null
   );
@@ -186,6 +191,7 @@ export default function DeskWorkflowActions({
         },
         body: JSON.stringify({
           action,
+          ...(contentType === 'article' ? { expectedVersion: articleVersion } : {}),
           ...extra,
         }),
       });
@@ -194,10 +200,19 @@ export default function DeskWorkflowActions({
         success?: boolean;
         error?: string;
         message?: string;
+        data?: { version?: number };
       };
 
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || `Failed to ${action.replace(/_/g, ' ')}.`);
+      }
+
+      if (
+        contentType === 'article' &&
+        typeof payload.data?.version === 'number' &&
+        payload.data.version > 0
+      ) {
+        setArticleVersion(payload.data.version);
       }
 
       if (action === 'assign') {

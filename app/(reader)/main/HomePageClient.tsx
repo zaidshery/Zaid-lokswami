@@ -1000,7 +1000,8 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
                 supportLabel={desktopHeroEpaperSupport}
                 ariaLabel={desktopHeroEpaperAriaLabel}
                 primaryCtaLabel={desktopHeroEpaperPrimaryCta}
-                shareLabel="WhatsApp"
+                shareLabel={language === 'hi' ? '\u0936\u0947\u092f\u0930' : 'Share'}
+                language={language}
               />
             </div>
           </aside>

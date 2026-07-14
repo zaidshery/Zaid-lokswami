@@ -5,12 +5,13 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAppStore } from '@/lib/store/appStore';
 import { NEWS_CATEGORIES, getNewsCategoryHref } from '@/lib/constants/newsCategories';
+import { READER_NAVIGATION, isReaderNavigationActive } from '@/lib/constants/readerNavigation';
 
 const primaryLinks = [
-  { name: '\u0939\u094b\u092e', nameEn: 'Home', href: '/main' },
-  { name: '\u0908-\u092a\u0947\u092a\u0930', nameEn: 'E-Paper', href: '/main/epaper' },
-  { name: '\u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928', nameEn: 'E-Magazine', href: '/main/e-magazine' },
-  { name: '\u0921\u093f\u091c\u093f\u091f\u0932 \u0928\u094d\u092f\u0942\u091c\u0930\u0942\u092e', nameEn: 'Digital Newsroom', href: '/main/digital-newsroom' },
+  READER_NAVIGATION.home,
+  READER_NAVIGATION.epaper,
+  READER_NAVIGATION.emagazine,
+  READER_NAVIGATION.digitalNewsroom,
 ];
 
 const categoryLinks = NEWS_CATEGORIES.map((category) => ({
@@ -20,7 +21,8 @@ const categoryLinks = NEWS_CATEGORIES.map((category) => ({
 }));
 
 const utilityLinks = [
-  { name: '\u0938\u0902\u092a\u0930\u094d\u0915', nameEn: 'Contact', href: '/main/contact' },
+  READER_NAVIGATION.search,
+  READER_NAVIGATION.contact,
 ];
 
 const mainLinks = [...primaryLinks, ...categoryLinks, ...utilityLinks];
@@ -36,12 +38,13 @@ export default function DesktopNav({ className = '' }: DesktopNavProps) {
   return (
     <nav className={`flex items-center gap-0 whitespace-nowrap sm:gap-1 md:gap-1.5 ${className}`}>
       {mainLinks.map((link) => {
-        const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+        const isActive = isReaderNavigationActive(pathname, link.href);
 
         return (
           <Link
             key={link.href}
             href={link.href}
+            aria-current={isActive ? 'page' : undefined}
             className={`cnp-motion reader-touch-link reader-focus-ring group relative inline-flex min-h-10 items-center rounded-md px-2.5 py-2 text-[12px] font-semibold sm:px-3 sm:text-sm md:min-h-11 md:px-3.5 md:py-2.5 md:text-[15px] ${
               isActive
                 ? 'text-red-600 dark:text-red-400'

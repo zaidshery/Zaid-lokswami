@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongoose';
 import User from '@/lib/models/User';
 import Article from '@/lib/models/Article';
+import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
 
 type SessionIdentity = {
   userId: string;
@@ -25,6 +26,7 @@ type LeanSavedArticle = {
   publishedAt?: Date | string;
   isBreaking?: boolean;
   isTrending?: boolean;
+  editorial?: unknown;
 };
 
 function getSessionIdentity() {
@@ -74,6 +76,7 @@ function normalizePublishedAt(value: unknown) {
 }
 
 function toSavedArticleDTO(article: LeanSavedArticle) {
+  const activeFlags = resolveArticleEditorialFlags(article);
   return {
     id: article._id.toString(),
     title: String(article.title || '').trim(),
@@ -82,8 +85,8 @@ function toSavedArticleDTO(article: LeanSavedArticle) {
     category: String(article.category || '').trim(),
     author: String(article.author || '').trim(),
     publishedAt: normalizePublishedAt(article.publishedAt),
-    isBreaking: Boolean(article.isBreaking),
-    isTrending: Boolean(article.isTrending),
+    isBreaking: activeFlags.isBreaking,
+    isTrending: activeFlags.isTrending,
   };
 }
 
@@ -126,7 +129,7 @@ export async function GET() {
       _id: { $in: savedArticleIds.map((id) => new Types.ObjectId(id)) },
     })
       .select(
-        '_id title summary image category author publishedAt isBreaking isTrending'
+        '_id title summary image category author publishedAt isBreaking isTrending editorial'
       )
       .lean<LeanSavedArticle[]>();
 

@@ -15,6 +15,20 @@ import {
   type ArticleSourceType,
 } from '@/lib/content/newsroomPublishing';
 import {
+  createEmptyArticleEditorialMeta,
+  normalizeArticleEditorialMeta,
+  type ArticleEditorialMeta,
+} from '@/lib/content/articleEditorial';
+import {
+  createEmptyArticleMediaMetadata,
+  normalizeArticleMediaMetadata,
+  type ArticleMediaMetadata,
+} from '@/lib/content/articleMediaMetadata';
+import {
+  normalizeArticleDocument,
+  type ArticleDocument,
+} from '@/lib/content/articleDocument';
+import {
   createWorkflowMeta,
   isWorkflowCommentKind,
   isWorkflowPriority,
@@ -39,14 +53,19 @@ export interface StoredArticleRevision {
   title: string;
   summary: string;
   content: string;
+  contentJson: ArticleDocument;
   image: string;
   category: string;
   author: string;
+  slug: string;
+  previousSlugs: string[];
   isBreaking: boolean;
   isTrending: boolean;
   seo: ArticleSeo;
   reporterMeta: ReporterMeta;
   copyEditorMeta: CopyEditorMeta;
+  editorial: ArticleEditorialMeta;
+  media: ArticleMediaMetadata;
   savedAt: string;
 }
 
@@ -76,9 +95,11 @@ export interface StoredWorkflowMeta {
 
 export interface StoredArticle {
   _id: string;
+  version: number;
   title: string;
   summary: string;
   content: string;
+  contentJson: ArticleDocument;
   image: string;
   category: string;
   author: string;
@@ -95,6 +116,8 @@ export interface StoredArticle {
   workflow: StoredWorkflowMeta;
   reporterMeta: ReporterMeta;
   copyEditorMeta: CopyEditorMeta;
+  editorial: ArticleEditorialMeta;
+  media: ArticleMediaMetadata;
   sourceType: ArticleSourceType;
   sourceStoryId: string;
   sourceStoryTitle: string;
@@ -104,6 +127,7 @@ export interface CreateArticleInput {
   title: string;
   summary: string;
   content: string;
+  contentJson?: ArticleDocument;
   image: string;
   category: string;
   author: string;
@@ -115,6 +139,8 @@ export interface CreateArticleInput {
   workflow?: Partial<StoredWorkflowMeta>;
   reporterMeta?: Partial<ReporterMeta>;
   copyEditorMeta?: Partial<CopyEditorMeta>;
+  editorial?: Partial<ArticleEditorialMeta>;
+  media?: Partial<ArticleMediaMetadata>;
   sourceType?: ArticleSourceType;
   sourceStoryId?: string;
   sourceStoryTitle?: string;
@@ -130,7 +156,35 @@ type UpdateArticleInput = Partial<CreateArticleInput> & {
   workflow?: Partial<StoredWorkflowMeta>;
   reporterMeta?: Partial<ReporterMeta>;
   copyEditorMeta?: Partial<CopyEditorMeta>;
+  editorial?: Partial<ArticleEditorialMeta>;
+  media?: Partial<ArticleMediaMetadata>;
 };
+
+type UpdateStoredArticleOptions = {
+  skipRevision?: boolean;
+  skipVersion?: boolean;
+  expectedVersion?: number;
+};
+
+type DeleteStoredArticleOptions = {
+  expectedVersion?: number;
+};
+
+export class ArticleVersionConflictError extends Error {
+  readonly currentVersion: number;
+
+  constructor(currentVersion: number) {
+    super('This article was updated in another session.');
+    this.name = 'ArticleVersionConflictError';
+    this.currentVersion = currentVersion;
+  }
+}
+
+export function isArticleVersionConflictError(
+  error: unknown
+): error is ArticleVersionConflictError {
+  return error instanceof ArticleVersionConflictError;
+}
 
 const dataDir = path.resolve(process.cwd(), 'data');
 const dataPath = path.join(dataDir, 'articles.json');
@@ -139,6 +193,16 @@ const USE_REMOTE_DEMO_MEDIA =
   process.env.NEXT_PUBLIC_USE_REMOTE_DEMO_MEDIA === 'true';
 const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
 const LOCAL_NEWS_FALLBACK_IMAGE = '/placeholders/news-16x9.svg';
+let articleMutationQueue: Promise<void> = Promise.resolve();
+
+function runArticleMutation<T>(mutation: () => Promise<T>) {
+  const result = articleMutationQueue.then(mutation);
+  articleMutationQueue = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
+}
 
 function createId() {
   return typeof crypto.randomUUID === 'function'
@@ -285,14 +349,19 @@ function normalizeRevision(input: unknown): StoredArticleRevision | null {
     title,
     summary,
     content,
+    contentJson: normalizeArticleDocument(source.contentJson, content),
     image,
     category,
     author,
+    slug: normalizeArticleSlug(typeof source.slug === 'string' ? source.slug : ''),
+    previousSlugs: normalizeSlugList(source.previousSlugs),
     isBreaking: Boolean(source.isBreaking),
     isTrending: Boolean(source.isTrending),
     seo: withSeoOgFallback(normalizeSeo(source.seo), image),
     reporterMeta: normalizeReporterMeta(source.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(source.copyEditorMeta),
+    editorial: normalizeArticleEditorialMeta(source.editorial),
+    media: normalizeArticleMediaMetadata(source.media),
     savedAt:
       typeof source.savedAt === 'string' && source.savedAt.trim()
         ? source.savedAt
@@ -304,10 +373,14 @@ function normalizeStoredArticle(input: unknown): StoredArticle | null {
   const source = typeof input === 'object' && input ? (input as Record<string, unknown>) : null;
   if (!source) return null;
 
+  const workflow = normalizeWorkflowMeta(source.workflow);
   const title = typeof source.title === 'string' ? source.title : '';
   const summary = typeof source.summary === 'string' ? source.summary : '';
   const content = typeof source.content === 'string' ? source.content : '';
-  const image = normalizeMediaUrl(source.image);
+  const image = normalizeMediaUrl(
+    source.image,
+    workflow.status === 'draft' ? '' : LOCAL_NEWS_FALLBACK_IMAGE
+  );
   const category = typeof source.category === 'string' ? source.category : '';
   const author = typeof source.author === 'string' ? source.author : '';
   const slug = normalizeArticleSlug(
@@ -315,7 +388,10 @@ function normalizeStoredArticle(input: unknown): StoredArticle | null {
   );
   const previousSlugs = normalizeSlugList(source.previousSlugs).filter((item) => item !== slug);
 
-  if (!title || !summary || !content || !image || !category || !author) {
+  if (
+    workflow.status !== 'draft' &&
+    (!title || !summary || !content || !image || !category || !author)
+  ) {
     return null;
   }
 
@@ -331,9 +407,14 @@ function normalizeStoredArticle(input: unknown): StoredArticle | null {
 
   return {
     _id: typeof source._id === 'string' && source._id.trim() ? source._id : createId(),
+    version:
+      typeof source.version === 'number' && Number.isInteger(source.version) && source.version > 0
+        ? source.version
+        : 1,
     title,
     summary,
     content,
+    contentJson: normalizeArticleDocument(source.contentJson, content),
     image,
     category,
     author,
@@ -353,9 +434,11 @@ function normalizeStoredArticle(input: unknown): StoredArticle | null {
     seo: withSeoOgFallback(normalizeSeo(source.seo), image),
     revisions,
     breakingTts: normalizeBreakingTtsMetadata(source.breakingTts),
-    workflow: normalizeWorkflowMeta(source.workflow),
+    workflow,
     reporterMeta: normalizeReporterMeta(source.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(source.copyEditorMeta),
+    editorial: normalizeArticleEditorialMeta(source.editorial),
+    media: normalizeArticleMediaMetadata(source.media),
     sourceType: normalizeArticleSourceType(source.sourceType),
     sourceStoryId:
       typeof source.sourceStoryId === 'string' ? source.sourceStoryId.trim() : '',
@@ -372,14 +455,19 @@ function createRevisionSnapshot(article: StoredArticle): StoredArticleRevision {
     title: article.title,
     summary: article.summary,
     content: article.content,
+    contentJson: article.contentJson,
     image: article.image,
     category: article.category,
     author: article.author,
+    slug: article.slug,
+    previousSlugs: article.previousSlugs,
     isBreaking: article.isBreaking,
     isTrending: article.isTrending,
     seo: article.seo || emptySeo(),
     reporterMeta: article.reporterMeta || createEmptyReporterMeta(),
     copyEditorMeta: article.copyEditorMeta || createEmptyCopyEditorMeta(),
+    editorial: article.editorial || createEmptyArticleEditorialMeta(),
+    media: article.media || createEmptyArticleMediaMetadata(),
     savedAt: new Date().toISOString(),
   };
 }
@@ -469,16 +557,21 @@ export async function listStoredArticleRevisions(id: string) {
   );
 }
 
-export async function createStoredArticle(input: CreateArticleInput) {
+async function createStoredArticleUnlocked(input: CreateArticleInput) {
   const now = new Date().toISOString();
   const all = await readAllArticles();
 
   const article: StoredArticle = {
     _id: createId(),
+    version: 1,
     title: input.title,
     summary: input.summary,
     content: input.content,
-    image: normalizeMediaUrl(input.image),
+    contentJson: normalizeArticleDocument(input.contentJson, input.content),
+    image: normalizeMediaUrl(
+      input.image,
+      input.workflow?.status === 'draft' ? '' : LOCAL_NEWS_FALLBACK_IMAGE
+    ),
     category: input.category,
     author: input.author,
     slug: normalizeArticleSlug(input.slug || input.title),
@@ -488,12 +581,20 @@ export async function createStoredArticle(input: CreateArticleInput) {
     views: 0,
     publishedAt: now,
     updatedAt: now,
-    seo: withSeoOgFallback(normalizeSeo(input.seo), normalizeMediaUrl(input.image)),
+    seo: withSeoOgFallback(
+      normalizeSeo(input.seo),
+      normalizeMediaUrl(
+        input.image,
+        input.workflow?.status === 'draft' ? '' : LOCAL_NEWS_FALLBACK_IMAGE
+      )
+    ),
     revisions: [],
     breakingTts: null,
     workflow: normalizeWorkflowMeta(input.workflow),
     reporterMeta: normalizeReporterMeta(input.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(input.copyEditorMeta),
+    editorial: normalizeArticleEditorialMeta(input.editorial),
+    media: normalizeArticleMediaMetadata(input.media),
     sourceType: normalizeArticleSourceType(input.sourceType),
     sourceStoryId:
       typeof input.sourceStoryId === 'string' ? input.sourceStoryId.trim() : '',
@@ -508,18 +609,26 @@ export async function createStoredArticle(input: CreateArticleInput) {
   return article;
 }
 
-export async function updateStoredArticle(
+export function createStoredArticle(input: CreateArticleInput) {
+  return runArticleMutation(() => createStoredArticleUnlocked(input));
+}
+
+async function updateStoredArticleUnlocked(
   id: string,
   updates: UpdateArticleInput,
-  options?: {
-    skipRevision?: boolean;
-  }
+  options?: UpdateStoredArticleOptions
 ) {
   const all = await readAllArticles();
   const index = all.findIndex((item) => item._id === id);
   if (index === -1) return null;
 
   const current = all[index];
+  if (
+    options?.expectedVersion !== undefined &&
+    current.version !== options.expectedVersion
+  ) {
+    throw new ArticleVersionConflictError(current.version);
+  }
   const nextSeo =
     updates.seo !== undefined
       ? normalizeSeo({ ...current.seo, ...updates.seo })
@@ -527,13 +636,21 @@ export async function updateStoredArticle(
 
   const nextImage =
     updates.image !== undefined
-      ? normalizeMediaUrl(updates.image)
+      ? normalizeMediaUrl(
+          updates.image,
+          current.workflow.status === 'draft' ? '' : LOCAL_NEWS_FALLBACK_IMAGE
+        )
       : current.image;
 
   const next: StoredArticle = {
     ...current,
     ...updates,
+    version: options?.skipVersion ? current.version : current.version + 1,
     image: nextImage,
+    contentJson:
+      updates.contentJson !== undefined || updates.content !== undefined
+        ? normalizeArticleDocument(updates.contentJson, String(updates.content ?? current.content))
+        : current.contentJson,
     slug:
       updates.slug !== undefined
         ? normalizeArticleSlug(updates.slug)
@@ -563,6 +680,21 @@ export async function updateStoredArticle(
             ...updates.copyEditorMeta,
           })
         : current.copyEditorMeta,
+    editorial:
+      updates.editorial !== undefined
+        ? normalizeArticleEditorialMeta({ ...current.editorial, ...updates.editorial })
+        : current.editorial,
+    media:
+      updates.media !== undefined
+        ? normalizeArticleMediaMetadata({
+            ...current.media,
+            ...updates.media,
+            variants: {
+              ...current.media.variants,
+              ...(updates.media.variants || {}),
+            },
+          })
+        : current.media,
     sourceType:
       updates.sourceType !== undefined
         ? normalizeArticleSourceType(updates.sourceType)
@@ -581,6 +713,7 @@ export async function updateStoredArticle(
     current.title !== next.title ||
     current.summary !== next.summary ||
     current.content !== next.content ||
+    JSON.stringify(current.contentJson) !== JSON.stringify(next.contentJson) ||
     current.image !== next.image ||
     current.category !== next.category ||
     current.author !== next.author ||
@@ -610,7 +743,9 @@ export async function updateStoredArticle(
     current.copyEditorMeta.imageOptimizationStatus !== next.copyEditorMeta.imageOptimizationStatus ||
     current.copyEditorMeta.copyEditorNotes !== next.copyEditorMeta.copyEditorNotes ||
     current.copyEditorMeta.returnForChangesReason !==
-      next.copyEditorMeta.returnForChangesReason;
+      next.copyEditorMeta.returnForChangesReason ||
+    JSON.stringify(current.editorial) !== JSON.stringify(next.editorial) ||
+    JSON.stringify(current.media) !== JSON.stringify(next.media);
 
   if (hasContentChange && !options?.skipRevision) {
     const snapshot = createRevisionSnapshot(current);
@@ -624,7 +759,15 @@ export async function updateStoredArticle(
   return next;
 }
 
-export async function restoreStoredArticleRevision(
+export function updateStoredArticle(
+  id: string,
+  updates: UpdateArticleInput,
+  options?: UpdateStoredArticleOptions
+) {
+  return runArticleMutation(() => updateStoredArticleUnlocked(id, updates, options));
+}
+
+async function restoreStoredArticleRevisionUnlocked(
   id: string,
   revisionId: string
 ) {
@@ -637,19 +780,42 @@ export async function restoreStoredArticleRevision(
   if (!revision) return null;
 
   const snapshot = createRevisionSnapshot(current);
+  const revisionSlug = normalizeArticleSlug(revision.slug);
+  const slugConflict =
+    Boolean(revisionSlug && revisionSlug !== current.slug) &&
+    all.some(
+      (item, itemIndex) =>
+        itemIndex !== index &&
+        (item.slug === revisionSlug || item.previousSlugs.includes(revisionSlug))
+    );
+  const restoredSlug = revisionSlug && !slugConflict ? revisionSlug : current.slug;
+  const restoredPreviousSlugs = new Set(current.previousSlugs);
+  if (revisionSlug && !slugConflict) {
+    revision.previousSlugs.forEach((slug) => restoredPreviousSlugs.add(slug));
+    if (current.slug && current.slug !== restoredSlug) {
+      restoredPreviousSlugs.add(current.slug);
+    }
+  }
+  restoredPreviousSlugs.delete(restoredSlug);
   const restored: StoredArticle = {
     ...current,
+    version: current.version + 1,
     title: revision.title,
     summary: revision.summary,
     content: revision.content,
+    contentJson: normalizeArticleDocument(revision.contentJson, revision.content),
     image: revision.image,
     category: revision.category,
     author: revision.author,
+    slug: restoredSlug,
+    previousSlugs: Array.from(restoredPreviousSlugs),
     isBreaking: revision.isBreaking,
     isTrending: revision.isTrending,
     seo: normalizeSeo(revision.seo),
     reporterMeta: normalizeReporterMeta(revision.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(revision.copyEditorMeta),
+    editorial: normalizeArticleEditorialMeta(revision.editorial),
+    media: normalizeArticleMediaMetadata(revision.media),
     updatedAt: new Date().toISOString(),
     revisions: [...current.revisions, snapshot].slice(-MAX_STORED_REVISIONS),
   };
@@ -659,12 +825,33 @@ export async function restoreStoredArticleRevision(
   return restored;
 }
 
-export async function deleteStoredArticle(id: string) {
+export function restoreStoredArticleRevision(id: string, revisionId: string) {
+  return runArticleMutation(() =>
+    restoreStoredArticleRevisionUnlocked(id, revisionId)
+  );
+}
+
+async function deleteStoredArticleUnlocked(
+  id: string,
+  options?: DeleteStoredArticleOptions
+) {
   const all = await readAllArticles();
   const index = all.findIndex((item) => item._id === id);
   if (index === -1) return false;
 
+  const current = all[index];
+  if (
+    options?.expectedVersion !== undefined &&
+    current.version !== options.expectedVersion
+  ) {
+    throw new ArticleVersionConflictError(current.version);
+  }
+
   all.splice(index, 1);
   await writeAllArticles(all);
   return true;
+}
+
+export function deleteStoredArticle(id: string, options?: DeleteStoredArticleOptions) {
+  return runArticleMutation(() => deleteStoredArticleUnlocked(id, options));
 }

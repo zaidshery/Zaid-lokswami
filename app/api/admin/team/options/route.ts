@@ -59,7 +59,11 @@ export async function GET(req: NextRequest) {
           }
 
           return Boolean(member.id && member.email);
-        }),
+        })
+        .map((member) => ({
+          ...member,
+          profileUrl: `/main/author/${encodeURIComponent(member.id)}`,
+        })),
     });
   } catch (error) {
     console.error('Team options GET failed:', error);

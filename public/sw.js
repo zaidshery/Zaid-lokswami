@@ -1,6 +1,7 @@
 const CACHE_NAME = 'lokswami-app-shell-v7';
 const RUNTIME_CACHE_NAME = 'lokswami-runtime-v2';
 const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v2';
+const LEGACY_EPAPER_OFFLINE_CACHE_NAMES = ['lokswami-epaper-offline-v1'];
 const APP_SHELL_URLS = [
   '/main/epaper',
   '/manifest.webmanifest',
@@ -54,20 +55,34 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
+    caches.keys()
+      .then(async (keys) => {
+        const durableOfflineCache = await caches.open(EPAPER_OFFLINE_CACHE_NAME);
+        for (const legacyName of LEGACY_EPAPER_OFFLINE_CACHE_NAMES) {
+          if (!keys.includes(legacyName)) continue;
+          const legacyCache = await caches.open(legacyName);
+          const legacyRequests = await legacyCache.keys();
+          await settleAll(
+            legacyRequests.map(async (request) => {
+              const response = await legacyCache.match(request);
+              if (response) await durableOfflineCache.put(request, response);
+            })
+          );
+          await caches.delete(legacyName);
+        }
+
+        await Promise.all(
           keys
             .filter(
               (key) =>
                 key !== CACHE_NAME &&
                 key !== RUNTIME_CACHE_NAME &&
-                key !== EPAPER_OFFLINE_CACHE_NAME
+                key !== EPAPER_OFFLINE_CACHE_NAME &&
+                !LEGACY_EPAPER_OFFLINE_CACHE_NAMES.includes(key)
             )
             .map((key) => caches.delete(key))
-        )
-      )
+        );
+      })
       .then(async () => {
         if ('navigationPreload' in self.registration) {
           await self.registration.navigationPreload.enable().catch(() => undefined);

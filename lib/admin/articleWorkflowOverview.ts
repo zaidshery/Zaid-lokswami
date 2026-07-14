@@ -40,6 +40,7 @@ export type ReviewQueueAssignmentFilter = 'assigned' | 'unassigned';
 
 type ArticleSource = {
   _id?: unknown;
+  version?: unknown;
   title?: string;
   category?: string;
   author?: string;
@@ -97,6 +98,7 @@ type EPaperSource = {
 type DeskItem = {
   contentType: WorkflowContentKey;
   id: string;
+  version?: number;
   title: string;
   category: string;
   author: string;
@@ -239,6 +241,10 @@ function buildArticleItem(source: ArticleSource): DeskItem | null {
   return {
     contentType: 'article',
     id,
+    version:
+      typeof source.version === 'number' && Number.isInteger(source.version) && source.version > 0
+        ? source.version
+        : 1,
     title,
     category: String(source.category || 'General').trim() || 'General',
     author: String(source.author || 'Desk').trim() || 'Desk',
@@ -434,7 +440,7 @@ async function loadArticles(): Promise<ArticleSource[]> {
   try {
     await connectDB();
     return (await Article.find({})
-      .select('_id title category author updatedAt publishedAt workflow reporterMeta copyEditorMeta')
+      .select('_id version title category author updatedAt publishedAt workflow reporterMeta copyEditorMeta')
       .sort({ updatedAt: -1, publishedAt: -1, _id: -1 })
       .lean()) as ArticleSource[];
   } catch (error) {

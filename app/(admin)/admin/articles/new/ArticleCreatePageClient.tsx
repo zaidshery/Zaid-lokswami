@@ -1,7 +1,6 @@
 'use client';
-/* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -13,26 +12,29 @@ import {
   Loader2,
   Search,
   Upload,
-  Volume2,
-  X,
   AlertCircle,
   CheckCircle,
-  CircleDot,
   Image as ImageIcon,
-  Sparkles,
+  Cloud,
+  CloudOff,
+  Save,
 } from 'lucide-react';
-import ArticleEditorStudio, {
-  ArticleEditorSidebar,
-  type ArticleEditorStudioMode,
-} from '@/components/forms/ArticleEditorStudio';
-import ArticleFeaturedImageReaderPreview from '@/components/forms/ArticleFeaturedImageReaderPreview';
+import type { ArticleEditorStudioMode } from '@/components/forms/ArticleEditorStudio';
 import ArticleWorkbenchAssistant, {
   getArticleAssistPatchKey,
 } from '@/components/forms/ArticleWorkbenchAssistant';
+import ArticleTranslationReview from '@/components/forms/ArticleTranslationReview';
+import ArticleDraftRecoveryNotice from '@/components/forms/ArticleDraftRecoveryNotice';
+import ArticleDraftModule from '@/components/forms/article-create/ArticleDraftModule';
+import ArticleSeoModule from '@/components/forms/article-create/ArticleSeoModule';
+import ArticleReadinessModule from '@/components/forms/article-create/ArticleReadinessModule';
+import ArticleComposeModule from '@/components/forms/article-create/ArticleComposeModule';
+import ArticleMediaModule from '@/components/forms/article-create/ArticleMediaModule';
+import ArticlePublishModule from '@/components/forms/article-create/ArticlePublishModule';
+import useArticleServerDraft from '@/components/forms/useArticleServerDraft';
 import {
   CmsEditorCanvas,
   CmsEditorColumns,
-  CmsEditorMain,
   CmsEditorSidebar,
 } from '@/components/admin/CmsEditorLayout';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -40,7 +42,6 @@ import { getAuthHeader } from '@/lib/auth/clientToken';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
 import {
-  ARTICLE_IMAGE_UPLOAD_GUIDE,
   getArticleImageHints,
   prepareArticleImageFile,
 } from '@/lib/utils/articleImageUpload';
@@ -64,12 +65,29 @@ import {
   type ArticleAssistField,
   type ArticleAssistPatch,
   type ArticleAssistResult,
+  type ArticleAssistSuggestion,
   type ArticleReadinessItem,
 } from '@/lib/utils/articleAssistant';
+import type { WorkflowPriority } from '@/lib/workflow/types';
+import {
+  createEmptyArticleEditorialMeta,
+  type ArticleEditorialMeta,
+} from '@/lib/content/articleEditorial';
+import {
+  createEmptyArticleMediaMetadata,
+  type ArticleMediaMetadata,
+} from '@/lib/content/articleMediaMetadata';
+import { migrateArticleHtmlToDocument } from '@/lib/content/articleDocument';
+import {
+  getOrCreateArticleDraftEditorSessionId,
+  isCurrentArticleDraftEditorSession,
+} from '@/lib/content/articleDraftRecovery';
 
 const DEFAULT_CATEGORIES = NEWS_CATEGORIES.map((category) => category.nameEn);
-const DRAFT_STORAGE_KEY = 'lokswami:article-draft:new';
-const AUTOSAVE_INTERVAL_MS = 15000;
+const LEGACY_DRAFT_STORAGE_KEY = 'lokswami:article-draft:new';
+const DRAFT_STORAGE_PREFIX = 'lokswami:article-draft:v2';
+const SERVER_AUTOSAVE_DEBOUNCE_MS = 4000;
+const LOCAL_AUTOSAVE_DEBOUNCE_MS = 1000;
 const ARTICLE_AUDIO_ACCEPT = '.mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4';
 const ARTICLE_AUDIO_MAX_BYTES = 50 * 1024 * 1024;
 const ARTICLE_AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a']);
@@ -107,6 +125,23 @@ type ArticleFormState = {
   authorProfileUrl: string;
   includeInNewsSitemap: boolean;
   majorUpdateNote: string;
+  editorial: ArticleEditorialMeta;
+  media: ArticleMediaMetadata;
+};
+
+type CreateArticleLocalDraft = {
+  savedAt?: string;
+  editorSessionId?: string;
+  formData?: Partial<ArticleFormState>;
+  imagePreview?: string;
+  contentMode?: ArticleEditorStudioMode;
+  focusMode?: boolean;
+  serverDraftId?: string;
+  serverDraftVersion?: number;
+  serverDraftSavedAt?: string;
+  articleAudioStored?: boolean;
+  breakingAudioStored?: boolean;
+  recoveryStorageKey?: string;
 };
 
 type RelatedArticleSuggestion = {
@@ -114,6 +149,26 @@ type RelatedArticleSuggestion = {
   slug?: string;
   title: string;
   category?: string;
+};
+
+type ArticleInspectorTab = 'media' | 'seo' | 'publish' | 'quality';
+type ArticleCreateWorkflowIntent = 'submit' | 'publish' | 'schedule';
+
+type AssignableTeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  profileUrl?: string;
+};
+
+type MediaLibraryItem = {
+  _id: string;
+  filename: string;
+  url: string;
+  size?: number;
+  type?: string;
 };
 
 type SourceStoryRecord = {
@@ -158,6 +213,8 @@ const EMPTY_FORM: ArticleFormState = {
   authorProfileUrl: '',
   includeInNewsSitemap: true,
   majorUpdateNote: '',
+  editorial: createEmptyArticleEditorialMeta(),
+  media: createEmptyArticleMediaMetadata(),
 };
 
 function formatDraftTimestamp(value: string) {
@@ -215,32 +272,6 @@ function validateArticleAudioFile(file: File | null, label = 'Article') {
   return '';
 }
 
-function getReadinessStatusClass(status: ArticleReadinessItem['status']) {
-  switch (status) {
-    case 'done':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-100';
-    case 'blocked':
-      return 'border-red-200 bg-red-50 text-red-900 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100';
-    case 'warning':
-      return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/30 dark:bg-amber-400/10 dark:text-amber-100';
-    default:
-      return 'border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-300';
-  }
-}
-
-function getReadinessIcon(item: ArticleReadinessItem) {
-  if (item.status === 'done') {
-    return <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-200" />;
-  }
-  if (item.status === 'blocked') {
-    return <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-200" />;
-  }
-  if (item.status === 'warning') {
-    return <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-200" />;
-  }
-  return <CircleDot className="h-4 w-4 text-gray-400 dark:text-gray-300" />;
-}
-
 function createArticleAudioPreviewUrl(file: File) {
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
     return '';
@@ -255,37 +286,179 @@ function resolveCreatedArticleId(payload: unknown) {
   return String(source._id || source.id || '').trim();
 }
 
+function resolveCreatedArticleVersion(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return 1;
+  const rawVersion = Number((payload as Record<string, unknown>).version);
+  return Number.isInteger(rawVersion) && rawVersion > 0 ? rawVersion : 1;
+}
+
+function buildArticleMutationPayload(
+  formData: ArticleFormState,
+  imageUrl: string,
+  sourceStoryId: string,
+  mediaOverride?: ArticleMediaMetadata
+) {
+  const persistedImage = imageUrl.startsWith('data:') ? '' : imageUrl;
+  return {
+    title: formData.title,
+    slug: formData.seoSlug,
+    summary: formData.summary,
+    content: formData.content,
+    contentJson: migrateArticleHtmlToDocument(formData.content),
+    category: formData.category,
+    author: formData.author,
+    reporterMeta: {
+      locationTag: formData.locationTag,
+      sourceInfo: formData.sourceInfo,
+      sourceConfidential: formData.sourceConfidential,
+      reporterNotes: formData.reporterNotes,
+    },
+    isBreaking: formData.isBreaking,
+    isTrending: formData.isTrending,
+    editorial: formData.editorial,
+    media: mediaOverride || formData.media,
+    image: persistedImage,
+    seo: {
+      metaTitle: formData.seoTitle,
+      metaDescription: formData.seoDescription,
+      ogImage:
+        formData.ogImage.trim() ||
+        (persistedImage ? resolveArticleOgImageUrl({ image: persistedImage }) : ''),
+      canonicalUrl: formData.canonicalUrl,
+      focusKeyword: formData.focusKeyword,
+      secondaryKeywords: formData.secondaryKeywords,
+      featuredImageAlt: formData.featuredImageAlt,
+      featuredImageCaption: formData.featuredImageCaption,
+      imageCredit: formData.imageCredit,
+      authorProfileUrl: formData.authorProfileUrl,
+      includeInNewsSitemap: formData.includeInNewsSitemap,
+      majorUpdateNote: formData.majorUpdateNote,
+    },
+    ...(sourceStoryId ? { sourceStoryId } : {}),
+  };
+}
+
+async function uploadArticleImageFile(
+  file: File,
+  focalPoint: { x: number; y: number }
+) {
+  const uploadPayload = new FormData();
+  uploadPayload.append('file', file);
+  uploadPayload.append('purpose', 'image');
+  uploadPayload.append('optimizeArticleImage', 'true');
+  uploadPayload.append('focalPointX', String(focalPoint.x));
+  uploadPayload.append('focalPointY', String(focalPoint.y));
+  const response = await fetch('/api/admin/upload', {
+    method: 'POST',
+    headers: { ...getAuthHeader() },
+    body: uploadPayload,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || 'Failed to upload image');
+  }
+  const url = String(data?.data?.url || '').trim();
+  if (!url) throw new Error('Image upload completed without a URL.');
+  let sourceMediaId = '';
+  try {
+    const registerResponse = await fetch('/api/admin/media', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify({
+        filename: data?.data?.filename || file.name,
+        url,
+        size: data?.data?.size || file.size,
+        type: data?.data?.type || 'image/webp',
+      }),
+    });
+    const registered = await registerResponse.json().catch(() => ({}));
+    if (registerResponse.ok) sourceMediaId = String(registered?.data?._id || '');
+  } catch {
+    // Article upload remains valid even when the optional library index is unavailable.
+  }
+  return {
+    url,
+    sourceMediaId,
+    width: Number(data?.data?.width || 0),
+    height: Number(data?.data?.height || 0),
+    format: String(data?.data?.format || data?.data?.type || '').replace(/^image\//, ''),
+    variants: {
+      ...createEmptyArticleMediaMetadata().variants,
+      ...(data?.data?.variants || {}),
+    },
+  };
+}
+
 export default function UploadArticle() {
   const router = useRouter();
+  const redirectTimerRef = useRef<number | null>(null);
+  const articleFormRef = useRef<HTMLFormElement | null>(null);
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
+  const scheduleRedirect = useCallback(
+    (href: string, delayMs: number) => {
+      if (redirectTimerRef.current !== null) {
+        window.clearTimeout(redirectTimerRef.current);
+      }
+      redirectTimerRef.current = window.setTimeout(() => {
+        redirectTimerRef.current = null;
+        router.push(href);
+      }, delayMs);
+    },
+    [router]
+  );
+
+  useEffect(
+    () => () => {
+      if (redirectTimerRef.current !== null) {
+        window.clearTimeout(redirectTimerRef.current);
+      }
+    },
+    []
+  );
   const [formData, setFormData] = useState<ArticleFormState>(EMPTY_FORM);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState('');
+  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryItem[]>([]);
+  const [mediaSearch, setMediaSearch] = useState('');
+  const [isMediaLibraryLoading, setIsMediaLibraryLoading] = useState(false);
+  const [mediaLibraryLoaded, setMediaLibraryLoaded] = useState(false);
+  const [mediaLibraryError, setMediaLibraryError] = useState('');
   const [articleAudioFile, setArticleAudioFile] = useState<File | null>(null);
   const [articleAudioPreviewUrl, setArticleAudioPreviewUrl] = useState('');
+  const [articleAudioStored, setArticleAudioStored] = useState(false);
   const [articleAudioValidationError, setArticleAudioValidationError] = useState('');
   const [isUploadingArticleAudio, setIsUploadingArticleAudio] = useState(false);
   const [breakingAudioFile, setBreakingAudioFile] = useState<File | null>(null);
   const [breakingAudioPreviewUrl, setBreakingAudioPreviewUrl] = useState('');
+  const [breakingAudioStored, setBreakingAudioStored] = useState(false);
   const [breakingAudioValidationError, setBreakingAudioValidationError] = useState('');
   const [isUploadingBreakingAudio, setIsUploadingBreakingAudio] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-  const [showCreateCategory, setShowCreateCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategorySlug, setNewCategorySlug] = useState('');
-  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
-  const [createCategoryError, setCreateCategoryError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [contentMode, setContentMode] = useState<ArticleEditorStudioMode>('write');
+  const [inspectorTab, setInspectorTab] = useState<ArticleInspectorTab>('quality');
+  const [workflowIntent, setWorkflowIntent] = useState<ArticleCreateWorkflowIntent>('submit');
+  const [workflowPriority, setWorkflowPriority] = useState<WorkflowPriority>('normal');
+  const [workflowDueAt, setWorkflowDueAt] = useState('');
+  const [workflowScheduledFor, setWorkflowScheduledFor] = useState('');
+  const [workflowAssigneeId, setWorkflowAssigneeId] = useState('');
+  const [teamOptions, setTeamOptions] = useState<AssignableTeamMember[]>([]);
+  const [teamOptionsError, setTeamOptionsError] = useState('');
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState('');
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
+  const [pendingDraftRecovery, setPendingDraftRecovery] = useState<CreateArticleLocalDraft | null>(null);
+  const [draftEditorSessionId, setDraftEditorSessionId] = useState('');
+  const [lastServerSavedSignature, setLastServerSavedSignature] = useState('');
   const [imageQualityNote, setImageQualityNote] = useState('');
   const [sourceStory, setSourceStory] = useState<SourceStoryRecord | null>(null);
   const [isLoadingSourceStory, setIsLoadingSourceStory] = useState(false);
@@ -296,20 +469,75 @@ export default function UploadArticle() {
   const [assistResult, setAssistResult] = useState<ArticleAssistResult | null>(null);
   const [assistError, setAssistError] = useState('');
   const [isAssistLoading, setIsAssistLoading] = useState(false);
+  const [isTrendingSignalLoading, setIsTrendingSignalLoading] = useState(false);
+  const [trendingSignalStatus, setTrendingSignalStatus] = useState('');
   const [rejectedAssistPatchKeys, setRejectedAssistPatchKeys] = useState<Set<string>>(
     () => new Set()
   );
 
   const sourceStoryId = searchParams.get('sourceStoryId')?.trim() || '';
+  const localDraftStorageKey = useMemo(() => {
+    const owner = String(session?.user?.email || 'anonymous')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9@._-]+/g, '-');
+    const source = sourceStoryId || 'direct';
+    return `${DRAFT_STORAGE_PREFIX}:${owner}:${source}`;
+  }, [session?.user?.email, sourceStoryId]);
+  const draftRecoveryBlocking = !draftReady || Boolean(pendingDraftRecovery);
+
+  useEffect(() => {
+    setDraftEditorSessionId(getOrCreateArticleDraftEditorSessionId(localDraftStorageKey));
+  }, [localDraftStorageKey]);
   const canPublishImmediately =
     session?.user?.role === 'admin' || session?.user?.role === 'super_admin';
   const canCreateCategories =
     session?.user?.role === 'admin' || session?.user?.role === 'super_admin';
-  const submitLabel = canPublishImmediately ? 'Publish Article' : 'Submit Article';
-  const submitVerb = canPublishImmediately ? 'Publishing' : 'Submitting';
-  const successMessage = canPublishImmediately
-    ? 'Article published successfully! Redirecting...'
-    : 'Article submitted for review! Redirecting...';
+  const authorOptions = useMemo(() => {
+    const sessionUserId = String((session?.user as { id?: string } | undefined)?.id || '').trim();
+    const options = [
+      ...(session?.user?.name
+        ? [
+            {
+              id: sessionUserId || session.user.email || session.user.name,
+              name: session.user.name,
+              email: session.user.email || '',
+              role: session.user.role || 'staff',
+              isActive: true,
+              profileUrl: sessionUserId
+                ? `/main/author/${encodeURIComponent(sessionUserId)}`
+                : '',
+            },
+          ]
+        : []),
+      ...teamOptions,
+    ];
+    const seen = new Set<string>();
+    return options.filter((member) => {
+      const key = member.name.trim().toLowerCase();
+      if (!key || seen.has(key) || !member.isActive) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [session?.user, teamOptions]);
+  const submitLabel =
+    workflowIntent === 'publish'
+      ? 'Publish Article'
+      : workflowIntent === 'schedule'
+        ? 'Schedule Article'
+        : 'Submit for Review';
+  const submitVerb =
+    workflowIntent === 'publish'
+      ? 'Publishing'
+      : workflowIntent === 'schedule'
+        ? 'Scheduling'
+        : 'Submitting';
+  const successMessage =
+    workflowIntent === 'publish'
+      ? 'Article published successfully! Redirecting...'
+      : workflowIntent === 'schedule'
+        ? 'Article scheduled successfully! Redirecting...'
+        : 'Article submitted for review! Redirecting...';
   const submitBusy = isLoading || isLoadingImage || isUploadingArticleAudio || isUploadingBreakingAudio;
   const submitBusyLabel = isUploadingBreakingAudio
     ? 'Uploading breaking audio...'
@@ -343,12 +571,37 @@ export default function UploadArticle() {
     isBreaking: formData.isBreaking,
     isTrending: formData.isTrending,
     language: 'hi' as const,
-    breakingAudioReady: !formData.isBreaking || Boolean(breakingAudioFile),
-    requireBreakingAudio: canPublishImmediately && formData.isBreaking,
-    listenAudioReady: Boolean(articleAudioFile),
+    breakingAudioReady:
+      !formData.isBreaking || Boolean(breakingAudioFile) || breakingAudioStored,
+    requireBreakingAudio: workflowIntent === 'publish' && formData.isBreaking,
+    listenAudioReady: Boolean(articleAudioFile) || articleAudioStored,
     sourceInfo: formData.sourceInfo,
     sourceStoryId,
-  }), [articleAudioFile, breakingAudioFile, canPublishImmediately, formData, imagePreview, sourceStoryId]);
+    locationTag: formData.locationTag,
+    editorial: {
+      ...formData.editorial,
+      flagApprovedBy:
+        formData.isBreaking || formData.isTrending
+          ? session?.user?.name || session?.user?.email || 'current staff user'
+          : '',
+    },
+    relatedArticles: relatedArticles.map((article) => ({
+      title: article.title,
+      slug: article.slug,
+    })),
+  }), [
+    articleAudioFile,
+    articleAudioStored,
+    breakingAudioFile,
+    breakingAudioStored,
+    formData,
+    imagePreview,
+    relatedArticles,
+    session?.user?.email,
+    session?.user?.name,
+    sourceStoryId,
+    workflowIntent,
+  ]);
 
   const liveAssistResult = useMemo(
     () => buildArticleAssistResult(buildAssistPayload()),
@@ -358,6 +611,150 @@ export default function UploadArticle() {
     () => summarizeArticleReadiness(liveAssistResult.readiness),
     [liveAssistResult]
   );
+
+  const serverDraftPayload = useMemo(
+    () => buildArticleMutationPayload(formData, imagePreview, sourceStoryId),
+    [formData, imagePreview, sourceStoryId]
+  );
+  const serverDraftPayloadSignature = useMemo(
+    () => JSON.stringify(serverDraftPayload),
+    [serverDraftPayload]
+  );
+  const hasMeaningfulDraftContent = useMemo(
+    () =>
+      Boolean(
+        formData.title.trim() ||
+          formData.summary.trim() ||
+          stripArticleHtml(formData.content).trim() ||
+          formData.locationTag.trim() ||
+          formData.sourceInfo.trim() ||
+          formData.reporterNotes.trim() ||
+          formData.editorial.sourceAttribution.trim() ||
+          formData.editorial.quoteAttribution.trim() ||
+          formData.editorial.correctionNote.trim() ||
+          imagePreview.trim() ||
+          imageFile ||
+          articleAudioFile ||
+          breakingAudioFile
+      ),
+    [articleAudioFile, breakingAudioFile, formData, imageFile, imagePreview]
+  );
+  const {
+    draftId,
+    draftVersion,
+    savedAt: serverDraftSavedAt,
+    status: serverDraftStatus,
+    message: serverDraftMessage,
+    saveNow: saveServerDraft,
+    adoptDraft,
+    resetDraft: resetServerDraft,
+  } = useArticleServerDraft({
+    enabled: draftReady && Boolean(session?.user),
+    hasMeaningfulContent: hasMeaningfulDraftContent,
+    payload: serverDraftPayload,
+    debounceMs: SERVER_AUTOSAVE_DEBOUNCE_MS,
+    onSaved: (record) => {
+      setLastServerSavedSignature(record.payloadSignature || serverDraftPayloadSignature);
+      setDraftSavedAt(record.updatedAt);
+    },
+  });
+  const draftStatusLabel =
+    serverDraftStatus === 'saving'
+      ? 'Saving...'
+      : serverDraftStatus === 'saved'
+        ? 'Saved'
+        : serverDraftStatus === 'offline'
+          ? 'Offline - local copy kept'
+          : serverDraftStatus === 'conflict'
+            ? 'Conflict detected'
+            : serverDraftStatus === 'error'
+              ? 'Save failed - local copy kept'
+              : draftId
+                ? 'Server draft ready'
+                : 'Not saved yet';
+
+  useEffect(() => {
+    setWorkflowIntent(canPublishImmediately ? 'publish' : 'submit');
+  }, [canPublishImmediately]);
+
+  useEffect(() => {
+    if (inspectorTab !== 'media' || mediaLibraryLoaded) {
+      return;
+    }
+    let active = true;
+    setIsMediaLibraryLoading(true);
+    setMediaLibraryError('');
+    void fetch('/api/admin/media', {
+      cache: 'no-store',
+      headers: { ...getAuthHeader() },
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.success === false) {
+          throw new Error(payload?.error || 'Failed to load the media library.');
+        }
+        if (!active) return;
+        setMediaLibrary(
+          (Array.isArray(payload?.data) ? payload.data : []).filter(
+            (item: MediaLibraryItem) => !item.type || item.type.startsWith('image/')
+          )
+        );
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setMediaLibraryError(
+            loadError instanceof Error ? loadError.message : 'Failed to load the media library.'
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsMediaLibraryLoading(false);
+          setMediaLibraryLoaded(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [inspectorTab, mediaLibraryLoaded]);
+
+  const filteredMediaLibrary = useMemo(() => {
+    const query = mediaSearch.trim().toLowerCase();
+    if (!query) return mediaLibrary.slice(0, 18);
+    return mediaLibrary
+      .filter((item) => item.filename.toLowerCase().includes(query))
+      .slice(0, 18);
+  }, [mediaLibrary, mediaSearch]);
+
+  useEffect(() => {
+    if (!canPublishImmediately) {
+      setTeamOptions([]);
+      setWorkflowAssigneeId('');
+      return;
+    }
+    let active = true;
+    setTeamOptionsError('');
+    void fetch('/api/admin/team/options', {
+      cache: 'no-store',
+      headers: { ...getAuthHeader() },
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.success === false) {
+          throw new Error(payload?.error || 'Failed to load newsroom staff.');
+        }
+        if (active) setTeamOptions(Array.isArray(payload?.data) ? payload.data : []);
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        setTeamOptionsError(
+          loadError instanceof Error ? loadError.message : 'Failed to load newsroom staff.'
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [canPublishImmediately]);
 
   const breakingRecordingScript = useMemo(
     () =>
@@ -371,11 +768,18 @@ export default function UploadArticle() {
 
   const persistDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
+    if (
+      lastServerSavedSignature &&
+      lastServerSavedSignature === serverDraftPayloadSignature
+    ) {
+      localStorage.removeItem(localDraftStorageKey);
+      localStorage.removeItem(LEGACY_DRAFT_STORAGE_KEY);
+      return;
+    }
     const hasAnyContent = Boolean(
       formData.title.trim() ||
       formData.summary.trim() ||
         formData.content.trim() ||
-        formData.author.trim() ||
         formData.locationTag.trim() ||
         formData.sourceInfo.trim() ||
         formData.reporterNotes.trim() ||
@@ -397,82 +801,329 @@ export default function UploadArticle() {
     if (!hasAnyContent) return;
 
     const payload = {
-      version: 1,
+      version: 2,
       savedAt: new Date().toISOString(),
+      editorSessionId: draftEditorSessionId,
+      serverDraftId: draftId,
+      serverDraftVersion: draftVersion,
+      serverDraftSavedAt,
+      articleAudioStored,
+      breakingAudioStored,
       formData,
       imagePreview: imagePreview.startsWith('data:') ? '' : imagePreview,
       contentMode,
       focusMode: isFocusMode,
     };
 
-    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(localDraftStorageKey, JSON.stringify(payload));
     setDraftSavedAt(payload.savedAt);
-  }, [formData, imagePreview, contentMode, isFocusMode]);
+  }, [
+    contentMode,
+    articleAudioStored,
+    breakingAudioStored,
+    draftId,
+    draftEditorSessionId,
+    draftVersion,
+    formData,
+    imagePreview,
+    isFocusMode,
+    localDraftStorageKey,
+    lastServerSavedSignature,
+    serverDraftPayloadSignature,
+    serverDraftSavedAt,
+  ]);
 
-  const clearDraft = useCallback(() => {
+  const clearDraft = useCallback((resetServer = false) => {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    localStorage.removeItem(localDraftStorageKey);
+    localStorage.removeItem(LEGACY_DRAFT_STORAGE_KEY);
     setDraftSavedAt('');
     setDraftRestored(false);
-  }, []);
+    if (resetServer) resetServerDraft();
+  }, [localDraftStorageKey, resetServerDraft]);
+
+  const applyLocalDraft = useCallback((parsed: CreateArticleLocalDraft) => {
+    setFormData((current) => ({
+      ...current,
+      ...parsed.formData,
+      editorial: {
+        ...current.editorial,
+        ...(parsed.formData?.editorial || {}),
+      },
+      media: {
+        ...current.media,
+        ...(parsed.formData?.media || {}),
+        variants: {
+          ...current.media.variants,
+          ...(parsed.formData?.media?.variants || {}),
+        },
+      },
+    }));
+    if (typeof parsed.imagePreview === 'string' && parsed.imagePreview.trim()) {
+      setImagePreview(parsed.imagePreview);
+    }
+    if (
+      parsed.contentMode === 'write' ||
+      parsed.contentMode === 'split' ||
+      parsed.contentMode === 'preview'
+    ) {
+      setContentMode(parsed.contentMode);
+    }
+    if (typeof parsed.focusMode === 'boolean') {
+      setIsFocusMode(parsed.focusMode);
+    }
+    if (typeof parsed.savedAt === 'string') {
+      setDraftSavedAt(parsed.savedAt);
+    }
+    if (typeof parsed.serverDraftId === 'string' && parsed.serverDraftId.trim()) {
+      adoptDraft({
+        id: parsed.serverDraftId.trim(),
+        version:
+          typeof parsed.serverDraftVersion === 'number' && parsed.serverDraftVersion > 0
+            ? parsed.serverDraftVersion
+            : 1,
+        updatedAt:
+          typeof parsed.serverDraftSavedAt === 'string' && parsed.serverDraftSavedAt
+            ? parsed.serverDraftSavedAt
+            : parsed.savedAt || new Date().toISOString(),
+      });
+    }
+    setArticleAudioStored(Boolean(parsed.articleAudioStored));
+    setBreakingAudioStored(Boolean(parsed.breakingAudioStored));
+    setDraftRestored(true);
+  }, [adoptDraft]);
+
+  const restorePendingDraft = useCallback(() => {
+    if (!pendingDraftRecovery) return;
+    applyLocalDraft(pendingDraftRecovery);
+    if (
+      pendingDraftRecovery.recoveryStorageKey &&
+      pendingDraftRecovery.recoveryStorageKey !== localDraftStorageKey
+    ) {
+      localStorage.removeItem(pendingDraftRecovery.recoveryStorageKey);
+    }
+    setPendingDraftRecovery(null);
+    setDraftReady(true);
+  }, [applyLocalDraft, localDraftStorageKey, pendingDraftRecovery]);
+
+  const discardPendingDraft = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (pendingDraftRecovery?.recoveryStorageKey) {
+      localStorage.removeItem(pendingDraftRecovery.recoveryStorageKey);
+    }
+    localStorage.removeItem(LEGACY_DRAFT_STORAGE_KEY);
+    setPendingDraftRecovery(null);
+    setDraftRestored(false);
+    setDraftSavedAt('');
+    setDraftReady(true);
+  }, [pendingDraftRecovery]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (
+      typeof window === 'undefined' ||
+      sessionStatus === 'loading' ||
+      !draftEditorSessionId
+    ) return;
+    setDraftReady(false);
+    setPendingDraftRecovery(null);
     try {
-      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      const currentRaw = localStorage.getItem(localDraftStorageKey);
+      const recoveryStorageKey = currentRaw
+        ? localDraftStorageKey
+        : LEGACY_DRAFT_STORAGE_KEY;
+      const raw = currentRaw || localStorage.getItem(LEGACY_DRAFT_STORAGE_KEY);
       if (!raw) {
         setDraftReady(true);
         return;
       }
 
-      const parsed = JSON.parse(raw) as {
-        savedAt?: string;
-        formData?: Partial<typeof formData>;
-        imagePreview?: string;
-        contentMode?: ArticleEditorStudioMode;
-        focusMode?: boolean;
-      };
+      const parsed = JSON.parse(raw) as CreateArticleLocalDraft;
 
       if (!parsed.formData) {
         setDraftReady(true);
         return;
       }
 
-      const shouldRestore = window.confirm(
-        'Unsaved draft found. Do you want to restore it?'
-      );
-      if (shouldRestore) {
-        setFormData((current) => ({ ...current, ...parsed.formData }));
-        if (typeof parsed.imagePreview === 'string' && parsed.imagePreview.trim()) {
-          setImagePreview(parsed.imagePreview);
+      const candidate = { ...parsed, recoveryStorageKey };
+      if (isCurrentArticleDraftEditorSession(parsed.editorSessionId, draftEditorSessionId)) {
+        applyLocalDraft(candidate);
+        if (recoveryStorageKey !== localDraftStorageKey) {
+          localStorage.removeItem(recoveryStorageKey);
         }
-        if (
-          parsed.contentMode === 'write' ||
-          parsed.contentMode === 'split' ||
-          parsed.contentMode === 'preview'
-        ) {
-          setContentMode(parsed.contentMode);
-        }
-        if (typeof parsed.focusMode === 'boolean') {
-          setIsFocusMode(parsed.focusMode);
-        }
-        if (typeof parsed.savedAt === 'string') {
-          setDraftSavedAt(parsed.savedAt);
-        }
-        setDraftRestored(true);
+        setDraftReady(true);
+        return;
       }
+
+      setPendingDraftRecovery(candidate);
     } catch {
       // Ignore invalid draft payloads.
-    } finally {
       setDraftReady(true);
     }
-  }, []);
+  }, [
+    applyLocalDraft,
+    draftEditorSessionId,
+    localDraftStorageKey,
+    sessionStatus,
+  ]);
 
   useEffect(() => {
     if (!draftReady || typeof window === 'undefined') return;
-    const id = window.setInterval(persistDraft, AUTOSAVE_INTERVAL_MS);
-    return () => window.clearInterval(id);
+    const id = window.setTimeout(persistDraft, LOCAL_AUTOSAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
   }, [draftReady, persistDraft]);
+
+  useEffect(() => {
+    const form = articleFormRef.current;
+    if (!form) return;
+    form.toggleAttribute('inert', draftRecoveryBlocking);
+    return () => form.removeAttribute('inert');
+  }, [draftRecoveryBlocking]);
+
+  useEffect(() => {
+    if (!serverDraftSavedAt) return;
+    setDraftSavedAt(serverDraftSavedAt);
+  }, [serverDraftSavedAt]);
+
+  useEffect(() => {
+    const handleKeyboardSave = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      if (draftRecoveryBlocking) return;
+      persistDraft();
+      void saveServerDraft();
+    };
+    window.addEventListener('keydown', handleKeyboardSave);
+    return () => window.removeEventListener('keydown', handleKeyboardSave);
+  }, [draftRecoveryBlocking, persistDraft, saveServerDraft]);
+
+  useEffect(() => {
+    if (!draftId || !imageFile) return;
+    let active = true;
+    const fileToUpload = imageFile;
+    setIsLoadingImage(true);
+    void uploadArticleImageFile(fileToUpload, {
+      x: formData.media.focalPointX,
+      y: formData.media.focalPointY,
+    })
+      .then((uploaded) => {
+        if (!active) return;
+        setImagePreview(uploaded.url);
+        setImageFile((current) => (current === fileToUpload ? null : current));
+        setFormData((current) => ({
+          ...current,
+          media: {
+            ...current.media,
+            sourceMediaId: uploaded.sourceMediaId || current.media.sourceMediaId,
+            width: uploaded.width || current.media.width,
+            height: uploaded.height || current.media.height,
+            format: uploaded.format || current.media.format,
+            variants: uploaded.variants,
+          },
+        }));
+        setImageQualityNote('Featured image uploaded and attached to the server draft.');
+      })
+      .catch((uploadError: unknown) => {
+        if (!active) return;
+        setError(
+          uploadError instanceof Error
+            ? uploadError.message
+            : 'Failed to upload the draft image.'
+        );
+      })
+      .finally(() => {
+        if (active) setIsLoadingImage(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [draftId, formData.media.focalPointX, formData.media.focalPointY, imageFile]);
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      !draftId ||
+      !articleAudioFile ||
+      Boolean(validateArticleAudioFile(articleAudioFile))
+    ) {
+      return;
+    }
+    let active = true;
+    const fileToUpload = articleAudioFile;
+    setIsUploadingArticleAudio(true);
+    void uploadArticleTtsAudioDirect({
+      articleId: draftId,
+      file: fileToUpload,
+      authHeaders: getAuthHeader(),
+    })
+      .then(() => {
+        if (!active) return;
+        setArticleAudioStored(true);
+        setArticleAudioFile((current) => (current === fileToUpload ? null : current));
+        setArticleAudioPreviewUrl('');
+        setArticleAudioValidationError('');
+      })
+      .catch((uploadError: unknown) => {
+        if (!active) return;
+        setArticleAudioValidationError(
+          uploadError instanceof Error
+            ? `Draft audio upload failed: ${uploadError.message}`
+            : 'Draft audio upload failed.'
+        );
+      })
+      .finally(() => {
+        if (active) setIsUploadingArticleAudio(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [articleAudioFile, draftId, isLoading]);
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      !draftId ||
+      !formData.isBreaking ||
+      !breakingAudioFile ||
+      Boolean(validateArticleAudioFile(breakingAudioFile, 'Breaking'))
+    ) {
+      return;
+    }
+    let active = true;
+    const fileToUpload = breakingAudioFile;
+    setIsUploadingBreakingAudio(true);
+    void uploadBreakingTtsAudioDirect({
+      articleId: draftId,
+      file: fileToUpload,
+      expectedVersion: draftVersion || 1,
+      authHeaders: getAuthHeader(),
+    })
+      .then((uploaded) => {
+        if (!active) return;
+        setBreakingAudioStored(true);
+        setBreakingAudioFile((current) => (current === fileToUpload ? null : current));
+        setBreakingAudioPreviewUrl('');
+        setBreakingAudioValidationError('');
+        adoptDraft({
+          id: draftId,
+          version: uploaded.version,
+          updatedAt: uploaded.updatedAt,
+        });
+      })
+      .catch((uploadError: unknown) => {
+        if (!active) return;
+        setBreakingAudioValidationError(
+          uploadError instanceof Error
+            ? `Draft breaking audio upload failed: ${uploadError.message}`
+            : 'Draft breaking audio upload failed.'
+        );
+      })
+      .finally(() => {
+        if (active) setIsUploadingBreakingAudio(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [adoptDraft, breakingAudioFile, draftId, draftVersion, formData.isBreaking, isLoading]);
 
   useEffect(() => {
     return () => {
@@ -569,8 +1220,51 @@ export default function UploadArticle() {
         next.seoSlug = normalizeArticleSlug(String(nextValue));
       }
 
+      if (name === 'author') {
+        next.authorProfileUrl =
+          authorOptions.find((member) => member.name === String(nextValue))?.profileUrl || '';
+      }
+
+      if (name === 'isBreaking') {
+        const checked = (e.target as HTMLInputElement).checked;
+        next.editorial = {
+          ...current.editorial,
+          storyType: checked
+            ? 'breaking'
+            : current.editorial.storyType === 'breaking'
+              ? 'standard'
+              : current.editorial.storyType,
+        };
+      }
+
       return next;
     });
+  };
+
+  const updateEditorialField = <Key extends keyof ArticleEditorialMeta>(
+    key: Key,
+    value: ArticleEditorialMeta[Key]
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      editorial: {
+        ...current.editorial,
+        [key]: value,
+      },
+    }));
+  };
+
+  const updateMediaField = <Key extends keyof Omit<ArticleMediaMetadata, 'variants'>>(
+    key: Key,
+    value: ArticleMediaMetadata[Key]
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      media: {
+        ...current.media,
+        [key]: value,
+      },
+    }));
   };
 
   const handleContentChange = useCallback((content: string) => {
@@ -629,6 +1323,37 @@ export default function UploadArticle() {
       );
     } finally {
       setIsAssistLoading(false);
+    }
+  };
+
+  const useTrendingAudienceSignal = async () => {
+    setIsTrendingSignalLoading(true);
+    setTrendingSignalStatus('');
+    try {
+      const response = await fetch(
+        `/api/admin/articles/trending-signal?category=${encodeURIComponent(formData.category)}`,
+        { headers: { ...getAuthHeader() } }
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        data?: { available?: boolean; reason?: string; detail?: string };
+      };
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error || 'Audience signal is unavailable');
+      }
+      if (!payload.data.available || !payload.data.reason) {
+        setTrendingSignalStatus(payload.data.detail || 'No audience signal is available.');
+        return;
+      }
+      updateEditorialField('trendingReason', payload.data.reason);
+      setTrendingSignalStatus(payload.data.detail || 'Audience signal added for editorial review.');
+    } catch (signalError) {
+      setTrendingSignalStatus(
+        signalError instanceof Error ? signalError.message : 'Audience signal is unavailable'
+      );
+    } finally {
+      setIsTrendingSignalLoading(false);
     }
   };
 
@@ -694,8 +1419,72 @@ export default function UploadArticle() {
     });
   };
 
+  const insertAssistSuggestion = (suggestion: ArticleAssistSuggestion) => {
+    if (!suggestion.insertValue || !suggestion.targetField) return;
+    if (suggestion.targetField === 'title') {
+      setFormData((current) => ({
+        ...current,
+        title: suggestion.insertValue || current.title,
+        seoTitle: current.seoTitle.trim()
+          ? current.seoTitle
+          : (suggestion.insertValue || '').slice(0, 160),
+      }));
+      return;
+    }
+    if (suggestion.targetField === 'content') {
+      setFormData((current) => ({
+        ...current,
+        content: `${current.content}${current.content.trim() ? '\n' : ''}${suggestion.insertValue}`,
+      }));
+      setContentMode('write');
+    }
+  };
+
+  const applyTranslation = (field: 'title' | 'summary' | 'content', value: string) => {
+    if (field === 'content') {
+      handleContentChange(value);
+      setContentMode('write');
+      return;
+    }
+    setFormData((current) => ({ ...current, [field]: value }));
+  };
+
   const focusWorkbenchField = useCallback((field: ArticleAssistField) => {
     if (typeof document === 'undefined') return;
+    if (
+      field === 'image' ||
+      field === 'featuredImageAlt' ||
+      field === 'featuredImageCaption' ||
+      field === 'imageCredit' ||
+      field === 'imageLicense'
+    ) {
+      setInspectorTab('media');
+    } else if (
+      field === 'seoTitle' ||
+      field === 'seoDescription' ||
+      field === 'seoSlug' ||
+      field === 'focusKeyword' ||
+      field === 'secondaryKeywords' ||
+      field === 'canonicalUrl' ||
+      field === 'authorProfileUrl'
+    ) {
+      setInspectorTab('seo');
+    } else if (field === 'breakingAudio' || field === 'isBreaking' || field === 'isTrending') {
+      setInspectorTab('publish');
+    } else if (
+      field === 'storyType' ||
+      field === 'sourceAttribution' ||
+      field === 'quoteAttribution' ||
+      field === 'eventDateTime' ||
+      field === 'factCheckStatus' ||
+      field === 'legalReviewStatus' ||
+      field === 'sensitivityReviewStatus' ||
+      field === 'headlineSupportConfirmed' ||
+      field === 'duplicateCheckComplete' ||
+      field === 'aiDisclosure'
+    ) {
+      setInspectorTab('quality');
+    }
     const fieldSelectors: Partial<Record<ArticleAssistField, string>> = {
       title: '[name="title"]',
       summary: '[name="summary"]',
@@ -712,22 +1501,41 @@ export default function UploadArticle() {
       featuredImageAlt: '[name="featuredImageAlt"]',
       featuredImageCaption: '[name="featuredImageCaption"]',
       imageCredit: '[name="imageCredit"]',
+      imageLicense: '[name="imageLicense"]',
       canonicalUrl: '[name="canonicalUrl"]',
       authorProfileUrl: '[name="authorProfileUrl"]',
       sourceInfo: '[name="sourceInfo"]',
       breakingAudio: '[data-article-field="breakingAudio"], [name="isBreaking"]',
+      isBreaking: '[name="isBreaking"]',
+      isTrending: '[name="isTrending"]',
+      storyType: '[name="storyType"]',
+      sourceAttribution: '[name="sourceAttribution"]',
+      quoteAttribution: '[name="quoteAttribution"]',
+      eventDateTime: '[name="eventDateTime"]',
+      factCheckStatus: '[name="factCheckStatus"]',
+      legalReviewStatus: '[name="legalReviewStatus"]',
+      sensitivityReviewStatus: '[name="sensitivityReviewStatus"]',
+      headlineSupportConfirmed: '[name="headlineSupportConfirmed"]',
+      duplicateCheckComplete: '[name="duplicateCheckComplete"]',
+      aiDisclosure: '[name="aiDisclosure"]',
     };
     const selector = fieldSelectors[field] || `[name="${field}"]`;
-    const element = document.querySelector<HTMLElement>(selector);
-    const details = element?.closest('details') as HTMLDetailsElement | null;
-    if (details) details.open = true;
-    if (typeof element?.scrollIntoView === 'function') {
-      element.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-    const focusTarget = element?.matches('input, textarea, select, button, [contenteditable="true"]')
-      ? element
-      : element?.querySelector<HTMLElement>('input, textarea, select, button, [contenteditable="true"]');
-    window.setTimeout(() => focusTarget?.focus(), 0);
+    window.setTimeout(() => {
+      const element = document.querySelector<HTMLElement>(selector);
+      const details = element?.closest('details') as HTMLDetailsElement | null;
+      if (details) details.open = true;
+      if (typeof element?.scrollIntoView === 'function') {
+        element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+      const focusTarget = element?.matches(
+        'input, textarea, select, button, [contenteditable="true"]'
+      )
+        ? element
+        : element?.querySelector<HTMLElement>(
+            'input, textarea, select, button, [contenteditable="true"]'
+          );
+      focusTarget?.focus();
+    }, 0);
   }, []);
 
   const focusReadinessItem = useCallback(
@@ -767,6 +1575,14 @@ export default function UploadArticle() {
         featuredImageCaption: current.featuredImageCaption.trim()
           ? current.featuredImageCaption
           : current.summary.trim().slice(0, 300),
+        media: {
+          ...current.media,
+          sourceMediaId: '',
+          width: prepared.width,
+          height: prepared.height,
+          format: prepared.file.type.replace(/^image\//, ''),
+          variants: createEmptyArticleMediaMetadata().variants,
+        },
       }));
 
       const notes: string[] = [];
@@ -903,34 +1719,50 @@ export default function UploadArticle() {
   }, [imagePreview, sourcePrefillApplied, sourceStory]);
 
   const uploadImage = async () => {
-    if (!imageFile) return imagePreview;
+    if (!imageFile) return { url: imagePreview, media: formData.media };
 
     setIsLoadingImage(true);
     try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('file', imageFile);
-
-      const response = await fetch('/api/admin/upload', {
-        method: 'POST',
-        headers: {
-          ...getAuthHeader(),
-        },
-        body: formDataToSend,
+      const uploaded = await uploadArticleImageFile(imageFile, {
+        x: formData.media.focalPointX,
+        y: formData.media.focalPointY,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to upload image');
-      }
-
-      return data.data.url;
+      const media = {
+        ...formData.media,
+        sourceMediaId: uploaded.sourceMediaId || formData.media.sourceMediaId,
+        width: uploaded.width || formData.media.width,
+        height: uploaded.height || formData.media.height,
+        format: uploaded.format || formData.media.format,
+        variants: uploaded.variants,
+      };
+      setImagePreview(uploaded.url);
+      setFormData((current) => ({ ...current, media }));
+      setImageFile(null);
+      return { url: uploaded.url, media };
     } catch (err) {
       setError('Failed to upload image. Please try again.');
       throw err;
     } finally {
       setIsLoadingImage(false);
     }
+  };
+
+  const selectMediaLibraryItem = (item: MediaLibraryItem) => {
+    setImageFile(null);
+    setImagePreview(item.url);
+    setImageQualityNote('Selected from the newsroom media library.');
+    setFormData((current) => ({
+      ...current,
+      featuredImageAlt: current.featuredImageAlt.trim()
+        ? current.featuredImageAlt
+        : item.filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 220),
+      media: {
+        ...current.media,
+        sourceMediaId: item._id,
+        format: String(item.type || '').replace(/^image\//, ''),
+        variants: createEmptyArticleMediaMetadata().variants,
+      },
+    }));
   };
 
   const handleArticleAudioChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -976,6 +1808,11 @@ export default function UploadArticle() {
     setError('');
     setSuccess('');
 
+    if (draftRecoveryBlocking) {
+      setError('Restore or discard the browser recovery copy before creating this article.');
+      return;
+    }
+
     if (sourceStory?.linkedArticleId) {
       setError('A linked article already exists for this source story.');
       return;
@@ -985,6 +1822,26 @@ export default function UploadArticle() {
       const blockerLabels = liveReadinessSummary.blockers.map((item) => item.label).join(', ');
       setError(`Resolve blockers: ${blockerLabels}`);
       focusReadinessItem(liveReadinessSummary.blockers[0]);
+      return;
+    }
+
+    if (workflowIntent === 'schedule') {
+      const scheduledTime = new Date(workflowScheduledFor).getTime();
+      if (!workflowScheduledFor || !Number.isFinite(scheduledTime)) {
+        setInspectorTab('publish');
+        setError('Choose a valid publication date and time before scheduling.');
+        return;
+      }
+      if (scheduledTime <= Date.now()) {
+        setInspectorTab('publish');
+        setError('Scheduled publication must be in the future.');
+        return;
+      }
+    }
+
+    if (workflowDueAt && !Number.isFinite(new Date(workflowDueAt).getTime())) {
+      setInspectorTab('publish');
+      setError('Choose a valid editorial deadline.');
       return;
     }
 
@@ -1006,9 +1863,9 @@ export default function UploadArticle() {
         return;
       }
 
-      const breakingAudioRequired = canPublishImmediately && formData.isBreaking;
+      const breakingAudioRequired = workflowIntent === 'publish' && formData.isBreaking;
       const breakingValidationError = validateArticleAudioFile(breakingAudioFile, 'Breaking');
-      if (breakingAudioRequired && !breakingAudioFile) {
+      if (breakingAudioRequired && !breakingAudioFile && !breakingAudioStored) {
         const nextError = 'Upload breaking news audio before publishing this breaking article.';
         setBreakingAudioValidationError(nextError);
         setError(nextError);
@@ -1038,9 +1895,10 @@ export default function UploadArticle() {
 
       if (
         formData.authorProfileUrl.trim() &&
+        !formData.authorProfileUrl.trim().startsWith('/') &&
         !isValidAbsoluteHttpUrl(formData.authorProfileUrl.trim())
       ) {
-        setError('Author profile URL must start with http:// or https://');
+        setError('Author profile URL must be a local path or start with http:// or https://');
         setIsLoading(false);
         return;
       }
@@ -1058,128 +1916,176 @@ export default function UploadArticle() {
 
       // Upload image first if it's a new file
       let imageUrl = imagePreview;
+      let finalMedia = formData.media;
       if (imageFile) {
-        imageUrl = await uploadImage();
+        const uploaded = await uploadImage();
+        imageUrl = uploaded.url;
+        finalMedia = uploaded.media;
       }
-      const resolvedOgImage =
-        formData.ogImage.trim() || resolveArticleOgImageUrl({ image: imageUrl });
-
-      const response = await fetch('/api/admin/articles', {
-        method: 'POST',
+      const finalPayload = buildArticleMutationPayload(
+        formData,
+        imageUrl,
+        sourceStoryId,
+        finalMedia
+      );
+      const response = await fetch(
+        draftId
+          ? `/api/admin/articles/${encodeURIComponent(draftId)}`
+          : '/api/admin/articles',
+        {
+        method: draftId ? 'PATCH' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeader(),
         },
         body: JSON.stringify({
-          intent: canPublishImmediately ? 'publish' : 'submit',
-          breakingAudioUploadPending: breakingAudioRequired && Boolean(breakingAudioFile),
-          title: formData.title,
-          slug: formData.seoSlug,
-          summary: formData.summary,
-          content: formData.content,
-          category: formData.category,
-          author: formData.author,
-          reporterMeta: {
-            locationTag: formData.locationTag,
-            sourceInfo: formData.sourceInfo,
-            sourceConfidential: formData.sourceConfidential,
-            reporterNotes: formData.reporterNotes,
-          },
-          isBreaking: formData.isBreaking,
-          isTrending: formData.isTrending,
-          image: imageUrl,
-          seo: {
-            metaTitle: formData.seoTitle,
-            metaDescription: formData.seoDescription,
-            ogImage: resolvedOgImage,
-            canonicalUrl: formData.canonicalUrl,
-            focusKeyword: formData.focusKeyword,
-            secondaryKeywords: formData.secondaryKeywords,
-            featuredImageAlt: formData.featuredImageAlt,
-            featuredImageCaption: formData.featuredImageCaption,
-            imageCredit: formData.imageCredit,
-            authorProfileUrl: formData.authorProfileUrl,
-            includeInNewsSitemap: formData.includeInNewsSitemap,
-            majorUpdateNote: formData.majorUpdateNote,
-          },
-          ...(sourceStoryId ? { sourceStoryId } : {}),
+          ...finalPayload,
+          ...(draftId
+            ? { expectedVersion: draftVersion }
+            : { intent: 'draft' }),
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Failed to publish article');
-        setIsLoading(false);
-        return;
+        throw new Error(
+          response.status === 409
+            ? 'This draft changed in another session. Open the saved draft and compare before publishing.'
+            : data.error || 'Failed to save the article draft'
+        );
       }
 
       const createdArticleId = resolveCreatedArticleId(data.data);
+      if (!createdArticleId) {
+        throw new Error('The server saved the draft without returning an article ID.');
+      }
+      const savedVersion = resolveCreatedArticleVersion(data.data);
+      let workflowExpectedVersion = savedVersion;
+      const savedAt =
+        typeof data?.data?.updatedAt === 'string'
+          ? data.data.updatedAt
+          : new Date().toISOString();
+      adoptDraft({ id: createdArticleId, version: savedVersion, updatedAt: savedAt });
+
       let audioUploadWarning = '';
       if (breakingAudioFile) {
-        if (!createdArticleId) {
-          audioUploadWarning =
-            'Article was created, but breaking audio could not be uploaded because the new article ID was missing.';
-        } else {
-          setIsUploadingBreakingAudio(true);
-          try {
-            await uploadBreakingTtsAudioDirect({
-              articleId: createdArticleId,
-              file: breakingAudioFile,
-              authHeaders: getAuthHeader(),
-            });
-
-            if (breakingAudioRequired) {
-              const publishResponse = await fetch(
-                `/api/admin/articles/${encodeURIComponent(createdArticleId)}`,
-                {
-                  method: 'PATCH',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeader(),
-                  },
-                  body: JSON.stringify({ action: 'publish' }),
-                }
-              );
-              const publishPayload = (await publishResponse.json().catch(() => ({}))) as {
-                success?: boolean;
-                error?: string;
-              };
-              if (!publishResponse.ok || !publishPayload.success) {
-                throw new Error(publishPayload.error || 'Breaking article audio was uploaded, but publishing failed.');
-              }
-            }
-          } catch (audioError) {
-            audioUploadWarning =
-              audioError instanceof Error
-                ? `Article was created, but breaking audio upload failed: ${audioError.message}`
-                : 'Article was created, but breaking audio upload failed.';
-          } finally {
-            setIsUploadingBreakingAudio(false);
-          }
+        setIsUploadingBreakingAudio(true);
+        try {
+          const uploaded = await uploadBreakingTtsAudioDirect({
+            articleId: createdArticleId,
+            file: breakingAudioFile,
+            expectedVersion: workflowExpectedVersion,
+            authHeaders: getAuthHeader(),
+          });
+          workflowExpectedVersion = uploaded.version;
+          adoptDraft({
+            id: createdArticleId,
+            version: uploaded.version,
+            updatedAt: uploaded.updatedAt,
+          });
+        } catch (audioError) {
+          const uploadError =
+            audioError instanceof Error
+              ? `Breaking audio upload failed: ${audioError.message}`
+              : 'Breaking audio upload failed.';
+          if (breakingAudioRequired) throw new Error(uploadError);
+          audioUploadWarning = uploadError;
+        } finally {
+          setIsUploadingBreakingAudio(false);
         }
       }
 
       if (articleAudioFile) {
-        if (!createdArticleId) {
+        setIsUploadingArticleAudio(true);
+        try {
+          await uploadArticleTtsAudioDirect({
+            articleId: createdArticleId,
+            file: articleAudioFile,
+            authHeaders: getAuthHeader(),
+          });
+        } catch (audioError) {
           audioUploadWarning =
-            'Article was created, but listen audio could not be uploaded because the new article ID was missing.';
-        } else {
-          setIsUploadingArticleAudio(true);
-          try {
-            await uploadArticleTtsAudioDirect({
-              articleId: createdArticleId,
-              file: articleAudioFile,
-              authHeaders: getAuthHeader(),
-            });
-          } catch (audioError) {
-            audioUploadWarning =
-              audioError instanceof Error
-                ? `Article was created, but listen audio upload failed: ${audioError.message}`
-                : 'Article was created, but listen audio upload failed.';
-          } finally {
-            setIsUploadingArticleAudio(false);
+            audioError instanceof Error
+              ? `Listen audio upload failed: ${audioError.message}`
+              : 'Listen audio upload failed.';
+        } finally {
+          setIsUploadingArticleAudio(false);
+        }
+      }
+
+      const workflowAction = workflowIntent;
+      const workflowResponse = await fetch(
+        `/api/admin/articles/${encodeURIComponent(createdArticleId)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({
+            action: workflowAction,
+            expectedVersion: workflowExpectedVersion,
+            priority: workflowPriority,
+            ...(workflowDueAt ? { dueAt: workflowDueAt } : {}),
+            ...(workflowAction === 'schedule'
+              ? { scheduledFor: workflowScheduledFor }
+              : {}),
+          }),
+        }
+      );
+      const workflowPayload = await workflowResponse.json().catch(() => ({}));
+      if (!workflowResponse.ok || workflowPayload?.success === false) {
+        throw new Error(
+          workflowPayload?.error ||
+            `The draft was saved, but ${workflowAction === 'publish' ? 'publishing' : 'submission'} failed.`
+        );
+      }
+
+      let workflowVersion = resolveCreatedArticleVersion(workflowPayload?.data);
+      adoptDraft({
+        id: createdArticleId,
+        version: workflowVersion,
+        updatedAt:
+          typeof workflowPayload?.data?.updatedAt === 'string'
+            ? workflowPayload.data.updatedAt
+            : new Date().toISOString(),
+      });
+
+
+      if (workflowAction === 'submit' && workflowAssigneeId) {
+        const assignmentResponse = await fetch(
+          `/api/admin/articles/${encodeURIComponent(createdArticleId)}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeader(),
+            },
+            body: JSON.stringify({
+              action: 'assign',
+              expectedVersion: workflowVersion,
+              assignedToId: workflowAssigneeId,
+              priority: workflowPriority,
+              ...(workflowDueAt ? { dueAt: workflowDueAt } : {}),
+            }),
           }
+        );
+        const assignmentPayload = await assignmentResponse.json().catch(() => ({}));
+        if (!assignmentResponse.ok || assignmentPayload?.success === false) {
+          audioUploadWarning =
+            assignmentPayload?.error ||
+            'Article was submitted, but the editor assignment could not be saved.';
+        } else {
+          workflowVersion = resolveCreatedArticleVersion(assignmentPayload?.data);
+          adoptDraft({
+            id: createdArticleId,
+            version: workflowVersion,
+            updatedAt:
+              typeof assignmentPayload?.data?.updatedAt === 'string'
+                ? assignmentPayload.data.updatedAt
+                : new Date().toISOString(),
+          });
         }
       }
 
@@ -1191,42 +2097,47 @@ export default function UploadArticle() {
       setImagePreview('');
       clearArticleAudioFile();
       clearBreakingAudioFile();
+      setArticleAudioStored(false);
+      setBreakingAudioStored(false);
       setContentMode('write');
       setIsSeoSlugTouched(false);
-      clearDraft();
+      clearDraft(true);
 
       if (audioUploadWarning) {
         setSuccess(
-          canPublishImmediately
-            ? 'Article saved successfully. Redirecting to the editor to retry audio upload...'
-            : 'Article submitted successfully. Redirecting to the editor to retry audio upload...'
+          workflowIntent === 'publish'
+            ? 'Article published. Redirecting to the editor to retry the remaining attachment...'
+            : workflowIntent === 'schedule'
+              ? 'Article scheduled. Redirecting to the editor to retry the remaining attachment...'
+              : 'Article submitted. Redirecting to the editor to retry the remaining attachment...'
         );
         setError(audioUploadWarning);
-        setTimeout(() => {
-          router.push(
-            createdArticleId
-              ? `/admin/articles/${encodeURIComponent(createdArticleId)}/edit`
-              : '/admin/articles'
-          );
-        }, 2500);
+        scheduleRedirect(
+          createdArticleId
+            ? `/admin/articles/${encodeURIComponent(createdArticleId)}/edit`
+            : '/admin/articles',
+          2500
+        );
         return;
       }
 
       setSuccess(
-        breakingAudioFile
-          ? canPublishImmediately
-            ? 'Article published successfully with breaking audio! Redirecting...'
-            : 'Article submitted successfully with staged breaking audio! Redirecting...'
-          : articleAudioFile
-          ? canPublishImmediately
+        breakingAudioFile || breakingAudioStored
+            ? workflowIntent === 'publish'
+              ? 'Article published successfully with breaking audio! Redirecting...'
+              : workflowIntent === 'schedule'
+                ? 'Article scheduled successfully with breaking audio! Redirecting...'
+                : 'Article submitted successfully with staged breaking audio! Redirecting...'
+            : articleAudioFile || articleAudioStored
+          ? workflowIntent === 'publish'
             ? 'Article published successfully with listen audio! Redirecting...'
-            : 'Article submitted successfully with listen audio! Redirecting...'
+            : workflowIntent === 'schedule'
+              ? 'Article scheduled successfully with listen audio! Redirecting...'
+              : 'Article submitted successfully with listen audio! Redirecting...'
           : successMessage
       );
 
-      setTimeout(() => {
-        router.push('/admin/articles');
-      }, 2000);
+      scheduleRedirect('/admin/articles', 2000);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -1327,6 +2238,41 @@ export default function UploadArticle() {
 
           {!isFocusMode ? (
             <div className="sticky top-0 z-20 mb-5 flex items-center gap-2 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-950/95 p-2 shadow-lg shadow-black/10 backdrop-blur dark:border-white/10">
+              <div
+                className={`inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold ${
+                  serverDraftStatus === 'conflict' || serverDraftStatus === 'error'
+                    ? 'border-red-400/40 bg-red-500/15 text-red-100'
+                    : serverDraftStatus === 'offline'
+                      ? 'border-amber-300/40 bg-amber-400/15 text-amber-100'
+                      : 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100'
+                }`}
+                title={serverDraftMessage || draftStatusLabel}
+                aria-live="polite"
+              >
+                {serverDraftStatus === 'offline' ? (
+                  <CloudOff className="h-4 w-4" />
+                ) : (
+                  <Cloud className="h-4 w-4" />
+                )}
+                <span>{draftStatusLabel}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  persistDraft();
+                  void saveServerDraft();
+                }}
+                disabled={
+                  draftRecoveryBlocking ||
+                  !hasMeaningfulDraftContent ||
+                  serverDraftStatus === 'saving'
+                }
+                className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
+                title="Save draft (Ctrl+S)"
+              >
+                <Save className="h-4 w-4" />
+                <span>Save draft</span>
+              </button>
               {[
                 { label: 'Write', field: 'content' as ArticleAssistField, Icon: FileText },
                 { label: 'SEO', field: 'seoTitle' as ArticleAssistField, Icon: Search },
@@ -1349,282 +2295,69 @@ export default function UploadArticle() {
                 className="inline-flex shrink-0 items-center gap-2 rounded-md bg-spanish-red px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-700"
               >
                 <CheckCircle className="h-4 w-4" />
-                <span>Ready</span>
+                <span>Check readiness</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setContentMode((current) => (current === 'preview' ? 'write' : 'preview'))}
+                className="ml-auto inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/[0.12]"
+              >
+                <FileText className="h-4 w-4" />
+                <span>{contentMode === 'preview' ? 'Continue writing' : 'Preview'}</span>
+              </button>
+              <button
+                type="submit"
+                form="article-create-form"
+                disabled={
+                  submitBusy ||
+                  draftRecoveryBlocking ||
+                  Boolean(sourceStory?.linkedArticleId) ||
+                  !liveReadinessSummary.canSend
+                }
+                className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md bg-spanish-red px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                <span>{submitBusy ? submitBusyLabel : submitLabel}</span>
               </button>
             </div>
           ) : null}
 
+          {pendingDraftRecovery ? (
+            <ArticleDraftRecoveryNotice
+              savedAtLabel={
+                pendingDraftRecovery.savedAt
+                  ? formatDraftTimestamp(pendingDraftRecovery.savedAt)
+                  : ''
+              }
+              onRestore={restorePendingDraft}
+              onDiscard={discardPendingDraft}
+            />
+          ) : null}
+
           <form
+            id="article-create-form"
+            ref={articleFormRef}
             onSubmit={handleSubmit}
-            className="space-y-4 sm:space-y-8"
+            className="admin-article-workspace space-y-4 sm:space-y-8"
           >
-            <CmsEditorColumns stacked={isFocusMode} sidebarWidth="narrow">
-            <CmsEditorMain>
-              <div data-article-field="title">
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Article Title <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                placeholder="Enter an engaging title"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                required
-              />
-              </div>
-
-              <div data-article-field="summary">
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Summary <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                name="summary"
-                value={formData.summary}
-                onChange={handleInputChange}
-                placeholder="Brief summary of the article (will appear in article feed)"
-                rows={2}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                required
-              />
-              </div>
-
-              <div data-article-field="content">
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Article Content <span className="text-red-500">*</span>
-              </label>
-              <details className="mb-3 rounded-lg border border-amber-100 bg-amber-50 text-xs text-amber-900">
-                <summary className="cursor-pointer px-3 py-2 font-semibold">
-                  Writing tools and embed tips
-                </summary>
-                <div className="grid gap-3 border-t border-amber-100 p-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <div>
-                    <p className="font-semibold">Headings</p>
-                    <p className="mt-1">Use H2 and H3 buttons to break long copy into clean sections.</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">Inline Images</p>
-                    <p className="mt-1">Upload article images with caption and source credit.</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">Resources & Tables</p>
-                    <p className="mt-1">Add source cards, comparison tables, quotes, and links.</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">Video</p>
-                    <p className="mt-1">Paste a YouTube link on its own line or use the toolbar button.</p>
-                  </div>
-                </div>
-              </details>
-              <ArticleEditorStudio
-                title={formData.title}
-                summary={formData.summary}
-                content={formData.content}
-                mode={contentMode}
-                focusMode={isFocusMode}
-                showSidebar={false}
-                previewVariant="article"
-                author={formData.author}
-                image={imagePreview}
-                imageAlt={formData.featuredImageAlt}
-                imageCaption={formData.featuredImageCaption}
-                imageCredit={formData.imageCredit}
-                category={formData.category}
-                onModeChange={setContentMode}
-                onFocusModeChange={setIsFocusMode}
-                onContentChange={handleContentChange}
-                editorClassName="min-h-[260px] sm:min-h-64"
-                placeholder="Write your article here. Use the toolbar above for formatting."
-              />
-              </div>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div data-article-field="category">
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-
-                  {canCreateCategories ? (
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowCreateCategory((s) => !s)}
-                        className="text-sm text-spanish-red font-medium hover:underline"
-                      >
-                        {showCreateCategory ? 'Cancel' : '+ Create new category'}
-                      </button>
-
-                      {showCreateCategory && (
-                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
-                          {createCategoryError && <div className="text-sm text-red-600">{createCategoryError}</div>}
-                          <input
-                            value={newCategoryName}
-                            onChange={(e) => setNewCategoryName(e.target.value)}
-                            placeholder="Category name"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          />
-                          <input
-                            value={newCategorySlug}
-                            onChange={(e) => setNewCategorySlug(e.target.value)}
-                            placeholder="Optional slug (auto-generated if blank)"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={isCreatingCategory}
-                              onClick={async () => {
-                                setCreateCategoryError('');
-                                if (!newCategoryName.trim()) {
-                                  setCreateCategoryError('Please provide a category name');
-                                  return;
-                                }
-                                setIsCreatingCategory(true);
-                                try {
-                                  const res = await fetch('/api/admin/categories', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      ...getAuthHeader(),
-                                    },
-                                    body: JSON.stringify({ name: newCategoryName.trim(), slug: newCategorySlug.trim() || undefined }),
-                                  });
-                                  const data = await res.json();
-                                  if (!res.ok) throw new Error(data.error || 'Failed to create category');
-                                  const created = data.data;
-                                  setCategories((c) => [created.name, ...c.filter((x) => x !== created.name)]);
-                                  setFormData((f) => ({ ...f, category: created.name }));
-                                  setNewCategoryName('');
-                                  setNewCategorySlug('');
-                                  setShowCreateCategory(false);
-                                } catch (err: unknown) {
-                                  const message =
-                                    err instanceof Error
-                                      ? err.message
-                                      : 'Failed to create category';
-                                  setCreateCategoryError(message);
-                                } finally {
-                                  setIsCreatingCategory(false);
-                                }
-                              }}
-                              className="px-4 py-2 bg-spanish-red text-white rounded-md disabled:opacity-50"
-                            >
-                              {isCreatingCategory ? 'Creating...' : 'Create'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowCreateCategory(false);
-                                setNewCategoryName('');
-                                setNewCategorySlug('');
-                                setCreateCategoryError('');
-                              }}
-                              className="px-4 py-2 border border-gray-300 rounded-md"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div data-article-field="author">
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Author Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="author"
-                    value={formData.author}
-                    onChange={handleInputChange}
-                    placeholder="Your name or team name"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                    required
-                  />
-                </div>
-              </div>
-
-              <details className="rounded-lg border border-gray-200 bg-gray-50">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
-                  Reporter submission details
-                </summary>
-                <div className="space-y-4 border-t border-gray-200 p-4">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Reporter Submission</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Add location context, source notes, and reporter handoff details for the desk.
-                  </p>
-                </div>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Location Tag
-                    </label>
-                    <input
-                      type="text"
-                      name="locationTag"
-                      value={formData.locationTag}
-                      onChange={handleInputChange}
-                      placeholder="Indore, Madhya Pradesh"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Reporter Notes
-                    </label>
-                    <textarea
-                      name="reporterNotes"
-                      value={formData.reporterNotes}
-                      onChange={handleInputChange}
-                      placeholder="Extra context for copy edit, verification, or publishing."
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Source Info
-                  </label>
-                  <textarea
-                    name="sourceInfo"
-                    value={formData.sourceInfo}
-                    onChange={handleInputChange}
-                    placeholder="Who provided the information, documents, or quotes?"
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                </div>
-                <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-3">
-                  <input
-                    type="checkbox"
-                    name="sourceConfidential"
-                    checked={formData.sourceConfidential}
-                    onChange={handleInputChange}
-                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                  />
-                  <span className="text-sm text-gray-700">
-                    Source is confidential and should stay internal to the desk
-                  </span>
-                </label>
-                </div>
-              </details>
-            </CmsEditorMain>
+            <CmsEditorColumns stacked={isFocusMode} sidebarWidth="workspace">
+            <ArticleComposeModule
+              value={formData}
+              image={imagePreview}
+              mode={contentMode}
+              focusMode={isFocusMode}
+              categories={categories}
+              canCreateCategories={canCreateCategories}
+              authorOptions={authorOptions}
+              onChange={handleInputChange}
+              onContentChange={handleContentChange}
+              onModeChange={setContentMode}
+              onFocusModeChange={setIsFocusMode}
+              onCategoryCreated={(name) => {
+                setCategories((current) => [name, ...current.filter((category) => category !== name)]);
+                setFormData((current) => ({ ...current, category: name }));
+              }}
+            />
 
             {!isFocusMode ? (
             <CmsEditorSidebar>
@@ -1676,7 +2409,44 @@ export default function UploadArticle() {
                 </div>
               ) : null}
 
-              <ArticleWorkbenchAssistant
+              <div
+                role="tablist"
+                aria-label="Article inspector"
+                className="sticky top-0 z-10 grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white/95 p-1.5 shadow-sm backdrop-blur"
+              >
+                {(
+                  [
+                    ['media', 'Media'],
+                    ['seo', 'SEO'],
+                    ['publish', 'Publish'],
+                    ['quality', 'Quality'],
+                  ] as const
+                ).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={inspectorTab === tab}
+                    aria-controls={`article-inspector-${tab}`}
+                    onClick={() => setInspectorTab(tab)}
+                    className={`min-h-9 rounded-lg px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-spanish-red focus-visible:ring-offset-2 ${
+                      inspectorTab === tab
+                        ? 'bg-zinc-950 text-white shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                id="article-inspector-quality-assistant"
+                role="region"
+                aria-label="Article assistance"
+                className={inspectorTab === 'quality' ? 'space-y-4' : 'hidden'}
+              >
+                <ArticleWorkbenchAssistant
                 result={assistResult}
                 isLoading={isAssistLoading}
                 error={assistError}
@@ -1686,639 +2456,144 @@ export default function UploadArticle() {
                 onApplyAll={applyAssistPatches}
                 onRejectPatch={rejectAssistPatch}
                 onFocusField={focusWorkbenchField}
+                onInsertSuggestion={insertAssistSuggestion}
                 title="Packaging assistant"
-              />
-
-              <details className="rounded-xl border border-blue-100 bg-blue-50 text-sm text-blue-900">
-                <summary className="cursor-pointer px-4 py-3 font-medium">Draft & Local Restore</summary>
-                <div className="border-t border-blue-100 p-4 pt-3">
-                <p className="mt-1 text-blue-800">
-                  Draft autosaves every {AUTOSAVE_INTERVAL_MS / 1000} seconds.
-                  {draftSavedAt
-                    ? ` Last saved: ${formatDraftTimestamp(draftSavedAt)}.`
-                    : ' No local draft yet.'}
-                </p>
-                {draftRestored ? (
-                  <p className="mt-1 text-blue-800">
-                    Draft restored from local storage.
-                  </p>
-                ) : null}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={persistDraft}
-                    className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
-                  >
-                    Save Draft Now
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearDraft}
-                    className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
-                  >
-                    Discard Local Draft
-                  </button>
-                </div>
-                </div>
-              </details>
-
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-white p-2 text-spanish-red shadow-sm">
-                    <Volume2 className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-gray-900">Article Listen Audio</p>
-                      <span className="rounded-full border border-spanish-red/30 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-spanish-red dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-100">
-                        Optional
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-gray-600">
-                      Upload MP3, WAV, or M4A audio. It will attach after the article is created.
-                    </p>
-                  </div>
-                </div>
-
-                {articleAudioFile ? (
-                  <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
-                    <div className="flex items-start gap-3">
-                      <FileAudio className="mt-0.5 h-4 w-4 flex-shrink-0 text-spanish-red" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-900">
-                          {articleAudioFile.name}
-                        </p>
-                        <p className="mt-1 text-xs text-gray-500">
-                          {formatArticleAudioSize(articleAudioFile.size)}
-                          {articleAudioValidationError
-                            ? ' | Needs replacement'
-                            : ' | Ready to attach after article creation'}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={clearArticleAudioFile}
-                        className="rounded-md border border-gray-200 p-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
-                        aria-label="Remove article listen audio"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {articleAudioPreviewUrl ? (
-                      <audio
-                        controls
-                        preload="metadata"
-                        src={articleAudioPreviewUrl}
-                        className="mt-3 w-full"
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {articleAudioValidationError ? (
-                  <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-                    {articleAudioValidationError}
-                  </p>
-                ) : null}
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <label
-                    className={`inline-flex items-center gap-2 rounded-md border border-spanish-red bg-white px-3 py-2 text-xs font-semibold text-spanish-red transition-colors hover:bg-red-50 ${
-                      submitBusy ? 'pointer-events-none cursor-not-allowed opacity-60' : 'cursor-pointer'
-                    }`}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {articleAudioFile ? 'Replace Audio' : 'Upload Audio'}
-                    <input
-                      type="file"
-                      accept={ARTICLE_AUDIO_ACCEPT}
-                      disabled={submitBusy}
-                      onChange={handleArticleAudioChange}
-                      className="sr-only"
-                    />
-                  </label>
-                  {articleAudioFile ? (
-                    <button
-                      type="button"
-                      onClick={clearArticleAudioFile}
-                      disabled={submitBusy}
-                      className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <X className="h-4 w-4" />
-                      Remove
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              <details data-article-field="seo" className="rounded-xl border border-gray-200 bg-gray-50">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
-                  SEO Settings
-                </summary>
-                <div className="space-y-4 border-t border-gray-200 p-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    SEO Slug
-                  </label>
-                  <input
-                    type="text"
-                    name="seoSlug"
-                    value={formData.seoSlug}
-                    onChange={handleInputChange}
-                    placeholder="article-public-url-slug"
-                    maxLength={200}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                  <p className="mt-1 break-all text-xs text-gray-500">{previewPath}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Meta Title
-                  </label>
-                  <input
-                    type="text"
-                    name="seoTitle"
-                    value={formData.seoTitle}
-                    onChange={handleInputChange}
-                    placeholder="Optional SEO title (recommended under 60 chars)"
-                    maxLength={160}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    {formData.seoTitle.length}/160
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Meta Description
-                  </label>
-                  <textarea
-                    name="seoDescription"
-                    value={formData.seoDescription}
-                    onChange={handleInputChange}
-                    placeholder="Optional SEO description"
-                    rows={3}
-                    maxLength={320}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    {formData.seoDescription.length}/320
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Focus Keyword
-                  </label>
-                  <input
-                    type="text"
-                    name="focusKeyword"
-                    value={formData.focusKeyword}
-                    onChange={handleInputChange}
-                    placeholder="Primary topic for internal SEO checks"
-                    maxLength={120}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Secondary Keywords
-                  </label>
-                  <input
-                    type="text"
-                    name="secondaryKeywords"
-                    value={formData.secondaryKeywords}
-                    onChange={handleInputChange}
-                    placeholder="Comma separated supporting topics"
-                    maxLength={240}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    OG Image URL
-                  </label>
-                  <input
-                    type="text"
-                    name="ogImage"
-                    value={formData.ogImage}
-                    onChange={handleInputChange}
-                    placeholder="https://example.com/image.jpg or /uploads/image.jpg"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Leave empty to auto-use featured image as 1200x630 OG preview.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Canonical URL
-                  </label>
-                  <input
-                    type="url"
-                    name="canonicalUrl"
-                    value={formData.canonicalUrl}
-                    onChange={handleInputChange}
-                    placeholder="https://example.com/main/article/slug"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Leave empty to use the default public article permalink after publish. You can
-                    override it here for migrated or syndicated stories.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
-                    Author Profile URL
-                  </label>
-                  <input
-                    type="url"
-                    name="authorProfileUrl"
-                    value={formData.authorProfileUrl}
-                    onChange={handleInputChange}
-                    placeholder="https://example.com/authors/name"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                </div>
-                <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
-                  <input
-                    type="checkbox"
-                    name="includeInNewsSitemap"
-                    checked={formData.includeInNewsSitemap}
-                    onChange={handleInputChange}
-                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                  />
-                  <span className="text-sm text-gray-700">Include in Google News sitemap after publish</span>
-                </label>
-                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Google Preview</p>
-                  <p className="mt-2 line-clamp-2 text-sm font-semibold text-blue-700">{googlePreview.title}</p>
-                  <p className="mt-1 break-all text-xs text-green-700">{googlePreview.url}</p>
-                  <p className="mt-1 line-clamp-3 text-xs text-gray-600">{googlePreview.description || 'Meta description or summary will appear here.'}</p>
-                </div>
-                </div>
-              </details>
-
-              <div data-article-field="image" className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-                <label className="block text-sm font-medium text-gray-900 mb-2 sm:mb-3">
-                  Featured Image <span className="text-red-500">*</span>
-                </label>
-                <label className="flex w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-3 py-4 transition-colors hover:border-spanish-red hover:bg-gray-50 sm:px-4 sm:py-6">
-                  <div className="flex flex-col items-center gap-2">
-                    <ImageIcon className="h-5 w-5 text-gray-400 sm:h-6 sm:w-6" />
-                    <span className="text-sm font-medium text-gray-700">Click to upload image</span>
-                    <span className="text-xs text-gray-500">PNG, JPG, WebP</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                    required={!imagePreview}
-                  />
-                </label>
-                <p className="mt-2 hidden text-xs text-gray-500 sm:block">{ARTICLE_IMAGE_UPLOAD_GUIDE}</p>
-                {imageQualityNote ? (
-                  <p className="mt-1 text-xs font-medium text-amber-700">{imageQualityNote}</p>
-                ) : null}
-
-                {imagePreview && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="mt-3 overflow-hidden rounded-lg border border-gray-200 sm:mt-4"
-                  >
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="aspect-[16/9] w-full bg-zinc-950 object-contain"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImageFile(null);
-                        setImagePreview('');
-                        setImageQualityNote('');
-                      }}
-                      className="w-full py-2 bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-sm font-medium"
-                    >
-                      Remove Image
-                    </button>
-                  </motion.div>
-                )}
-                <div className="mt-4 space-y-3">
-                  <input
-                    type="text"
-                    name="featuredImageAlt"
-                    value={formData.featuredImageAlt}
-                    onChange={handleInputChange}
-                    placeholder="Featured image alt text"
-                    maxLength={220}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                  <textarea
-                    name="featuredImageCaption"
-                    value={formData.featuredImageCaption}
-                    onChange={handleInputChange}
-                    placeholder="Featured image caption"
-                    rows={2}
-                    maxLength={300}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                  <input
-                    type="text"
-                    name="imageCredit"
-                    value={formData.imageCredit}
-                    onChange={handleInputChange}
-                    placeholder="Image credit/source"
-                    maxLength={180}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                </div>
-                <ArticleFeaturedImageReaderPreview
-                  image={imagePreview}
+                />
+                <ArticleTranslationReview
                   title={formData.title}
                   summary={formData.summary}
-                  caption={formData.featuredImageCaption}
-                  credit={formData.imageCredit}
-                  alt={formData.featuredImageAlt}
-                  category={formData.category}
+                  content={formData.content}
+                  reporterNotes={formData.reporterNotes}
+                  sourcePackage={[
+                    sourceStory?.title,
+                    sourceStory?.caption,
+                    formData.sourceInfo,
+                  ].filter(Boolean).join('\n')}
+                  onApply={applyTranslation}
                 />
               </div>
 
-              <details className="rounded-xl border border-gray-200 bg-gray-50">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
-                  Article flags
-                </summary>
-                <div className="space-y-3 border-t border-gray-200 p-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="isBreaking"
-                    checked={formData.isBreaking}
-                    onChange={handleInputChange}
-                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                  />
-                  <span className="text-sm text-gray-700">Mark as Breaking News</span>
-                </label>
-                {formData.isBreaking ? (
-                  <div data-article-field="breakingAudio" className="space-y-3 rounded-lg border border-red-200 bg-white p-3 dark:border-red-500/30 dark:bg-zinc-900">
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-lg bg-red-50 p-2 text-spanish-red dark:bg-red-500/15 dark:text-red-100">
-                        <Volume2 className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                            Breaking News Audio
-                          </p>
-                          <span className="rounded-full border border-spanish-red/30 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-spanish-red dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-100">
-                            Required before publish
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">
-                          Record the script below exactly, then upload the MP3, WAV, or M4A file.
-                        </p>
-                      </div>
-                    </div>
+              <ArticleDraftModule
+                active={inspectorTab === 'publish'}
+                debounceSeconds={SERVER_AUTOSAVE_DEBOUNCE_MS / 1000}
+                savedAtLabel={draftSavedAt ? formatDraftTimestamp(draftSavedAt) : ''}
+                statusLabel={draftStatusLabel}
+                draftId={draftId}
+                draftVersion={draftVersion}
+                message={serverDraftMessage}
+                restored={draftRestored}
+                onSave={() => {
+                  persistDraft();
+                  void saveServerDraft();
+                }}
+                onDiscardRecovery={() => clearDraft(false)}
+              />
 
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        Recording Script
-                      </p>
-                      <div className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-6 text-gray-900 dark:border-gray-700 dark:bg-zinc-950 dark:text-gray-100">
-                        {breakingRecordingScript}
-                      </div>
-                    </div>
+              <ArticleMediaModule
+                active={inspectorTab === 'media'}
+                busy={submitBusy}
+                audioAccept={ARTICLE_AUDIO_ACCEPT}
+                audioFile={articleAudioFile}
+                audioSizeLabel={articleAudioFile ? formatArticleAudioSize(articleAudioFile.size) : ''}
+                audioPreviewUrl={articleAudioPreviewUrl}
+                audioStored={articleAudioStored}
+                audioValidationError={articleAudioValidationError}
+                onAudioChange={handleArticleAudioChange}
+                onClearAudio={clearArticleAudioFile}
+                image={imagePreview}
+                imageQualityNote={imageQualityNote}
+                media={formData.media}
+                editorial={formData.editorial}
+                title={formData.title}
+                summary={formData.summary}
+                category={formData.category}
+                featuredImageAlt={formData.featuredImageAlt}
+                featuredImageCaption={formData.featuredImageCaption}
+                imageCredit={formData.imageCredit}
+                mediaSearch={mediaSearch}
+                mediaLibraryLoading={isMediaLibraryLoading}
+                mediaLibraryError={mediaLibraryError}
+                mediaLibrary={filteredMediaLibrary}
+                onImageChange={handleImageChange}
+                onRemoveImage={() => {
+                  setImageFile(null);
+                  setImagePreview('');
+                  setImageQualityNote('');
+                  setFormData((current) => ({
+                    ...current,
+                    media: createEmptyArticleMediaMetadata(),
+                  }));
+                }}
+                onMediaSearchChange={setMediaSearch}
+                onSelectMedia={selectMediaLibraryItem}
+                onMediaChange={updateMediaField}
+                onEditorialChange={updateEditorialField}
+                onTextChange={handleInputChange}
+              />
+              <ArticleSeoModule
+                active={inspectorTab === 'seo'}
+                value={formData}
+                previewPath={previewPath}
+                googlePreview={googlePreview}
+                onChange={handleInputChange}
+              />
 
-                    {breakingAudioFile ? (
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-zinc-950">
-                        <div className="flex items-start gap-3">
-                          <FileAudio className="mt-0.5 h-4 w-4 flex-shrink-0 text-spanish-red" />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
-                              {breakingAudioFile.name}
-                            </p>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {formatArticleAudioSize(breakingAudioFile.size)}
-                              {breakingAudioValidationError
-                                ? ' | Needs replacement'
-                                : ' | Ready to attach after article creation'}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={clearBreakingAudioFile}
-                            className="rounded-md border border-gray-200 p-1.5 text-gray-500 transition-colors hover:bg-white hover:text-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-zinc-900 dark:hover:text-white"
-                            aria-label="Remove breaking news audio"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        {breakingAudioPreviewUrl ? (
-                          <audio
-                            controls
-                            preload="metadata"
-                            src={breakingAudioPreviewUrl}
-                            className="mt-3 w-full"
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {breakingAudioValidationError ? (
-                      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-100">
-                        {breakingAudioValidationError}
-                      </p>
-                    ) : null}
-
-                    <div className="flex flex-wrap gap-2">
-                      <label
-                        className={`inline-flex items-center gap-2 rounded-md border border-spanish-red bg-white px-3 py-2 text-xs font-semibold text-spanish-red transition-colors hover:bg-red-50 dark:bg-transparent dark:text-red-100 dark:hover:bg-red-500/15 ${
-                          submitBusy ? 'pointer-events-none cursor-not-allowed opacity-60' : 'cursor-pointer'
-                        }`}
-                      >
-                        <Upload className="h-4 w-4" />
-                        {breakingAudioFile ? 'Replace Breaking Audio' : 'Upload Breaking Audio'}
-                        <input
-                          type="file"
-                          accept={ARTICLE_AUDIO_ACCEPT}
-                          disabled={submitBusy}
-                          onChange={handleBreakingAudioChange}
-                          className="sr-only"
-                        />
-                      </label>
-                      {breakingAudioFile ? (
-                        <button
-                          type="button"
-                          onClick={clearBreakingAudioFile}
-                          disabled={submitBusy}
-                          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-transparent dark:text-gray-200 dark:hover:bg-zinc-900"
-                        >
-                          <X className="h-4 w-4" />
-                          Remove
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="isTrending"
-                    checked={formData.isTrending}
-                    onChange={handleInputChange}
-                    className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
-                  />
-                  <span className="text-sm text-gray-700">Mark as Trending</span>
-                </label>
-                </div>
-              </details>
-
-              <details className="rounded-xl border border-gray-200 bg-gray-50">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
-                  Publish timing
-                </summary>
-                <div className="space-y-3 border-t border-gray-200 p-4 text-sm text-gray-700">
-                  <p>Timezone: Asia/Calcutta</p>
-                  <p>Status: {canPublishImmediately ? 'Publish now' : 'Submit for review'}</p>
-                  <textarea
-                    name="majorUpdateNote"
-                    value={formData.majorUpdateNote}
-                    onChange={handleInputChange}
-                    placeholder="Major update note (optional)"
-                    rows={2}
-                    maxLength={240}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-spanish-red focus:outline-none"
-                  />
-                </div>
-              </details>
-
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">Publishing readiness</p>
-                    <p className="mt-1 text-xs leading-5 text-gray-600">
-                      {liveReadinessSummary.canSend
-                        ? 'Critical checks are clear. Review warnings before sending.'
-                        : 'Resolve critical blockers before this article can be sent.'}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-900">
-                    {liveReadinessSummary.score}%
-                  </span>
-                </div>
-
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Done</p>
-                    <p className="mt-1 text-sm font-bold text-gray-900">
-                      {liveReadinessSummary.done.length}/{liveReadinessSummary.total}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-red-100 bg-white px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500">Blockers</p>
-                    <p className="mt-1 text-sm font-bold text-red-700">
-                      {liveReadinessSummary.blockers.length}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-amber-100 bg-white px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Warnings</p>
-                    <p className="mt-1 text-sm font-bold text-amber-700">
-                      {liveReadinessSummary.warnings.length + liveReadinessSummary.todos.length}
-                    </p>
-                  </div>
-                </div>
-
-                {sourceStory?.linkedArticleId ? (
-                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                    A linked article already exists for this source story.
-                  </p>
-                ) : null}
-
-                {!liveReadinessSummary.canSend ? (
-                  <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-                    Resolve blockers: {liveReadinessSummary.blockers.map((item) => item.label).join(', ')}
-                  </p>
-                ) : null}
-
-                <div className="mt-3 space-y-2">
-                  {liveAssistResult.readiness.items.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => focusReadinessItem(item)}
-                      aria-label={`${item.label} readiness: ${item.status}`}
-                      className={`flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors hover:border-gray-400 ${getReadinessStatusClass(item.status)}`}
-                    >
-                      <span className="mt-0.5">{getReadinessIcon(item)}</span>
-                      <span className="min-w-0">
-                        <span className="block text-xs font-semibold">{item.label}</span>
-                        <span className="mt-0.5 block text-xs opacity-80">{item.detail}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex flex-col gap-3">
-                  <button
-                    type="button"
-                    onClick={runArticleAssist}
-                    disabled={isAssistLoading}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isAssistLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    Assist with fixes
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={
-                      submitBusy ||
-                      Boolean(sourceStory?.linkedArticleId) ||
-                      !liveReadinessSummary.canSend
-                    }
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-spanish-red py-3 text-white font-medium transition-colors hover:bg-guardsman-red disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {submitBusy ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        {submitBusyLabel}
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-5 h-5" />
-                        {submitLabel}
-                      </>
-                    )}
-                  </button>
-                  <Link href="/admin" className="w-full">
-                    <button
-                      type="button"
-                      className="w-full rounded-lg border border-gray-300 px-6 py-3 text-gray-700 transition-colors hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                  </Link>
-                </div>
-              </div>
-
-              <details className="rounded-xl border border-gray-200 bg-gray-50">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">
-                  Article analysis
-                </summary>
-                <div className="border-t border-gray-200 p-4">
-                  <ArticleEditorSidebar
-                    title={formData.title}
-                    summary={formData.summary}
-                    content={formData.content}
-                    slug={formData.seoSlug}
-                    image={imagePreview}
-                    seo={normalizedSeo}
-                    category={formData.category}
-                    relatedArticles={relatedArticles}
-                    className="space-y-3"
-                  />
-                </div>
-              </details>
+              <ArticlePublishModule
+                active={inspectorTab === 'publish'}
+                busy={submitBusy}
+                isBreaking={formData.isBreaking}
+                isTrending={formData.isTrending}
+                majorUpdateNote={formData.majorUpdateNote}
+                editorial={formData.editorial}
+                onTextChange={handleInputChange}
+                onEditorialChange={updateEditorialField}
+                breakingRecordingScript={breakingRecordingScript}
+                breakingAudioAccept={ARTICLE_AUDIO_ACCEPT}
+                breakingAudioFile={breakingAudioFile}
+                breakingAudioSizeLabel={breakingAudioFile ? formatArticleAudioSize(breakingAudioFile.size) : ''}
+                breakingAudioPreviewUrl={breakingAudioPreviewUrl}
+                breakingAudioStored={breakingAudioStored}
+                breakingAudioValidationError={breakingAudioValidationError}
+                onBreakingAudioChange={handleBreakingAudioChange}
+                onClearBreakingAudio={clearBreakingAudioFile}
+                onUseTrendingSignal={useTrendingAudienceSignal}
+                trendingSignalLoading={isTrendingSignalLoading}
+                trendingSignalStatus={trendingSignalStatus}
+                workflowIntent={workflowIntent}
+                onWorkflowIntentChange={setWorkflowIntent}
+                canPublishImmediately={canPublishImmediately}
+                scheduledFor={workflowScheduledFor}
+                onScheduledForChange={setWorkflowScheduledFor}
+                priority={workflowPriority}
+                onPriorityChange={setWorkflowPriority}
+                dueAt={workflowDueAt}
+                onDueAtChange={setWorkflowDueAt}
+                assigneeId={workflowAssigneeId}
+                onAssigneeChange={setWorkflowAssigneeId}
+                teamOptions={teamOptions}
+                teamOptionsError={teamOptionsError}
+              />
+              <ArticleReadinessModule
+                active={inspectorTab === 'quality'}
+                editorial={formData.editorial}
+                onEditorialChange={updateEditorialField}
+                summary={liveReadinessSummary}
+                assistResult={liveAssistResult}
+                linkedArticleExists={Boolean(sourceStory?.linkedArticleId)}
+                onFocusItem={focusReadinessItem}
+                onRunAssist={runArticleAssist}
+                isAssistLoading={isAssistLoading}
+                article={{
+                  title: formData.title,
+                  summary: formData.summary,
+                  content: formData.content,
+                  slug: formData.seoSlug,
+                  image: imagePreview,
+                  seo: normalizedSeo,
+                  category: formData.category,
+                  relatedArticles,
+                }}
+              />
             </CmsEditorSidebar>
             ) : (
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -2331,6 +2606,7 @@ export default function UploadArticle() {
                     type="submit"
                     disabled={
                       submitBusy ||
+                      draftRecoveryBlocking ||
                       Boolean(sourceStory?.linkedArticleId) ||
                       !liveReadinessSummary.canSend
                     }

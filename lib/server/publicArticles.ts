@@ -16,6 +16,7 @@ import {
   normalizeArticleSeo,
   normalizeArticleSlug,
 } from '@/lib/seo/articleSeo';
+import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
 
 export type PublicArticleSource = 'mongo' | 'file';
 
@@ -219,6 +220,7 @@ function getLocationFromSource(source: Record<string, unknown>) {
 
 function toPublicArticleItem(source: unknown): PublicArticleItem | null {
   const input = asObject(source);
+  const activeFlags = resolveArticleEditorialFlags(input);
   const id = toId(input._id) || toId(input.id);
   const title = toText(input.title);
   const summary = toText(input.summary);
@@ -243,8 +245,8 @@ function toPublicArticleItem(source: unknown): PublicArticleItem | null {
     publishedAt,
     updatedAt,
     views: Math.max(0, Math.floor(toNumber(input.views, 0))),
-    isBreaking: Boolean(input.isBreaking),
-    isTrending: Boolean(input.isTrending),
+    isBreaking: activeFlags.isBreaking,
+    isTrending: activeFlags.isTrending,
     city: getLocationFromSource(input),
     href: buildArticlePublicPath({ id, slug }),
   };
@@ -417,7 +419,7 @@ async function listMongoArticles(options: PublicArticleListOptions) {
 
   const docs = await Article.find(buildMongoFilter(options))
     .select(
-      '_id slug previousSlugs title summary image category author publishedAt updatedAt views isBreaking isTrending workflow reporterMeta city cityName locationTag seo content'
+      '_id slug previousSlugs title summary image category author publishedAt updatedAt views isBreaking isTrending editorial workflow reporterMeta city cityName locationTag seo content'
     )
     .sort({ publishedAt: -1, _id: -1 })
     .limit(candidateLimit)

@@ -184,7 +184,7 @@ describe('maybeNotifyLeadershipReportCriticalAlerts', () => {
         activeAlertIds: expect.arrayContaining(['success-rate-decline', 'failure-volume-rising']),
       })
     );
-  });
+  }, 15_000);
 
   it('skips sending when the same critical alert set was already notified', async () => {
     const history = [

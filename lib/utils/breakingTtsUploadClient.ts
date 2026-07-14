@@ -11,11 +11,14 @@ export type DirectBreakingTtsUploadResult = {
   ttsAsset?: unknown;
   breakingTts?: unknown;
   script?: string;
+  version: number;
+  updatedAt: string;
 };
 
 type UploadOptions = {
   articleId: string;
   file: File;
+  expectedVersion: number;
   authHeaders?: Record<string, string>;
 };
 
@@ -121,6 +124,7 @@ export async function uploadBreakingTtsAudioDirect(options: UploadOptions) {
     body: JSON.stringify({
       articleId: options.articleId,
       mediaKey: target.mediaKey,
+      expectedVersion: options.expectedVersion,
       expectedSize: options.file.size,
       expectedFileType: options.file.type,
       expectedFileName: options.file.name,

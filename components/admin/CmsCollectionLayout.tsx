@@ -70,7 +70,7 @@ export const CMS_COLLECTION_SECONDARY_BUTTON_CLASS =
   'admin-shell-toolbar-btn inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold';
 
 export const CMS_COLLECTION_PRIMARY_BUTTON_CLASS =
-  'admin-shell-toolbar-btn inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold';
+  'inline-flex items-center justify-center gap-2 rounded-2xl border border-red-600 bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-red-700 hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 dark:ring-offset-zinc-950';
 
 export const CMS_COLLECTION_DANGER_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20';

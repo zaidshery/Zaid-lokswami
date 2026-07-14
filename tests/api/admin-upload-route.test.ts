@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import sharp from 'sharp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getAdminSessionFromReqMock = vi.fn();
@@ -86,6 +87,51 @@ describe('/api/admin/upload POST', () => {
     expect(response.status).toBe(201);
     expect(uploadBufferToSpacesMock).toHaveBeenCalledTimes(1);
     expect(payload.data.url).toBe('https://cdn.example.com/lokswami/images/image.jpg');
+  });
+
+  it('creates focal-point WebP, AVIF, and responsive crops for article images', async () => {
+    getAdminSessionFromReqMock.mockResolvedValue({ id: 'admin-1', role: 'admin' });
+    uploadBufferToSpacesMock.mockImplementation(
+      async (_buffer: Buffer, options: { originalFilename?: string }) => ({
+        secureUrl: `https://cdn.example.com/${options.originalFilename}`,
+        publicId: `lokswami/images/${options.originalFilename}`,
+        resourceType: 'image',
+        bytes: 1024,
+      })
+    );
+    const png = await sharp({
+      create: {
+        width: 16,
+        height: 9,
+        channels: 4,
+        background: { r: 36, g: 99, b: 235, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const pngBytes = new Uint8Array(png.byteLength);
+    pngBytes.set(png);
+    const formData = new FormData();
+    formData.set('file', new File([pngBytes], 'desk-photo.png', { type: 'image/png' }));
+    formData.set('purpose', 'image');
+    formData.set('optimizeArticleImage', 'true');
+    formData.set('focalPointX', '30');
+    formData.set('focalPointY', '70');
+
+    const { POST } = await import('@/app/api/admin/upload/route');
+    const response = await POST(createRequest(formData));
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(uploadBufferToSpacesMock).toHaveBeenCalledTimes(5);
+    expect(payload.data.type).toBe('image/webp');
+    expect(payload.data.variants).toEqual({
+      landscape16x9: 'https://cdn.example.com/desk-photo-16x9.webp',
+      standard4x3: 'https://cdn.example.com/desk-photo-4x3.webp',
+      square1x1: 'https://cdn.example.com/desk-photo-1x1.webp',
+      webp: 'https://cdn.example.com/desk-photo-optimized.webp',
+      avif: 'https://cdn.example.com/desk-photo-optimized.avif',
+    });
   });
 
   it('reads upload form data directly without cloning the request body', async () => {

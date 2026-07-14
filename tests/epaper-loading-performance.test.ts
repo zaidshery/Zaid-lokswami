@@ -69,4 +69,27 @@ describe('e-paper loading performance', () => {
     );
     expect(client).toContain("await import(\n          '@/lib/utils/pdfThumbnailClient'");
   });
+
+  it('preserves downloaded editions across service-worker and stale-chunk recovery', () => {
+    const client = read('app/(reader)/main/epaper/EPaperPageClient.tsx');
+    const serviceWorker = read('public/sw.js');
+    const rootLayout = read('app/layout.tsx');
+
+    expect(client).toContain("'lokswami-epaper-offline-v2'");
+    expect(serviceWorker).toContain("'lokswami-epaper-offline-v1'");
+    expect(serviceWorker).toContain('legacyCache.keys()');
+    expect(serviceWorker).toContain('durableOfflineCache.put(request, response)');
+    expect(rootLayout).toContain("DURABLE_CACHE_PREFIXES = ['lokswami-epaper-offline-']");
+    expect(rootLayout).toContain('!DURABLE_CACHE_PREFIXES.some');
+  });
+
+  it('uses the multi-channel branded share menu for editions and magazines', () => {
+    const client = read('app/(reader)/main/epaper/EPaperPageClient.tsx');
+
+    expect(client).toContain("import ShareMenu from '@/components/ui/ShareMenu'");
+    expect(client).toContain('placement="publication_reader_mobile_toolbar"');
+    expect(client).toContain('placement="publication_reader_desktop_toolbar"');
+    expect(client).toContain("publicationType === 'emagazine' ? 'emagazine' : 'epaper'");
+    expect(client).not.toContain('shareActivePaperOnWhatsApp');
+  });
 });

@@ -13,7 +13,6 @@ import {
   Loader2,
   Play,
   Search,
-  Share2,
   Smartphone,
   Volume2,
   VolumeX,
@@ -21,6 +20,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import ReaderImage from '@/components/ui/ReaderImage';
+import ShareMenu from '@/components/ui/ShareMenu';
 import VideoPlayer from '@/components/ui/VideoPlayer';
 import VideoShortsFeed, { type ShortsVideoItem } from '@/components/ui/VideoShortsFeed';
 import { resolveNewsCategory } from '@/lib/constants/newsCategories';
@@ -756,42 +756,11 @@ export default function VideosPageClient({
     });
   }
 
-  async function shareActiveVideo(targetVideo = selectedVideo) {
-    if (!targetVideo || typeof window === 'undefined') return;
-
+  function buildActiveVideoSharePath(targetVideo = selectedVideo) {
+    if (!targetVideo) return '/main/videos';
     const roundedTime = Math.floor(currentTime);
     const timeParam = targetVideo.id === selectedVideo?.id && roundedTime > 0 ? `&t=${roundedTime}` : '';
-    const url = `${window.location.origin}${buildVideoReaderPath(targetVideo.id)}${timeParam}`;
-    const nativeShareText = `Lokswami News - ${targetVideo.title}`;
-    const shareText = `${nativeShareText}\n${url}`;
-
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({
-          title: targetVideo.title,
-          text: nativeShareText,
-          url,
-        });
-        return;
-      } catch {
-        // Continue to fallback copy/share options.
-      }
-    }
-
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(shareText);
-        return;
-      } catch {
-        // Continue to WhatsApp fallback.
-      }
-    }
-
-    window.open(
-      `https://wa.me/?text=${encodeURIComponent(shareText)}`,
-      '_blank',
-      'noopener,noreferrer'
-    );
+    return `${buildVideoReaderPath(targetVideo.id)}${timeParam}`;
   }
 
   function handleTimeChange(nextCurrentTime: number, nextDuration: number) {
@@ -1225,14 +1194,18 @@ export default function VideosPageClient({
                     <span>{likedIds[mobileFeaturedVideo.id] ? copy.liked : copy.like}</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => void shareActiveVideo(mobileFeaturedVideo)}
-                    className="flex shrink-0 items-center gap-1.5 rounded-full bg-zinc-100 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200 active:scale-95 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-                  >
-                    <Share2 className="h-3.5 w-3.5" />
-                    <span>{copy.share}</span>
-                  </button>
+                  <ShareMenu
+                    title={mobileFeaturedVideo.title}
+                    url={buildActiveVideoSharePath(mobileFeaturedVideo)}
+                    text={`Lokswami News - ${mobileFeaturedVideo.title}`}
+                    whatsappText={`Lokswami News - ${mobileFeaturedVideo.title}`}
+                    contentType="video"
+                    contentId={mobileFeaturedVideo.id}
+                    placement="video_mobile_featured"
+                    language={language}
+                    triggerLabel={copy.share}
+                    buttonClassName="flex shrink-0 items-center gap-1.5 rounded-full bg-zinc-100 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200 active:scale-95 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                  />
 
                   <button
                     type="button"
@@ -1792,14 +1765,19 @@ export default function VideosPageClient({
                     {likedIds[selectedVideo.id] ? copy.liked : copy.like}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => void shareActiveVideo()}
-                    className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 dark:border-white/8 dark:bg-[#101014] dark:text-white/80"
-                  >
-                    <Share2 className="h-4 w-4" />
-                    {copy.share}
-                  </button>
+                  <ShareMenu
+                    title={selectedVideo.title}
+                    url={buildActiveVideoSharePath(selectedVideo)}
+                    text={`Lokswami News - ${selectedVideo.title}`}
+                    whatsappText={`Lokswami News - ${selectedVideo.title}`}
+                    contentType="video"
+                    contentId={selectedVideo.id}
+                    placement="video_detail_actions"
+                    language={language}
+                    triggerLabel={copy.share}
+                    className="w-full"
+                    buttonClassName="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 dark:border-white/8 dark:bg-[#101014] dark:text-white/80"
+                  />
 
                   <button
                     type="button"

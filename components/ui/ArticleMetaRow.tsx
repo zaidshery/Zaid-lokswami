@@ -7,9 +7,9 @@ import { ArrowUpRight, Newspaper } from 'lucide-react';
 import type { Article } from '@/lib/mock/data';
 import {
   buildArticleSharePath,
-  buildArticleWhatsAppShareUrl,
-  toAbsoluteShareUrl,
+  buildArticleWhatsAppShareText,
 } from '@/lib/utils/articleShare';
+import ShareMenu from '@/components/ui/ShareMenu';
 
 interface ArticleMetaRowProps {
   article: Pick<Article, 'id' | 'title' | 'views'> & {
@@ -58,23 +58,15 @@ export default function ArticleMetaRow({
   const router = useRouter();
   void timeText;
 
-  const shareOnWhatsApp = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (typeof window === 'undefined') return;
-
-    const resolvedPath =
-      sharePath ?? buildArticleSharePath({ id: article.id, slug: article.slug });
-    const articleUrl = toAbsoluteShareUrl(resolvedPath, window.location.origin);
-    const shareUrl = buildArticleWhatsAppShareUrl({
-      title: article.title,
-      articleUrl,
-      summary: article.summary,
-      category: article.category,
-    });
-    window.open(shareUrl, '_blank', 'noopener,noreferrer');
-  };
+  const resolvedSharePath =
+    sharePath ?? buildArticleSharePath({ id: article.id, slug: article.slug });
+  const brandedShareText = buildArticleWhatsAppShareText({
+    title: article.title,
+    articleUrl: resolvedSharePath,
+    summary: article.summary,
+    category: article.category,
+    includeUrl: false,
+  });
 
   const openEpaper = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -95,11 +87,11 @@ export default function ArticleMetaRow({
     : inverted
     ? 'border-orange-200/55 bg-orange-500/18 text-orange-100 hover:bg-orange-500/28'
     : 'border-orange-300/80 bg-white text-orange-700 hover:border-orange-400 hover:bg-orange-50 dark:border-orange-500/55 dark:bg-zinc-900 dark:text-orange-300 dark:hover:bg-orange-500/15';
-  const whatsappTone = inverted && readPriority
+  const shareTone = inverted && readPriority
     ? 'border-white/20 bg-white/[0.08] text-white/[0.88] hover:bg-white/[0.14]'
     : inverted
-    ? 'border-emerald-200/55 bg-emerald-500/18 text-emerald-100 hover:bg-emerald-500/28'
-    : 'border-emerald-300/85 bg-white text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-700/75 dark:bg-zinc-900 dark:text-emerald-300 dark:hover:bg-emerald-900/30';
+    ? 'border-sky-200/55 bg-sky-500/18 text-sky-100 hover:bg-sky-500/28'
+    : 'border-sky-300/85 bg-white text-sky-700 hover:border-sky-400 hover:bg-sky-50 dark:border-sky-700/75 dark:bg-zinc-900 dark:text-sky-300 dark:hover:bg-sky-900/30';
   const useTightCompactActions =
     compact && actionLayout === 'three-columns' && compactDensity === 'tight';
   const ctaSize = compact
@@ -146,24 +138,20 @@ export default function ArticleMetaRow({
         ) : null}
 
         {showWhatsAppButton ? (
-          <button
-            type="button"
-            onClick={shareOnWhatsApp}
-            aria-label={language === 'hi' ? '\u0935\u094d\u0939\u093e\u091f\u094d\u0938\u090f\u092a \u092a\u0930 \u0936\u0947\u092f\u0930 \u0915\u0930\u0947\u0902' : 'Share on WhatsApp'}
-            className={`${ctaBase} ${ctaSize} ${whatsappTone}`}
-            data-reader-action="true"
-          >
-            <span className={`${iconSize} flex items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm`}>
-              <svg viewBox="0 0 24 24" className={`${compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} fill-current`} aria-hidden="true">
-                <path d="M12 2a10 10 0 0 0-8.68 14.95L2 22l5.2-1.36A10 10 0 1 0 12 2Zm0 18.17a8.15 8.15 0 0 1-4.15-1.13l-.3-.18-3.09.8.82-3.01-.2-.31A8.18 8.18 0 1 1 12 20.17Zm4.48-5.86c-.24-.12-1.4-.7-1.62-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.91-1.17-.7-.63-1.18-1.4-1.32-1.64-.14-.24-.02-.37.1-.49.1-.1.24-.26.36-.39.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.79-.2-.47-.4-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.33.98 2.49c.12.16 1.7 2.61 4.11 3.66.58.25 1.03.4 1.38.52.58.18 1.1.16 1.52.1.46-.07 1.4-.57 1.6-1.12.2-.55.2-1.02.14-1.12-.06-.1-.22-.16-.46-.28Z" />
-              </svg>
-            </span>
-            {showWhatsAppText ? (
-              <span className={secondaryLabelClass}>
-                WhatsApp
-              </span>
-            ) : null}
-          </button>
+          <ShareMenu
+            title={article.title}
+            url={resolvedSharePath}
+            text={article.summary || ''}
+            whatsappText={brandedShareText}
+            contentType="article"
+            contentId={article.id}
+            placement="article_card"
+            language={language}
+            triggerLabel={language === 'hi' ? '\u0936\u0947\u092f\u0930' : 'Share'}
+            ariaLabel={language === 'hi' ? '\u0936\u0947\u092f\u0930 \u0915\u0930\u0928\u0947 \u0915\u093e \u0924\u0930\u0940\u0915\u093e \u091a\u0941\u0928\u0947\u0902' : 'Choose how to share article'}
+            className={actionLayout === 'three-columns' ? 'w-full' : ''}
+            buttonClassName={`${ctaBase} ${ctaSize} ${shareTone} ${actionLayout === 'three-columns' ? 'w-full' : ''} ${showWhatsAppText ? '' : '[&>span]:sr-only'}`}
+          />
         ) : null}
 
         {showReadButton ? (

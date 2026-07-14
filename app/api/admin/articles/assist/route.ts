@@ -34,6 +34,23 @@ function normalizeAssistInput(body: unknown): ArticleAssistInput {
     listenAudioReady: Boolean(source.listenAudioReady),
     sourceInfo: typeof source.sourceInfo === 'string' ? source.sourceInfo : '',
     sourceStoryId: typeof source.sourceStoryId === 'string' ? source.sourceStoryId : '',
+    locationTag: typeof source.locationTag === 'string' ? source.locationTag : '',
+    editorial:
+      source.editorial && typeof source.editorial === 'object' && !Array.isArray(source.editorial)
+        ? source.editorial
+        : undefined,
+    relatedArticles: Array.isArray(source.relatedArticles)
+      ? source.relatedArticles
+          .map((item) => {
+            const record = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+            return {
+              title: typeof record.title === 'string' ? record.title.trim() : '',
+              slug: typeof record.slug === 'string' ? record.slug.trim() : '',
+            };
+          })
+          .filter((item) => item.title)
+          .slice(0, 50)
+      : [],
   };
 }
 

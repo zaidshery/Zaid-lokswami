@@ -282,7 +282,7 @@ export function buildNewsArticleJsonLd(input: {
     name: input.author,
   };
   if (seo.authorProfileUrl) {
-    author.url = seo.authorProfileUrl;
+    author.url = toAbsoluteArticleUrl(seo.authorProfileUrl, siteUrl);
   }
 
   return {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const getAdminSessionMock = vi.fn();
 const connectDBMock = vi.fn();
 const articleFindByIdMock = vi.fn();
+const articleFindOneAndUpdateMock = vi.fn();
 const createBreakingTtsUploadTargetMock = vi.fn();
 const parseBreakingTtsAssetSizeMock = vi.fn();
 const validateBreakingTtsUploadSelectionMock = vi.fn();
@@ -22,6 +23,7 @@ vi.mock('@/lib/db/mongoose', () => ({
 vi.mock('@/lib/models/Article', () => ({
   default: {
     findById: articleFindByIdMock,
+    findOneAndUpdate: articleFindOneAndUpdateMock,
   },
 }));
 
@@ -50,9 +52,10 @@ function createJsonRequest(url: string, body: Record<string, unknown>) {
   }) as unknown as NextRequest;
 }
 
-function mockBreakingArticle(articleId: string) {
+function mockBreakingArticle(articleId: string, version = 4) {
   const article = {
     _id: articleId,
+    version,
     title: 'Heavy rain alert',
     author: 'Desk',
     reporterMeta: { locationTag: 'Bhopal' },
@@ -63,6 +66,7 @@ function mockBreakingArticle(articleId: string) {
     publishedAt: new Date('2026-05-23T10:00:00.000Z'),
     toObject: vi.fn(() => ({
       _id: articleId,
+      version,
       title: 'Heavy rain alert',
       author: 'Desk',
       reporterMeta: { locationTag: 'Bhopal' },
@@ -79,6 +83,33 @@ function mockBreakingArticle(articleId: string) {
     select: vi.fn().mockResolvedValue(article),
   });
   return article;
+}
+
+function mockCompletedUpload(articleId: string) {
+  const mediaKey = `lokswami/tts/article/${articleId}/breaking/headline.mp3`;
+  verifyBreakingTtsUploadMock.mockResolvedValue({
+    mediaUrl: `https://cdn.example.com/${mediaKey}`,
+    mediaKey,
+    mediaSizeBytes: 4096,
+    mediaMimeType: 'audio/mpeg',
+    storageProvider: 'do-spaces',
+  });
+  saveManualTtsAssetMock.mockResolvedValue({
+    _id: 'tts-breaking-1',
+    status: 'ready',
+    provider: 'manual',
+    audioUrl: `https://cdn.example.com/${mediaKey}`,
+    voice: 'manual-upload',
+    model: 'manual-upload',
+    languageCode: 'manual',
+    mimeType: 'audio/mpeg',
+    generatedAt: new Date('2026-05-23T12:00:00.000Z'),
+    updatedAt: new Date('2026-05-23T12:01:00.000Z'),
+    lastVerifiedAt: new Date('2026-05-23T12:02:00.000Z'),
+    chunkCount: 1,
+    charCount: 24,
+  });
+  return mediaKey;
 }
 
 describe('breaking manual TTS direct upload admin routes', () => {
@@ -130,6 +161,15 @@ describe('breaking manual TTS direct upload admin routes', () => {
     const articleId = '665000000000000000000001';
     const mediaKey = `lokswami/tts/article/${articleId}/breaking/headline.mp3`;
     const article = mockBreakingArticle(articleId);
+    articleFindOneAndUpdateMock.mockResolvedValue({
+      ...article,
+      version: 5,
+      updatedAt: new Date('2026-05-23T12:03:00.000Z'),
+      toObject: vi.fn(() => ({
+        ...article.toObject(),
+        version: 5,
+      })),
+    });
     verifyBreakingTtsUploadMock.mockResolvedValue({
       mediaUrl: `https://cdn.example.com/${mediaKey}`,
       mediaKey,
@@ -158,6 +198,7 @@ describe('breaking manual TTS direct upload admin routes', () => {
       createJsonRequest('http://localhost/api/admin/uploads/breaking-tts/complete', {
         articleId,
         mediaKey,
+        expectedVersion: 4,
         expectedSize: 4096,
         expectedFileType: 'audio/mpeg',
         expectedFileName: 'headline.mp3',
@@ -184,16 +225,101 @@ describe('breaking manual TTS direct upload admin routes', () => {
         mediaKey,
       })
     );
-    expect(article.breakingTts).toEqual(
+    expect(articleFindOneAndUpdateMock).toHaveBeenCalledWith(
+      {
+        _id: articleId,
+        isBreaking: true,
+        version: 4,
+      },
       expect.objectContaining({
-        audioUrl: `https://cdn.example.com/${mediaKey}`,
-        voice: 'manual',
-        model: 'manual',
-        mimeType: 'audio/mpeg',
-      })
+        $set: expect.objectContaining({
+          breakingTts: expect.objectContaining({
+            audioUrl: `https://cdn.example.com/${mediaKey}`,
+            voice: 'manual',
+            model: 'manual',
+            mimeType: 'audio/mpeg',
+          }),
+        }),
+        $inc: { version: 1 },
+      }),
+      { new: true, runValidators: true }
     );
-    expect(article.save).toHaveBeenCalled();
+    expect(article.save).not.toHaveBeenCalled();
     expect(payload.data.breakingTts.audioUrl).toBe(`https://cdn.example.com/${mediaKey}`);
     expect(payload.data.script).toBe('Bhopal: Heavy rain alert');
+    expect(payload.data.version).toBe(5);
+  });
+
+  it('advances a legacy versionless article from logical version 1 to 2', async () => {
+    const articleId = '665000000000000000000001';
+    const mediaKey = mockCompletedUpload(articleId);
+    const article = mockBreakingArticle(articleId, 1);
+    delete (article as Partial<typeof article>).version;
+    articleFindOneAndUpdateMock.mockResolvedValue({
+      ...article,
+      version: 2,
+      updatedAt: new Date('2026-05-23T12:03:00.000Z'),
+    });
+
+    const { POST } = await import('@/app/api/admin/uploads/breaking-tts/complete/route');
+    const response = await POST(
+      createJsonRequest('http://localhost/api/admin/uploads/breaking-tts/complete', {
+        articleId,
+        mediaKey,
+        expectedVersion: 1,
+        expectedSize: 4096,
+        expectedFileType: 'audio/mpeg',
+        expectedFileName: 'headline.mp3',
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(articleFindOneAndUpdateMock).toHaveBeenCalledWith(
+      {
+        _id: articleId,
+        isBreaking: true,
+        $or: [{ version: 1 }, { version: { $exists: false } }],
+      },
+      expect.objectContaining({
+        $set: expect.objectContaining({ version: 2 }),
+      }),
+      { new: true, runValidators: true }
+    );
+    const update = articleFindOneAndUpdateMock.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(update).not.toHaveProperty('$inc');
+    expect(payload.data.version).toBe(2);
+  });
+
+  it('rejects an upload recorded for an older article version before verification', async () => {
+    const articleId = '665000000000000000000001';
+    const mediaKey = `lokswami/tts/article/${articleId}/breaking/headline.mp3`;
+    mockBreakingArticle(articleId, 5);
+
+    const { POST } = await import('@/app/api/admin/uploads/breaking-tts/complete/route');
+    const response = await POST(
+      createJsonRequest('http://localhost/api/admin/uploads/breaking-tts/complete', {
+        articleId,
+        mediaKey,
+        expectedVersion: 4,
+        expectedSize: 4096,
+        expectedFileType: 'audio/mpeg',
+        expectedFileName: 'headline.mp3',
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload).toEqual(
+      expect.objectContaining({
+        code: 'ARTICLE_VERSION_CONFLICT',
+        currentVersion: 5,
+      })
+    );
+    expect(verifyBreakingTtsUploadMock).not.toHaveBeenCalled();
+    expect(articleFindOneAndUpdateMock).not.toHaveBeenCalled();
   });
 });

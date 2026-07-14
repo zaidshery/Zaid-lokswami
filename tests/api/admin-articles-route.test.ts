@@ -372,6 +372,17 @@ describe('/api/admin/articles route', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           intent: 'draft',
+          content: '<h2>Draft context</h2><p>Draft reporting.</p>',
+          editorial: {
+            storyType: 'analysis',
+            evidenceType: 'official',
+            sourceAttribution: 'Municipal release reviewed by the desk',
+          },
+          media: {
+            focalPointX: 35,
+            focalPointY: 65,
+            variants: { landscape16x9: '/uploads/draft-16x9.webp' },
+          },
         }),
       }) as unknown as NextRequest
     );
@@ -382,6 +393,22 @@ describe('/api/admin/articles route', () => {
       expect.objectContaining({
         slug: 'article',
         workflow: expect.objectContaining({ status: 'draft' }),
+        contentJson: expect.objectContaining({
+          version: 1,
+          blocks: expect.arrayContaining([
+            expect.objectContaining({ type: 'heading' }),
+            expect.objectContaining({ type: 'paragraph' }),
+          ]),
+        }),
+        editorial: expect.objectContaining({
+          storyType: 'analysis',
+          evidenceType: 'official',
+        }),
+        media: expect.objectContaining({
+          focalPointX: 35,
+          focalPointY: 65,
+          variants: expect.objectContaining({ landscape16x9: '/uploads/draft-16x9.webp' }),
+        }),
       })
     );
     expect(payload).toEqual({

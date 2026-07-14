@@ -15,6 +15,7 @@ import {
   buildPublicationTypeMongoFilter,
   normalizePublicationIssueMonth,
 } from '@/lib/utils/epaperPublication';
+import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
 
 export type PublicHomeFeedSource = 'mongo' | 'file';
 
@@ -221,6 +222,7 @@ function compareByPublishedAtDesc<T extends { id: string; publishedAt: string }>
 
 function mapArticle(raw: unknown): PublicHomeFeedArticle | null {
   const input = asObject(raw);
+  const activeFlags = resolveArticleEditorialFlags(input);
   const id = toId(input._id || input.id);
   const slug = String(input.slug || '').trim();
   const title = String(input.title || '').trim();
@@ -242,8 +244,8 @@ function mapArticle(raw: unknown): PublicHomeFeedArticle | null {
     author,
     publishedAt,
     views: Math.max(0, Math.floor(toNumber(input.views, 0))),
-    isBreaking: Boolean(input.isBreaking),
-    isTrending: Boolean(input.isTrending),
+    isBreaking: activeFlags.isBreaking,
+    isTrending: activeFlags.isTrending,
     href: buildArticlePublicPath({ id, slug }),
   };
 }
@@ -398,7 +400,7 @@ async function loadMongoFeed(
   const [articleDocs, videoDocs, shortDocs, epaperDocs, emagazineDocs] = await Promise.all([
     Article.find({})
       .select(
-        '_id slug title summary image category author publishedAt updatedAt views isBreaking isTrending workflow reporterMeta breakingTts'
+        '_id slug title summary image category author publishedAt updatedAt views isBreaking isTrending editorial workflow reporterMeta breakingTts'
       )
       .sort({ publishedAt: -1, _id: -1 })
       .limit(articleLimit)

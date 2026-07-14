@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import {
@@ -33,11 +33,14 @@ import {
 import Logo from '@/components/layout/Logo';
 import {
   formatUserRoleLabel,
+  isAdminRole,
   isCopyEditorRole,
   isReporterDeskRole,
   isSuperAdminRole,
+  type AdminRole,
   type UserRole,
 } from '@/lib/auth/roles';
+import { canViewPage, type AdminPageKey } from '@/lib/auth/permissions';
 import { useAppStore } from '@/lib/store/appStore';
 
 type SidebarItem = {
@@ -45,7 +48,12 @@ type SidebarItem = {
   labelEn: string;
   labelHi: string;
   icon: typeof LayoutDashboard;
+  pageKey: AdminPageKey;
+  section: SidebarSectionId;
+  visibleRoles?: readonly AdminRole[];
 };
+
+type SidebarSectionId = 'workflow' | 'content' | 'insights' | 'governance';
 
 type SidebarSection = {
   labelEn: string;
@@ -111,79 +119,36 @@ const HI = {
   darkTheme: '\u0921\u093e\u0930\u094d\u0915',
 } as const;
 
-const SUPER_ADMIN_ITEMS: SidebarItem[] = [
-  { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
-  { icon: BarChart3, labelEn: 'Analytics', labelHi: HI.analytics, href: '/admin/analytics' },
-  { icon: BarChart3, labelEn: 'Business Value', labelHi: 'बिजनेस वैल्यू', href: '/admin/analytics/business-value' },
-  { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls' },
-  { icon: BarChart3, labelEn: 'Revenue', labelHi: HI.revenue, href: '/admin/revenue' },
-  { icon: ClipboardList, labelEn: 'Audit Log', labelHi: HI.auditLog, href: '/admin/audit-log' },
-  {
-    icon: Activity,
-    labelEn: 'Operations Center',
-    labelHi: HI.operationsCenter,
-    href: '/admin/operations',
-  },
-  {
-    icon: ShieldCheck,
-    labelEn: 'Permission Review',
-    labelHi: HI.permissionReview,
-    href: '/admin/permission-review',
-  },
-  {
-    icon: Activity,
-    labelEn: 'Operations Diagnostics',
-    labelHi: HI.operationsDiagnostics,
-    href: '/admin/operations-diagnostics',
-  },
-  { icon: Activity, labelEn: 'Elections', labelHi: 'चुनाव', href: '/admin/settings/elections' },
-  { icon: Settings, labelEn: 'Settings', labelHi: HI.settings, href: '/admin/settings' },
-];
-
-const ADMIN_ITEMS: SidebarItem[] = [
-  { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
-  { icon: BarChart3, labelEn: 'Analytics', labelHi: HI.analytics, href: '/admin/analytics' },
-  { icon: FileText, labelEn: 'Review Queue', labelHi: HI.reviewQueue, href: '/admin/review-queue' },
-  { icon: ClipboardList, labelEn: 'Assignments', labelHi: HI.assignments, href: '/admin/assignments' },
-  { icon: FolderOpen, labelEn: 'Content Queue', labelHi: HI.contentQueue, href: '/admin/content-queue' },
-  { icon: BellRing, labelEn: 'Push Alerts', labelHi: HI.pushAlerts, href: '/admin/push-alerts' },
-  { icon: UserCog, labelEn: 'Team', labelHi: HI.team, href: '/admin/team' },
-  { icon: Activity, labelEn: 'Operations Center', labelHi: HI.operationsCenter, href: '/admin/operations' },
-  { icon: FileText, labelEn: 'Articles', labelHi: HI.articles, href: '/admin/articles' },
-  { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls' },
-  { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
-  { icon: Video, labelEn: 'Videos', labelHi: HI.videos, href: '/admin/videos' },
-  { icon: Share2, labelEn: 'Social Posts', labelHi: HI.socialPosts, href: '/admin/social-posts' },
-  { icon: Newspaper, labelEn: 'E-Papers', labelHi: HI.epapers, href: '/admin/epapers' },
-  { icon: BookOpen, labelEn: 'E-Magazines', labelHi: HI.emagazines, href: '/admin/emagazines' },
-  { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
-  { icon: Activity, labelEn: 'Elections', labelHi: 'चुनाव', href: '/admin/settings/elections' },
-  {
-    icon: Settings2,
-    labelEn: 'Newsroom Settings',
-    labelHi: HI.newsroomSettings,
-    href: '/admin/settings/newsroom',
-  },
-];
-
-const COPY_EDITOR_ITEMS: SidebarItem[] = [
-  { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
-  { icon: FileText, labelEn: 'Copy Desk', labelHi: HI.copyDesk, href: '/admin/copy-desk' },
-  { icon: FileText, labelEn: 'My Work', labelHi: HI.myWork, href: '/admin/my-work' },
-  { icon: FileText, labelEn: 'Articles', labelHi: HI.articles, href: '/admin/articles' },
-  { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories' },
-  { icon: Video, labelEn: 'Videos', labelHi: HI.videos, href: '/admin/videos' },
-  { icon: Share2, labelEn: 'Social Posts', labelHi: HI.socialPosts, href: '/admin/social-posts' },
-  { icon: Newspaper, labelEn: 'E-Papers', labelHi: HI.epapers, href: '/admin/epapers' },
-  { icon: BookOpen, labelEn: 'E-Magazines', labelHi: HI.emagazines, href: '/admin/emagazines' },
-  { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
-];
-
-const REPORTER_ITEMS: SidebarItem[] = [
-  { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin' },
-  { icon: FileText, labelEn: 'My Work', labelHi: HI.myWork, href: '/admin/my-work' },
-  { icon: FileText, labelEn: 'My Stories', labelHi: HI.myStories, href: '/admin/stories' },
-  { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media' },
+const ADMIN_SURFACES: SidebarItem[] = [
+  { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin', pageKey: 'dashboard', section: 'workflow' },
+  { icon: FileText, labelEn: 'My Work', labelHi: HI.myWork, href: '/admin/my-work', pageKey: 'my_work', section: 'workflow' },
+  { icon: FileText, labelEn: 'Review Queue', labelHi: HI.reviewQueue, href: '/admin/review-queue', pageKey: 'review_queue', section: 'workflow' },
+  { icon: ClipboardList, labelEn: 'Assignments', labelHi: HI.assignments, href: '/admin/assignments', pageKey: 'assignments', section: 'workflow' },
+  { icon: FolderOpen, labelEn: 'Content Queue', labelHi: HI.contentQueue, href: '/admin/content-queue', pageKey: 'content_queue', section: 'workflow' },
+  { icon: BellRing, labelEn: 'Push Alerts', labelHi: HI.pushAlerts, href: '/admin/push-alerts', pageKey: 'push_alerts', section: 'workflow' },
+  { icon: FileText, labelEn: 'Copy Desk', labelHi: HI.copyDesk, href: '/admin/copy-desk', pageKey: 'copy_desk', section: 'workflow' },
+  { icon: UserCog, labelEn: 'Team', labelHi: HI.team, href: '/admin/team', pageKey: 'team', section: 'workflow' },
+  { icon: Activity, labelEn: 'Operations Center', labelHi: HI.operationsCenter, href: '/admin/operations', pageKey: 'operations_center', section: 'workflow' },
+  { icon: FileText, labelEn: 'Articles', labelHi: HI.articles, href: '/admin/articles', pageKey: 'articles', section: 'content' },
+  { icon: FileText, labelEn: 'Stories', labelHi: HI.stories, href: '/admin/stories', pageKey: 'stories', section: 'content' },
+  { icon: Video, labelEn: 'Videos', labelHi: HI.videos, href: '/admin/videos', pageKey: 'videos', section: 'content' },
+  { icon: Share2, labelEn: 'Social Posts', labelHi: HI.socialPosts, href: '/admin/social-posts', pageKey: 'social_posts', section: 'content' },
+  { icon: Newspaper, labelEn: 'E-Papers', labelHi: HI.epapers, href: '/admin/epapers', pageKey: 'epapers', section: 'content' },
+  { icon: BookOpen, labelEn: 'E-Magazines', labelHi: HI.emagazines, href: '/admin/emagazines', pageKey: 'epapers', section: 'content' },
+  { icon: ImageIcon, labelEn: 'Media', labelHi: HI.media, href: '/admin/media', pageKey: 'media', section: 'content' },
+  { icon: ListChecks, labelEn: 'Polls', labelHi: HI.polls, href: '/admin/polls', pageKey: 'polls', section: 'content' },
+  { icon: FolderOpen, labelEn: 'Categories', labelHi: HI.categories, href: '/admin/categories', pageKey: 'categories', section: 'content' },
+  { icon: BellRing, labelEn: 'Contact Messages', labelHi: '\u0938\u0902\u092a\u0930\u094d\u0915 \u0938\u0902\u0926\u0947\u0936', href: '/admin/contact-messages', pageKey: 'contact_messages', section: 'content' },
+  { icon: BarChart3, labelEn: 'Analytics', labelHi: HI.analytics, href: '/admin/analytics', pageKey: 'analytics', section: 'insights' },
+  { icon: BarChart3, labelEn: 'Business Value', labelHi: '\u092c\u093f\u091c\u093c\u0928\u0947\u0938 \u0935\u0948\u0932\u094d\u092f\u0942', href: '/admin/analytics/business-value', pageKey: 'analytics', section: 'insights', visibleRoles: ['super_admin'] },
+  { icon: BarChart3, labelEn: 'Revenue', labelHi: HI.revenue, href: '/admin/revenue', pageKey: 'revenue', section: 'insights' },
+  { icon: Settings2, labelEn: 'AI Ops', labelHi: '\u090f\u0906\u0908 \u0911\u092a\u0930\u0947\u0936\u0902\u0938', href: '/admin/ai', pageKey: 'ai_ops', section: 'insights' },
+  { icon: ClipboardList, labelEn: 'Audit Log', labelHi: HI.auditLog, href: '/admin/audit-log', pageKey: 'audit_log', section: 'governance' },
+  { icon: ShieldCheck, labelEn: 'Permission Review', labelHi: HI.permissionReview, href: '/admin/permission-review', pageKey: 'permission_review', section: 'governance' },
+  { icon: Activity, labelEn: 'Operations Diagnostics', labelHi: HI.operationsDiagnostics, href: '/admin/operations-diagnostics', pageKey: 'operations_diagnostics', section: 'governance' },
+  { icon: Activity, labelEn: 'Elections', labelHi: '\u091a\u0941\u0928\u093e\u0935', href: '/admin/settings/elections', pageKey: 'newsroom_settings', section: 'governance' },
+  { icon: Settings2, labelEn: 'Newsroom Settings', labelHi: HI.newsroomSettings, href: '/admin/settings/newsroom', pageKey: 'newsroom_settings', section: 'governance' },
+  { icon: Settings, labelEn: 'Settings', labelHi: HI.settings, href: '/admin/settings', pageKey: 'settings', section: 'governance' },
 ];
 
 const ADMIN_MOBILE_DOCK_HREFS = [
@@ -202,121 +167,50 @@ const COPY_EDITOR_MOBILE_DOCK_HREFS = [
   '/admin/media',
 ] as const;
 
-function getSidebarItems(role: UserRole | undefined): SidebarItem[] {
-  if (isSuperAdminRole(role)) {
-    return SUPER_ADMIN_ITEMS;
-  }
+const SUPER_ADMIN_MOBILE_DOCK_HREFS = [
+  '/admin',
+  '/admin/review-queue',
+  '/admin/analytics',
+  '/admin/operations',
+  '/admin/settings',
+] as const;
 
-  switch (role) {
-    case 'admin':
-      return ADMIN_ITEMS;
-    case 'copy_editor':
-      return COPY_EDITOR_ITEMS;
-    case 'reporter':
-      return REPORTER_ITEMS;
-    default:
-      return REPORTER_ITEMS;
-  }
+function getSidebarItems(role: UserRole | undefined): SidebarItem[] {
+  if (!isAdminRole(role)) return [];
+
+  return ADMIN_SURFACES.filter(
+    (surface) =>
+      canViewPage(role, surface.pageKey) &&
+      (!surface.visibleRoles || surface.visibleRoles.includes(role))
+  ).map((surface) =>
+    role === 'reporter' && surface.pageKey === 'stories'
+      ? { ...surface, labelEn: 'My Stories', labelHi: HI.myStories }
+      : surface
+  );
 }
 
 function getSidebarSections(
   role: UserRole | undefined,
   sidebarItems: SidebarItem[]
 ): SidebarSection[] {
-  const pick = (hrefs: string[]) =>
-    hrefs
-      .map((href) => sidebarItems.find((item) => item.href === href))
-      .filter((item): item is SidebarItem => Boolean(item));
-
-  if (isSuperAdminRole(role)) {
-    return [
-      {
-        labelEn: 'Overview',
-        labelHi: '\u0913\u0935\u0930\u0935\u094d\u092f\u0942',
-        items: pick(['/admin', '/admin/analytics', '/admin/analytics/business-value', '/admin/revenue']),
-      },
-      {
-        labelEn: 'Governance',
-        labelHi: '\u0917\u0935\u0930\u094d\u0928\u0947\u0902\u0938',
-        items: pick([
-          '/admin/polls',
-          '/admin/audit-log',
-          '/admin/operations',
-          '/admin/permission-review',
-          '/admin/operations-diagnostics',
-          '/admin/settings/elections',
-          '/admin/settings',
-        ]),
-      },
-    ].filter((section) => section.items.length > 0);
+  if (isReporterDeskRole(role)) {
+    return [{ labelEn: 'Reporter Desk', labelHi: HI.reporterDesk, items: sidebarItems }];
   }
 
-  if (role === 'admin') {
-    return [
-      {
-        labelEn: 'Desk Workflow',
-        labelHi: '\u0921\u0947\u0938\u094d\u0915 \u0935\u0930\u094d\u0915\u092b\u094d\u0932\u094b',
-        items: pick([
-          '/admin',
-          '/admin/review-queue',
-          '/admin/assignments',
-          '/admin/content-queue',
-          '/admin/push-alerts',
-          '/admin/team',
-        ]),
-      },
-      {
-        labelEn: 'Content',
-        labelHi: '\u0915\u0902\u091f\u0947\u0902\u091f',
-        items: pick([
-          '/admin/articles',
-          '/admin/polls',
-          '/admin/stories',
-          '/admin/videos',
-          '/admin/social-posts',
-          '/admin/epapers',
-          '/admin/emagazines',
-          '/admin/media',
-        ]),
-      },
-      {
-        labelEn: 'Insights & Settings',
-        labelHi: '\u0907\u0928\u0938\u093e\u0907\u091f\u094d\u0938 \u0914\u0930 \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938',
-        items: pick(['/admin/operations', '/admin/analytics', '/admin/settings/elections', '/admin/settings/newsroom']),
-      },
-    ].filter((section) => section.items.length > 0);
-  }
-
-  if (isCopyEditorRole(role)) {
-    return [
-      {
-        labelEn: 'Desk Workflow',
-        labelHi: '\u0921\u0947\u0938\u094d\u0915 \u0935\u0930\u094d\u0915\u092b\u094d\u0932\u094b',
-        items: pick(['/admin', '/admin/copy-desk', '/admin/my-work']),
-      },
-      {
-        labelEn: 'Content',
-        labelHi: '\u0915\u0902\u091f\u0947\u0902\u091f',
-        items: pick([
-          '/admin/articles',
-          '/admin/stories',
-          '/admin/videos',
-          '/admin/social-posts',
-          '/admin/epapers',
-          '/admin/emagazines',
-          '/admin/media',
-        ]),
-      },
-    ].filter((section) => section.items.length > 0);
-  }
-
-  return [
-    {
-      labelEn: 'Reporter Desk',
-      labelHi: HI.reporterDesk,
-      items: sidebarItems,
-    },
+  const labels: Array<{ id: SidebarSectionId; labelEn: string; labelHi: string }> = [
+    { id: 'workflow', labelEn: 'Desk Workflow', labelHi: '\u0921\u0947\u0938\u094d\u0915 \u0935\u0930\u094d\u0915\u092b\u094d\u0932\u094b' },
+    { id: 'content', labelEn: 'Content', labelHi: '\u0915\u0902\u091f\u0947\u0902\u091f' },
+    { id: 'insights', labelEn: 'Insights', labelHi: '\u0907\u0928\u0938\u093e\u0907\u091f\u094d\u0938' },
+    { id: 'governance', labelEn: 'Governance & Settings', labelHi: '\u0917\u0935\u0930\u094d\u0928\u0947\u0902\u0938 \u0914\u0930 \u0938\u0947\u091f\u093f\u0902\u0917\u094d\u0938' },
   ];
+
+  return labels
+    .map(({ id, labelEn, labelHi }) => ({
+      labelEn,
+      labelHi,
+      items: sidebarItems.filter((item) => item.section === id),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 
 function getMobileDockItems(
@@ -335,6 +229,12 @@ function getMobileDockItems(
 
   if (role === 'admin') {
     return ADMIN_MOBILE_DOCK_HREFS
+      .map((href) => sidebarItems.find((item) => item.href === href))
+      .filter((item): item is SidebarItem => Boolean(item));
+  }
+
+  if (isSuperAdminRole(role)) {
+    return SUPER_ADMIN_MOBILE_DOCK_HREFS
       .map((href) => sidebarItems.find((item) => item.href === href))
       .filter((item): item is SidebarItem => Boolean(item));
   }
@@ -360,6 +260,33 @@ function isActiveNavItem(pathname: string, href: string) {
   }
 
   return pathname === hrefPath || pathname.startsWith(`${hrefPath}/`);
+}
+
+function findActiveSidebarItem(pathname: string, items: SidebarItem[]) {
+  return items
+    .filter((item) => isActiveNavItem(pathname, item.href))
+    .sort((left, right) => right.href.length - left.href.length)[0];
+}
+
+function trapTabKey(event: React.KeyboardEvent<HTMLElement>) {
+  if (event.key !== 'Tab') return;
+
+  const focusable = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((element) => element.getClientRects().length > 0);
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) return;
+
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function getConsoleLabel(role: UserRole | undefined, isHindi: boolean) {
@@ -454,6 +381,10 @@ export default function AdminShell({
   const [isHydrated, setIsHydrated] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const mobileNavButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileDrawerRef = useRef<HTMLElement>(null);
+  const mobileToolsButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileToolsMenuRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme, language, toggleLanguage } = useAppStore();
 
   useEffect(() => {
@@ -495,6 +426,45 @@ export default function AdminShell({
     }
   }, [mobileNavOpen]);
 
+  useEffect(() => {
+    const drawer = mobileDrawerRef.current;
+    if (!drawer) return;
+
+    drawer.toggleAttribute('inert', !mobileNavOpen);
+    if (mobileNavOpen) {
+      window.requestAnimationFrame(() => {
+        drawer.querySelector<HTMLElement>('button[aria-label="Close navigation"]')?.focus();
+      });
+    }
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (mobileToolsOpen) {
+      window.requestAnimationFrame(() => {
+        mobileToolsMenuRef.current?.querySelector<HTMLElement>('button, a[href]')?.focus();
+      });
+    }
+  }, [mobileToolsOpen]);
+
+  useEffect(() => {
+    if (!mobileNavOpen && !mobileToolsOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      if (mobileNavOpen) {
+        setMobileNavOpen(false);
+        window.requestAnimationFrame(() => mobileNavButtonRef.current?.focus());
+      } else {
+        setMobileToolsOpen(false);
+        window.requestAnimationFrame(() => mobileToolsButtonRef.current?.focus());
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [mobileNavOpen, mobileToolsOpen]);
+
   const resolvedUser = {
     name: initialUser.name ?? null,
     email: initialUser.email ?? null,
@@ -521,7 +491,7 @@ export default function AdminShell({
   const adminRoleLabel = formatUserRoleLabel(resolvedUser.role);
   const adminInitial = (adminName.charAt(0) || 'A').toUpperCase();
   const consoleLabel = getConsoleLabel(resolvedUser.role, isHindi);
-  const activeSidebarItem = sidebarItems.find((item) => isActiveNavItem(pathname, item.href));
+  const activeSidebarItem = findActiveSidebarItem(pathname, sidebarItems);
   const headerLabel = activeSidebarItem
     ? isHindi
       ? activeSidebarItem.labelHi
@@ -569,7 +539,10 @@ export default function AdminShell({
         </Link>
         <button
           type="button"
-          onClick={() => setMobileNavOpen(false)}
+          onClick={() => {
+            setMobileNavOpen(false);
+            window.requestAnimationFrame(() => mobileNavButtonRef.current?.focus());
+          }}
           className="admin-shell-toolbar-btn inline-flex h-10 w-10 items-center justify-center rounded-xl lg:hidden"
           aria-label="Close navigation"
         >
@@ -577,7 +550,7 @@ export default function AdminShell({
         </button>
       </div>
 
-      <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 pb-24">
+      <nav aria-label="Newsroom tools" className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 pb-24">
         {sidebarSections.map((section) => (
           <div key={section.labelEn} className="space-y-2">
             <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
@@ -585,13 +558,14 @@ export default function AdminShell({
             </p>
             <div className="space-y-1">
               {section.items.map((item) => {
-                const isActive = isActiveNavItem(pathname, item.href);
+                const isActive = activeSidebarItem?.href === item.href;
 
                 return (
                   <Link
                     key={`${item.href}-${item.labelEn}`}
                     href={item.href}
                     onClick={() => setMobileNavOpen(false)}
+                    aria-current={isActive ? 'page' : undefined}
                     className={`group flex items-center gap-3 rounded-2xl px-3 py-3 transition-all ${
                       isActive
                         ? 'bg-[color:var(--admin-shell-active)] text-[color:var(--admin-shell-active-text)] shadow-[var(--admin-shell-shadow)]'
@@ -636,21 +610,33 @@ export default function AdminShell({
       suppressHydrationWarning
       className="admin-shell min-h-screen text-[color:var(--admin-shell-text)] transition-colors lg:flex lg:h-screen lg:overflow-hidden"
     >
-      <button
-        type="button"
-        aria-label={mobileNavOpen ? 'Close mobile navigation' : mobileToolsOpen ? 'Close mobile tools' : 'Close mobile overlays'}
-        onClick={() => {
-          setMobileNavOpen(false);
-          setMobileToolsOpen(false);
-        }}
-        className={cx(
-          'fixed inset-0 z-30 bg-black/55 transition-opacity lg:hidden',
-          mobileNavOpen || mobileToolsOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
-        )}
-      />
+      {mobileNavOpen || mobileToolsOpen ? (
+        <button
+          type="button"
+          aria-label={mobileNavOpen ? 'Close mobile navigation' : 'Close mobile tools'}
+          onClick={() => {
+            const restoreTarget = mobileNavOpen
+              ? mobileNavButtonRef.current
+              : mobileToolsButtonRef.current;
+            setMobileNavOpen(false);
+            setMobileToolsOpen(false);
+            window.requestAnimationFrame(() => restoreTarget?.focus());
+          }}
+          className="fixed inset-0 z-30 bg-black/55 lg:hidden"
+        />
+      ) : null}
       <aside
+        className="admin-shell-surface-strong fixed inset-y-0 left-0 z-40 hidden w-[272px] flex-col overflow-hidden border-r border-[color:var(--admin-shell-border-strong)] lg:flex"
+      >
+        {sidebarContent}
+      </aside>
+      <aside
+        ref={mobileDrawerRef}
+        id="admin-mobile-navigation"
+        aria-hidden={!mobileNavOpen}
+        onKeyDown={trapTabKey}
         className={cx(
-          'admin-shell-surface-strong fixed inset-y-0 left-0 z-40 flex w-[min(86vw,320px)] flex-col overflow-hidden border-r border-[color:var(--admin-shell-border-strong)] transition-transform duration-300 lg:w-[272px] lg:translate-x-0',
+          'admin-shell-surface-strong fixed inset-y-0 left-0 z-40 flex w-[min(86vw,320px)] flex-col overflow-hidden border-r border-[color:var(--admin-shell-border-strong)] transition-transform duration-300 lg:hidden',
           mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -668,19 +654,21 @@ export default function AdminShell({
         >
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
+              ref={mobileNavButtonRef}
               type="button"
               onClick={() => setMobileNavOpen((current) => !current)}
               className="admin-shell-toolbar-btn inline-flex h-10 w-10 items-center justify-center rounded-xl lg:hidden"
               aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
               aria-expanded={mobileNavOpen}
+              aria-controls="admin-mobile-navigation"
             >
               {mobileNavOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold text-[color:var(--admin-shell-text)] sm:text-lg">
+              <p className="truncate text-base font-semibold text-[color:var(--admin-shell-text)] sm:text-lg">
                 <span className="sm:hidden">{mobileHeaderLabel}</span>
                 <span className="hidden sm:inline">{headerLabel}</span>
-              </h1>
+              </p>
               <p className="truncate text-xs text-[color:var(--admin-shell-text-muted)]">
                 {headerSubtitle}
               </p>
@@ -698,6 +686,7 @@ export default function AdminShell({
               <span>{isHindi ? '\u0939\u093f' : 'EN'}</span>
             </button>
             <button
+              ref={mobileToolsButtonRef}
               type="button"
               onClick={() => {
                 setMobileNavOpen(false);
@@ -749,7 +738,11 @@ export default function AdminShell({
 
             {mobileToolsOpen ? (
               <div
+                ref={mobileToolsMenuRef}
                 id="admin-mobile-tools-menu"
+                role="dialog"
+                aria-label="Display and language tools"
+                onKeyDown={trapTabKey}
                 className="admin-shell-surface-strong absolute right-0 top-12 z-50 w-[min(calc(100vw-2rem),18rem)] rounded-[24px] p-3 shadow-[var(--admin-shell-shadow-strong)] sm:hidden"
               >
                 <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
@@ -807,15 +800,16 @@ export default function AdminShell({
       </main>
 
       {hasMobileDock ? (
-        <nav className="admin-shell-surface-strong fixed inset-x-4 bottom-4 z-20 rounded-[26px] px-2 py-2 shadow-[var(--admin-shell-shadow-strong)] lg:hidden">
+        <nav aria-label="Quick newsroom navigation" className="admin-shell-surface-strong fixed inset-x-4 bottom-4 z-20 rounded-[26px] px-2 py-2 shadow-[var(--admin-shell-shadow-strong)] lg:hidden">
           <div className={cx('grid gap-1', getMobileDockGridClass(mobileDockItems.length))}>
             {mobileDockItems.map((item) => {
-              const isActive = isActiveNavItem(pathname, item.href);
+              const isActive = activeSidebarItem?.href === item.href;
 
               return (
                 <Link
                   key={`${item.href}-${item.labelEn}-mobile`}
                   href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
                   className={cx(
                     'flex min-w-0 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center text-[10px] font-semibold transition-colors',
                     isActive

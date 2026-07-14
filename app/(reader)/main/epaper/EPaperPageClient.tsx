@@ -37,6 +37,7 @@ import {
 import Logo from '@/components/layout/Logo';
 import EPaperDatePicker from '@/components/ui/EPaperDatePicker';
 import EPaperCityPicker from '@/components/ui/EPaperCityPicker';
+import ShareMenu from '@/components/ui/ShareMenu';
 import {
   EPAPER_CITY_OPTIONS,
 } from '@/lib/constants/epaperCities';
@@ -44,7 +45,6 @@ import { COMPANY_INFO } from '@/lib/constants/company';
 import { useAppStore } from '@/lib/store/appStore';
 import {
   buildEpaperIssueShareText,
-  buildEpaperIssueWhatsAppShareUrl,
   buildEpaperSharePath,
   buildEpaperStoryShareText,
   buildEpaperStoryWhatsAppShareUrl,
@@ -377,7 +377,7 @@ const COPY = {
 
 const EPAPER_LAST_PAGE_STORAGE_KEY = 'lokswami_epaper_last_page_v1';
 const EPAPER_ZOOM_HINT_STORAGE_KEY = 'lokswami_epaper_zoom_hint_seen_v1';
-const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v1';
+const EPAPER_OFFLINE_CACHE_NAME = 'lokswami-epaper-offline-v2';
 const MIN_PREVIEW_ZOOM = 1;
 const PREVIEW_ZOOM_STEP = 0.2;
 const PREVIEW_DOUBLE_TAP_ZOOM = 2;
@@ -1770,49 +1770,24 @@ export default function EPaperPageClient({
     }
   };
 
-  const shareActivePaperOnWhatsApp = async () => {
-    if (!activePaper) return;
-
-    const sharePath = buildEpaperSharePath({
+  const activePaperSharePath = activePaper
+    ? buildEpaperSharePath({
       paperId: activePaper._id,
       page: activePage,
-    });
-    const shareUrl = toAbsoluteShareUrl(sharePath, window.location.origin);
-    const dateLabel = activePaper.publishDate
+    })
+    : '/main/epaper';
+  const activePaperShareDateLabel = activePaper?.publishDate
       ? formatPublicationIssueLabel(activePaper.publishDate, publicationType, activePaper.publishDate)
       : selectedPublishDate;
-    const shareText = buildEpaperIssueShareText({
+  const activePaperShareText = activePaper
+    ? buildEpaperIssueShareText({
       title: activePaper.title,
-      issueUrl: shareUrl,
+      issueUrl: activePaperSharePath,
       cityLabel: getPublicationLocationLabel(publicationType, activePaper.cityName),
-      dateLabel,
+      dateLabel: activePaperShareDateLabel,
       includeUrl: false,
-    });
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: activePaper.title,
-          text: shareText,
-          url: shareUrl,
-        });
-        return;
-      } catch (error: unknown) {
-        if (isAbortError(error)) return;
-      }
-    }
-
-    const whatsappUrl = buildEpaperIssueWhatsAppShareUrl({
-      title: activePaper.title,
-      issueUrl: shareUrl,
-      cityLabel: getPublicationLocationLabel(publicationType, activePaper.cityName),
-      dateLabel,
-    });
-    const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-    if (!opened) {
-      window.location.href = whatsappUrl;
-    }
-  };
+    })
+    : '';
 
   const buildActiveArticleShareUrl = () => {
     if (!activePaper || !activeArticle) return '';
@@ -3064,18 +3039,19 @@ export default function EPaperPageClient({
 
                 {/* Right: Share action */}
                 <div className="flex items-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void shareActivePaperOnWhatsApp();
-                    }}
-                    aria-label={t.shareWhatsApp}
-                    className="reader-touch-button reader-focus-ring inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-100 px-2.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-200 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-                    title={t.shareWhatsApp}
-                  >
-                    <Share2 className="h-4 w-4" />
-                    <span>{t.shareWhatsApp}</span>
-                  </button>
+                  <ShareMenu
+                    title={activePaper.title}
+                    url={activePaperSharePath}
+                    text={activePaperShareText}
+                    whatsappText={activePaperShareText}
+                    contentType={publicationType === 'emagazine' ? 'emagazine' : 'epaper'}
+                    contentId={activePaper._id}
+                    placement="publication_reader_mobile_toolbar"
+                    language={language}
+                    triggerLabel={t.shareWhatsApp}
+                    ariaLabel={t.shareWhatsApp}
+                    buttonClassName="reader-touch-button reader-focus-ring inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-100 px-2.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-200 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                  />
                 </div>
               </div>
 
@@ -3241,18 +3217,19 @@ export default function EPaperPageClient({
                     <span className="hidden lg:inline">{isActivePaperSaved ? t.savedIssue : t.saveIssue}</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void shareActivePaperOnWhatsApp();
-                    }}
-                    aria-label={t.shareWhatsApp}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    title={t.shareWhatsApp}
-                  >
-                    <Share2 className="h-3.5 w-3.5" />
-                    <span className="hidden lg:inline">{t.shareWhatsApp}</span>
-                  </button>
+                  <ShareMenu
+                    title={activePaper.title}
+                    url={activePaperSharePath}
+                    text={activePaperShareText}
+                    whatsappText={activePaperShareText}
+                    contentType={publicationType === 'emagazine' ? 'emagazine' : 'epaper'}
+                    contentId={activePaper._id}
+                    placement="publication_reader_desktop_toolbar"
+                    language={language}
+                    triggerLabel={t.shareWhatsApp}
+                    ariaLabel={t.shareWhatsApp}
+                    buttonClassName="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 [&>span]:hidden [&>span]:lg:inline"
+                  />
 
                   <div className="relative" ref={overflowRef}>
                     <button

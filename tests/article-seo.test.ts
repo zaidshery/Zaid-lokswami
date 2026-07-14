@@ -22,6 +22,27 @@ describe('article SEO helpers', () => {
     );
   });
 
+  it('turns staff-directory profile paths into absolute JSON-LD author URLs', () => {
+    const jsonLd = buildNewsArticleJsonLd({
+      id: 'article-1',
+      slug: 'staff-story',
+      title: 'Staff story',
+      summary: 'Staff story summary',
+      image: '/image.jpg',
+      category: 'City',
+      author: 'Staff Reporter',
+      publishedAt: '2026-07-13T09:00:00.000Z',
+      updatedAt: '2026-07-13T09:30:00.000Z',
+      siteUrl: 'https://lokswami.com',
+      seo: { authorProfileUrl: '/main/author/staff-1' },
+    });
+
+    expect(jsonLd.author).toEqual([expect.objectContaining({
+      name: 'Staff Reporter',
+      url: 'https://lokswami.com/main/author/staff-1',
+    })]);
+  });
+
   it('scores keyword, image, schema, and linking readiness', () => {
     const analysis = analyzeArticleSeo({
       title: 'Indore Metro update reaches readers',

@@ -429,6 +429,14 @@ export function canTransitionContent(
   }
 
   if (isCopyEditorRole(user.role)) {
+    if (
+      action === 'submit' &&
+      workflowStatus === 'draft' &&
+      isOwnContent(user, content)
+    ) {
+      return true;
+    }
+
     if (action === 'start_review' && workflowStatus === 'submitted') {
       return !resolveAssignedToId(content);
     }

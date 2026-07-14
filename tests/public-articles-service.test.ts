@@ -171,6 +171,35 @@ describe('public articles service', () => {
     );
   });
 
+  it('removes expired editorial flags from public article output', async () => {
+    listAllStoredArticlesMock.mockResolvedValue([
+      {
+        ...publishedBase,
+        _id: 'expired-flags',
+        slug: 'expired-flags',
+        title: 'Expired Flags',
+        category: 'Politics',
+        publishedAt: '2026-05-09T10:00:00.000Z',
+        updatedAt: '2026-05-09T10:30:00.000Z',
+        isBreaking: true,
+        isTrending: true,
+        editorial: {
+          breakingStartsAt: '2020-01-01T10:00',
+          breakingExpiresAt: '2020-01-01T11:00',
+          trendingExpiresAt: '2020-01-01T11:00',
+        },
+      },
+    ]);
+
+    const { listPublicArticles } = await import('@/lib/server/publicArticles');
+    const result = await listPublicArticles({ limit: 10 });
+
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      isBreaking: false,
+      isTrending: false,
+    }));
+  });
+
   it('returns public article detail by slug without leaking workflow metadata', async () => {
     getStoredArticleByIdOrSlugMock.mockResolvedValue({
       ...publishedBase,

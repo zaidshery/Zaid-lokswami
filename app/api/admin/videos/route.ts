@@ -9,7 +9,7 @@ import {
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import {
   createStoredVideo,
-  listStoredVideos,
+  listAllStoredVideos,
 } from '@/lib/storage/videosFile';
 import {
   buildVideoActivityMessage,
@@ -314,18 +314,30 @@ export async function GET(req: NextRequest) {
     const effectiveLimit = isUnbounded ? FILE_STORE_UNBOUNDED_LIMIT : limit;
 
     if (await shouldUseFileStore()) {
-      const { data, total } = await listStoredVideos({
-        category,
-        type,
-        published: publishedParam,
-        search,
+      const allVideos = await listAllStoredVideos();
+      const filteredVideos = sortVideos(
+        allVideos
+          .map((video) => resolveVideoRecord(video))
+          .filter((video) =>
+            matchesFilters(video, user, {
+              category,
+              type,
+              search,
+              published: publishedParam,
+              workflowStatus: effectiveWorkflowStatus,
+            })
+          ),
         sort,
-        workflowStatus: effectiveWorkflowStatus,
-        limit: effectiveLimit,
-        page: effectivePage,
-      });
+        type
+      );
+      const total = filteredVideos.length;
+      const videos = isUnbounded
+        ? filteredVideos
+        : filteredVideos.slice(
+            (effectivePage - 1) * effectiveLimit,
+            (effectivePage - 1) * effectiveLimit + effectiveLimit
+          );
 
-      const videos = data.map((video) => resolveVideoRecord(video));
       return NextResponse.json({
         success: true,
         data: videos,

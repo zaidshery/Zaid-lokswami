@@ -27,7 +27,7 @@ import {
 } from '@/lib/auth/permissions';
 import {
   createStoredStory,
-  listStoredStories,
+  listAllStoredStories,
 } from '@/lib/storage/storiesFile';
 import { getStoryVideoMonthlyUsageSummary } from '@/lib/server/storyVideoUsage';
 import {
@@ -439,17 +439,28 @@ export async function GET(req: NextRequest) {
     const effectiveLimit = isUnbounded ? FILE_STORE_UNBOUNDED_LIMIT : limit;
 
     if (await shouldUseFileStore()) {
-      const { data, total } = await listStoredStories({
-        category,
-        published: publishedParam,
-        search,
-        sort,
-        workflowStatus: effectiveWorkflowStatus,
-        limit: effectiveLimit,
-        page: effectivePage,
-      });
+      const allStories = await listAllStoredStories();
+      const filteredStories = sortStories(
+        allStories
+          .map((story) => resolveStoryRecord(story))
+          .filter((story) =>
+            matchesFilters(story, user, {
+              category,
+              search,
+              published: publishedParam,
+              workflowStatus: effectiveWorkflowStatus,
+            })
+          ),
+        sort
+      );
+      const total = filteredStories.length;
+      const stories = isUnbounded
+        ? filteredStories
+        : filteredStories.slice(
+            (effectivePage - 1) * effectiveLimit,
+            (effectivePage - 1) * effectiveLimit + effectiveLimit
+          );
 
-      const stories = data.map((story) => resolveStoryRecord(story));
       return NextResponse.json({
         success: true,
         data: stories,

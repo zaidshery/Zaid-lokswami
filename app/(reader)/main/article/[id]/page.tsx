@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Bookmark, Newspaper, Sparkles, Volume2, PauseCircle, Loader2 } from 'lucide-react';
 import NewsCard from '@/components/ui/NewsCard';
+import ShareMenu from '@/components/ui/ShareMenu';
 import { fetchMergedLiveArticles } from '@/lib/content/liveArticles';
 import {
   fetchPublicArticleDetail,
@@ -15,8 +16,7 @@ import type { Article } from '@/lib/mock/data';
 import { useAppStore } from '@/lib/store/appStore';
 import {
   buildArticleSharePath,
-  buildArticleWhatsAppShareUrl,
-  toAbsoluteShareUrl,
+  buildArticleWhatsAppShareText,
 } from '@/lib/utils/articleShare';
 import {
   buildArticleImageVariantUrl,
@@ -554,26 +554,6 @@ export default function ArticleDetailPage() {
     stopListening(true);
   }, [article?.id, listenLanguageCode, listenVoiceId]);
 
-  useEffect(() => {
-    if (!article) return;
-    void prepareArticleListenAudio();
-  }, [article, prepareArticleListenAudio]);
-
-  const handleWhatsAppShare = () => {
-    if (typeof window === 'undefined' || !article) return;
-
-    const articlePath = buildArticleSharePath({ id: article.id, slug: article.slug });
-    const articleUrl = toAbsoluteShareUrl(articlePath, window.location.origin);
-    const shareUrl = buildArticleWhatsAppShareUrl({
-      title: article.title,
-      articleUrl,
-      summary: article.summary,
-      category: article.category,
-    });
-
-    window.open(shareUrl, '_blank', 'noopener,noreferrer');
-  };
-
   const handleBookmarkToggle = async () => {
     if (!article) return;
 
@@ -739,19 +719,26 @@ export default function ArticleDetailPage() {
                 {isBookmarked ? 'Saved' : 'Save'}
               </button>
 
-              <button
-                type="button"
-                onClick={handleWhatsAppShare}
-                className="reader-touch-button reader-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 text-[10px] font-semibold leading-none text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-700/75 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/45 sm:min-h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal"
-                aria-label={language === 'hi' ? '\u0935\u094d\u0939\u093e\u091f\u094d\u0938\u090f\u092a \u0936\u0947\u092f\u0930' : 'Share on WhatsApp'}
-              >
-                <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 text-white max-[420px]:hidden sm:h-4 sm:w-4">
-                  <svg viewBox="0 0 24 24" className="h-2 w-2 fill-current sm:h-2.5 sm:w-2.5" aria-hidden="true">
-                    <path d="M12 2a10 10 0 0 0-8.68 14.95L2 22l5.2-1.36A10 10 0 1 0 12 2Zm0 18.17a8.15 8.15 0 0 1-4.15-1.13l-.3-.18-3.09.8.82-3.01-.2-.31A8.18 8.18 0 1 1 12 20.17Zm4.48-5.86c-.24-.12-1.4-.7-1.62-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.91-1.17-.7-.63-1.18-1.4-1.32-1.64-.14-.24-.02-.37.1-.49.1-.1.24-.26.36-.39.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.79-.2-.47-.4-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.33.98 2.49c.12.16 1.7 2.61 4.11 3.66.58.25 1.03.4 1.38.52.58.18 1.1.16 1.52.1.46-.07 1.4-.57 1.6-1.12.2-.55.2-1.02.14-1.12-.06-.1-.22-.16-.46-.28Z" />
-                  </svg>
-                </span>
-                WhatsApp
-              </button>
+              <ShareMenu
+                title={article.title}
+                url={buildArticleSharePath({ id: article.id, slug: article.slug })}
+                text={article.summary}
+                whatsappText={buildArticleWhatsAppShareText({
+                  title: article.title,
+                  articleUrl: '',
+                  summary: article.summary,
+                  category: article.category,
+                  includeUrl: false,
+                })}
+                contentType="article"
+                contentId={article.id}
+                placement="article_detail_header"
+                language={language}
+                triggerLabel={language === 'hi' ? '\u0936\u0947\u092f\u0930' : 'Share'}
+                ariaLabel={language === 'hi' ? '\u0932\u0947\u0916 \u0936\u0947\u092f\u0930 \u0915\u0930\u0947\u0902' : 'Share article'}
+                className="shrink-0"
+                buttonClassName="reader-touch-button reader-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-full border border-zinc-300 bg-white px-2.5 text-[10px] font-semibold leading-none text-zinc-700 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-orange-500/50 dark:hover:bg-orange-500/15 dark:hover:text-orange-300 sm:min-h-9 sm:px-3.5 sm:text-sm sm:font-bold sm:leading-normal"
+              />
 
               <Link
                 href="/main/epaper"

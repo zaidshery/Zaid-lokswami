@@ -60,6 +60,7 @@ const ASSET_RECOVERY_SCRIPT = `
   var RECOVERY_WINDOW_MS = 10 * 60 * 1000;
   var RECOVERY_SUCCESS_DELAY_MS = 15000;
   var MAX_ATTEMPTS = 1;
+  var DURABLE_CACHE_PREFIXES = ['lokswami-epaper-offline-'];
   var chunkErrorPattern =
     /ChunkLoadError|Loading chunk [0-9]+ failed|CSS_CHUNK_LOAD_FAILED|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Failed to load module script|MIME type.*text\\/(?:html|plain)|strict MIME type checking/i;
   var recoveryInFlight = false;
@@ -131,7 +132,11 @@ const ASSET_RECOVERY_SCRIPT = `
 
     return window.caches.keys().then(function (cacheKeys) {
       return settleAll(
-        cacheKeys.map(function (key) {
+        cacheKeys.filter(function (key) {
+          return !DURABLE_CACHE_PREFIXES.some(function (prefix) {
+            return key.indexOf(prefix) === 0;
+          });
+        }).map(function (key) {
           return window.caches.delete(key);
         })
       );

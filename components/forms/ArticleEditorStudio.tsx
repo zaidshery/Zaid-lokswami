@@ -11,7 +11,7 @@ import {
   Minimize2,
   PenSquare,
 } from 'lucide-react';
-import RichTextEditor from '@/components/forms/RichTextEditor';
+import RichTextEditor from '@/components/forms/StructuredArticleEditor';
 import { analyzeArticleEditorContent } from '@/lib/utils/articleEditorAnalysis';
 import { renderArticleRichContent } from '@/lib/utils/articleRichContent';
 import {

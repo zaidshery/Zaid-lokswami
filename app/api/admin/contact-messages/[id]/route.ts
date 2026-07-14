@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import ContactMessage from '@/lib/models/ContactMessage';
 import { getAdminSession } from '@/lib/auth/admin';
+import { canManageContactInbox } from '@/lib/auth/permissions';
 import {
   getStoredContactMessageById,
   updateStoredContactMessageWorkflow,
@@ -72,6 +73,12 @@ export async function GET(req: NextRequest) {
         { status: 401 }
       );
     }
+    if (!canManageContactInbox(user.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
 
     const id = resolveId(req);
     if (!id) {
@@ -129,6 +136,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+    if (!canManageContactInbox(user.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

@@ -22,10 +22,13 @@ import ArticleEditorStudio, {
   ArticleEditorSidebar,
   type ArticleEditorStudioMode,
 } from '@/components/forms/ArticleEditorStudio';
+import ArticleDraftRecoveryNotice from '@/components/forms/ArticleDraftRecoveryNotice';
 import ArticleFeaturedImageReaderPreview from '@/components/forms/ArticleFeaturedImageReaderPreview';
 import ArticleWorkbenchAssistant, {
   getArticleAssistPatchKey,
 } from '@/components/forms/ArticleWorkbenchAssistant';
+import ArticleTranslationReview from '@/components/forms/ArticleTranslationReview';
+import useArticleServerDraft from '@/components/forms/useArticleServerDraft';
 import {
   CmsEditorCanvas,
   CmsEditorColumns,
@@ -88,9 +91,20 @@ import {
 } from '@/lib/workflow/feedback';
 import { getAllowedWorkflowTransitions } from '@/lib/workflow/transitions';
 import type { WorkflowPriority, WorkflowStatus } from '@/lib/workflow/types';
+import { migrateArticleHtmlToDocument } from '@/lib/content/articleDocument';
+import {
+  createEmptyArticleEditorialMeta,
+  normalizeArticleEditorialMeta,
+  type ArticleEditorialMeta,
+} from '@/lib/content/articleEditorial';
+import {
+  getOrCreateArticleDraftEditorSessionId,
+  isCurrentArticleDraftEditorSession,
+} from '@/lib/content/articleDraftRecovery';
 
 const DEFAULT_CATEGORIES = NEWS_CATEGORIES.map((category) => category.nameEn);
-const AUTOSAVE_INTERVAL_MS = 15000;
+const SERVER_AUTOSAVE_DEBOUNCE_MS = 4000;
+const LOCAL_AUTOSAVE_DEBOUNCE_MS = 1000;
 const DRAFT_STORAGE_PREFIX = 'lokswami:article-draft:edit:';
 const WORKFLOW_PRIORITIES: WorkflowPriority[] = ['low', 'normal', 'high', 'urgent'];
 const MANUAL_AUDIO_ACCEPT = '.mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4';
@@ -157,6 +171,16 @@ type ArticleFormState = {
   sourceType: 'story' | 'direct';
   sourceStoryId: string;
   sourceStoryTitle: string;
+  editorial: ArticleEditorialMeta;
+};
+
+type EditArticleDraftRecovery = {
+  formData: ArticleFormState;
+  imagePreview: string;
+  contentMode: ArticleEditorStudioMode;
+  focusMode: boolean;
+  savedAt: string;
+  recoveryStorageKey: string;
 };
 
 type ArticleSeo = {
@@ -277,6 +301,7 @@ type AssignableUserOption = {
   name: string;
   email: string;
   role: AdminRole;
+  profileUrl?: string;
 };
 
 const EMPTY_FORM: ArticleFormState = {
@@ -313,6 +338,7 @@ const EMPTY_FORM: ArticleFormState = {
   sourceType: 'direct',
   sourceStoryId: '',
   sourceStoryTitle: '',
+  editorial: createEmptyArticleEditorialMeta(),
 };
 
 const EMPTY_WORKFLOW: WorkflowState = {
@@ -567,7 +593,7 @@ function parseWorkflowActionDate(value: string) {
 }
 
 export default function EditArticle() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const params = useParams<{ id: string }>();
   const routeId = Array.isArray(params?.id) ? params.id[0] || '' : params?.id || '';
   const articleId = decodeURIComponent(routeId);
@@ -575,7 +601,12 @@ export default function EditArticle() {
     () => buildDefaultArticlePermalink(articleId),
     [articleId]
   );
-  const draftStorageKey = `${DRAFT_STORAGE_PREFIX}${articleId}`;
+  const legacyDraftStorageKey = `${DRAFT_STORAGE_PREFIX}${articleId}`;
+  const draftOwner = String(session?.user?.email || 'anonymous')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9@._-]+/g, '-');
+  const draftStorageKey = `${DRAFT_STORAGE_PREFIX}${draftOwner}:${articleId}`;
 
   const [formData, setFormData] = useState<ArticleFormState>(EMPTY_FORM);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -599,6 +630,9 @@ export default function EditArticle() {
   const [draftSavedAt, setDraftSavedAt] = useState('');
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
+  const [pendingDraftRecovery, setPendingDraftRecovery] =
+    useState<EditArticleDraftRecovery | null>(null);
+  const [draftEditorSessionId, setDraftEditorSessionId] = useState('');
   const [revisions, setRevisions] = useState<RevisionItem[]>([]);
   const [isLoadingRevisions, setIsLoadingRevisions] = useState(false);
   const [restoringRevisionId, setRestoringRevisionId] = useState('');
@@ -631,6 +665,10 @@ export default function EditArticle() {
     () => new Set()
   );
 
+  useEffect(() => {
+    setDraftEditorSessionId(getOrCreateArticleDraftEditorSessionId(draftStorageKey));
+  }, [draftStorageKey]);
+
   const currentArticleListenSignature = useMemo(
     () => buildArticleListenSignature(formData),
     [formData]
@@ -646,6 +684,92 @@ export default function EditArticle() {
     () => buildSavedFormSnapshot(formData, imagePreview),
     [formData, imagePreview]
   );
+
+  const editDraftPayload = useMemo(
+    () => ({
+      title: formData.title,
+      slug: formData.seoSlug,
+      summary: formData.summary,
+      content: formData.content,
+      contentJson: migrateArticleHtmlToDocument(formData.content),
+      category: formData.category,
+      author: formData.author,
+      ...(imagePreview && !imagePreview.startsWith('data:') ? { image: imagePreview } : {}),
+      reporterMeta: {
+        locationTag: formData.locationTag,
+        sourceInfo: formData.sourceInfo,
+        sourceConfidential: formData.sourceConfidential,
+        reporterNotes: formData.reporterNotes,
+      },
+      copyEditorMeta: {
+        proofreadComplete: formData.proofreadComplete,
+        factCheckStatus: formData.factCheckStatus,
+        headlineStatus: formData.headlineStatus,
+        imageOptimizationStatus: formData.imageOptimizationStatus,
+        copyEditorNotes: formData.copyEditorNotes,
+        returnForChangesReason: formData.returnForChangesReason,
+      },
+      isBreaking: formData.isBreaking,
+      isTrending: formData.isTrending,
+      editorial: formData.editorial,
+      seo: {
+        metaTitle: formData.seoTitle,
+        metaDescription: formData.seoDescription,
+        ogImage: formData.ogImage,
+        canonicalUrl: formData.canonicalUrl,
+        focusKeyword: formData.focusKeyword,
+        secondaryKeywords: formData.secondaryKeywords,
+        featuredImageAlt: formData.featuredImageAlt,
+        featuredImageCaption: formData.featuredImageCaption,
+        imageCredit: formData.imageCredit,
+        authorProfileUrl: formData.authorProfileUrl,
+        includeInNewsSitemap: formData.includeInNewsSitemap,
+        majorUpdateNote: formData.majorUpdateNote,
+      },
+    }),
+    [formData, imagePreview]
+  );
+  const editDraftPayloadSignature = useMemo(
+    () => JSON.stringify(editDraftPayload),
+    [editDraftPayload]
+  );
+  const hasMeaningfulDraftContent = Boolean(
+    formData.title.trim() || formData.summary.trim() || formData.content.trim()
+  );
+  const {
+    draftVersion: serverDraftVersion,
+    savedAt: serverDraftSavedAt,
+    status: serverDraftStatus,
+    message: serverDraftMessage,
+    saveNow: saveServerDraft,
+    adoptDraft: adoptServerDraft,
+    pauseAndWait: pauseAndWaitForServerDraft,
+    resume: resumeServerDraft,
+  } = useArticleServerDraft({
+    enabled:
+      Boolean(articleId) &&
+      draftReady &&
+      !pendingDraftRecovery &&
+      !isLoading &&
+      !isSaving &&
+      !restoringRevisionId &&
+      !runningWorkflowAction &&
+      currentFormSnapshot !== savedFormSnapshot,
+    hasMeaningfulContent: hasMeaningfulDraftContent,
+    payload: editDraftPayload,
+    debounceMs: SERVER_AUTOSAVE_DEBOUNCE_MS,
+    createIfMissing: false,
+    onSaved: (record) => {
+      setDraftSavedAt(record.updatedAt);
+      if (record.payloadSignature === editDraftPayloadSignature) {
+        setSavedFormSnapshot(currentFormSnapshot);
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (!restoringRevisionId) resumeServerDraft();
+  }, [restoringRevisionId, resumeServerDraft]);
 
   const permissionUser = useMemo(() => {
     const sessionUser = session?.user;
@@ -673,6 +797,31 @@ export default function EditArticle() {
   );
 
   const canUseWorkflowDesk = canManageWorkflowAssignments(permissionUser?.role);
+  const staffAuthorOptions = useMemo(() => {
+    const options: AssignableUserOption[] = [
+      ...(permissionUser
+        ? [
+            {
+              id: permissionUser.id,
+              name: permissionUser.name,
+              email: permissionUser.email,
+              role: permissionUser.role,
+              profileUrl: permissionUser.id
+                ? `/main/author/${encodeURIComponent(permissionUser.id)}`
+                : '',
+            },
+          ]
+        : []),
+      ...assignableUsers,
+    ];
+    const seen = new Set<string>();
+    return options.filter((member) => {
+      const key = member.name.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [assignableUsers, permissionUser]);
   const canEditCopyDeskMeta = Boolean(
     permissionUser?.role &&
       (permissionUser.role === 'admin' ||
@@ -774,6 +923,8 @@ export default function EditArticle() {
     listenAudioReady: articleTtsStatus === 'ready',
     sourceInfo: formData.sourceInfo,
     sourceStoryId: formData.sourceStoryId,
+    locationTag: formData.locationTag,
+    editorial: formData.editorial,
   }), [articleTtsStatus, breakingTtsStatus, formData, imagePreview]);
 
   const fetchArticleTtsStatus = useCallback(async () => {
@@ -928,7 +1079,17 @@ export default function EditArticle() {
     }
   }, [canUseWorkflowDesk]);
 
+  const applyLocalDraftRecovery = useCallback((draft: EditArticleDraftRecovery) => {
+    setFormData(draft.formData);
+    setImagePreview(draft.imagePreview);
+    setContentMode(draft.contentMode);
+    setIsFocusMode(draft.focusMode);
+    setDraftSavedAt(draft.savedAt);
+    setDraftRestored(true);
+  }, []);
+
   const fetchArticle = useCallback(async () => {
+    if (sessionStatus === 'loading' || !draftEditorSessionId) return;
     if (!articleId) {
       setIsLoading(false);
       setDraftReady(true);
@@ -937,6 +1098,8 @@ export default function EditArticle() {
 
     setIsLoading(true);
     setDraftReady(false);
+    setPendingDraftRecovery(null);
+    let shouldEnableDrafts = true;
     try {
       const response = await fetch(`/api/admin/articles/${encodeURIComponent(articleId)}`, {
         headers: { ...getAuthHeader() },
@@ -949,6 +1112,9 @@ export default function EditArticle() {
       }
 
       const article = data.data as {
+        _id?: string;
+        version?: number;
+        updatedAt?: string;
         title?: string;
         summary?: string;
         content?: string;
@@ -958,6 +1124,7 @@ export default function EditArticle() {
         slug?: string;
         isBreaking?: boolean;
         isTrending?: boolean;
+        editorial?: unknown;
         sourceType?: 'story' | 'direct';
         sourceStoryId?: string;
         sourceStoryTitle?: string;
@@ -988,6 +1155,7 @@ export default function EditArticle() {
           article.copyEditorMeta?.returnForChangesReason || '',
         isBreaking: Boolean(article.isBreaking),
         isTrending: Boolean(article.isTrending),
+        editorial: normalizeArticleEditorialMeta(article.editorial),
         seoSlug: article.slug || normalizeArticleSlug(article.seo?.metaTitle || article.title || ''),
         seoTitle: article.seo?.metaTitle || '',
         seoDescription: article.seo?.metaDescription || '',
@@ -1016,29 +1184,71 @@ export default function EditArticle() {
 
       if (typeof window !== 'undefined') {
         try {
-          const raw = localStorage.getItem(draftStorageKey);
+          const currentRaw = localStorage.getItem(draftStorageKey);
+          const recoveryStorageKey = currentRaw
+            ? draftStorageKey
+            : legacyDraftStorageKey;
+          const raw = currentRaw || localStorage.getItem(legacyDraftStorageKey);
           if (raw) {
             const parsed = JSON.parse(raw) as {
               savedAt?: string;
+              editorSessionId?: string;
               formData?: Partial<ArticleFormState>;
               imagePreview?: string;
               contentMode?: ArticleEditorStudioMode;
               focusMode?: boolean;
             };
             if (parsed.formData) {
-              const shouldRestore = window.confirm(
-                'Unsaved local draft found for this article. Do you want to restore it?'
-              );
-              if (shouldRestore) {
-                nextForm = { ...baseForm, ...parsed.formData };
-                nextImage = parsed.imagePreview?.trim() ? parsed.imagePreview : nextImage;
-                nextMode =
+              const recoveredForm: ArticleFormState = {
+                ...baseForm,
+                ...parsed.formData,
+                editorial: {
+                  ...baseForm.editorial,
+                  ...(parsed.formData.editorial || {}),
+                },
+              };
+              const recoveredImage = parsed.imagePreview?.trim()
+                ? parsed.imagePreview
+                : nextImage;
+              const recoveryDiffersFromServer =
+                buildSavedFormSnapshot(recoveredForm, recoveredImage) !==
+                buildSavedFormSnapshot(baseForm, article.image || '');
+
+              if (recoveryDiffersFromServer) {
+                const recoveredMode =
                   parsed.contentMode === 'preview' || parsed.contentMode === 'split'
                     ? parsed.contentMode
                     : 'write';
-                nextFocusMode = Boolean(parsed.focusMode);
-                nextSavedAt = parsed.savedAt || '';
-                restored = true;
+                const recovery: EditArticleDraftRecovery = {
+                  formData: recoveredForm,
+                  imagePreview: recoveredImage,
+                  contentMode: recoveredMode,
+                  focusMode: Boolean(parsed.focusMode),
+                  savedAt: parsed.savedAt || '',
+                  recoveryStorageKey,
+                };
+
+                if (
+                  isCurrentArticleDraftEditorSession(
+                    parsed.editorSessionId,
+                    draftEditorSessionId
+                  )
+                ) {
+                  nextForm = recovery.formData;
+                  nextImage = recovery.imagePreview;
+                  nextMode = recovery.contentMode;
+                  nextFocusMode = recovery.focusMode;
+                  nextSavedAt = recovery.savedAt;
+                  restored = true;
+                  if (recoveryStorageKey !== draftStorageKey) {
+                    localStorage.removeItem(recoveryStorageKey);
+                  }
+                } else {
+                  setPendingDraftRecovery(recovery);
+                  shouldEnableDrafts = false;
+                }
+              } else {
+                localStorage.removeItem(recoveryStorageKey);
               }
             }
           }
@@ -1066,14 +1276,30 @@ export default function EditArticle() {
       setWorkflowRejectionReason(nextWorkflow.rejectionReason || '');
       setWorkflowComment('');
       setImageFile(null);
+      adoptServerDraft({
+        id: String(article._id || articleId),
+        version:
+          Number.isInteger(Number(article.version)) && Number(article.version) > 0
+            ? Number(article.version)
+            : 1,
+        updatedAt: article.updatedAt || new Date().toISOString(),
+      });
       void fetchArticleTtsStatus();
     } catch {
       setError('Failed to load article');
     } finally {
       setIsLoading(false);
-      setDraftReady(true);
+      setDraftReady(shouldEnableDrafts);
     }
-  }, [articleId, draftStorageKey, fetchArticleTtsStatus]);
+  }, [
+    adoptServerDraft,
+    articleId,
+    draftEditorSessionId,
+    draftStorageKey,
+    fetchArticleTtsStatus,
+    legacyDraftStorageKey,
+    sessionStatus,
+  ]);
 
   useEffect(() => {
     void fetchArticle();
@@ -1140,6 +1366,11 @@ export default function EditArticle() {
 
   const persistDraft = useCallback(() => {
     if (!draftReady || typeof window === 'undefined' || !articleId) return;
+    if (currentFormSnapshot === savedFormSnapshot) {
+      localStorage.removeItem(draftStorageKey);
+      localStorage.removeItem(legacyDraftStorageKey);
+      return;
+    }
     const hasAnyContent = Boolean(
       formData.title.trim() ||
       formData.summary.trim() ||
@@ -1164,6 +1395,7 @@ export default function EditArticle() {
     const payload = {
       version: 1,
       savedAt: new Date().toISOString(),
+      editorSessionId: draftEditorSessionId,
       formData,
       imagePreview: imagePreview.startsWith('data:') ? '' : imagePreview,
       contentMode,
@@ -1171,19 +1403,77 @@ export default function EditArticle() {
     };
     localStorage.setItem(draftStorageKey, JSON.stringify(payload));
     setDraftSavedAt(payload.savedAt);
-  }, [articleId, contentMode, draftReady, draftStorageKey, formData, imagePreview, isFocusMode]);
+  }, [
+    articleId,
+    contentMode,
+    currentFormSnapshot,
+    draftEditorSessionId,
+    draftReady,
+    draftStorageKey,
+    formData,
+    imagePreview,
+    isFocusMode,
+    legacyDraftStorageKey,
+    savedFormSnapshot,
+  ]);
+
+  const restorePendingDraft = useCallback(() => {
+    if (!pendingDraftRecovery || typeof window === 'undefined') return;
+
+    applyLocalDraftRecovery(pendingDraftRecovery);
+    localStorage.setItem(
+      draftStorageKey,
+      JSON.stringify({
+        version: 1,
+        savedAt: pendingDraftRecovery.savedAt || new Date().toISOString(),
+        editorSessionId: draftEditorSessionId,
+        formData: pendingDraftRecovery.formData,
+        imagePreview: pendingDraftRecovery.imagePreview.startsWith('data:')
+          ? ''
+          : pendingDraftRecovery.imagePreview,
+        contentMode: pendingDraftRecovery.contentMode,
+        focusMode: pendingDraftRecovery.focusMode,
+      })
+    );
+    if (pendingDraftRecovery.recoveryStorageKey !== draftStorageKey) {
+      localStorage.removeItem(pendingDraftRecovery.recoveryStorageKey);
+    }
+    setPendingDraftRecovery(null);
+    setDraftReady(true);
+  }, [
+    applyLocalDraftRecovery,
+    draftEditorSessionId,
+    draftStorageKey,
+    pendingDraftRecovery,
+  ]);
+
+  const discardPendingDraft = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (pendingDraftRecovery?.recoveryStorageKey) {
+      localStorage.removeItem(pendingDraftRecovery.recoveryStorageKey);
+    }
+    localStorage.removeItem(draftStorageKey);
+    localStorage.removeItem(legacyDraftStorageKey);
+    setPendingDraftRecovery(null);
+    setDraftSavedAt('');
+    setDraftRestored(false);
+    setDraftReady(true);
+  }, [draftStorageKey, legacyDraftStorageKey, pendingDraftRecovery]);
 
   const clearDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(draftStorageKey);
+    localStorage.removeItem(legacyDraftStorageKey);
+    setPendingDraftRecovery(null);
     setDraftSavedAt('');
     setDraftRestored(false);
-  }, [draftStorageKey]);
+    setDraftReady(true);
+  }, [draftStorageKey, legacyDraftStorageKey]);
 
   useEffect(() => {
     if (!draftReady || typeof window === 'undefined') return;
-    const intervalId = window.setInterval(persistDraft, AUTOSAVE_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
+    const timeoutId = window.setTimeout(persistDraft, LOCAL_AUTOSAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeoutId);
   }, [draftReady, persistDraft]);
 
   useEffect(() => {
@@ -1192,6 +1482,17 @@ export default function EditArticle() {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [draftReady, persistDraft]);
+
+  useEffect(() => {
+    const handleKeyboardSave = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      persistDraft();
+      void saveServerDraft();
+    };
+    window.addEventListener('keydown', handleKeyboardSave);
+    return () => window.removeEventListener('keydown', handleKeyboardSave);
+  }, [persistDraft, saveServerDraft]);
 
   const handleInputChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -1228,8 +1529,30 @@ export default function EditArticle() {
         next.seoSlug = normalizeArticleSlug(String(nextValue));
       }
 
+      if (name === 'isBreaking') {
+        const checked = (event.target as HTMLInputElement).checked;
+        next.editorial = {
+          ...current.editorial,
+          storyType: checked
+            ? 'breaking'
+            : current.editorial.storyType === 'breaking'
+              ? 'standard'
+              : current.editorial.storyType,
+        };
+      }
+
       return next;
     });
+  };
+
+  const updateEditorialField = <Key extends keyof ArticleEditorialMeta>(
+    key: Key,
+    value: ArticleEditorialMeta[Key]
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      editorial: { ...current.editorial, [key]: value },
+    }));
   };
 
   const handleContentChange = useCallback((content: string) => {
@@ -1257,6 +1580,15 @@ export default function EditArticle() {
       };
     });
   }, []);
+
+  const applyTranslation = (field: 'title' | 'summary' | 'content', value: string) => {
+    if (field === 'content') {
+      handleContentChange(value);
+      setContentMode('write');
+      return;
+    }
+    setFormData((current) => ({ ...current, [field]: value }));
+  };
 
   const runArticleAssist = async () => {
     setIsAssistLoading(true);
@@ -1467,6 +1799,7 @@ export default function EditArticle() {
     setError('');
     setSuccess('');
     try {
+      await pauseAndWaitForServerDraft();
       const response = await fetch(
         `/api/admin/articles/${encodeURIComponent(articleId)}/revisions/${encodeURIComponent(revisionId)}/restore`,
         { method: 'POST', headers: { ...getAuthHeader() } }
@@ -1478,6 +1811,9 @@ export default function EditArticle() {
       }
 
       const article = data.data as {
+        _id?: string;
+        version?: number;
+        updatedAt?: string;
         title?: string;
         summary?: string;
         content?: string;
@@ -1487,6 +1823,7 @@ export default function EditArticle() {
         slug?: string;
         isBreaking?: boolean;
         isTrending?: boolean;
+        editorial?: unknown;
         sourceType?: 'story' | 'direct';
         sourceStoryId?: string;
         sourceStoryTitle?: string;
@@ -1496,6 +1833,15 @@ export default function EditArticle() {
         breakingTts?: BreakingTtsMetadata | null;
         workflow?: unknown;
       };
+      const restoredVersion = Number(article.version);
+      if (
+        !Number.isInteger(restoredVersion) ||
+        restoredVersion < 1 ||
+        !article.updatedAt
+      ) {
+        setError('Revision restored, but its server version was missing. Reload before editing.');
+        return;
+      }
 
       const restoredForm: ArticleFormState = {
         title: article.title || '',
@@ -1517,6 +1863,7 @@ export default function EditArticle() {
           article.copyEditorMeta?.returnForChangesReason || '',
         isBreaking: Boolean(article.isBreaking),
         isTrending: Boolean(article.isTrending),
+        editorial: normalizeArticleEditorialMeta(article.editorial),
         seoSlug: article.slug || normalizeArticleSlug(article.seo?.metaTitle || article.title || ''),
         seoTitle: article.seo?.metaTitle || '',
         seoDescription: article.seo?.metaDescription || '',
@@ -1554,6 +1901,12 @@ export default function EditArticle() {
       setWorkflowRejectionReason(restoredWorkflow.rejectionReason || '');
       setWorkflowComment('');
       clearDraft();
+      adoptServerDraft({
+        id: String(article._id || articleId),
+        version: restoredVersion,
+        updatedAt: article.updatedAt,
+      });
+      setDraftSavedAt(article.updatedAt);
       setSuccess('Revision restored successfully.');
       await fetchArticleTtsStatus();
       await fetchRevisions();
@@ -1586,6 +1939,7 @@ export default function EditArticle() {
       const uploaded = await uploadBreakingTtsAudioDirect({
         articleId,
         file,
+        expectedVersion: serverDraftVersion || 1,
         authHeaders: getAuthHeader(),
       });
       const breakingTts = normalizeBreakingTtsMetadata(uploaded.breakingTts);
@@ -1595,6 +1949,11 @@ export default function EditArticle() {
 
       setBreakingTtsInfo(breakingTts);
       setSavedBreakingRecordingScript(currentBreakingRecordingScript);
+      adoptServerDraft({
+        id: articleId,
+        version: uploaded.version,
+        updatedAt: uploaded.updatedAt,
+      });
       setSuccess('Manual breaking news audio uploaded successfully.');
     } catch (requestError) {
       setError(
@@ -1656,6 +2015,16 @@ export default function EditArticle() {
     setIsSaving(true);
 
     try {
+      if (pendingDraftRecovery) {
+        setError('Restore or discard the browser recovery copy before saving this article.');
+        setIsSaving(false);
+        return;
+      }
+      if (serverDraftStatus === 'conflict') {
+        setError(serverDraftMessage || 'Resolve the server version conflict before saving.');
+        setIsSaving(false);
+        return;
+      }
       if (!formData.title || !formData.summary || !formData.content || !formData.author || !imagePreview) {
         setError('Please fill in all required fields');
         setIsSaving(false);
@@ -1676,9 +2045,10 @@ export default function EditArticle() {
 
       if (
         formData.authorProfileUrl.trim() &&
+        !formData.authorProfileUrl.trim().startsWith('/') &&
         !isValidAbsoluteHttpUrl(formData.authorProfileUrl.trim())
       ) {
-        setError('Author profile URL must start with http:// or https://');
+        setError('Author profile URL must be a local path or start with http:// or https://');
         setIsSaving(false);
         return;
       }
@@ -1697,6 +2067,8 @@ export default function EditArticle() {
       if (imageFile) imageUrl = await uploadImage();
       const resolvedOgImage =
         formData.ogImage.trim() || resolveArticleOgImageUrl({ image: imageUrl });
+      const synchronizedDraft = await saveServerDraft();
+      const expectedVersion = synchronizedDraft?.version || serverDraftVersion;
 
       const response = await fetch(`/api/admin/articles/${encodeURIComponent(articleId)}`, {
         method: 'PUT',
@@ -1705,6 +2077,7 @@ export default function EditArticle() {
           ...getAuthHeader(),
         },
         body: JSON.stringify({
+          ...(expectedVersion > 0 ? { expectedVersion } : {}),
           title: formData.title,
           slug: formData.seoSlug,
           summary: formData.summary,
@@ -1727,6 +2100,7 @@ export default function EditArticle() {
           },
           isBreaking: formData.isBreaking,
           isTrending: formData.isTrending,
+          editorial: formData.editorial,
           image: imageUrl,
           seo: {
             metaTitle: formData.seoTitle,
@@ -1769,6 +2143,11 @@ export default function EditArticle() {
   const handleWorkflowAction = async (action: ContentTransitionAction) => {
     setError('');
     setSuccess('');
+
+    if (pendingDraftRecovery) {
+      setError('Restore or discard the browser recovery copy before changing workflow status.');
+      return;
+    }
 
     if (hasUnsavedChanges) {
       setError('Save article changes before moving the workflow.');
@@ -1822,6 +2201,7 @@ export default function EditArticle() {
         },
         body: JSON.stringify({
           action,
+          ...(serverDraftVersion > 0 ? { expectedVersion: serverDraftVersion } : {}),
           assignedToId: workflowAssigneeId || undefined,
           scheduledFor: scheduledFor || undefined,
           dueAt: dueAt || undefined,
@@ -1832,13 +2212,35 @@ export default function EditArticle() {
       });
       const data = (await response.json().catch(() => ({}))) as {
         success?: boolean;
+        code?: string;
         error?: string;
         message?: string;
+        currentVersion?: number;
+        data?: {
+          _id?: string;
+          version?: number;
+          updatedAt?: string;
+        };
       };
 
       if (!response.ok || !data.success) {
+        if (response.status === 409 && data.code === 'ARTICLE_VERSION_CONFLICT') {
+          setError(
+            data.error ||
+              'This article changed in another session. Reload before changing workflow.'
+          );
+          return;
+        }
         setError(data.error || 'Failed to update workflow');
         return;
+      }
+
+      if (Number.isInteger(data.data?.version) && Number(data.data?.version) > 0) {
+        adoptServerDraft({
+          id: data.data?._id || articleId,
+          version: Number(data.data?.version),
+          updatedAt: data.data?.updatedAt || new Date().toISOString(),
+        });
       }
 
       setWorkflowComment('');
@@ -2017,7 +2419,21 @@ export default function EditArticle() {
             </div>
           ) : null}
 
-          <form onSubmit={handleSubmit} className="space-y-8">
+          {pendingDraftRecovery ? (
+            <div className="mb-6">
+              <ArticleDraftRecoveryNotice
+                savedAtLabel={
+                  pendingDraftRecovery.savedAt
+                    ? formatDraftTimestamp(pendingDraftRecovery.savedAt)
+                    : ''
+                }
+                onRestore={restorePendingDraft}
+                onDiscard={discardPendingDraft}
+              />
+            </div>
+          ) : null}
+
+          <form onSubmit={handleSubmit} className="admin-article-workspace space-y-8">
             <CmsEditorColumns stacked={isFocusMode}>
               <CmsEditorMain>
                 <div data-article-field="title">
@@ -2207,18 +2623,40 @@ export default function EditArticle() {
                     ) : null}
                   </div>
 
-                  <div>
+                  <div data-article-field="author">
                     <label className="block text-sm font-medium text-gray-900 mb-2">
-                      Author Name <span className="text-red-500">*</span>
+                      Staff author <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="author"
                       value={formData.author}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
+                      onChange={(event) =>
+                        setFormData((current) => ({
+                          ...current,
+                          author: event.target.value,
+                          authorProfileUrl:
+                            staffAuthorOptions.find(
+                              (member) => member.name === event.target.value
+                            )?.profileUrl || '',
+                        }))
+                      }
+                      className="w-full bg-white px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
                       required
-                    />
+                    >
+                      <option value="">Choose a newsroom staff profile</option>
+                      {formData.author &&
+                      !staffAuthorOptions.some((member) => member.name === formData.author) ? (
+                        <option value={formData.author}>{formData.author} (legacy byline)</option>
+                      ) : null}
+                      {staffAuthorOptions.map((member) => (
+                        <option key={member.id} value={member.name}>
+                          {member.name} ({member.role.replace(/_/g, ' ')})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Select an authenticated newsroom identity; legacy bylines remain readable.
+                    </p>
                   </div>
                 </div>
 
@@ -2626,6 +3064,14 @@ export default function EditArticle() {
                   onFocusField={focusWorkbenchField}
                   title="Packaging assistant"
                 />
+                <ArticleTranslationReview
+                  title={formData.title}
+                  summary={formData.summary}
+                  content={formData.content}
+                  reporterNotes={formData.reporterNotes}
+                  sourcePackage={[formData.sourceStoryTitle, formData.sourceInfo].filter(Boolean).join('\n')}
+                  onApply={applyTranslation}
+                />
 
                 {formData.sourceType === 'story' && formData.sourceStoryId ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
@@ -2654,11 +3100,39 @@ export default function EditArticle() {
                 <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
                   <p className="font-medium">Draft & Revision Tools</p>
                   <p className="mt-1 text-blue-800">
-                    Draft autosaves every {AUTOSAVE_INTERVAL_MS / 1000} seconds.
-                    {draftSavedAt ? ` Last saved: ${formatDraftTimestamp(draftSavedAt)}.` : ' No local draft yet.'}
+                    Server autosave runs {SERVER_AUTOSAVE_DEBOUNCE_MS / 1000} seconds after changes;
+                    the browser copy updates after {LOCAL_AUTOSAVE_DEBOUNCE_MS / 1000} second.
+                    {serverDraftSavedAt || draftSavedAt
+                      ? ` Last saved: ${formatDraftTimestamp(serverDraftSavedAt || draftSavedAt)}.`
+                      : ' No draft save yet.'}
+                  </p>
+                  <p
+                    className={`mt-1 text-xs font-semibold ${
+                      serverDraftStatus === 'conflict'
+                        ? 'text-red-700'
+                        : serverDraftStatus === 'offline' || serverDraftStatus === 'error'
+                          ? 'text-amber-700'
+                          : 'text-blue-700'
+                    }`}
+                    aria-live="polite"
+                  >
+                    {serverDraftStatus === 'saving'
+                      ? 'Saving to server…'
+                      : serverDraftStatus === 'saved'
+                        ? `Saved on server${serverDraftVersion ? ` · version ${serverDraftVersion}` : ''}`
+                        : serverDraftStatus === 'conflict'
+                          ? 'Conflict detected'
+                          : serverDraftStatus === 'offline'
+                            ? 'Offline · browser fallback retained'
+                            : serverDraftStatus === 'error'
+                              ? 'Server save failed · browser fallback retained'
+                              : 'Server draft ready'}
+                    {serverDraftMessage ? ` — ${serverDraftMessage}` : ''}
                   </p>
                   {draftRestored ? (
-                    <p className="mt-1 text-blue-800">Local draft restored for this article.</p>
+                    <p className="mt-1 text-blue-800">
+                      Browser fallback restored and queued for versioned server save.
+                    </p>
                   ) : null}
                   {hasUnsavedChanges ? (
                     <p className="mt-1 text-blue-800">
@@ -2668,10 +3142,13 @@ export default function EditArticle() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={persistDraft}
+                      onClick={() => {
+                        persistDraft();
+                        void saveServerDraft();
+                      }}
                       className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
                     >
-                      Save Draft Now
+                      Save now (Ctrl+S)
                     </button>
                     <button
                       type="button"
@@ -2743,14 +3220,6 @@ export default function EditArticle() {
                     onChange={handleInputChange}
                     placeholder="Secondary keywords"
                     maxLength={240}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
-                  />
-                  <input
-                    type="url"
-                    name="authorProfileUrl"
-                    value={formData.authorProfileUrl}
-                    onChange={handleInputChange}
-                    placeholder="Author profile URL"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
                   />
                   <input
@@ -2886,6 +3355,33 @@ export default function EditArticle() {
                     <span className="text-sm text-gray-700">Mark as Breaking News</span>
                   </label>
                   {formData.isBreaking ? (
+                    <div className="grid gap-3 rounded-lg border border-red-200 bg-red-50/60 p-3">
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-red-700">Breaking reason</span>
+                        <textarea
+                          name="breakingReason"
+                          value={formData.editorial.breakingReason}
+                          onChange={(event) => updateEditorialField('breakingReason', event.target.value)}
+                          rows={2}
+                          maxLength={500}
+                          placeholder="Why does this story require a breaking banner?"
+                          className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm focus:border-spanish-red focus:outline-none"
+                        />
+                      </label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block space-y-1.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Starts at</span>
+                          <input type="datetime-local" name="breakingStartsAt" value={formData.editorial.breakingStartsAt} onChange={(event) => updateEditorialField('breakingStartsAt', event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-spanish-red focus:outline-none" />
+                        </label>
+                        <label className="block space-y-1.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Expires at</span>
+                          <input type="datetime-local" name="breakingExpiresAt" value={formData.editorial.breakingExpiresAt} onChange={(event) => updateEditorialField('breakingExpiresAt', event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-spanish-red focus:outline-none" />
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-600">The public breaking flag is automatically hidden before its start and after its expiry. The server records the approving editor.</p>
+                    </div>
+                  ) : null}
+                  {formData.isBreaking ? (
                     <div data-article-field="breakingAudio" className="space-y-3 rounded-lg border border-red-200 bg-white p-3 dark:border-red-500/30 dark:bg-zinc-900">
                       <div className="flex items-start gap-3">
                         <div className="rounded-lg bg-red-50 p-2 text-spanish-red dark:bg-red-500/15 dark:text-red-100">
@@ -2993,6 +3489,19 @@ export default function EditArticle() {
                     />
                     <span className="text-sm text-gray-700">Mark as Trending</span>
                   </label>
+                  {formData.isTrending ? (
+                    <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-amber-800">Trending reason</span>
+                        <textarea name="trendingReason" value={formData.editorial.trendingReason} onChange={(event) => updateEditorialField('trendingReason', event.target.value)} rows={2} maxLength={500} placeholder="Cite the audience or editorial signal." className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm focus:border-spanish-red focus:outline-none" />
+                      </label>
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Trending expires at</span>
+                        <input type="datetime-local" name="trendingExpiresAt" value={formData.editorial.trendingExpiresAt} onChange={(event) => updateEditorialField('trendingExpiresAt', event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-spanish-red focus:outline-none" />
+                      </label>
+                      <p className="text-xs text-gray-600">The public trending flag is automatically hidden after expiry.</p>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">

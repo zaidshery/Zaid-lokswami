@@ -10,6 +10,17 @@ import {
   type ArticleSourceType,
 } from '@/lib/content/newsroomPublishing';
 import type { WorkflowMeta } from '@/lib/workflow/types';
+import {
+  ARTICLE_AI_DISCLOSURES,
+  ARTICLE_EVIDENCE_TYPES,
+  ARTICLE_FACT_CHECK_STATUSES,
+  ARTICLE_IMAGE_LICENSES,
+  ARTICLE_REVIEW_STATUSES,
+  ARTICLE_STORY_TYPES,
+  type ArticleEditorialMeta,
+} from '@/lib/content/articleEditorial';
+import type { ArticleMediaMetadata } from '@/lib/content/articleMediaMetadata';
+import type { ArticleDocument } from '@/lib/content/articleDocument';
 
 export interface IArticleSeo {
   metaTitle: string;
@@ -31,6 +42,7 @@ export interface IArticleRevision {
   title: string;
   summary: string;
   content: string;
+  contentJson: ArticleDocument;
   image: string;
   category: string;
   author: string;
@@ -41,6 +53,8 @@ export interface IArticleRevision {
   seo: IArticleSeo;
   reporterMeta: ReporterMeta;
   copyEditorMeta: CopyEditorMeta;
+  editorial: ArticleEditorialMeta;
+  media: ArticleMediaMetadata;
   savedAt: Date;
 }
 
@@ -56,9 +70,11 @@ export interface IArticleBreakingTts {
 
 export interface IArticle {
   _id?: string;
+  version: number;
   title: string;
   summary: string;
   content: string;
+  contentJson: ArticleDocument;
   image: string;
   category: string;
   author: string;
@@ -75,6 +91,8 @@ export interface IArticle {
   workflow: WorkflowMeta;
   reporterMeta: ReporterMeta;
   copyEditorMeta: CopyEditorMeta;
+  editorial: ArticleEditorialMeta;
+  media: ArticleMediaMetadata;
   sourceType: ArticleSourceType;
   sourceStoryId: string;
   sourceStoryTitle: string;
@@ -101,11 +119,73 @@ const SeoSchema = new mongoose.Schema<IArticleSeo>(
   { _id: false }
 );
 
+const EditorialSchema = new mongoose.Schema<ArticleEditorialMeta>(
+  {
+    storyType: { type: String, enum: ARTICLE_STORY_TYPES, default: 'standard' },
+    evidenceType: { type: String, enum: ARTICLE_EVIDENCE_TYPES, default: 'none' },
+    sourceAttribution: { type: String, default: '', maxlength: 1000 },
+    quoteAttribution: { type: String, default: '', maxlength: 1000 },
+    eventDateTime: { type: String, default: '' },
+    factCheckStatus: {
+      type: String,
+      enum: ARTICLE_FACT_CHECK_STATUSES,
+      default: 'pending',
+    },
+    legalReviewStatus: {
+      type: String,
+      enum: ARTICLE_REVIEW_STATUSES,
+      default: 'pending',
+    },
+    sensitivityReviewStatus: {
+      type: String,
+      enum: ARTICLE_REVIEW_STATUSES,
+      default: 'pending',
+    },
+    headlineSupportConfirmed: { type: Boolean, default: false },
+    duplicateCheckComplete: { type: Boolean, default: false },
+    aiDisclosure: { type: String, enum: ARTICLE_AI_DISCLOSURES, default: 'none' },
+    imageLicense: { type: String, enum: ARTICLE_IMAGE_LICENSES, default: 'unknown' },
+    correctionNote: { type: String, default: '', maxlength: 1000 },
+    breakingStartsAt: { type: String, default: '' },
+    breakingExpiresAt: { type: String, default: '' },
+    breakingReason: { type: String, default: '', maxlength: 500 },
+    trendingExpiresAt: { type: String, default: '' },
+    trendingReason: { type: String, default: '', maxlength: 500 },
+    flagApprovedBy: { type: String, default: '', maxlength: 180 },
+  },
+  { _id: false }
+);
+
+const MediaVariantsSchema = new mongoose.Schema<ArticleMediaMetadata['variants']>(
+  {
+    landscape16x9: { type: String, default: '' },
+    standard4x3: { type: String, default: '' },
+    square1x1: { type: String, default: '' },
+    webp: { type: String, default: '' },
+    avif: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
+const MediaMetadataSchema = new mongoose.Schema<ArticleMediaMetadata>(
+  {
+    sourceMediaId: { type: String, default: '', maxlength: 200 },
+    focalPointX: { type: Number, default: 50, min: 0, max: 100 },
+    focalPointY: { type: Number, default: 50, min: 0, max: 100 },
+    width: { type: Number, default: 0, min: 0 },
+    height: { type: Number, default: 0, min: 0 },
+    format: { type: String, default: '', maxlength: 32 },
+    variants: { type: MediaVariantsSchema, default: () => ({}) },
+  },
+  { _id: false }
+);
+
 const RevisionSchema = new mongoose.Schema<IArticleRevision>(
   {
     title: { type: String, required: true, maxlength: 200 },
     summary: { type: String, required: true, maxlength: 500 },
     content: { type: String, required: true },
+    contentJson: { type: mongoose.Schema.Types.Mixed, default: () => ({ version: 1, blocks: [] }) },
     image: { type: String, required: true },
     category: { type: String, required: true },
     author: { type: String, required: true },
@@ -116,6 +196,8 @@ const RevisionSchema = new mongoose.Schema<IArticleRevision>(
     seo: { type: SeoSchema, default: () => ({}) },
     reporterMeta: { type: ReporterMetaSchema, default: () => ({}) },
     copyEditorMeta: { type: CopyEditorMetaSchema, default: () => ({}) },
+    editorial: { type: EditorialSchema, default: () => ({}) },
+    media: { type: MediaMetadataSchema, default: () => ({}) },
     savedAt: { type: Date, default: Date.now },
   },
   { _id: true }
@@ -135,13 +217,17 @@ const BreakingTtsSchema = new mongoose.Schema<IArticleBreakingTts>(
 );
 
 const ArticleSchema = new mongoose.Schema<IArticle>({
-  title: { type: String, required: true, maxlength: 200 },
-  summary: { type: String, required: true, maxlength: 500 },
-  content: { type: String, required: true },
-  image: { type: String, required: true },
+  // Drafts are created before publish-ready fields exist. Publication and
+  // workflow transitions enforce completeness at the API boundary.
+  version: { type: Number, default: 1, min: 1 },
+  title: { type: String, default: '', maxlength: 200 },
+  summary: { type: String, default: '', maxlength: 500 },
+  content: { type: String, default: '' },
+  contentJson: { type: mongoose.Schema.Types.Mixed, default: () => ({ version: 1, blocks: [] }) },
+  image: { type: String, default: '' },
   // category is stored as a string (category name or slug). Categories are managed separately.
-  category: { type: String, required: true },
-  author: { type: String, required: true },
+  category: { type: String, default: '' },
+  author: { type: String, default: '' },
   slug: { type: String, default: '', trim: true, lowercase: true },
   previousSlugs: { type: [String], default: [] },
   publishedAt: { type: Date, default: Date.now },
@@ -155,6 +241,8 @@ const ArticleSchema = new mongoose.Schema<IArticle>({
   workflow: { type: WorkflowMetaSchema, default: () => ({}) },
   reporterMeta: { type: ReporterMetaSchema, default: () => ({}) },
   copyEditorMeta: { type: CopyEditorMetaSchema, default: () => ({}) },
+  editorial: { type: EditorialSchema, default: () => ({}) },
+  media: { type: MediaMetadataSchema, default: () => ({}) },
   sourceType: {
     type: String,
     enum: ['story', 'direct'],

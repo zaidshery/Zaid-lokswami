@@ -27,6 +27,15 @@ import {
   normalizeArticleSourceType,
 } from '@/lib/content/newsroomPublishing';
 import {
+  normalizeArticleEditorialMeta,
+  validateArticleEditorialMeta,
+} from '@/lib/content/articleEditorial';
+import {
+  normalizeArticleMediaMetadata,
+  validateArticleMediaMetadata,
+} from '@/lib/content/articleMediaMetadata';
+import { normalizeArticleDocument } from '@/lib/content/articleDocument';
+import {
   buildArticleActivityMessage,
   recordArticleActivity,
 } from '@/lib/server/articleActivity';
@@ -282,11 +291,13 @@ function normalizeArticleInput(body: unknown) {
     seo.ogImage = resolveArticleOgImageUrl({ image });
   }
 
+  const content = typeof source.content === 'string' ? source.content.trim() : '';
   return {
     title: typeof source.title === 'string' ? source.title.trim() : '',
     slug: typeof source.slug === 'string' ? source.slug.trim() : '',
     summary: typeof source.summary === 'string' ? source.summary.trim() : '',
-    content: typeof source.content === 'string' ? source.content.trim() : '',
+    content,
+    contentJson: normalizeArticleDocument(source.contentJson, content),
     image,
     category: typeof source.category === 'string' ? source.category.trim() : '',
     author: typeof source.author === 'string' ? source.author.trim() : '',
@@ -295,6 +306,8 @@ function normalizeArticleInput(body: unknown) {
     seo,
     reporterMeta: normalizeReporterMeta(source.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(source.copyEditorMeta),
+    editorial: normalizeArticleEditorialMeta(source.editorial),
+    media: normalizeArticleMediaMetadata(source.media),
     sourceStoryId:
       typeof source.sourceStoryId === 'string' ? source.sourceStoryId.trim() : '',
     sourceType: normalizeArticleSourceType(
@@ -330,8 +343,12 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
     return 'Canonical URL must be a valid absolute URL';
   }
 
-  if (input.seo.authorProfileUrl && !isValidAbsoluteHttpUrl(input.seo.authorProfileUrl)) {
-    return 'Author profile URL must be a valid absolute URL';
+  if (
+    input.seo.authorProfileUrl &&
+    !input.seo.authorProfileUrl.startsWith('/') &&
+    !isValidAbsoluteHttpUrl(input.seo.authorProfileUrl)
+  ) {
+    return 'Author profile URL must be a valid absolute URL or local path';
   }
 
   if (input.seo.ogImage && !isValidAbsoluteHttpUrl(input.seo.ogImage) && !input.seo.ogImage.startsWith('/')) {
@@ -346,6 +363,16 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
   const copyEditorMetaError = validateCopyEditorMeta(input.copyEditorMeta);
   if (copyEditorMetaError) {
     return copyEditorMetaError;
+  }
+
+  const editorialError = validateArticleEditorialMeta(input.editorial);
+  if (editorialError) {
+    return editorialError;
+  }
+
+  const mediaError = validateArticleMediaMetadata(input.media);
+  if (mediaError) {
+    return mediaError;
   }
 
   return null;
@@ -375,6 +402,8 @@ function validateArticleReadiness(
     requireBreakingAudio: options.requireBreakingAudio,
     sourceInfo: input.reporterMeta.sourceInfo,
     sourceStoryId: input.sourceStoryId,
+    locationTag: input.reporterMeta.locationTag,
+    editorial: input.editorial,
   });
   const summary = summarizeArticleReadiness(result.readiness);
 
@@ -535,6 +564,11 @@ export async function POST(req: NextRequest) {
     const intent = normalizeCreateIntent((body as Record<string, unknown>)?.intent);
     const bodyRecord = body as Record<string, unknown>;
     const input = normalizeArticleInput(body);
+    if (input.isBreaking || input.isTrending) {
+      input.editorial.flagApprovedBy = user.name || user.email;
+    } else {
+      input.editorial.flagApprovedBy = '';
+    }
     const breakingAudioUploadPending = Boolean(bodyRecord.breakingAudioUploadPending);
     const validationError = validateArticleInput(input);
     const workflow = buildInitialWorkflow(intent, user, {
@@ -687,7 +721,7 @@ export async function POST(req: NextRequest) {
           const updated = await updateStoredArticle(
             stored._id,
             { breakingTts },
-            { skipRevision: true }
+            { skipRevision: true, skipVersion: true }
           );
           if (updated) {
             stored.breakingTts = updated.breakingTts ?? breakingTts;

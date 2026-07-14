@@ -1,0 +1,161 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mockedFs = vi.hoisted(() => ({
+  state: { contents: '' },
+  mkdir: vi.fn(),
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+}));
+
+vi.mock('fs/promises', () => ({
+  default: {
+    mkdir: mockedFs.mkdir,
+    readFile: mockedFs.readFile,
+    writeFile: mockedFs.writeFile,
+  },
+}));
+
+import {
+  ArticleVersionConflictError,
+  deleteStoredArticle,
+  restoreStoredArticleRevision,
+  updateStoredArticle,
+} from '@/lib/storage/articlesFile';
+
+describe('articles file mutation serialization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedFs.state.contents = JSON.stringify([
+      {
+        _id: 'article-1',
+        version: 1,
+        title: 'Original title',
+        summary: '',
+        content: '',
+        image: '',
+        category: '',
+        author: '',
+        slug: 'original-title',
+        previousSlugs: [],
+        workflow: { status: 'draft' },
+      },
+    ]);
+    mockedFs.mkdir.mockResolvedValue(undefined);
+    mockedFs.readFile.mockImplementation(async () => mockedFs.state.contents);
+    mockedFs.writeFile.mockImplementation(async (_path, contents) => {
+      await Promise.resolve();
+      mockedFs.state.contents = String(contents);
+    });
+  });
+
+  it('allows only one concurrent update to claim the same expected version', async () => {
+    const results = await Promise.allSettled([
+      updateStoredArticle(
+        'article-1',
+        { title: 'First editor title' },
+        { expectedVersion: 1 }
+      ),
+      updateStoredArticle(
+        'article-1',
+        { title: 'Second editor title' },
+        { expectedVersion: 1 }
+      ),
+    ]);
+
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({
+      reason: expect.any(ArticleVersionConflictError),
+    });
+    expect((rejected[0] as PromiseRejectedResult).reason.currentVersion).toBe(2);
+
+    const stored = JSON.parse(mockedFs.state.contents) as Array<{
+      title: string;
+      version: number;
+    }>;
+    expect(stored).toHaveLength(1);
+    expect(stored[0].version).toBe(2);
+    expect(['First editor title', 'Second editor title']).toContain(stored[0].title);
+  });
+
+  it('rejects a queued delete after another mutation advances the expected version', async () => {
+    const results = await Promise.allSettled([
+      updateStoredArticle(
+        'article-1',
+        { title: 'Newer editor title' },
+        { expectedVersion: 1 }
+      ),
+      deleteStoredArticle('article-1', { expectedVersion: 1 }),
+    ]);
+
+    expect(results[0].status).toBe('fulfilled');
+    expect(results[1]).toMatchObject({
+      status: 'rejected',
+      reason: expect.any(ArticleVersionConflictError),
+    });
+    expect((results[1] as PromiseRejectedResult).reason.currentVersion).toBe(2);
+
+    const stored = JSON.parse(mockedFs.state.contents) as Array<{
+      title: string;
+      version: number;
+    }>;
+    expect(stored).toEqual([
+      expect.objectContaining({ title: 'Newer editor title', version: 2 }),
+    ]);
+  });
+
+  it('increments the version when restoring a revision', async () => {
+    mockedFs.state.contents = JSON.stringify([
+      {
+        _id: 'article-1',
+        version: 7,
+        title: 'Current title',
+        summary: 'Current summary',
+        content: '<p>Current content</p>',
+        image: '/current.jpg',
+        category: 'News',
+        author: 'Current Author',
+        slug: 'current-title',
+        previousSlugs: [],
+        workflow: { status: 'draft' },
+        revisions: [
+          {
+            _id: 'revision-1',
+            title: 'Restored title',
+            summary: 'Restored summary',
+            content: '<p>Restored content</p>',
+            image: '/restored.jpg',
+            category: 'Politics',
+            author: 'Revision Author',
+            slug: 'restored-title',
+            previousSlugs: ['legacy-title'],
+            savedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+
+    const restored = await restoreStoredArticleRevision('article-1', 'revision-1');
+
+    expect(restored).toMatchObject({
+      title: 'Restored title',
+      slug: 'restored-title',
+      previousSlugs: expect.arrayContaining(['current-title', 'legacy-title']),
+      version: 8,
+    });
+    const stored = JSON.parse(mockedFs.state.contents) as Array<{
+      title: string;
+      slug: string;
+      previousSlugs: string[];
+      version: number;
+    }>;
+    expect(stored[0]).toMatchObject({
+      title: 'Restored title',
+      slug: 'restored-title',
+      previousSlugs: expect.arrayContaining(['current-title', 'legacy-title']),
+      version: 8,
+    });
+  });
+});

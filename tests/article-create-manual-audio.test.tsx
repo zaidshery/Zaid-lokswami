@@ -28,6 +28,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('next-auth/react', () => ({
   useSession: () => ({
+    status: 'authenticated',
     data: {
       user: {
         name: 'Parvez Khan',
@@ -253,7 +254,7 @@ async function fillRequiredArticleFields(container: HTMLElement) {
   fireEvent.change(getImageInput(container), { target: { files: [image] } });
 
   await waitFor(() => {
-    expect(screen.getByAltText('Preview')).toBeInTheDocument();
+    expect(screen.getByAltText('Manual Audio Story')).toBeInTheDocument();
   });
 }
 
@@ -265,6 +266,26 @@ function uploadBreakingAudio(container: HTMLElement, file: File) {
   fireEvent.change(getBreakingAudioInput(container), { target: { files: [file] } });
 }
 
+function fillBreakingEditorialControl() {
+  const start = new Date(Date.now() - 60_000).toISOString().slice(0, 16);
+  const expiry = new Date(Date.now() + 24 * 60 * 60_000).toISOString().slice(0, 16);
+  const reasonInput = screen.getByLabelText(/breaking reason/i);
+  const startInput = screen.getByLabelText(/starts at/i);
+  const expiryInput = screen.getByLabelText(/expires at/i);
+  fireEvent.change(reasonInput, {
+    target: { value: 'Fast-moving public-interest update confirmed by the desk.' },
+  });
+  fireEvent.change(startInput, {
+    target: { value: start },
+  });
+  fireEvent.change(expiryInput, {
+    target: { value: expiry },
+  });
+  expect(reasonInput).toHaveValue('Fast-moving public-interest update confirmed by the desk.');
+  expect(startInput).toHaveValue(start);
+  expect(expiryInput).toHaveValue(expiry);
+}
+
 function hasArticleCreateFetchCall(fetchMock: ReturnType<typeof createFetchMock>) {
   return fetchMock.mock.calls.some(([input]) => String(input) === '/api/admin/articles');
 }
@@ -273,6 +294,7 @@ describe('Article create manual listen audio', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
+    window.sessionStorage.clear();
     mocks.prepareArticleImageFile.mockImplementation(async (file: File) => ({
       file,
       previewDataUrl: 'data:image/jpeg;base64,preview',
@@ -307,6 +329,8 @@ describe('Article create manual listen audio', () => {
         generatedAt: '2026-05-23T08:00:00.000Z',
       },
       script: 'Manual Audio Story',
+      version: 2,
+      updatedAt: '2026-05-23T08:00:00.000Z',
     });
     vi.stubGlobal('fetch', createFetchMock());
     Object.defineProperty(URL, 'createObjectURL', {
@@ -317,6 +341,57 @@ describe('Article create manual listen audio', () => {
       configurable: true,
       value: vi.fn(),
     });
+  });
+
+  it('offers browser recovery inline without a repeated native confirmation', async () => {
+    const draftKey = 'lokswami:article-draft:v2:parvez@example.com:direct';
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    window.localStorage.setItem(
+      draftKey,
+      JSON.stringify({
+        savedAt: '2026-07-13T08:00:00.000Z',
+        editorSessionId: 'another-tab',
+        formData: { title: 'Recovered newsroom draft' },
+      })
+    );
+
+    await renderCreatePage();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Browser recovery copy available' })
+    ).toBeInTheDocument();
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Discard old copy' }));
+    expect(
+      screen.queryByRole('heading', { name: 'Browser recovery copy available' })
+    ).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(draftKey)).toBeNull();
+  });
+
+  it('silently resumes a recovery copy owned by the current editor tab', async () => {
+    const draftKey = 'lokswami:article-draft:v2:parvez@example.com:direct';
+    const editorSessionId = 'current-editor-tab';
+    window.sessionStorage.setItem(`${draftKey}:editor-session`, editorSessionId);
+    window.localStorage.setItem(
+      draftKey,
+      JSON.stringify({
+        savedAt: '2026-07-13T08:00:00.000Z',
+        editorSessionId,
+        formData: { title: 'Continue without interruption' },
+      })
+    );
+
+    await renderCreatePage();
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Enter an engaging title')).toHaveValue(
+        'Continue without interruption'
+      );
+    });
+    expect(
+      screen.queryByRole('heading', { name: 'Browser recovery copy available' })
+    ).not.toBeInTheDocument();
   });
 
   it('shows staged status for a valid article listen audio file', async () => {
@@ -488,13 +563,19 @@ describe('Article create manual listen audio', () => {
     expect(mocks.uploadBreakingTtsAudioDirect).not.toHaveBeenCalled();
   });
 
-  it('creates a breaking article first, uploads breaking audio, then publishes it', async () => {
+  it('creates a server draft, uploads breaking audio, then publishes the same article', async () => {
     const fetchMock = fetch as ReturnType<typeof createFetchMock>;
     const { container } = await renderCreatePage();
     await fillRequiredArticleFields(container);
     await userEvent.click(screen.getByLabelText(/mark as breaking news/i));
+    fillBreakingEditorialControl();
     const breakingAudio = new File(['breaking-audio'], 'breaking.mp3', { type: 'audio/mpeg' });
     uploadBreakingAudio(container, breakingAudio);
+
+    expect(
+      screen.getByRole('button', { name: /Breaking flag approval readiness/i })
+    ).toHaveTextContent(/recorded/i);
+    expect(screen.queryByText(/Resolve blockers:/i)?.textContent || null).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: /publish article/i }));
 
@@ -502,6 +583,7 @@ describe('Article create manual listen audio', () => {
       expect(mocks.uploadBreakingTtsAudioDirect).toHaveBeenCalledWith({
         articleId: '665000000000000000000001',
         file: breakingAudio,
+        expectedVersion: 1,
         authHeaders: { Authorization: 'Bearer test-token' },
       });
     });
@@ -516,14 +598,29 @@ describe('Article create manual listen audio', () => {
           ?.body || '{}'
       )
     );
-    expect(createBody.breakingAudioUploadPending).toBe(true);
+    expect(createBody.intent).toBe('draft');
+    expect(createBody.breakingAudioUploadPending).toBeUndefined();
+    const workflowBody = JSON.parse(
+      String(
+        (
+          fetchMock.mock.calls.find(
+            ([input, init]) =>
+              String(input) === '/api/admin/articles/665000000000000000000001' &&
+              String(init?.method || '').toUpperCase() === 'PATCH'
+          )?.[1]
+        )?.body || '{}'
+      )
+    );
+    expect(workflowBody.expectedVersion).toBe(2);
   });
 
-  it('routes to edit retry when required breaking audio upload fails', async () => {
+  it('keeps the article as a draft when required breaking audio upload fails', async () => {
+    mocks.push.mockClear();
     mocks.uploadBreakingTtsAudioDirect.mockRejectedValueOnce(new Error('Spaces CORS missing'));
     const { container } = await renderCreatePage();
     await fillRequiredArticleFields(container);
     await userEvent.click(screen.getByLabelText(/mark as breaking news/i));
+    fillBreakingEditorialControl();
     uploadBreakingAudio(
       container,
       new File(['breaking-audio'], 'breaking.wav', { type: 'audio/wav' })
@@ -532,14 +629,9 @@ describe('Article create manual listen audio', () => {
     await userEvent.click(screen.getByRole('button', { name: /publish article/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Article was created, but breaking audio upload failed: Spaces CORS missing/i)).toBeInTheDocument();
+      expect(screen.getByText(/Breaking audio upload failed: Spaces CORS missing/i)).toBeInTheDocument();
     });
-    await waitFor(
-      () => {
-        expect(mocks.push).toHaveBeenCalledWith('/admin/articles/665000000000000000000001/edit');
-      },
-      { timeout: 3500 }
-    );
+    expect(mocks.push).not.toHaveBeenCalled();
   }, 10000);
 
   it('creates the article first, then uploads staged audio against the returned article id', async () => {
@@ -572,7 +664,7 @@ describe('Article create manual listen audio', () => {
     await userEvent.click(screen.getByRole('button', { name: /publish article/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Article was created, but listen audio upload failed: Spaces CORS missing/i)).toBeInTheDocument();
+      expect(screen.getByText(/Listen audio upload failed: Spaces CORS missing/i)).toBeInTheDocument();
     });
     expect(hasArticleCreateFetchCall(fetch as ReturnType<typeof createFetchMock>)).toBe(true);
   });

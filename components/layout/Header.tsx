@@ -75,7 +75,30 @@ export default function Header() {
     }
   }
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return (
+      <header
+        aria-label="Site header"
+        aria-busy="true"
+        className="fixed left-0 right-0 top-11 z-50 border-b border-zinc-200/85 bg-white/95 shadow-[var(--shadow-soft)] backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:top-12"
+      >
+        <div className="flex h-12 items-center justify-between px-1.5 sm:h-[3.45rem] sm:px-5 md:px-8">
+          <div className="sm:hidden"><Logo size="headerCompact" href="/main" /></div>
+          <div className="hidden sm:block lg:hidden"><Logo size="headerMobile" href="/main" /></div>
+          <div className="hidden lg:block"><Logo size="headerDesktop" href="/main" /></div>
+          <div aria-hidden="true" className="flex items-center gap-2">
+            <span className="h-10 w-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
+            <span className="h-10 w-10 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
+          </div>
+        </div>
+        <div aria-hidden="true" className="flex min-h-11 items-center gap-3 overflow-hidden border-t border-zinc-200/80 px-3 dark:border-zinc-800">
+          {[64, 88, 76, 96, 72].map((width) => (
+            <span key={width} className="h-3 shrink-0 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" style={{ width }} />
+          ))}
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="fixed left-0 right-0 top-11 z-50 border-b border-zinc-200/85 bg-white/95 shadow-[var(--shadow-soft)] backdrop-blur-md transition-all duration-500 dark:border-zinc-800 dark:bg-zinc-950/95 md:top-12">

@@ -192,6 +192,7 @@ export default async function CopyDeskPage() {
                     role={admin.role}
                     contentType={item.contentType}
                     contentId={item.id}
+                    version={item.version}
                     status={item.status}
                     editHref={item.editHref}
                     hasAssignment={Boolean(item.assignedToId || item.assignedToEmail || item.assignedToName)}

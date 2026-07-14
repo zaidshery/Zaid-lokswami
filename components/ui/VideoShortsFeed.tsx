@@ -12,12 +12,12 @@ import {
   Heart,
   Play,
   SlidersHorizontal,
-  Share2,
   Volume2,
   VolumeX,
 } from 'lucide-react';
 import { buildVideoReaderPath } from '@/lib/utils/readerContentPaths';
 import formatNumber from '@/lib/utils/formatNumber';
+import ShareMenu from '@/components/ui/ShareMenu';
 
 const VIEWPORT_HEIGHT_CLASS = 'h-[calc(100dvh-12.9rem)] md:h-[calc(100dvh-13.4rem)]';
 const IMMERSIVE_VIEWPORT_HEIGHT_CLASS = 'h-vh-dvh h-dvh';
@@ -588,26 +588,6 @@ export default function VideoShortsFeed({
     toggleActivePlayback();
   };
 
-  const handleShare = async () => {
-    if (!activeVideo || typeof window === 'undefined') return;
-
-    const url = `${window.location.origin}${activeReadHref}`;
-    const nativeText = `Lokswami News - ${activeVideo.title}`;
-    const text = `${nativeText}\n${url}`;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: activeVideo.title, text: nativeText, url });
-        return;
-      } catch {
-        // User canceled native share; fallback below.
-      }
-    }
-
-    const whatsapp = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(whatsapp, '_blank', 'noopener,noreferrer');
-  };
-
   const handleLike = () => {
     if (!activeVideo) return;
     setLikedIds((prev) => ({ ...prev, [activeVideo.id]: !prev[activeVideo.id] }));
@@ -922,15 +902,21 @@ export default function VideoShortsFeed({
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={handleShare}
-                className={actionIconButtonClass}
-                aria-label={language === 'hi' ? '\u0936\u0947\u092f\u0930 \u0915\u0930\u0947\u0902' : 'Share'}
-                data-swipe-ignore="true"
-              >
-                <Share2 className="h-[22px] w-[22px] md:h-[26px] md:w-[26px]" />
-              </button>
+              <div data-swipe-ignore="true">
+                <ShareMenu
+                  title={activeVideo.title}
+                  url={activeReadHref}
+                  text={`Lokswami News - ${activeVideo.title}`}
+                  whatsappText={`Lokswami News - ${activeVideo.title}`}
+                  contentType="video"
+                  contentId={activeVideo.id}
+                  placement="video_shorts_actions"
+                  language={language}
+                  triggerLabel={language === 'hi' ? '\u0936\u0947\u092f\u0930' : 'Share'}
+                  ariaLabel={language === 'hi' ? '\u0936\u0947\u092f\u0930 \u0915\u0930\u0928\u0947 \u0915\u093e \u0924\u0930\u0940\u0915\u093e \u091a\u0941\u0928\u0947\u0902' : 'Choose how to share video'}
+                  buttonClassName={`${actionIconButtonClass} [&>span]:sr-only [&>svg]:h-[22px] [&>svg]:w-[22px] md:[&>svg]:h-[26px] md:[&>svg]:w-[26px]`}
+                />
+              </div>
 
               <button
                 type="button"

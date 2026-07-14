@@ -5,6 +5,7 @@ import Article from '@/lib/models/Article';
 import { resolveReusableBreakingTts } from '@/lib/server/breakingTts';
 import { listAllStoredArticles } from '@/lib/storage/articlesFile';
 import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
+import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
 
 const DEFAULT_LIMIT = 10;
 const MIN_LIMIT = 1;
@@ -48,6 +49,7 @@ function normalizeBreakingItem(source: unknown): BreakingItem | null {
   const input =
     typeof source === 'object' && source ? (source as Record<string, unknown>) : null;
   if (!input) return null;
+  if (!resolveArticleEditorialFlags(input).isBreaking) return null;
 
   const id = String(input._id || input.id || '').trim();
   const title = String(input.title || '').trim();
@@ -121,9 +123,9 @@ async function shouldUseFileStore() {
 
 async function listFromMongo(limit: number) {
   const docs = await Article.find({ isBreaking: true })
-    .select('_id slug title category publishedAt views reporterMeta breakingTts')
+    .select('_id slug title category publishedAt views isBreaking editorial reporterMeta breakingTts')
     .sort({ publishedAt: -1, _id: -1 })
-    .limit(limit)
+    .limit(Math.min(MAX_LIMIT * 5, Math.max(limit * 5, limit)))
     .lean();
 
   return docs
@@ -137,7 +139,6 @@ async function listFromFileStore(limit: number) {
   const stored = await listAllStoredArticles();
 
   return stored
-    .filter((item) => item.isBreaking)
     .map((item) => normalizeBreakingItem(item))
     .filter((item): item is BreakingItem => Boolean(item))
     .sort(compareBreakingItems)

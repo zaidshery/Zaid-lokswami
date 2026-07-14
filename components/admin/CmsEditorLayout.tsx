@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 
-type SidebarWidth = 'narrow' | 'default' | 'wide' | 'quarter';
+type SidebarWidth = 'narrow' | 'default' | 'wide' | 'quarter' | 'workspace';
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -13,6 +13,7 @@ const SIDEBAR_WIDTH_CLASS: Record<SidebarWidth, string> = {
   default: 'xl:grid-cols-[minmax(0,1fr)_380px]',
   wide: 'xl:grid-cols-[minmax(0,1fr)_400px]',
   quarter: 'xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]',
+  workspace: 'xl:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]',
 };
 
 export function CmsEditorCanvas({
@@ -67,7 +68,12 @@ export function CmsEditorSidebar({
   className?: string;
 }) {
   return (
-    <aside className={cx('space-y-3 sm:space-y-4 xl:sticky xl:top-24 xl:self-start', className)}>
+    <aside
+      className={cx(
+        'space-y-3 sm:space-y-4 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:self-start xl:overflow-y-auto xl:overscroll-contain xl:pr-1',
+        className
+      )}
+    >
       {children}
     </aside>
   );

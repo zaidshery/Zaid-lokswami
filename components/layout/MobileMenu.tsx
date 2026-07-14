@@ -9,6 +9,7 @@ import { useAppStore } from '@/lib/store/appStore';
 import Logo from '@/components/layout/Logo';
 import { COMPANY_INFO } from '@/lib/constants/company';
 import { NEWS_CATEGORIES, getNewsCategoryHref } from '@/lib/constants/newsCategories';
+import { READER_NAVIGATION } from '@/lib/constants/readerNavigation';
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -72,14 +73,15 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
       : '/signin?redirect=/main/account';
 
   const pages = [
-    { name: '\u0939\u094b\u092e', nameEn: 'Home', href: '/main' },
-    { name: '\u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930\u0947\u0902', nameEn: 'Latest News', href: '/main/latest' },
-    { name: '\u0935\u0940\u0921\u093f\u092f\u094b', nameEn: 'Videos', href: '/main/videos' },
-    { name: '\u0908-\u092a\u0947\u092a\u0930', nameEn: 'E-Paper', href: '/main/epaper' },
-    { name: '\u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928', nameEn: 'E-Magazine', href: '/main/e-magazine' },
-    { name: '\u0921\u093f\u091c\u093f\u091f\u0932 \u0928\u094d\u092f\u0942\u091c\u0930\u0942\u092e', nameEn: 'Digital Newsroom', href: '/main/digital-newsroom' },
+    READER_NAVIGATION.home,
+    READER_NAVIGATION.latest,
+    READER_NAVIGATION.videos,
+    READER_NAVIGATION.epaper,
+    READER_NAVIGATION.emagazine,
+    READER_NAVIGATION.digitalNewsroom,
+    READER_NAVIGATION.search,
     { name: '\u0905\u0915\u093e\u0909\u0902\u091f', nameEn: 'Account', href: accountHref },
-    { name: '\u0938\u0902\u092a\u0930\u094d\u0915', nameEn: 'Contact', href: '/main/contact' },
+    READER_NAVIGATION.contact,
   ];
 
   useEffect(() => {

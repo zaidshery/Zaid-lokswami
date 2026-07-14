@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Types } from 'mongoose';
 import { publicJsonCacheHeaders } from '@/lib/api/cache';
 import connectDB from '@/lib/db/mongoose';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 import Article from '@/lib/models/Article';
 import { listAllStoredArticles } from '@/lib/storage/articlesFile';
+import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
+import { WORKFLOW_STATUSES } from '@/lib/workflow/types';
 
 const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 5;
@@ -90,6 +93,7 @@ function normalizeFeedArticle(source: unknown): FeedArticle | null {
   const publishedAt = normalizeDate(input.publishedAt);
   const viewsRaw =
     typeof input.views === 'number' ? input.views : Number(input.views || 0);
+  const activeFlags = resolveArticleEditorialFlags(input);
 
   if (!id || !title || !summary || !image) {
     return null;
@@ -107,8 +111,8 @@ function normalizeFeedArticle(source: unknown): FeedArticle | null {
     author: author || 'Editor',
     publishedAt,
     views: Number.isFinite(viewsRaw) ? viewsRaw : 0,
-    isBreaking: Boolean(input.isBreaking),
-    isTrending: Boolean(input.isTrending),
+    isBreaking: activeFlags.isBreaking,
+    isTrending: activeFlags.isTrending,
   };
 }
 
@@ -168,12 +172,73 @@ async function shouldUseFileStore() {
   }
 }
 
+function buildMongoPublicationFilter() {
+  return {
+    $or: [
+      { 'workflow.status': 'published' },
+      {
+        $and: [
+          // Articles created before workflow metadata was introduced are
+          // public when they have a publication/update timestamp. Invalid
+          // legacy status values follow the same fallback in
+          // isPubliclyPublishedArticle.
+          { 'workflow.status': { $nin: [...WORKFLOW_STATUSES] } },
+          {
+            $or: [
+              { publishedAt: { $exists: true, $ne: null } },
+              { updatedAt: { $exists: true, $ne: null } },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function buildMongoCursorFilter(cursor: Cursor | null) {
+  if (!cursor) return null;
+
+  const equalDateIdFilter = Types.ObjectId.isValid(cursor.id)
+    ? { _id: { $lt: new Types.ObjectId(cursor.id) } }
+    : {
+        $expr: {
+          $lt: [{ $toString: '$_id' }, cursor.id],
+        },
+      };
+
+  return {
+    $or: [
+      { publishedAt: { $lt: cursor.date } },
+      {
+        $and: [{ publishedAt: cursor.date }, equalDateIdFilter],
+      },
+    ],
+  };
+}
+
+function buildMongoFeedFilter(cursor: Cursor | null) {
+  const filters: Record<string, unknown>[] = [
+    buildMongoPublicationFilter(),
+    { title: { $type: 'string', $regex: /\S/ } },
+    { summary: { $type: 'string', $regex: /\S/ } },
+    { image: { $type: 'string', $regex: /\S/ } },
+  ];
+  const cursorFilter = buildMongoCursorFilter(cursor);
+  if (cursorFilter) filters.push(cursorFilter);
+
+  return { $and: filters };
+}
+
 async function listFromMongo(limit: number, cursor: Cursor | null) {
-  const docs = await Article.find({})
+  const docs = await Article.find(buildMongoFeedFilter(cursor))
     .select(
-      '_id slug title summary content image category author publishedAt updatedAt views isBreaking isTrending workflow'
+      // Feed cards do not consume the article body. normalizeFeedArticle keeps
+      // the legacy `content` response key (as an empty string) so older clients
+      // retain the same payload shape without loading full documents.
+      '_id slug title summary image category author publishedAt updatedAt views isBreaking isTrending editorial workflow'
     )
     .sort({ publishedAt: -1, _id: -1 })
+    .limit(limit + 1)
     .lean();
 
   const normalized = docs
@@ -182,8 +247,7 @@ async function listFromMongo(limit: number, cursor: Cursor | null) {
     .filter((item): item is FeedArticle => Boolean(item))
     .sort(compareFeedArticles);
 
-  const filtered = applyCursorFilter(normalized, cursor);
-  return buildPagedResponse(filtered.slice(0, limit + 1), limit);
+  return buildPagedResponse(normalized, limit);
 }
 
 async function listFromFileStore(limit: number, cursor: Cursor | null) {

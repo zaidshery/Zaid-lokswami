@@ -8,7 +8,10 @@ import {
   normalizeCopyEditorMeta,
   normalizeReporterMeta,
 } from '@/lib/content/newsroomMetadata';
-import { normalizeArticleSeo } from '@/lib/seo/articleSeo';
+import { normalizeArticleDocument } from '@/lib/content/articleDocument';
+import { normalizeArticleEditorialMeta } from '@/lib/content/articleEditorial';
+import { normalizeArticleMediaMetadata } from '@/lib/content/articleMediaMetadata';
+import { normalizeArticleSeo, normalizeArticleSlug } from '@/lib/seo/articleSeo';
 import {
   buildArticleActivityMessage,
   recordArticleActivity,
@@ -39,20 +42,37 @@ function normalizeSeo(input: unknown) {
 }
 
 function buildRevisionSnapshot(article: Record<string, unknown>) {
+  const content = typeof article.content === 'string' ? article.content : '';
   return {
     title: typeof article.title === 'string' ? article.title : '',
     summary: typeof article.summary === 'string' ? article.summary : '',
-    content: typeof article.content === 'string' ? article.content : '',
+    content,
+    contentJson: normalizeArticleDocument(article.contentJson, content),
     image: typeof article.image === 'string' ? article.image : '',
     category: typeof article.category === 'string' ? article.category : '',
     author: typeof article.author === 'string' ? article.author : '',
+    slug: normalizeArticleSlug(String(article.slug || '')),
+    previousSlugs: Array.isArray(article.previousSlugs)
+      ? article.previousSlugs
+          .map((item) => normalizeArticleSlug(String(item || '')))
+          .filter(Boolean)
+      : [],
     isBreaking: Boolean(article.isBreaking),
     isTrending: Boolean(article.isTrending),
     seo: normalizeSeo(article.seo),
     reporterMeta: normalizeReporterMeta(article.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(article.copyEditorMeta),
+    editorial: normalizeArticleEditorialMeta(article.editorial),
+    media: normalizeArticleMediaMetadata(article.media),
     savedAt: new Date(),
   };
+}
+
+function normalizeSlugHistory(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => normalizeArticleSlug(String(item || '')))
+    .filter(Boolean);
 }
 
 type RouteContext = {
@@ -171,24 +191,69 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const snapshot = buildRevisionSnapshot(article as unknown as Record<string, unknown>);
-    const restoredArticle = await Article.findByIdAndUpdate(
-      id,
+    const restoredContent =
+      typeof targetRevision.content === 'string' ? targetRevision.content : '';
+    const currentSlug = normalizeArticleSlug(String(article.slug || ''));
+    const revisionSlug = normalizeArticleSlug(String(targetRevision.slug || ''));
+    const currentPreviousSlugs = normalizeSlugHistory(article.previousSlugs);
+    let restoredSlug = currentSlug;
+    let restoredPreviousSlugs = currentPreviousSlugs;
+
+    if (revisionSlug) {
+      const slugConflict =
+        revisionSlug !== currentSlug &&
+        Boolean(
+          await Article.exists({
+            _id: { $ne: id },
+            $or: [{ slug: revisionSlug }, { previousSlugs: revisionSlug }],
+          })
+        );
+      if (!slugConflict) {
+        restoredSlug = revisionSlug;
+        const slugHistory = new Set([
+          ...currentPreviousSlugs,
+          ...normalizeSlugHistory(targetRevision.previousSlugs),
+        ]);
+        if (currentSlug && currentSlug !== restoredSlug) slugHistory.add(currentSlug);
+        slugHistory.delete(restoredSlug);
+        restoredPreviousSlugs = Array.from(slugHistory);
+      }
+    }
+
+    const hasStoredVersion =
+      typeof article.version === 'number' &&
+      Number.isInteger(article.version) &&
+      article.version > 0;
+    const restoredArticle = await Article.findOneAndUpdate(
+      {
+        _id: id,
+        version: hasStoredVersion ? article.version : { $exists: false },
+      },
       {
         $set: {
           title: typeof targetRevision.title === 'string' ? targetRevision.title : '',
           summary: typeof targetRevision.summary === 'string' ? targetRevision.summary : '',
-          content: typeof targetRevision.content === 'string' ? targetRevision.content : '',
+          content: restoredContent,
+          contentJson: normalizeArticleDocument(targetRevision.contentJson, restoredContent),
           image: typeof targetRevision.image === 'string' ? targetRevision.image : '',
           category:
             typeof targetRevision.category === 'string' ? targetRevision.category : '',
           author: typeof targetRevision.author === 'string' ? targetRevision.author : '',
+          slug: restoredSlug,
+          previousSlugs: restoredPreviousSlugs,
           isBreaking: Boolean(targetRevision.isBreaking),
           isTrending: Boolean(targetRevision.isTrending),
           seo: normalizeSeo(targetRevision.seo),
           reporterMeta: normalizeReporterMeta(targetRevision.reporterMeta),
           copyEditorMeta: normalizeCopyEditorMeta(targetRevision.copyEditorMeta),
+          editorial: normalizeArticleEditorialMeta(targetRevision.editorial),
+          media: normalizeArticleMediaMetadata(targetRevision.media),
           updatedAt: new Date(),
         },
+        // Mongo starts a missing field at zero for $inc. Legacy articles have a
+        // logical version of 1, so initialize them to 2 while preserving one
+        // atomic compare-and-swap update.
+        $inc: { version: hasStoredVersion ? 1 : 2 },
         $push: { revisions: { $each: [snapshot], $slice: -30 } },
       },
       { new: true, runValidators: true }
@@ -196,8 +261,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
     if (!restoredArticle) {
       return NextResponse.json(
-        { success: false, error: 'Article not found' },
-        { status: 404 }
+        {
+          success: false,
+          error: 'This article was updated in another session.',
+        },
+        { status: 409 }
       );
     }
 
