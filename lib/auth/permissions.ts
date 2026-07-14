@@ -41,6 +41,7 @@ export const ADMIN_PAGE_KEYS = [
   'revenue',
   'team',
   'analytics',
+  'business_value',
   'audit_log',
   'permission_review',
   'operations_center',
@@ -110,6 +111,7 @@ export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
   revenue: ['super_admin'],
   team: ['super_admin', 'admin'],
   analytics: ['super_admin', 'admin'],
+  business_value: ['super_admin'],
   audit_log: ['super_admin'],
   permission_review: ['super_admin'],
   operations_center: ['super_admin', 'admin'],
@@ -148,6 +150,7 @@ export const PAGE_LABELS: Record<AdminPageKey, string> = {
   revenue: 'Revenue & Ads Control',
   team: 'Team',
   analytics: 'Analytics',
+  business_value: 'Business Value',
   audit_log: 'Audit Log',
   permission_review: 'Permission Review',
   operations_center: 'Operations Center',
@@ -159,6 +162,10 @@ const COPY_EDITOR_EDITABLE_WORKFLOW_STATUSES: WorkflowStatus[] = [
   'assigned',
   'in_review',
   'copy_edit',
+];
+const COPY_EDITOR_OWN_EDITABLE_WORKFLOW_STATUSES: WorkflowStatus[] = [
+  'draft',
+  'changes_requested',
 ];
 const COPY_EDITOR_SHARED_QUEUE_STATUSES: WorkflowStatus[] = ['submitted'];
 
@@ -184,6 +191,14 @@ function resolveAssignedToId(content: PermissionContentRecord): string {
 
 function resolveLegacyAuthorName(content: PermissionContentRecord): string {
   return content.legacyAuthorName?.trim() || '';
+}
+
+function isExplicitContentOwner(
+  user: PermissionUser | null | undefined,
+  content: PermissionContentRecord
+): boolean {
+  if (!user) return false;
+  return matchesActor(user, resolveCreatedById(content));
 }
 
 export function resolveWorkflowStatus(content: PermissionContentRecord): WorkflowStatus | null {
@@ -303,6 +318,7 @@ export function canReadContent(
       return isOwnContent(user, content) || isAssignedContent(user, content);
     case 'copy_editor':
       return (
+        isExplicitContentOwner(user, content) ||
         isAssignedContent(user, content) ||
         Boolean(
           workflowStatus && COPY_EDITOR_SHARED_QUEUE_STATUSES.includes(workflowStatus)
@@ -332,8 +348,15 @@ export function canEditContent(
       );
     case 'copy_editor':
       return (
-        Boolean(workflowStatus && COPY_EDITOR_EDITABLE_WORKFLOW_STATUSES.includes(workflowStatus)) &&
-        isAssignedContent(user, content)
+        Boolean(
+          workflowStatus &&
+            (
+              (COPY_EDITOR_OWN_EDITABLE_WORKFLOW_STATUSES.includes(workflowStatus) &&
+                isExplicitContentOwner(user, content)) ||
+              (COPY_EDITOR_EDITABLE_WORKFLOW_STATUSES.includes(workflowStatus) &&
+                isAssignedContent(user, content))
+            )
+        )
       );
     default:
       return false;
@@ -353,7 +376,7 @@ export function canCommentOnContent(
     case 'reporter':
       return isOwnContent(user, content) || isAssignedContent(user, content);
     case 'copy_editor':
-      return isAssignedContent(user, content);
+      return isExplicitContentOwner(user, content) || isAssignedContent(user, content);
     default:
       return false;
   }
@@ -431,8 +454,11 @@ export function canTransitionContent(
   if (isCopyEditorRole(user.role)) {
     if (
       action === 'submit' &&
-      workflowStatus === 'draft' &&
-      isOwnContent(user, content)
+      Boolean(
+        workflowStatus &&
+          COPY_EDITOR_OWN_EDITABLE_WORKFLOW_STATUSES.includes(workflowStatus)
+      ) &&
+      isExplicitContentOwner(user, content)
     ) {
       return true;
     }

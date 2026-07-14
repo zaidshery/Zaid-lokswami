@@ -1,10 +1,22 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Activity, AlertTriangle, Settings2, ShieldCheck } from 'lucide-react';
+import { getAdminSession } from '@/lib/auth/admin';
+import { canViewPage } from '@/lib/auth/permissions';
 import DeploymentSafeguardsPanel from './DeploymentSafeguardsPanel';
 import LeadershipReportsSettingsPanel from './LeadershipReportsSettingsPanel';
 import TtsSettingsPanel from './TtsSettingsPanel';
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const admin = await getAdminSession();
+  if (!admin) {
+    redirect('/signin?redirect=/admin/settings');
+  }
+
+  if (!canViewPage(admin.role, 'settings')) {
+    redirect('/admin');
+  }
+
   return (
     <div className="mx-auto max-w-[1640px] space-y-8">
       <section className="relative overflow-hidden rounded-[36px] border border-[color:var(--admin-shell-border)] bg-[radial-gradient(circle_at_top_left,rgba(185,28,28,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(37,99,235,0.08),transparent_28%),var(--admin-bg-depth)] p-8 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] lg:p-10">

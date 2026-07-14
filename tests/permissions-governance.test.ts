@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canCommentOnContent,
   canCreateContent,
   canCreateEpaper,
   canDeleteEpaper,
@@ -64,10 +65,14 @@ describe('governance permission helpers', () => {
 
   it('keeps leadership controls narrower than normal analytics access', () => {
     expect(canViewPage(superAdmin.role, 'analytics')).toBe(true);
+    expect(canViewPage(superAdmin.role, 'business_value')).toBe(true);
     expect(canViewPage(superAdmin.role, 'polls')).toBe(true);
+    expect(canViewPage(superAdmin.role, 'settings')).toBe(true);
     expect(canViewPage(superAdmin.role, 'revenue')).toBe(true);
     expect(canViewPage(admin.role, 'analytics')).toBe(true);
+    expect(canViewPage(admin.role, 'business_value')).toBe(false);
     expect(canViewPage(admin.role, 'polls')).toBe(true);
+    expect(canViewPage(admin.role, 'settings')).toBe(false);
     expect(canViewPage(admin.role, 'revenue')).toBe(false);
     expect(canViewPage(copyEditor.role, 'polls')).toBe(false);
     expect(canViewPage(reporter.role, 'polls')).toBe(false);
@@ -153,6 +158,47 @@ describe('governance permission helpers', () => {
         'start_review'
       )
     ).toBe(false);
+  });
+
+  it('lets copy editors reopen, revise, and submit only their own direct-article drafts', () => {
+    const ownDraft = {
+      ...baseContent,
+      workflowStatus: 'draft' as const,
+      createdById: copyEditor.id,
+      assignedToId: '',
+      legacyAuthorName: copyEditor.name,
+    };
+    const ownChangesRequested = {
+      ...ownDraft,
+      workflowStatus: 'changes_requested' as const,
+    };
+    const anotherEditorsDraft = {
+      ...ownDraft,
+      createdById: 'copy-editor-2',
+      legacyAuthorName: 'Another Copy Editor',
+    };
+    const legacyNameOnlyDraft = {
+      ...ownDraft,
+      createdById: '',
+      legacyAuthorName: copyEditor.name,
+    };
+
+    expect(canReadContent(copyEditor, ownDraft)).toBe(true);
+    expect(canEditContent(copyEditor, ownDraft)).toBe(true);
+    expect(canCommentOnContent(copyEditor, ownDraft)).toBe(true);
+    expect(canTransitionContent(copyEditor, ownDraft, 'submit')).toBe(true);
+    expect(canReadContent(copyEditor, ownChangesRequested)).toBe(true);
+    expect(canEditContent(copyEditor, ownChangesRequested)).toBe(true);
+    expect(canTransitionContent(copyEditor, ownChangesRequested, 'submit')).toBe(true);
+
+    expect(canReadContent(copyEditor, anotherEditorsDraft)).toBe(false);
+    expect(canEditContent(copyEditor, anotherEditorsDraft)).toBe(false);
+    expect(canCommentOnContent(copyEditor, anotherEditorsDraft)).toBe(false);
+    expect(canTransitionContent(copyEditor, anotherEditorsDraft, 'submit')).toBe(false);
+    expect(canReadContent(copyEditor, legacyNameOnlyDraft)).toBe(false);
+    expect(canEditContent(copyEditor, legacyNameOnlyDraft)).toBe(false);
+    expect(canCommentOnContent(copyEditor, legacyNameOnlyDraft)).toBe(false);
+    expect(canTransitionContent(copyEditor, ownDraft, 'publish')).toBe(false);
   });
 
   it('keeps admin and super admin fully operational on workflow actions', () => {

@@ -140,7 +140,7 @@ const ADMIN_SURFACES: SidebarItem[] = [
   { icon: FolderOpen, labelEn: 'Categories', labelHi: HI.categories, href: '/admin/categories', pageKey: 'categories', section: 'content' },
   { icon: BellRing, labelEn: 'Contact Messages', labelHi: '\u0938\u0902\u092a\u0930\u094d\u0915 \u0938\u0902\u0926\u0947\u0936', href: '/admin/contact-messages', pageKey: 'contact_messages', section: 'content' },
   { icon: BarChart3, labelEn: 'Analytics', labelHi: HI.analytics, href: '/admin/analytics', pageKey: 'analytics', section: 'insights' },
-  { icon: BarChart3, labelEn: 'Business Value', labelHi: '\u092c\u093f\u091c\u093c\u0928\u0947\u0938 \u0935\u0948\u0932\u094d\u092f\u0942', href: '/admin/analytics/business-value', pageKey: 'analytics', section: 'insights', visibleRoles: ['super_admin'] },
+  { icon: BarChart3, labelEn: 'Business Value', labelHi: '\u092c\u093f\u091c\u093c\u0928\u0947\u0938 \u0935\u0948\u0932\u094d\u092f\u0942', href: '/admin/analytics/business-value', pageKey: 'business_value', section: 'insights' },
   { icon: BarChart3, labelEn: 'Revenue', labelHi: HI.revenue, href: '/admin/revenue', pageKey: 'revenue', section: 'insights' },
   { icon: Settings2, labelEn: 'AI Ops', labelHi: '\u090f\u0906\u0908 \u0911\u092a\u0930\u0947\u0936\u0902\u0938', href: '/admin/ai', pageKey: 'ai_ops', section: 'insights' },
   { icon: ClipboardList, labelEn: 'Audit Log', labelHi: HI.auditLog, href: '/admin/audit-log', pageKey: 'audit_log', section: 'governance' },

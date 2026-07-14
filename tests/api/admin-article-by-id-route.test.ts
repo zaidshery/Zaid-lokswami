@@ -181,6 +181,82 @@ describe('/api/admin/articles/[id] route', () => {
     expect(getStoredArticleByIdMock).not.toHaveBeenCalled();
   });
 
+  it('lets a copy editor reopen their explicitly owned direct-article draft', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'copy-1',
+      email: 'copy@example.com',
+      name: 'Copy Editor',
+      role: 'copy_editor',
+    });
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      version: 2,
+      title: 'Copy desk draft',
+      slug: 'copy-desk-draft',
+      workflow: {
+        status: 'draft',
+        createdBy: {
+          id: 'copy-1',
+          email: 'copy@example.com',
+          name: 'Copy Editor',
+          role: 'copy_editor',
+        },
+      },
+    });
+
+    const { GET } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await GET(createJsonRequest('GET'), {
+      params: Promise.resolve({ id: 'article-1' }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data).toEqual(
+      expect.objectContaining({ _id: 'article-1', title: 'Copy desk draft' })
+    );
+  });
+
+  it('keeps another copy editor draft private from detail reads and autosave', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'copy-1',
+      email: 'copy@example.com',
+      name: 'Copy Editor',
+      role: 'copy_editor',
+    });
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      version: 2,
+      title: 'Private draft',
+      slug: 'private-draft',
+      workflow: {
+        status: 'draft',
+        createdBy: {
+          id: 'copy-2',
+          email: 'copy2@example.com',
+          name: 'Another Copy Editor',
+          role: 'copy_editor',
+        },
+      },
+    });
+
+    const { GET, PATCH } = await import('@/app/api/admin/articles/[id]/route');
+    const readResponse = await GET(createJsonRequest('GET'), {
+      params: Promise.resolve({ id: 'article-1' }),
+    });
+    const patchResponse = await PATCH(
+      createJsonRequest('PATCH', {
+        title: 'Unauthorized change',
+        autosave: true,
+        expectedVersion: 2,
+      }),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+
+    expect(readResponse.status).toBe(403);
+    expect(patchResponse.status).toBe(403);
+    expect(updateStoredArticleMock).not.toHaveBeenCalled();
+  });
+
   it('prevents reporters from patching articles through the API', async () => {
     getAdminSessionMock.mockResolvedValue({
       id: 'reporter-1',
@@ -205,6 +281,55 @@ describe('/api/admin/articles/[id] route', () => {
     });
     expect(getStoredArticleByIdMock).not.toHaveBeenCalled();
     expect(updateStoredArticleMock).not.toHaveBeenCalled();
+  });
+
+  it('allows a copy editor to autosave their own direct-article draft', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'copy-1',
+      email: 'copy@example.com',
+      name: 'Copy Editor',
+      role: 'copy_editor',
+    });
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      version: 2,
+      title: 'Copy desk draft',
+      slug: 'copy-desk-draft',
+      previousSlugs: [],
+      updatedAt: '2026-07-14T08:30:00.000Z',
+      workflow: {
+        status: 'draft',
+        createdBy: {
+          id: 'copy-1',
+          email: 'copy@example.com',
+          name: 'Copy Editor',
+          role: 'copy_editor',
+        },
+      },
+    });
+    updateStoredArticleMock.mockResolvedValue({
+      _id: 'article-1',
+      version: 3,
+      title: 'Updated copy desk draft',
+      workflow: { status: 'draft' },
+    });
+
+    const { PATCH } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await PATCH(
+      createJsonRequest('PATCH', {
+        title: 'Updated copy desk draft',
+        autosave: true,
+        expectedVersion: 2,
+      }),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateStoredArticleMock).toHaveBeenCalledWith(
+      'article-1',
+      expect.objectContaining({ title: 'Updated copy desk draft' }),
+      { skipRevision: true, expectedVersion: 2 }
+    );
   });
 
   it('rejects a stale autosave instead of overwriting a newer draft', async () => {

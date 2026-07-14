@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongoose';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
+import { canViewPage } from '@/lib/auth/permissions';
 import ContactMessage from '@/lib/models/ContactMessage';
 import AdvertiseInquiry from '@/lib/models/AdvertiseInquiry';
 
 export async function GET(req: NextRequest) {
   try {
     const user = await getAdminSessionFromReq(req);
-    if (!user || (user.role !== 'super_admin' && user.role !== 'admin')) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!canViewPage(user.role, 'business_value')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);

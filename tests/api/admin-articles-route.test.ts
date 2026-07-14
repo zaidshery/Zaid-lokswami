@@ -131,6 +131,81 @@ describe('/api/admin/articles route', () => {
     });
   });
 
+  it('lists a copy editor own draft without exposing another editor draft', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'copy-1',
+      email: 'copy@example.com',
+      name: 'Copy Editor',
+      role: 'copy_editor',
+    });
+    listAllStoredArticlesMock.mockResolvedValue([
+      {
+        _id: 'own-draft',
+        title: 'Own direct article',
+        category: 'General',
+        author: 'Copy Editor',
+        updatedAt: '2026-07-14T08:00:00.000Z',
+        workflow: {
+          status: 'draft',
+          createdBy: {
+            id: 'copy-1',
+            email: 'copy@example.com',
+            name: 'Copy Editor',
+            role: 'copy_editor',
+          },
+        },
+      },
+      {
+        _id: 'other-draft',
+        title: 'Another editor draft',
+        category: 'General',
+        author: 'Another Copy Editor',
+        updatedAt: '2026-07-14T09:00:00.000Z',
+        workflow: {
+          status: 'draft',
+          createdBy: {
+            id: 'copy-2',
+            email: 'copy2@example.com',
+            name: 'Another Copy Editor',
+            role: 'copy_editor',
+          },
+        },
+      },
+      {
+        _id: 'shared-submitted',
+        title: 'Shared submitted article',
+        category: 'General',
+        author: 'Desk',
+        updatedAt: '2026-07-14T08:30:00.000Z',
+        workflow: {
+          status: 'submitted',
+          createdBy: {
+            id: 'admin-1',
+            email: 'desk@example.com',
+            name: 'Desk',
+            role: 'admin',
+          },
+        },
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/admin/articles/route');
+    const response = await GET(
+      new Request('http://localhost/api/admin/articles?limit=all') as unknown as NextRequest
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data).toEqual([
+      expect.objectContaining({
+        _id: 'shared-submitted',
+        title: 'Shared submitted article',
+      }),
+      expect.objectContaining({ _id: 'own-draft', title: 'Own direct article' }),
+    ]);
+    expect(payload.pagination.total).toBe(2);
+  });
+
   it('prevents reporters from opening the article list API', async () => {
     getAdminSessionMock.mockResolvedValue({
       id: 'reporter-1',

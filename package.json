@@ -28,6 +28,7 @@
     "test:security": "vitest run tests/security-rate-limiter.test.ts tests/security-validation.test.ts tests/security-audit-logger.test.ts tests/security-request-logger.test.ts tests/security-csp-report.test.ts tests/security-request-log-reader.test.ts tests/api/admin-team-routes.test.ts tests/tts-queue.test.ts",
     "test:e2e": "npx playwright test",
     "test:browser-smoke": "node scripts/browser-smoke-local.js",
+    "docs:cms-sop-pdf": "node scripts/generate-cms-sop-pdf.js",
     "quality:full": "npm run typecheck && npm run lint:strict && npm run test:security && npm run test:governance && npm run test:four-role-newsroom && npm run build:ci",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

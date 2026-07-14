@@ -3,6 +3,16 @@
 This folder documents the practical path from the current Next.js newsroom app
 to a modern API-first media platform.
 
+## Operations Guides
+
+- [Newsroom CMS Role SOP](./LOKSWAMI_CMS_ROLE_SOP.md)
+  - Daily workflows, permissions, checklists, and issue handling for Reporter,
+    Copy Editor, and Admin.
+- [Printable CMS Role SOP](./LOKSWAMI_CMS_ROLE_SOP.pdf)
+  - Branded A4 edition for staff onboarding and desk reference. The
+    [printable HTML source](./LOKSWAMI_CMS_ROLE_SOP.html) is included for future
+    updates.
+
 ## Suggested Reading Order
 
 1. [Lokswami Platform 2 Architecture](./LOKSWAMI_PLATFORM_2_ARCHITECTURE.md)
