@@ -228,7 +228,7 @@ describe('/api/admin/articles route', () => {
     expect(listAllStoredArticlesMock).not.toHaveBeenCalled();
   });
 
-  it('prevents reporters from creating articles through the API', async () => {
+  it('allows reporters to submit a short article handoff to copy editors', async () => {
     getAdminSessionMock.mockResolvedValue({
       id: 'reporter-1',
       email: 'reporter@example.com',
@@ -236,23 +236,45 @@ describe('/api/admin/articles route', () => {
       role: 'reporter',
     });
 
+    createStoredArticleMock.mockImplementation(async (article) => ({
+      _id: 'reporter-article-1',
+      ...article,
+    }));
+
     const { POST } = await import('@/app/api/admin/articles/route');
     const response = await POST(
       new Request('http://localhost/api/admin/articles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intent: 'publish' }),
+        body: JSON.stringify({
+          intent: 'submit',
+          title: 'Short reporter title',
+          content: '<p>Reporter body for copy editing.</p>',
+          image: 'https://cdn.example.com/photo.jpg',
+          author: 'Impersonated Author',
+          category: 'Politics',
+          isBreaking: true,
+        }),
       }) as unknown as NextRequest
     );
     const payload = await response.json();
 
-    expect(response.status).toBe(403);
-    expect(payload).toEqual({
-      success: false,
-      error: 'Forbidden',
-    });
-    expect(createStoredArticleMock).not.toHaveBeenCalled();
-    expect(recordArticleActivityMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(payload.success).toBe(true);
+    expect(createStoredArticleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Short reporter title',
+        author: 'Reporter',
+        category: 'General',
+        isBreaking: false,
+        summary: 'Reporter body for copy editing.',
+        workflow: expect.objectContaining({
+          status: 'submitted',
+          createdBy: expect.objectContaining({ id: 'reporter-1' }),
+        }),
+      })
+    );
+    expect(recordArticleActivityMock).toHaveBeenCalled();
     expect(ensureBreakingTtsForArticleMock).not.toHaveBeenCalled();
   });
 

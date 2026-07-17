@@ -904,9 +904,7 @@ export async function PUT(
       }
 
       const nextMediaAssets = applyDerivedStoryMediaUpdates(updates, currentStory);
-      const mediaAssetsError = validateStoryMediaAssets(nextMediaAssets, {
-        requireCompletePackage: user.role === 'reporter' || nextMediaAssets.length > 0,
-      });
+      const mediaAssetsError = validateStoryMediaAssets(nextMediaAssets);
       if (mediaAssetsError) {
         return NextResponse.json({ success: false, error: mediaAssetsError }, { status: 400 });
       }
@@ -1023,9 +1021,7 @@ export async function PUT(
     }
 
     const nextMediaAssets = applyDerivedStoryMediaUpdates(updates, current);
-    const mediaAssetsError = validateStoryMediaAssets(nextMediaAssets, {
-      requireCompletePackage: user.role === 'reporter' || nextMediaAssets.length > 0,
-    });
+    const mediaAssetsError = validateStoryMediaAssets(nextMediaAssets);
     if (mediaAssetsError) {
       return NextResponse.json({ success: false, error: mediaAssetsError }, { status: 400 });
     }

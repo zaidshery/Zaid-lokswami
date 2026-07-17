@@ -1,7 +1,7 @@
 export const STORY_MIN_IMAGE_COUNT = 1;
-export const STORY_MAX_IMAGE_COUNT = 5;
+export const STORY_MAX_IMAGE_COUNT = Number.POSITIVE_INFINITY;
 export const STORY_MIN_VIDEO_COUNT = 1;
-export const STORY_MAX_VIDEO_COUNT = 10;
+export const STORY_MAX_VIDEO_COUNT = Number.POSITIVE_INFINITY;
 export const STORY_MAX_TOTAL_VIDEO_BYTES = Number.POSITIVE_INFINITY;
 
 export type StoryMediaAssetKind = 'image' | 'video';

@@ -75,6 +75,7 @@ describe('AdminShell role-aware navigation', () => {
 
     expect(screen.queryByRole('link', { name: /Contact Messages/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^Articles$/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /Article Create/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: /My Stories/i }).length).toBeGreaterThan(0);
   }, 15_000);
 

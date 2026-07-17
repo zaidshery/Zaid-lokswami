@@ -682,10 +682,6 @@ export async function getMyWorkOverview(
 
   const items = all
     .filter((entry) => {
-      if (user.role === 'reporter' && entry.contentType === 'article') {
-        return false;
-      }
-
       const permissionRecord = buildPermissionRecordFromSource(entry);
       const matches = isOwnContent(user, permissionRecord) || isAssignedContent(user, permissionRecord);
       if (matches) {

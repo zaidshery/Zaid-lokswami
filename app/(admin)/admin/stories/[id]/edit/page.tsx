@@ -1451,9 +1451,7 @@ export default function EditStoryPage() {
       }
 
       const shouldUseMediaCollection = canEditMediaFields && usesMediaCollection;
-      const mediaValidationError = validateStoryMediaAssets(mediaAssets, {
-        requireCompletePackage: isReporterView || shouldUseMediaCollection,
-      });
+      const mediaValidationError = validateStoryMediaAssets(mediaAssets);
       if (mediaValidationError) {
         setError(mediaValidationError);
         setIsSaving(false);
@@ -1955,11 +1953,11 @@ export default function EditStoryPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-900">Story Images</label>
                     <p className="mt-1 text-xs text-gray-500">
-                      Upload up to {STORY_MAX_IMAGE_COUNT} JPG, PNG, or WEBP files. The first image becomes the cover thumbnail.
+                      Upload JPG, PNG, or WEBP files with no image count limit. The first image becomes the cover thumbnail.
                     </p>
                   </div>
                   <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
-                    Images: {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
+                    Images: {mediaCounts.images} • No limit
                   </span>
                 </div>
 
@@ -2039,7 +2037,7 @@ export default function EditStoryPage() {
                     </p>
                   </div>
                   <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
-                    Images: {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
+                    Images: {mediaCounts.images} • No limit
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -2089,7 +2087,7 @@ export default function EditStoryPage() {
                     ) : null}
                   </div>
                   <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
-                    Videos: {mediaCounts.videos}/{STORY_MAX_VIDEO_COUNT}
+                    Videos: {mediaCounts.videos} • No limit
                   </span>
                 </div>
 

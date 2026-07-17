@@ -103,7 +103,9 @@ function canReadQueueItem(user: PermissionUser, item: DeskItem) {
     item.assignedToId,
     item.assignedToEmail
   );
-  if (user.role === 'reporter') return isMine && item.contentType === 'story';
+  if (user.role === 'reporter') {
+    return isMine && (item.contentType === 'story' || item.contentType === 'article');
+  }
   if (user.role === 'copy_editor') {
     return isMine || item.status === 'submitted';
   }

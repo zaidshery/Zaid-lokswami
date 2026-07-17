@@ -28,7 +28,7 @@ describe('story media helpers', () => {
     ).toBe('At least 1 video is required for this story.');
   });
 
-  it('rejects packages above the configured image and video caps', () => {
+  it('allows image packages without a count cap', () => {
     const images = Array.from({ length: 6 }, (_, index) =>
       createStoryMediaAsset({
         kind: 'image',
@@ -42,7 +42,7 @@ describe('story media helpers', () => {
       })
     );
 
-    expect(validateStoryMediaAssets(images)).toBe('You can upload up to 5 images per story.');
+    expect(validateStoryMediaAssets(images)).toBeNull();
   });
 
   it('allows large combined video uploads when each file is otherwise valid', () => {

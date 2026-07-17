@@ -26,8 +26,6 @@ import {
   derivePrimaryStoryMedia,
   getTotalStoryVideoBytes,
   validateStoryMediaAssets,
-  STORY_MAX_IMAGE_COUNT,
-  STORY_MAX_VIDEO_COUNT,
   type StoryMediaAsset,
 } from '@/lib/content/storyMedia';
 import { useAppStore } from '@/lib/store/appStore';
@@ -208,7 +206,7 @@ const REPORTER_COPY = {
   en: {
     back: 'Back to Stories',
     pageTitle: 'Create Story',
-    pageSubtitle: 'Add media, capture reporter notes, and hand the story to the desk for review.',
+    pageSubtitle: 'Add a short title, body, photos or videos, then send it to the desk.',
     roleLoading: 'Your session is still loading role permissions. Publishing actions may stay hidden until it resolves.',
     sections: {
       media: 'Add Media',
@@ -218,7 +216,7 @@ const REPORTER_COPY = {
     },
     fields: {
       title: 'Story Title',
-      caption: 'Video Script',
+      caption: 'Body',
       category: 'Category',
       storyType: 'Story Type',
       thumbnailUrl: 'Thumbnail URL (optional if file upload used)',
@@ -236,7 +234,7 @@ const REPORTER_COPY = {
     },
     placeholders: {
       title: 'Headline for visual story',
-      caption: 'Optional context line for fullscreen viewer',
+      caption: 'Write the story details for the copy editor',
       thumbnailUrl: 'https://example.com/story-thumbnail.jpg',
       linkUrl: '/main/article/123 or https://...',
       linkLabel: 'Read Full Story',
@@ -598,12 +596,6 @@ export default function CreateStoryPage() {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    if (imageAssets.length + files.length > STORY_MAX_IMAGE_COUNT) {
-      setError(t.validation.imageLimitExceeded);
-      e.target.value = '';
-      return;
-    }
-
     for (const file of files) {
       if (!isAllowedImageFile(file)) {
         setError(t.validation.imageTypeInvalid);
@@ -763,12 +755,6 @@ export default function CreateStoryPage() {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    if (videoAssets.length + files.length > STORY_MAX_VIDEO_COUNT) {
-      setError(t.validation.videoLimitExceeded);
-      e.target.value = '';
-      return;
-    }
-
     for (const file of files) {
       const validationError = validateStoryVideoFile(file);
       if (validationError) {
@@ -834,9 +820,7 @@ export default function CreateStoryPage() {
         return;
       }
 
-      const mediaValidationError = validateStoryMediaAssets(mediaAssets, {
-        requireCompletePackage: true,
-      });
+      const mediaValidationError = validateStoryMediaAssets(mediaAssets);
       if (mediaValidationError) {
         setError(getLocalizedMediaValidationMessage(mediaValidationError));
         return;
@@ -1012,7 +996,7 @@ export default function CreateStoryPage() {
                         ) : null}
                       </div>
                       <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
-                        {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
+                        {mediaCounts.images}
                       </span>
                     </div>
 
@@ -1026,8 +1010,7 @@ export default function CreateStoryPage() {
                     />
 
                     <div className="flex flex-wrap gap-2.5 sm:gap-3">
-                      {mediaCounts.images < STORY_MAX_IMAGE_COUNT ? (
-                        <label
+                      <label
                           htmlFor={THUMBNAIL_INPUT_ID}
                           className="flex aspect-square w-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-center text-gray-600 transition-colors hover:border-primary-600 hover:bg-primary-50 sm:w-24"
                         >
@@ -1035,8 +1018,7 @@ export default function CreateStoryPage() {
                           <span className="px-2 text-[11px] font-semibold leading-4">
                             {t.media.selectPhoto}
                           </span>
-                        </label>
-                      ) : null}
+                      </label>
 
                       {imageAssets.map((asset) => (
                         <StoryMediaTile
@@ -1075,7 +1057,7 @@ export default function CreateStoryPage() {
                         ) : null}
                       </div>
                       <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-gray-200">
-                        {mediaCounts.videos}/{STORY_MAX_VIDEO_COUNT}
+                        {mediaCounts.videos}
                       </span>
                     </div>
 
@@ -1089,8 +1071,7 @@ export default function CreateStoryPage() {
                     />
 
                     <div className="flex flex-wrap gap-2.5 sm:gap-3">
-                      {mediaCounts.videos < STORY_MAX_VIDEO_COUNT ? (
-                        <label
+                      <label
                           htmlFor={VIDEO_INPUT_ID}
                           className="flex aspect-square w-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-center text-gray-600 transition-colors hover:border-primary-600 hover:bg-primary-50 sm:w-24"
                         >
@@ -1098,8 +1079,7 @@ export default function CreateStoryPage() {
                           <span className="px-2 text-[11px] font-semibold leading-4">
                             {t.media.selectVideo}
                           </span>
-                        </label>
-                      ) : null}
+                      </label>
 
                       {videoAssets.map((asset) => (
                         <StoryMediaTile
@@ -1190,7 +1170,7 @@ export default function CreateStoryPage() {
                 />
               </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {!isReporterFlow ? <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {!isReporterFlow ? (
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-900">
@@ -1225,7 +1205,7 @@ export default function CreateStoryPage() {
                   ))}
                 </select>
               </div>
-            </div>
+            </div> : null}
             </section>
 
             {!isReporterFlow ? (
@@ -1304,7 +1284,7 @@ export default function CreateStoryPage() {
               </>
             ) : null}
 
-            <section className="space-y-4 rounded-[20px] border border-gray-200 bg-gray-50 p-4 sm:space-y-5 sm:rounded-xl sm:p-5">
+            {!isReporterFlow ? <section className="space-y-4 rounded-[20px] border border-gray-200 bg-gray-50 p-4 sm:space-y-5 sm:rounded-xl sm:p-5">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{t.sections.source}</h2>
                 <p className="mt-1 text-sm text-gray-600">{t.helper.sourceBody}</p>
@@ -1373,7 +1353,7 @@ export default function CreateStoryPage() {
                   </span>
                 </label>
               </div>
-            </section>
+            </section> : null}
 
               </CmsEditorMain>
 
@@ -1396,7 +1376,7 @@ export default function CreateStoryPage() {
                         {t.media.imageCount}
                       </p>
                       <p className="mt-2 text-lg font-semibold text-gray-900">
-                        {mediaCounts.images}/{STORY_MAX_IMAGE_COUNT}
+                        {mediaCounts.images}
                       </p>
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-3">
@@ -1404,7 +1384,7 @@ export default function CreateStoryPage() {
                         {t.media.videoCount}
                       </p>
                       <p className="mt-2 text-lg font-semibold text-gray-900">
-                        {mediaCounts.videos}/{STORY_MAX_VIDEO_COUNT}
+                        {mediaCounts.videos}
                       </p>
                     </div>
                   </div>

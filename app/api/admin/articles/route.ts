@@ -378,6 +378,32 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
   return null;
 }
 
+function sanitizeReporterArticleInput(
+  input: ReturnType<typeof normalizeArticleInput>,
+  user: NonNullable<Awaited<ReturnType<typeof getAdminSessionFromReq>>>
+) {
+  const bodyText = input.content
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return {
+    ...input,
+    summary: bodyText.slice(0, 240),
+    category: 'General',
+    author: user.name?.trim() || user.email.trim() || 'Reporter',
+    isBreaking: false,
+    isTrending: false,
+    seo: normalizeSeo(undefined),
+    reporterMeta: normalizeReporterMeta(undefined),
+    copyEditorMeta: normalizeCopyEditorMeta(undefined),
+    editorial: normalizeArticleEditorialMeta(undefined),
+    media: normalizeArticleMediaMetadata(undefined),
+    sourceStoryId: '',
+    sourceType: normalizeArticleSourceType('manual'),
+  };
+}
+
 function validateArticleReadiness(
   input: ReturnType<typeof normalizeArticleInput>,
   options: {
@@ -563,7 +589,10 @@ export async function POST(req: NextRequest) {
 
     const intent = normalizeCreateIntent((body as Record<string, unknown>)?.intent);
     const bodyRecord = body as Record<string, unknown>;
-    const input = normalizeArticleInput(body);
+    const normalizedInput = normalizeArticleInput(body);
+    const input = isReporterDeskRole(user.role)
+      ? sanitizeReporterArticleInput(normalizedInput, user)
+      : normalizedInput;
     if (input.isBreaking || input.isTrending) {
       input.editorial.flagApprovedBy = user.name || user.email;
     } else {
@@ -614,7 +643,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (intent !== 'draft') {
+    // Reporter-created articles are intentionally short handoffs. Copy editors
+    // complete the normal SEO, metadata, and publication-readiness checks.
+    if (intent !== 'draft' && !isReporterDeskRole(user.role)) {
       const readinessError = validateArticleReadiness(input, {
         breakingAudioReady:
           breakingAudioUploadPending || Boolean(bodyRecord.breakingAudioReady),

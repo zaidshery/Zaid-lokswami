@@ -61,7 +61,7 @@ describe('article workflow overview', () => {
     listAllStoredEPapersMock.mockResolvedValue([]);
   });
 
-  it('builds reporter my-work overview with story-only statuses', async () => {
+  it('builds reporter my-work overview with owned story and article handoffs', async () => {
     listAllStoredArticlesMock.mockResolvedValue([
       {
         _id: 'article-1',
@@ -168,21 +168,28 @@ describe('article workflow overview', () => {
     expect(overview.counts).toMatchObject({
       submitted: 1,
       assigned: 1,
+      changes_requested: 1,
     });
-    expect(overview.counts.changes_requested || 0).toBe(0);
     expect(overview.contentCounts).toMatchObject({
       story: 2,
+      article: 1,
     });
-    expect(overview.contentCounts.article || 0).toBe(0);
-    expect(overview.items.map((item) => item.id)).toEqual(['story-1', 'story-2']);
+    expect(overview.items.map((item) => item.id)).toEqual(['article-1', 'story-1', 'story-2']);
     expect(overview.items[0]).toEqual(
+      expect.objectContaining({
+        contentType: 'article',
+        author: 'Reporter One',
+        status: 'changes_requested',
+      })
+    );
+    expect(overview.items[1]).toEqual(
       expect.objectContaining({
         contentType: 'story',
         author: 'Reporter One',
         status: 'submitted',
       })
     );
-    expect(overview.items[1]).toEqual(
+    expect(overview.items[2]).toEqual(
       expect.objectContaining({
         contentType: 'story',
         author: 'Reporter Two',

@@ -214,7 +214,7 @@ function sanitizeCreateInputForUser(
 
 function validateStoryInput(
   input: ReturnType<typeof normalizeStoryInput>,
-  options: { requireMediaPackage?: boolean } = {}
+  options: { requireMediaPackage?: boolean; allowLongCaption?: boolean } = {}
 ) {
   if (!input.title || !input.thumbnail) {
     return 'Title and thumbnail are required';
@@ -224,7 +224,7 @@ function validateStoryInput(
     return 'Title is too long (max 140 characters)';
   }
 
-  if (input.caption.length > 300) {
+  if (!options.allowLongCaption && input.caption.length > 300) {
     return 'Caption is too long (max 300 characters)';
   }
 
@@ -554,7 +554,7 @@ export async function POST(req: NextRequest) {
     const rawInput = normalizeStoryInput(body);
     const input = sanitizeCreateInputForUser(user, rawInput);
     const validationError = validateStoryInput(input, {
-      requireMediaPackage: user.role === 'reporter' || input.mediaAssets.length > 0,
+      allowLongCaption: user.role === 'reporter',
     });
     const intent = normalizeCreateIntent((body as Record<string, unknown>)?.intent, input.isPublished);
     const workflow = buildInitialWorkflow(intent, user);
