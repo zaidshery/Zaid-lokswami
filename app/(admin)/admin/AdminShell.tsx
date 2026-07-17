@@ -42,6 +42,7 @@ import {
 } from '@/lib/auth/roles';
 import { canViewPage, type AdminPageKey } from '@/lib/auth/permissions';
 import { useAppStore } from '@/lib/store/appStore';
+import WorkflowNotificationBell from '@/components/admin/WorkflowNotificationBell';
 
 type SidebarItem = {
   href: string;
@@ -89,6 +90,7 @@ const HI = {
   pushAlerts: '\u092a\u0941\u0936 \u0905\u0932\u0930\u094d\u091f\u094d\u0938',
   copyDesk: '\u0915\u0949\u092a\u0940 \u0921\u0947\u0938\u094d\u0915',
   myWork: '\u092e\u0947\u0930\u093e \u0915\u093e\u092e',
+  workQueue: '\u0935\u0930\u094d\u0915 \u0915\u094d\u092f\u0942',
   articles: '\u0932\u0947\u0916',
   myArticles: '\u092e\u0947\u0930\u0947 \u0932\u0947\u0916',
   myStories: '\u092e\u0947\u0930\u0940 \u0938\u094d\u091f\u094b\u0930\u0940\u091c\u093c',
@@ -121,10 +123,7 @@ const HI = {
 
 const ADMIN_SURFACES: SidebarItem[] = [
   { icon: LayoutDashboard, labelEn: 'Dashboard', labelHi: HI.dashboard, href: '/admin', pageKey: 'dashboard', section: 'workflow' },
-  { icon: FileText, labelEn: 'My Work', labelHi: HI.myWork, href: '/admin/my-work', pageKey: 'my_work', section: 'workflow' },
-  { icon: FileText, labelEn: 'Review Queue', labelHi: HI.reviewQueue, href: '/admin/review-queue', pageKey: 'review_queue', section: 'workflow' },
-  { icon: ClipboardList, labelEn: 'Assignments', labelHi: HI.assignments, href: '/admin/assignments', pageKey: 'assignments', section: 'workflow' },
-  { icon: FolderOpen, labelEn: 'Content Queue', labelHi: HI.contentQueue, href: '/admin/content-queue', pageKey: 'content_queue', section: 'workflow' },
+  { icon: ClipboardList, labelEn: 'Work Queue', labelHi: HI.workQueue, href: '/admin/work', pageKey: 'work_queue', section: 'workflow' },
   { icon: BellRing, labelEn: 'Push Alerts', labelHi: HI.pushAlerts, href: '/admin/push-alerts', pageKey: 'push_alerts', section: 'workflow' },
   { icon: FileText, labelEn: 'Copy Desk', labelHi: HI.copyDesk, href: '/admin/copy-desk', pageKey: 'copy_desk', section: 'workflow' },
   { icon: UserCog, labelEn: 'Team', labelHi: HI.team, href: '/admin/team', pageKey: 'team', section: 'workflow' },
@@ -153,23 +152,23 @@ const ADMIN_SURFACES: SidebarItem[] = [
 
 const ADMIN_MOBILE_DOCK_HREFS = [
   '/admin',
-  '/admin/review-queue',
-  '/admin/assignments',
-  '/admin/content-queue',
+  '/admin/work',
+  '/admin/copy-desk',
+  '/admin/push-alerts',
   '/admin/team',
 ] as const;
 
 const COPY_EDITOR_MOBILE_DOCK_HREFS = [
   '/admin',
+  '/admin/work',
   '/admin/copy-desk',
-  '/admin/my-work',
   '/admin/articles',
   '/admin/media',
 ] as const;
 
 const SUPER_ADMIN_MOBILE_DOCK_HREFS = [
   '/admin',
-  '/admin/review-queue',
+  '/admin/work',
   '/admin/analytics',
   '/admin/operations',
   '/admin/settings',
@@ -523,7 +522,7 @@ export default function AdminShell({
 
   const sidebarContent = (
     <>
-      <div className="flex h-16 items-center gap-3 border-b border-[color:var(--admin-shell-border)] px-4">
+      <div className="flex h-[68px] items-center gap-3 border-b border-[color:var(--admin-shell-border)] px-4">
         <Link href="/admin" className="flex min-w-0 flex-1 items-center gap-2">
           <div className="flex-shrink-0">
             <Logo size="sm" />
@@ -550,10 +549,10 @@ export default function AdminShell({
         </button>
       </div>
 
-      <nav aria-label="Newsroom tools" className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 pb-24">
+      <nav aria-label="Newsroom tools" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 pb-20">
         {sidebarSections.map((section) => (
-          <div key={section.labelEn} className="space-y-2">
-            <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--admin-shell-text-muted)]">
+          <div key={section.labelEn} className="space-y-1.5">
+            <p className="px-2 pb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-[color:var(--admin-shell-text-muted)]">
               {isHindi ? section.labelHi : section.labelEn}
             </p>
             <div className="space-y-1">
@@ -566,22 +565,22 @@ export default function AdminShell({
                     href={item.href}
                     onClick={() => setMobileNavOpen(false)}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`group flex items-center gap-3 rounded-2xl px-3 py-3 transition-all ${
+                    className={`group flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all ${
                       isActive
-                        ? 'bg-[color:var(--admin-shell-active)] text-[color:var(--admin-shell-active-text)] shadow-[var(--admin-shell-shadow)]'
+                        ? 'bg-red-500/10 text-red-700 ring-1 ring-inset ring-red-500/20 dark:text-red-300'
                         : 'text-[color:var(--admin-shell-text-muted)] hover:bg-[color:var(--admin-shell-surface-muted)] hover:text-[color:var(--admin-shell-text)]'
                     }`}
                   >
                     <div
-                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+                      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-colors ${
                         isActive
-                          ? 'bg-white/10 dark:bg-black/10'
-                          : 'bg-white/80 text-[color:var(--admin-shell-text-muted)] group-hover:bg-[color:var(--admin-shell-surface-strong)] group-hover:text-[color:var(--admin-shell-text)] dark:bg-white/5'
+                          ? 'bg-red-500/15 text-red-700 dark:text-red-300'
+                          : 'bg-[color:var(--admin-shell-surface-muted)] text-[color:var(--admin-shell-text-muted)] group-hover:text-[color:var(--admin-shell-text)]'
                       }`}
                     >
                       <item.icon className="h-4 w-4 flex-shrink-0" />
                     </div>
-                    <span className="text-sm font-medium">
+                    <span className="truncate text-[13px] font-semibold">
                       {isHindi ? item.labelHi : item.labelEn}
                     </span>
                   </Link>
@@ -592,10 +591,10 @@ export default function AdminShell({
         ))}
       </nav>
 
-      <div className="border-t border-[color:var(--admin-shell-border)] p-4">
+      <div className="border-t border-[color:var(--admin-shell-border)] p-3">
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-[color:var(--admin-shell-text-muted)] transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[color:var(--admin-shell-text-muted)] transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
           type="button"
         >
           <LogOut className="h-5 w-5 flex-shrink-0" />
@@ -626,7 +625,7 @@ export default function AdminShell({
         />
       ) : null}
       <aside
-        className="admin-shell-surface-strong fixed inset-y-0 left-0 z-40 hidden w-[272px] flex-col overflow-hidden border-r border-[color:var(--admin-shell-border-strong)] lg:flex"
+        className="admin-shell-surface-strong fixed inset-y-0 left-0 z-40 hidden w-[248px] flex-col overflow-hidden border-r border-[color:var(--admin-shell-border-strong)] lg:flex"
       >
         {sidebarContent}
       </aside>
@@ -644,11 +643,11 @@ export default function AdminShell({
       </aside>
 
       <main
-        className="relative min-h-screen min-w-0 flex-1 overflow-y-auto transition-colors lg:ml-[272px] lg:h-screen"
+        className="relative min-h-screen min-w-0 flex-1 overflow-y-auto transition-colors lg:ml-[248px] lg:h-screen"
       >
         <header
           className={cx(
-            'admin-shell-surface fixed left-0 right-0 top-0 flex min-h-16 flex-nowrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 py-3 sm:px-6 lg:left-[272px]',
+            'admin-shell-surface fixed left-0 right-0 top-0 flex h-[68px] flex-nowrap items-center justify-between gap-3 border-b border-[color:var(--admin-shell-border)] px-4 sm:px-6 lg:left-[248px]',
             mobileToolsOpen ? 'z-50' : 'z-20'
           )}
         >
@@ -676,6 +675,7 @@ export default function AdminShell({
           </div>
 
           <div className="relative ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+            <WorkflowNotificationBell />
             <button
               onClick={toggleLanguage}
               className="admin-shell-toolbar-btn hidden items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold sm:inline-flex"
@@ -791,7 +791,7 @@ export default function AdminShell({
 
         <div
           className={cx(
-            'relative p-3 pt-20 sm:p-6 sm:pt-28 lg:p-8 lg:pt-28',
+            'relative p-3 pt-20 sm:p-5 sm:pt-[88px] lg:p-6 lg:pt-[92px] xl:p-7 xl:pt-[96px]',
             hasMobileDock && 'pb-28 lg:pb-8'
           )}
         >

@@ -36,6 +36,7 @@ import {
   buildStoryActivityMessage,
   recordStoryActivity,
 } from '@/lib/server/storyActivity';
+import { notifyWorkflowEvent } from '@/lib/server/workflowNotificationEvents';
 import type { CreateStoryInput } from '@/lib/storage/storiesFile';
 import {
   deleteStoredStory,
@@ -52,6 +53,8 @@ import {
   applyStoryWorkflowAction,
   resolveStoryWorkflow,
 } from '@/lib/workflow/story';
+import { validateFastPublish } from '@/lib/workflow/fastPublish';
+import { validateEditorialPublishReadiness } from '@/lib/workflow/readiness';
 import { isWorkflowPriority } from '@/lib/workflow/types';
 
 type RouteContext = {
@@ -96,6 +99,7 @@ const WORKFLOW_ACTIONS = new Set<ContentTransitionAction>([
   'reject',
   'schedule',
   'publish',
+  'fast_publish',
   'archive',
 ]);
 
@@ -583,6 +587,21 @@ export async function PATCH(
         );
       }
 
+      const currentStoryWorkflow = resolveStoryWorkflow(currentStory);
+      const readinessError = validateEditorialPublishReadiness({
+        contentType: 'story',
+        title: currentStory.title,
+        category: currentStory.category,
+        thumbnail: currentStory.thumbnail,
+        mediaUrl: currentStory.mediaUrl,
+        mediaAssets: currentStory.mediaAssets,
+      }, action);
+      if (readinessError) return NextResponse.json({ success: false, error: readinessError }, { status: 400 });
+      if (action === 'fast_publish') {
+        const urgentError = validateFastPublish({ role: user.role, workflow: currentStoryWorkflow, reason: actionBody.comment });
+        if (urgentError) return NextResponse.json({ success: false, error: urgentError }, { status: 400 });
+      }
+
       let assignedTo = null;
       if (action === 'assign') {
         if (!process.env.MONGODB_URI?.trim()) {
@@ -606,7 +625,7 @@ export async function PATCH(
         const { fromStatus, toStatus, nextWorkflow } = applyStoryWorkflowAction({
           action,
           actor: user,
-          currentWorkflow: resolveStoryWorkflow(currentStory),
+          currentWorkflow: currentStoryWorkflow,
           assignedTo,
           scheduledFor: parseOptionalDate(actionBody.scheduledFor),
           dueAt: parseOptionalDate(actionBody.dueAt),
@@ -655,6 +674,15 @@ export async function PATCH(
             comment: actionBody.comment?.trim() || '',
           }),
         });
+        await notifyWorkflowEvent({
+          contentType: 'story',
+          contentId: id,
+          title: String(story.title || 'Story'),
+          href: `/admin/stories/${encodeURIComponent(id)}/edit`,
+          action,
+          workflow: nextWorkflow,
+          actor: user,
+        });
 
         return NextResponse.json({
           success: true,
@@ -698,6 +726,21 @@ export async function PATCH(
       );
     }
 
+    const currentStoryWorkflow = resolveStoryWorkflow(current);
+    const readinessError = validateEditorialPublishReadiness({
+      contentType: 'story',
+      title: current.title,
+      category: current.category,
+      thumbnail: current.thumbnail,
+      mediaUrl: current.mediaUrl,
+      mediaAssets: current.mediaAssets,
+    }, action);
+    if (readinessError) return NextResponse.json({ success: false, error: readinessError }, { status: 400 });
+    if (action === 'fast_publish') {
+      const urgentError = validateFastPublish({ role: user.role, workflow: currentStoryWorkflow, reason: actionBody.comment });
+      if (urgentError) return NextResponse.json({ success: false, error: urgentError }, { status: 400 });
+    }
+
     let assignedTo = null;
     if (action === 'assign') {
       assignedTo = await resolveAssignee(String(actionBody.assignedToId || ''));
@@ -713,7 +756,7 @@ export async function PATCH(
       const { fromStatus, toStatus, nextWorkflow } = applyStoryWorkflowAction({
         action,
         actor: user,
-        currentWorkflow: resolveStoryWorkflow(current),
+        currentWorkflow: currentStoryWorkflow,
         assignedTo,
         scheduledFor: parseOptionalDate(actionBody.scheduledFor),
         dueAt: parseOptionalDate(actionBody.dueAt),
@@ -763,6 +806,15 @@ export async function PATCH(
           rejectionReason: nextWorkflow.rejectionReason || '',
           comment: actionBody.comment?.trim() || '',
         }),
+      });
+      await notifyWorkflowEvent({
+        contentType: 'story',
+        contentId: id,
+        title: String(story.title || 'Story'),
+        href: `/admin/stories/${encodeURIComponent(id)}/edit`,
+        action,
+        workflow: nextWorkflow,
+        actor: user,
       });
 
       return NextResponse.json({

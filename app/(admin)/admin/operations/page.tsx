@@ -10,10 +10,13 @@ import {
 import { getSuperAdminDashboardData } from '@/lib/admin/superAdminDashboard';
 import { getAdminSession } from '@/lib/auth/admin';
 import { canViewPage } from '@/lib/auth/permissions';
+import { formatUserRoleLabel } from '@/lib/auth/roles';
 import formatNumber from '@/lib/utils/formatNumber';
-
-const PANEL_CLASS =
-  'admin-shell-surface-strong rounded-[20px] p-3 sm:rounded-[32px] sm:p-6';
+import {
+  CmsCollectionHero,
+  CmsCollectionPage,
+  CMS_COLLECTION_META_CHIP_CLASS as META_CHIP_CLASS,
+} from '@/components/admin/CmsCollectionLayout';
 
 const SECTION_LINK_CLASS =
   'admin-shell-toolbar-btn inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] sm:text-xs sm:tracking-[0.14em]';
@@ -42,20 +45,13 @@ export default async function OperationsCenterPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-5 sm:space-y-6">
-      <section className={PANEL_CLASS}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-600">
-              Operations Center
-            </p>
-            <h1 className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)] sm:text-3xl">
-              Decisions, risks, quality, and growth
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
-              A focused leadership workspace for the deeper signals that no longer belong on the daily dashboard.
-            </p>
-          </div>
+    <CmsCollectionPage>
+      <CmsCollectionHero
+        accent="red"
+        eyebrow={formatUserRoleLabel(admin.role)}
+        title="Operations Center"
+        description="Make release decisions, resolve risks, inspect quality signals, and monitor newsroom growth from one focused workspace."
+        aside={
           <div className="flex flex-wrap gap-2">
             <Link href="/admin" className={SECTION_LINK_CLASS}>
               Back To Dashboard
@@ -64,29 +60,16 @@ export default async function OperationsCenterPage() {
               Open Analytics
             </Link>
           </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            ['Ready Decisions', metrics.readyDecisions],
-            ['Blocked Editions', metrics.blockedEditions],
-            ['Quality Alerts', metrics.qualityAlerts],
-            ['Reporting Alerts', metrics.reportingAlerts],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              className="rounded-[18px] border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] p-4"
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
-                {label}
-              </p>
-              <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">
-                {formatNumber(Number(value))}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+        }
+        meta={
+          <>
+            <span className={META_CHIP_CLASS}>Ready {formatNumber(metrics.readyDecisions)}</span>
+            <span className={META_CHIP_CLASS}>Blocked {formatNumber(metrics.blockedEditions)}</span>
+            <span className={META_CHIP_CLASS}>Quality alerts {formatNumber(metrics.qualityAlerts)}</span>
+            <span className={META_CHIP_CLASS}>Reporting alerts {formatNumber(metrics.reportingAlerts)}</span>
+          </>
+        }
+      />
 
       <OperationsCenterTabs
         tabs={[
@@ -128,6 +111,6 @@ export default async function OperationsCenterPage() {
           },
         ]}
       />
-    </div>
+    </CmsCollectionPage>
   );
 }

@@ -64,6 +64,7 @@ import {
 } from '@/components/admin/CmsEditorLayout';
 import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
+import WorkflowRail from '@/components/admin/WorkflowRail';
 import { CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
 import ArticleEditorStudio, {
   type ArticleEditorStudioMode,
@@ -337,6 +338,7 @@ const ACTION_LABELS: Record<ContentTransitionAction, string> = {
   reject: 'Reject',
   schedule: 'Schedule',
   publish: 'Publish',
+  fast_publish: 'Urgent Publish',
   archive: 'Archive',
 };
 
@@ -1784,6 +1786,15 @@ export default function EditStoryPage() {
         Back to Stories
       </Link>
 
+      <WorkflowRail
+        status={workflow.status}
+        assignee={workflow.assignedTo?.name || workflow.assignedTo?.email}
+        dueAt={workflow.dueAt}
+        hasUnsavedChanges={hasUnsavedChanges}
+        blockerCount={hasUnsavedChanges ? 1 : 0}
+        primaryAction={availableWorkflowActions[0] ? ACTION_LABELS[availableWorkflowActions[0]] : 'Review workflow'}
+      />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1939,7 +1950,7 @@ export default function EditStoryPage() {
                 </div>
               </>
             ) : (
-              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div id="workflow-actions" className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-900">Story Images</label>

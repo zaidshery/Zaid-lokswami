@@ -36,6 +36,7 @@ import {
   CmsEditorSidebar,
 } from '@/components/admin/CmsEditorLayout';
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
+import WorkflowRail from '@/components/admin/WorkflowRail';
 import { CmsWorkflowPriorityBadge, CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
 import { getAuthHeader } from '@/lib/auth/clientToken';
 import {
@@ -134,6 +135,7 @@ const ACTION_LABELS: Record<ContentTransitionAction, string> = {
   reject: 'Reject',
   schedule: 'Schedule',
   publish: 'Publish',
+  fast_publish: 'Urgent Publish',
   archive: 'Archive',
 };
 
@@ -2350,6 +2352,15 @@ export default function EditArticle() {
         Back to Articles
       </Link>
 
+      <WorkflowRail
+        status={workflow.status}
+        assignee={workflow.assignedTo?.name || workflow.assignedTo?.email}
+        dueAt={workflow.dueAt}
+        hasUnsavedChanges={hasUnsavedChanges}
+        blockerCount={hasUnsavedChanges ? 1 : 0}
+        primaryAction={availableWorkflowActions[0] ? ACTION_LABELS[availableWorkflowActions[0]] : 'Review workflow'}
+      />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -2660,7 +2671,7 @@ export default function EditArticle() {
                   </div>
                 </div>
 
-                <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div id="workflow-actions" className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                   <div>
                     <p className="text-sm font-semibold text-gray-900">Reporter Submission</p>
                     <p className="mt-1 text-xs text-gray-500">
@@ -3343,16 +3354,19 @@ export default function EditArticle() {
                 </div>
 
                 <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-medium text-gray-900">Article Status</p>
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Homepage placement & article status</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-600">Choose where this published story receives priority. The homepage automatically fills any unused positions.</p>
+                  </div>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 bg-white p-3">
                     <input
                       type="checkbox"
                       name="isBreaking"
                       checked={formData.isBreaking}
                       onChange={handleInputChange}
-                      className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
                     />
-                    <span className="text-sm text-gray-700">Mark as Breaking News</span>
+                    <span><span className="block text-sm font-semibold text-gray-900">Breaking News / Live Updates</span><span className="mt-0.5 block text-xs leading-5 text-gray-600">Prioritizes this story in Live Updates and enables the breaking-news banner. Breaking audio is required before publication.</span></span>
                   </label>
                   {formData.isBreaking ? (
                     <div className="grid gap-3 rounded-lg border border-red-200 bg-red-50/60 p-3">
@@ -3479,15 +3493,15 @@ export default function EditArticle() {
                       </div>
                     </div>
                   ) : null}
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 bg-white p-3">
                     <input
                       type="checkbox"
                       name="isTrending"
                       checked={formData.isTrending}
                       onChange={handleInputChange}
-                      className="w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
+                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red"
                     />
-                    <span className="text-sm text-gray-700">Mark as Trending</span>
+                    <span><span className="block text-sm font-semibold text-gray-900">Feature in Popular News</span><span className="mt-0.5 block text-xs leading-5 text-gray-600">Pins this story near the top of Popular News until the trending expiry.</span></span>
                   </label>
                   {formData.isTrending ? (
                     <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">

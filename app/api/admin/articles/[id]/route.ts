@@ -51,6 +51,7 @@ import {
   buildArticleActivityMessage,
   recordArticleActivity,
 } from '@/lib/server/articleActivity';
+import { notifyWorkflowEvent } from '@/lib/server/workflowNotificationEvents';
 import { applyEpaperWorkflowAutomation } from '@/lib/server/epaperWorkflowAutomation';
 import {
   assertEpaperDraftEditable,
@@ -82,6 +83,7 @@ import {
   applyArticleWorkflowAction,
   resolveArticleWorkflow,
 } from '@/lib/workflow/article';
+import { validateFastPublish } from '@/lib/workflow/fastPublish';
 import { isWorkflowPriority } from '@/lib/workflow/types';
 
 type NormalizedSeo = {
@@ -128,6 +130,7 @@ const WORKFLOW_ACTIONS = new Set<ContentTransitionAction>([
   'reject',
   'schedule',
   'publish',
+  'fast_publish',
   'archive',
 ]);
 
@@ -182,7 +185,7 @@ function validateWorkflowReadiness(
   article: unknown,
   action: ContentTransitionAction
 ) {
-  if (action !== 'submit' && action !== 'schedule' && action !== 'publish') {
+  if (action !== 'submit' && action !== 'schedule' && action !== 'publish' && action !== 'fast_publish') {
     return null;
   }
 
@@ -211,7 +214,7 @@ function validateWorkflowReadiness(
     language: 'hi',
     breakingAudioReady:
       !Boolean(source.isBreaking) || Boolean(resolveReusableBreakingTts(source)),
-    requireBreakingAudio: action === 'publish' && Boolean(source.isBreaking),
+    requireBreakingAudio: (action === 'publish' || action === 'fast_publish') && Boolean(source.isBreaking),
     sourceInfo:
       typeof reporterMeta.sourceInfo === 'string' ? reporterMeta.sourceInfo : '',
     locationTag:
@@ -1103,7 +1106,7 @@ export async function PATCH(
           });
         }
 
-        if (action === 'publish' && isBreakingArticleMissingAudio(currentArticle)) {
+        if ((action === 'publish' || action === 'fast_publish') && isBreakingArticleMissingAudio(currentArticle)) {
           return NextResponse.json(
             { success: false, error: BREAKING_AUDIO_REQUIRED_ERROR },
             { status: 400 }
@@ -1116,6 +1119,16 @@ export async function PATCH(
             { success: false, error: readinessError },
             { status: 400 }
           );
+        }
+
+        if (action === 'fast_publish') {
+          const urgentError = validateFastPublish({
+            role: user.role,
+            workflow: resolveArticleWorkflow(currentArticle),
+            isBreaking: Boolean(currentArticle.isBreaking),
+            reason: actionBody.comment,
+          });
+          if (urgentError) return NextResponse.json({ success: false, error: urgentError }, { status: 400 });
         }
 
         let assignedTo = null;
@@ -1198,6 +1211,16 @@ export async function PATCH(
             }),
           });
 
+          await notifyWorkflowEvent({
+            contentType: 'article',
+            contentId: id,
+            title: String(article.title || 'Article'),
+            href: `/admin/articles/${encodeURIComponent(id)}/edit`,
+            action,
+            workflow: nextWorkflow,
+            actor: user,
+          });
+
           if (article.sourceStoryId) {
             await syncStoryLinkedArticle({
               useFileStore: true,
@@ -1267,7 +1290,7 @@ export async function PATCH(
         });
       }
 
-      if (action === 'publish' && isBreakingArticleMissingAudio(current)) {
+      if ((action === 'publish' || action === 'fast_publish') && isBreakingArticleMissingAudio(current)) {
         return NextResponse.json(
           { success: false, error: BREAKING_AUDIO_REQUIRED_ERROR },
           { status: 400 }
@@ -1280,6 +1303,17 @@ export async function PATCH(
           { success: false, error: readinessError },
           { status: 400 }
         );
+      }
+
+
+      if (action === 'fast_publish') {
+        const urgentError = validateFastPublish({
+          role: user.role,
+          workflow: resolveArticleWorkflow(current),
+          isBreaking: Boolean(current.isBreaking),
+          reason: actionBody.comment,
+        });
+        if (urgentError) return NextResponse.json({ success: false, error: urgentError }, { status: 400 });
       }
 
       let assignedTo = null;
@@ -1363,6 +1397,16 @@ export async function PATCH(
             rejectionReason: nextWorkflow.rejectionReason || '',
             comment: actionBody.comment?.trim() || '',
           }),
+        });
+
+        await notifyWorkflowEvent({
+          contentType: 'article',
+          contentId: id,
+          title: String(article.title || 'Article'),
+          href: `/admin/articles/${encodeURIComponent(id)}/edit`,
+          action,
+          workflow: nextWorkflow,
+          actor: user,
         });
 
         if (typeof article.sourceStoryId === 'string' && article.sourceStoryId.trim()) {

@@ -39,6 +39,7 @@ const WORKFLOW_ACTION_TARGET_STATUS: Record<ContentTransitionAction, WorkflowSta
   reject: 'rejected',
   schedule: 'scheduled',
   publish: 'published',
+  fast_publish: 'published',
   archive: 'archived',
 };
 
@@ -46,6 +47,7 @@ function toCommentKind(action: ContentTransitionAction, hasComment: boolean): Wo
   if (action === 'reject') return 'rejection_note';
   if (action === 'request_changes') return 'revision_request';
   if (action === 'approve') return 'approval_note';
+  if (action === 'fast_publish') return 'approval_note';
   if (action === 'submit' && hasComment) return 'comment';
   return 'comment';
 }
@@ -178,11 +180,14 @@ export function applyArticleWorkflowAction(params: WorkflowActionParams) {
   const toStatus = getTargetWorkflowStatus(params.action);
   const nextComment = createWorkflowComment(params.action, actorRef, params.comment || '');
 
-  if (!canTransitionWorkflow(fromStatus, toStatus)) {
+  if (params.action !== 'fast_publish' && !canTransitionWorkflow(fromStatus, toStatus)) {
     throw new Error(`Cannot move article from ${fromStatus} to ${toStatus}.`);
   }
 
-  const requirements = getWorkflowTransitionRequirements(fromStatus, toStatus);
+  const requirements = params.action === 'fast_publish' ? [] : getWorkflowTransitionRequirements(fromStatus, toStatus);
+  if (params.action === 'fast_publish' && !params.comment?.trim()) {
+    throw new Error('A reason is required for urgent publishing.');
+  }
   if (requirements.includes('assignedTo') && !params.assignedTo) {
     throw new Error('assignedTo is required for this transition.');
   }
@@ -213,20 +218,21 @@ export function applyArticleWorkflowAction(params: WorkflowActionParams) {
       params.action === 'mark_ready_for_approval' ||
       params.action === 'approve' ||
       params.action === 'reject'
+      || params.action === 'fast_publish'
         ? actorRef
         : params.currentWorkflow.reviewedBy,
     submittedAt:
       params.action === 'submit' ? new Date() : params.currentWorkflow.submittedAt,
     approvedAt:
-      params.action === 'approve' ? new Date() : params.currentWorkflow.approvedAt,
+      params.action === 'approve' || params.action === 'fast_publish' ? new Date() : params.currentWorkflow.approvedAt,
     rejectedAt:
       params.action === 'reject' ? new Date() : params.currentWorkflow.rejectedAt,
     publishedAt:
-      params.action === 'publish' ? new Date() : params.currentWorkflow.publishedAt,
+      params.action === 'publish' || params.action === 'fast_publish' ? new Date() : params.currentWorkflow.publishedAt,
     scheduledFor:
       params.action === 'schedule'
         ? params.scheduledFor ?? null
-        : params.action === 'publish'
+        : params.action === 'publish' || params.action === 'fast_publish'
           ? null
           : params.currentWorkflow.scheduledFor,
     dueAt: params.dueAt ?? params.currentWorkflow.dueAt,
@@ -235,6 +241,7 @@ export function applyArticleWorkflowAction(params: WorkflowActionParams) {
         ? params.rejectionReason?.trim() || ''
         : params.action === 'approve' ||
             params.action === 'publish' ||
+            params.action === 'fast_publish' ||
             params.action === 'submit' ||
             params.action === 'mark_ready_for_approval'
           ? ''

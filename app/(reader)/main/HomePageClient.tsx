@@ -111,6 +111,17 @@ function getPublishedTimestamp(article: Article) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function buildHomepageRail(
+  articles: Article[],
+  isPriority: (article: Article) => boolean,
+  limit: number,
+  fallbackCompare: (a: Article, b: Article) => number
+) {
+  const priority = articles.filter(isPriority);
+  const fallback = articles.filter((article) => !isPriority(article)).sort(fallbackCompare);
+  return [...priority, ...fallback].slice(0, limit);
+}
+
 const HOME_LATEST_INITIAL_COUNT = 6;
 const HOME_LATEST_PAGE_STEP = 6;
 const CATEGORY_INITIAL_STORIES_COUNT = 4;
@@ -301,7 +312,7 @@ function RankedStoryList({
         href="/main/latest"
         cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
       />
-      <div className="space-y-2">
+      <div className="space-y-2" data-testid="popular-news-rail">
         {articles.slice(0, 6).map((article) => (
           <Link
             key={article.id}
@@ -701,19 +712,28 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const [categoryArticlesBySlug, setCategoryArticlesBySlug] = useState<Record<string, Article[]>>({});
   const requestedCategorySlugsRef = useRef<Set<string>>(new Set());
   const categoryRequestGenerationRef = useRef(0);
-  const heroArticles = feedArticles.slice(0, 5);
-  const trendingArticles = feedArticles.filter((article) => article.isTrending);
-  const liveUpdateStories = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 4);
-  const latestNews = feedArticles.slice(5);
-  const visibleLatestNews = latestNews.slice(0, visibleLatestNewsCount);
-  const hasMoreLatestNews = visibleLatestNewsCount < latestNews.length;
-  const featuredSidebar: Article[] = (trendingArticles.length ? trendingArticles : feedArticles).slice(0, 6);
   const latestPublishedArticles = useMemo(
     () =>
       [...feedArticles].sort(
         (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
       ),
     [feedArticles]
+  );
+  const heroArticles = latestPublishedArticles.slice(0, 5);
+  const liveUpdateStories = buildHomepageRail(
+    latestPublishedArticles,
+    (article) => Boolean(article.isBreaking),
+    4,
+    (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
+  );
+  const latestNews = feedArticles.slice(5);
+  const visibleLatestNews = latestNews.slice(0, visibleLatestNewsCount);
+  const hasMoreLatestNews = visibleLatestNewsCount < latestNews.length;
+  const featuredSidebar = buildHomepageRail(
+    latestPublishedArticles,
+    (article) => Boolean(article.isTrending),
+    6,
+    (a, b) => b.views - a.views || getPublishedTimestamp(b) - getPublishedTimestamp(a)
   );
   const categorySections = useMemo(() => {
     return NEWS_CATEGORY_DEFINITIONS.map((definition) => {
@@ -969,7 +989,7 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
               href="/main/latest"
               cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
             />
-            <div className="grid gap-2.5">
+            <div className="grid gap-2.5" data-testid="live-updates-rail">
               {isClientReady ? (
                 liveUpdateStories.map((article, index) => (
                   <motion.div

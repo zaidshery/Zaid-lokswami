@@ -15,6 +15,7 @@ import {
   buildVideoActivityMessage,
   recordVideoActivity,
 } from '@/lib/server/videoActivity';
+import { notifyWorkflowEvent } from '@/lib/server/workflowNotificationEvents';
 import type { CreateVideoInput } from '@/lib/storage/videosFile';
 import {
   deleteStoredVideo,
@@ -25,6 +26,8 @@ import {
   applyVideoWorkflowAction,
   resolveVideoWorkflow,
 } from '@/lib/workflow/video';
+import { validateFastPublish } from '@/lib/workflow/fastPublish';
+import { validateEditorialPublishReadiness } from '@/lib/workflow/readiness';
 import { isWorkflowPriority } from '@/lib/workflow/types';
 
 type RouteContext = {
@@ -59,6 +62,7 @@ const WORKFLOW_ACTIONS = new Set<ContentTransitionAction>([
   'reject',
   'schedule',
   'publish',
+  'fast_publish',
   'archive',
 ]);
 
@@ -403,6 +407,21 @@ export async function PATCH(
         );
       }
 
+      const currentVideoWorkflow = resolveVideoWorkflow(currentVideo);
+      const readinessError = validateEditorialPublishReadiness({
+        contentType: 'video',
+        title: currentVideo.title,
+        description: currentVideo.description,
+        thumbnail: currentVideo.thumbnail,
+        videoUrl: currentVideo.videoUrl,
+        category: currentVideo.category,
+      }, action);
+      if (readinessError) return NextResponse.json({ success: false, error: readinessError }, { status: 400 });
+      if (action === 'fast_publish') {
+        const urgentError = validateFastPublish({ role: user.role, workflow: currentVideoWorkflow, reason: actionBody.comment });
+        if (urgentError) return NextResponse.json({ success: false, error: urgentError }, { status: 400 });
+      }
+
       let assignedTo = null;
       if (action === 'assign') {
         if (!process.env.MONGODB_URI?.trim()) {
@@ -426,7 +445,7 @@ export async function PATCH(
         const { fromStatus, toStatus, nextWorkflow } = applyVideoWorkflowAction({
           action,
           actor: user,
-          currentWorkflow: resolveVideoWorkflow(currentVideo),
+          currentWorkflow: currentVideoWorkflow,
           assignedTo,
           scheduledFor: parseOptionalDate(actionBody.scheduledFor),
           dueAt: parseOptionalDate(actionBody.dueAt),
@@ -475,6 +494,15 @@ export async function PATCH(
             comment: actionBody.comment?.trim() || '',
           }),
         });
+        await notifyWorkflowEvent({
+          contentType: 'video',
+          contentId: id,
+          title: String(video.title || 'Video'),
+          href: `/admin/videos/${encodeURIComponent(id)}/edit`,
+          action,
+          workflow: nextWorkflow,
+          actor: user,
+        });
 
         return NextResponse.json({
           success: true,
@@ -518,6 +546,21 @@ export async function PATCH(
       );
     }
 
+    const currentVideoWorkflow = resolveVideoWorkflow(current);
+    const readinessError = validateEditorialPublishReadiness({
+      contentType: 'video',
+      title: current.title,
+      description: current.description,
+      thumbnail: current.thumbnail,
+      videoUrl: current.videoUrl,
+      category: current.category,
+    }, action);
+    if (readinessError) return NextResponse.json({ success: false, error: readinessError }, { status: 400 });
+    if (action === 'fast_publish') {
+      const urgentError = validateFastPublish({ role: user.role, workflow: currentVideoWorkflow, reason: actionBody.comment });
+      if (urgentError) return NextResponse.json({ success: false, error: urgentError }, { status: 400 });
+    }
+
     let assignedTo = null;
     if (action === 'assign') {
       assignedTo = await resolveAssignee(String(actionBody.assignedToId || ''));
@@ -533,7 +576,7 @@ export async function PATCH(
       const { fromStatus, toStatus, nextWorkflow } = applyVideoWorkflowAction({
         action,
         actor: user,
-        currentWorkflow: resolveVideoWorkflow(current),
+        currentWorkflow: currentVideoWorkflow,
         assignedTo,
         scheduledFor: parseOptionalDate(actionBody.scheduledFor),
         dueAt: parseOptionalDate(actionBody.dueAt),
@@ -583,6 +626,15 @@ export async function PATCH(
           rejectionReason: nextWorkflow.rejectionReason || '',
           comment: actionBody.comment?.trim() || '',
         }),
+      });
+      await notifyWorkflowEvent({
+        contentType: 'video',
+        contentId: id,
+        title: String(video.title || 'Video'),
+        href: `/admin/videos/${encodeURIComponent(id)}/edit`,
+        action,
+        workflow: nextWorkflow,
+        actor: user,
       });
 
       return NextResponse.json({

@@ -9,6 +9,13 @@ import { formatUiDate } from '@/lib/utils/dateFormat';
 import formatNumber from '@/lib/utils/formatNumber';
 import DeskWorkflowActions from '@/app/(admin)/admin/DeskWorkflowActions';
 import StoryAssetDownloadActions from '@/app/(admin)/admin/copy-desk/StoryAssetDownloadActions';
+import {
+  CmsCollectionHero,
+  CmsCollectionPage,
+  CMS_COLLECTION_META_CHIP_CLASS as META_CHIP_CLASS,
+  CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
+  CMS_COLLECTION_SOFT_CARD_CLASS as SOFT_CARD_CLASS,
+} from '@/components/admin/CmsCollectionLayout';
 
 function formatStatusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
@@ -42,15 +49,6 @@ function matchesCurrentUser(
   );
 }
 
-const PANEL_CLASS =
-  'rounded-[26px] border border-zinc-200/80 bg-white/92 p-4 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.38)] dark:border-white/10 dark:bg-zinc-950/60 sm:rounded-[32px] sm:p-6';
-
-const SOFT_CARD_CLASS =
-  'rounded-[22px] border border-zinc-200/80 bg-zinc-50/78 p-4 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.3)] dark:border-white/10 dark:bg-white/[0.03] sm:rounded-[24px]';
-
-const META_CHIP_CLASS =
-  'inline-flex items-center gap-2 rounded-full border border-zinc-200/80 bg-white/85 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-300';
-
 export default async function CopyDeskPage() {
   const admin = await getAdminSession();
   if (!admin) {
@@ -65,24 +63,19 @@ export default async function CopyDeskPage() {
   const showReviewQueueLink = canViewPage(admin.role, 'review_queue') && !isCopyEditorRole(admin.role);
 
   return (
-    <div className="mx-auto max-w-[1640px] space-y-6 sm:space-y-8">
-      <section className="relative overflow-hidden rounded-[28px] border border-zinc-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(246,247,251,0.95)_48%,rgba(241,246,252,0.97)_100%)] p-5 shadow-[0_30px_90px_-52px_rgba(15,23,42,0.42)] dark:border-white/10 dark:bg-[linear-gradient(135deg,rgba(18,18,22,0.98),rgba(15,19,33,0.98)_48%,rgba(17,24,35,0.96)_100%)] sm:rounded-[36px] sm:p-8 lg:p-10">
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-600 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-            {formatUserRoleLabel(admin.role)}
-          </div>
-          <h1 className="mt-4 text-3xl font-black tracking-tight text-zinc-950 dark:text-zinc-50 sm:mt-5 sm:text-5xl">
-            Copy Desk
-          </h1>
-          <p className="mt-3 max-w-4xl text-sm leading-6 text-zinc-600 dark:text-zinc-300 sm:mt-4 sm:leading-7 sm:text-[15px]">
-            Pick up submitted stories, download reporter assets, complete copy checks, and move clean work to admin approval.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+    <CmsCollectionPage>
+      <CmsCollectionHero
+        accent="blue"
+        eyebrow={formatUserRoleLabel(admin.role)}
+        title="Copy Desk"
+        description="Pick up submitted stories, inspect reporter assets, complete copy checks, and return publication-ready work to approval."
+        meta={
+          <>
             <span className={META_CHIP_CLASS}>Copy Queue {formatNumber(control.copyDesk.length)}</span>
             <span className={META_CHIP_CLASS}>Assigned {formatNumber(control.stats.assignedItems)}</span>
-          </div>
-        </div>
-      </section>
+          </>
+        }
+      />
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr,0.95fr]">
         <section className={PANEL_CLASS}>
@@ -248,6 +241,6 @@ export default async function CopyDeskPage() {
           </div>
         </section>
       </section>
-    </div>
+    </CmsCollectionPage>
   );
 }

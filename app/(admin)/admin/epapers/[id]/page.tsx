@@ -33,6 +33,7 @@ import {
   normalizeEpaperPageImage,
 } from '@/lib/utils/epaperPageImage';
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
+import WorkflowRail from '@/components/admin/WorkflowRail';
 import type {
   EPaperArticleRecord,
   EPaperRecord,
@@ -1068,6 +1069,14 @@ export default function AdminEPaperDetailPage() {
   return (
     <div className="epaper-production-desk min-h-screen bg-gray-50 p-4 sm:p-6">
       <div className="mx-auto max-w-[1600px]">
+        <WorkflowRail
+          status={activeProductionStatus}
+          assignee={epaper.productionAssignee?.name || epaper.productionAssignee?.email}
+          dueAt={null}
+          hasUnsavedChanges={hasDeskChanges || savingMeta}
+          blockerCount={publishBlockers.length}
+          primaryAction={allowedProductionTransitions[0] ? (productionActionLabels[allowedProductionTransitions[0]] || formatProductionStatusLabel(allowedProductionTransitions[0])) : `Review ${workspaceNoun}`}
+        />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <Link
             href={labels.adminBasePath}
@@ -1674,7 +1683,7 @@ export default function AdminEPaperDetailPage() {
             </section>
           </main>
 
-          <aside className="order-1 min-w-0 space-y-4 xl:order-2">
+          <aside id="workflow-actions" className="order-1 min-w-0 space-y-4 xl:order-2">
             <div className="xl:sticky xl:top-6 xl:space-y-4">
               <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="bg-gray-50">

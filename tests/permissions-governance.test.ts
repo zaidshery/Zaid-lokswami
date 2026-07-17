@@ -86,6 +86,10 @@ describe('governance permission helpers', () => {
   });
 
   it('routes newsroom control panels to the correct desks', () => {
+    expect(canViewPage(admin.role, 'work_queue')).toBe(true);
+    expect(canViewPage(copyEditor.role, 'work_queue')).toBe(true);
+    expect(canViewPage(reporter.role, 'work_queue')).toBe(true);
+    expect(canViewPage(reporter.role, 'notifications')).toBe(true);
     expect(canViewPage(admin.role, 'assignments')).toBe(true);
     expect(canViewPage(admin.role, 'content_queue')).toBe(true);
     expect(canViewPage(admin.role, 'push_alerts')).toBe(true);
@@ -203,6 +207,8 @@ describe('governance permission helpers', () => {
 
   it('keeps admin and super admin fully operational on workflow actions', () => {
     expect(canTransitionContent(admin, baseContent, 'publish')).toBe(true);
+    expect(canTransitionContent(admin, baseContent, 'fast_publish')).toBe(true);
+    expect(canTransitionContent(copyEditor, baseContent, 'fast_publish')).toBe(false);
     expect(canTransitionContent(superAdmin, baseContent, 'archive')).toBe(true);
     expect(canEditContent(admin, baseContent)).toBe(true);
     expect(canEditContent(superAdmin, baseContent)).toBe(true);

@@ -38,6 +38,7 @@ import {
   buildEpaperActivityMessage,
   recordEpaperActivity,
 } from '@/lib/server/epaperActivity';
+import { createWorkflowNotification } from '@/lib/storage/workflowNotifications';
 import { isEPaperPageReviewStatus } from '@/lib/types/epaper';
 import { assertEpaperDraftEditable } from '@/lib/server/epaperWorkflowPolicy';
 import { logEpaperMetric } from '@/lib/server/epaperObservability';
@@ -672,6 +673,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     const mapped = mapEpaper(current);
+    const publicationType = resolveEPaperPublicationType(current.publicationType);
     const normalizedArticles = normalizeQualityArticles(
       Array.isArray(articles) ? articles : []
     );
@@ -863,6 +865,26 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         allowedNextStatuses: getAllowedEpaperProductionTransitions(toStatus),
       }),
     });
+    const notificationRecipient = nextProduction.productionAssignee;
+    if (
+      notificationRecipient?.email &&
+      notificationRecipient.email.toLowerCase() !== admin.email.toLowerCase() &&
+      (action === 'assign' || toStatus === 'published')
+    ) {
+      await createWorkflowNotification({
+        recipientId: notificationRecipient.id,
+        recipientEmail: notificationRecipient.email,
+        eventType: toStatus === 'published' ? 'published' : 'assigned',
+        contentType: 'epaper',
+        contentId: id,
+        publicationType,
+        title: String(updated.title || (publicationType === 'emagazine' ? 'E-Magazine' : 'E-Paper')),
+        message: toStatus === 'published' ? 'This publication was released.' : 'This publication was assigned to you.',
+        messageHi: toStatus === 'published' ? '\u092f\u0939 \u092a\u092c\u094d\u0932\u093f\u0915\u0947\u0936\u0928 \u091c\u093e\u0930\u0940 \u0939\u094b \u0917\u092f\u093e \u0939\u0948\u0964' : '\u092f\u0939 \u092a\u092c\u094d\u0932\u093f\u0915\u0947\u0936\u0928 \u0906\u092a\u0915\u094b \u0905\u0938\u093e\u0907\u0928 \u0915\u093f\u092f\u093e \u0917\u092f\u093e \u0939\u0948\u0964',
+        href: publicationType === 'emagazine' ? `/admin/emagazines/${encodeURIComponent(id)}` : `/admin/epapers/${encodeURIComponent(id)}`,
+        dedupeKey: `epaper:${id}:${action}:${notificationRecipient.email}:${new Date().toISOString()}`,
+      });
+    }
     if (toStatus === 'published') {
       logEpaperMetric('publishing_completed', {
         epaperId: id,

@@ -35,15 +35,15 @@
     --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
     --dur-fast: 180ms;
     --dur-base: 240ms;
-    --admin-bg: #f8f9fb;
-    --admin-bg-depth: #f0f1f5;
+    --admin-bg: #f6f7f9;
+    --admin-bg-depth: #eef1f5;
     --admin-shell-surface: rgba(255, 255, 255, 0.92);
     --admin-shell-surface-strong: rgba(255, 255, 255, 0.98);
     --admin-shell-surface-muted: rgba(243, 244, 248, 0.90);
     --admin-shell-border: rgba(15, 23, 42, 0.10);
     --admin-shell-border-strong: rgba(15, 23, 42, 0.16);
     --admin-shell-text: #0f1419;
-    --admin-shell-text-muted: #6b7280;
+    --admin-shell-text-muted: #64748b;
     --admin-shell-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
     --admin-shell-shadow-strong: 0 20px 56px rgba(15, 23, 42, 0.12);
     --admin-shell-active: #111827;
@@ -96,15 +96,15 @@
     --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.28);
     --shadow-card: 0 12px 30px rgba(0, 0, 0, 0.36);
     --shadow-hover: 0 16px 36px rgba(0, 0, 0, 0.48);
-    --admin-bg: #0b0b10;
-    --admin-bg-depth: #15151b;
-    --admin-shell-surface: rgba(18, 18, 24, 0.84);
-    --admin-shell-surface-strong: rgba(18, 18, 24, 0.96);
-    --admin-shell-surface-muted: rgba(27, 27, 35, 0.82);
-    --admin-shell-border: rgba(255, 255, 255, 0.08);
-    --admin-shell-border-strong: rgba(255, 255, 255, 0.13);
-    --admin-shell-text: #f6f1e8;
-    --admin-shell-text-muted: #b7afa4;
+    --admin-bg: #090b10;
+    --admin-bg-depth: #10131a;
+    --admin-shell-surface: rgba(18, 21, 29, 0.86);
+    --admin-shell-surface-strong: rgba(17, 20, 28, 0.97);
+    --admin-shell-surface-muted: rgba(28, 32, 42, 0.78);
+    --admin-shell-border: rgba(148, 163, 184, 0.12);
+    --admin-shell-border-strong: rgba(148, 163, 184, 0.18);
+    --admin-shell-text: #f8fafc;
+    --admin-shell-text-muted: #9aa6b7;
     --admin-shell-shadow: 0 24px 54px rgba(0, 0, 0, 0.34);
     --admin-shell-shadow-strong: 0 32px 80px rgba(0, 0, 0, 0.44);
     --admin-shell-active: #f4efe6;
@@ -1254,9 +1254,8 @@
 
   html.dark .admin-shell {
     background:
-      radial-gradient(circle at 12% 0%, rgba(244, 63, 94, 0.11), transparent 24%),
-      radial-gradient(circle at 88% 0%, rgba(245, 158, 11, 0.08), transparent 20%),
-      radial-gradient(circle at 80% 14%, rgba(59, 130, 246, 0.08), transparent 18%),
+      radial-gradient(circle at 12% 0%, rgba(220, 38, 38, 0.08), transparent 24%),
+      radial-gradient(circle at 88% 0%, rgba(37, 99, 235, 0.05), transparent 22%),
       linear-gradient(180deg, var(--admin-bg-depth) 0%, var(--admin-bg) 100%);
   }
 

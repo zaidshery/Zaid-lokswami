@@ -33,6 +33,7 @@ import {
 } from '@/components/admin/CmsEditorLayout';
 import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
+import WorkflowRail from '@/components/admin/WorkflowRail';
 import { CmsWorkflowPriorityBadge, CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
 
 type WorkflowActor = {
@@ -124,6 +125,7 @@ const ACTION_LABELS: Record<ContentTransitionAction, string> = {
   reject: 'Reject',
   schedule: 'Schedule',
   publish: 'Publish',
+  fast_publish: 'Urgent Publish',
   archive: 'Archive',
 };
 
@@ -649,6 +651,15 @@ export default function EditVideoPage() {
         Back to Videos
       </Link>
 
+      <WorkflowRail
+        status={workflow.status}
+        assignee={workflow.assignedTo?.name || workflow.assignedTo?.email}
+        dueAt={workflow.dueAt}
+        hasUnsavedChanges={hasUnsavedChanges}
+        blockerCount={hasUnsavedChanges ? 1 : 0}
+        primaryAction={availableWorkflowActions[0] ? ACTION_LABELS[availableWorkflowActions[0]] : 'Review workflow'}
+      />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -830,7 +841,7 @@ export default function EditVideoPage() {
               </CmsEditorMain>
 
               <CmsEditorSidebar>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+            <div id="workflow-actions" className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Workflow</p>

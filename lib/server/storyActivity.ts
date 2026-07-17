@@ -88,6 +88,8 @@ export function buildStoryActivityMessage(input: BuildStoryActivityMessageInput)
       return 'Story scheduled for publish.';
     case 'publish':
       return 'Story published.';
+    case 'fast_publish':
+      return 'Story urgently published with an audited desk exception.';
     case 'archive':
       return 'Story archived.';
     default:

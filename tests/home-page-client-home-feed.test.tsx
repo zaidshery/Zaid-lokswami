@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -256,6 +256,7 @@ describe('HomePageClient v1 home-feed integration', () => {
               },
               publishedAt: '2026-05-09T05:00:00.000Z',
               views: 4,
+              isBreaking: true,
             },
           ],
           epaper: {
@@ -293,6 +294,12 @@ describe('HomePageClient v1 home-feed integration', () => {
     });
     expect(emagazineLink).toHaveAttribute('href', '/main/e-magazine?month=2026-05');
     expect(emagazineLink).toHaveTextContent('May 2026 Issue');
+    const liveUpdateLinks = within(screen.getByTestId('live-updates-rail')).getAllByRole('link');
+    expect(liveUpdateLinks).toHaveLength(4);
+    expect(liveUpdateLinks[0]).toHaveTextContent('Latest Story From Feed');
+    const popularNewsLinks = within(screen.getByTestId('popular-news-rail')).getAllByRole('link');
+    expect(popularNewsLinks).toHaveLength(6);
+    expect(popularNewsLinks[0]).toHaveTextContent('Lead Story From Feed');
     expect(mocks.fetchHomeFeedForHomePage).not.toHaveBeenCalled();
     expect(mocks.fetchMergedLiveArticles).not.toHaveBeenCalled();
   });

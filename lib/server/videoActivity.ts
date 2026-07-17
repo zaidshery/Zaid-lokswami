@@ -88,6 +88,8 @@ export function buildVideoActivityMessage(input: BuildVideoActivityMessageInput)
       return 'Video scheduled for publish.';
     case 'publish':
       return 'Video published.';
+    case 'fast_publish':
+      return 'Video urgently published with an audited desk exception.';
     case 'archive':
       return 'Video archived.';
     default:

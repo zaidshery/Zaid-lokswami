@@ -33,6 +33,13 @@ import {
   type WorkflowPriority,
   type WorkflowStatus,
 } from '@/lib/workflow/types';
+import {
+  buildEditorialReadiness,
+  buildPublicationReadiness,
+  type WorkflowReadinessReport,
+} from '@/lib/workflow/readiness';
+import { resolveEPaperPublicationType } from '@/lib/utils/epaperPublication';
+import type { EPaperPublicationType } from '@/lib/types/epaper';
 
 export type WorkflowContentKey = 'article' | 'story' | 'video' | 'epaper';
 type DeskStatus = WorkflowStatus | EPaperProductionStatus;
@@ -42,8 +49,14 @@ type ArticleSource = {
   _id?: unknown;
   version?: unknown;
   title?: string;
+  summary?: string;
+  content?: string;
   category?: string;
   author?: string;
+  image?: string;
+  slug?: string;
+  isBreaking?: boolean;
+  breakingTts?: unknown;
   updatedAt?: Date | string;
   publishedAt?: Date | string;
   workflow?: unknown;
@@ -54,6 +67,7 @@ type ArticleSource = {
 type StorySource = {
   _id?: unknown;
   title?: string;
+  caption?: string;
   category?: string;
   author?: string;
   updatedAt?: Date | string;
@@ -72,6 +86,9 @@ type StorySource = {
 type VideoSource = {
   _id?: unknown;
   title?: string;
+  description?: string;
+  thumbnail?: string;
+  videoUrl?: string;
   category?: string;
   updatedAt?: Date | string;
   publishedAt?: Date | string;
@@ -82,6 +99,7 @@ type VideoSource = {
 type EPaperSource = {
   _id?: unknown;
   title?: string;
+  publicationType?: unknown;
   cityName?: string;
   city?: string;
   publishDate?: Date | string;
@@ -93,10 +111,17 @@ type EPaperSource = {
   productionNotes?: unknown;
   qaCompletedAt?: Date | string | null;
   sourceLabel?: string;
+  pdfPath?: string;
+  thumbnailPath?: string;
+  pageCount?: number;
+  pages?: Array<{ imagePath?: string }>;
+  readiness?: { blockers?: string[]; warnings?: string[]; pagesMissingImage?: number };
 };
 
-type DeskItem = {
+export type DeskItem = {
   contentType: WorkflowContentKey;
+  publicationType: EPaperPublicationType | null;
+  isBreaking?: boolean;
   id: string;
   version?: number;
   title: string;
@@ -108,7 +133,13 @@ type DeskItem = {
   assignedToId: string;
   assignedToEmail: string;
   assignedToName: string;
+  createdById: string;
+  createdByEmail: string;
   createdByName: string;
+  dueAt: string | null;
+  scheduledFor: string | null;
+  commentsCount: number;
+  readiness: WorkflowReadinessReport;
   editHref: string;
   deskHref: string;
   reporterSummary: ReporterMeta | null;
@@ -240,6 +271,8 @@ function buildArticleItem(source: ArticleSource): DeskItem | null {
 
   return {
     contentType: 'article',
+    publicationType: null,
+    isBreaking: Boolean(source.isBreaking),
     id,
     version:
       typeof source.version === 'number' && Number.isInteger(source.version) && source.version > 0
@@ -254,7 +287,28 @@ function buildArticleItem(source: ArticleSource): DeskItem | null {
     assignedToId: workflow.assignedTo?.id || '',
     assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
+    createdById: workflow.createdBy?.id || '',
+    createdByEmail: workflow.createdBy?.email || '',
     createdByName: workflow.createdBy?.name || '',
+    dueAt: workflow.dueAt?.toISOString() || null,
+    scheduledFor: workflow.scheduledFor?.toISOString() || null,
+    commentsCount: workflow.comments.length,
+    readiness: buildEditorialReadiness({
+      contentType: 'article',
+      title: source.title,
+      summary: source.summary,
+      content: source.content,
+      category: source.category,
+      author: source.author,
+      image: source.image,
+      slug: source.slug,
+      isBreaking: source.isBreaking,
+      breakingAudioReady:
+        !source.isBreaking || Boolean(
+          source.breakingTts && typeof source.breakingTts === 'object' &&
+            String((source.breakingTts as { audioUrl?: unknown }).audioUrl || '').trim()
+        ),
+    }),
     editHref: `/admin/articles/${encodeURIComponent(id)}/edit`,
     deskHref: '/admin/articles',
     reporterSummary: normalizeReporterMeta(source.reporterMeta),
@@ -284,6 +338,7 @@ function buildStoryItem(source: StorySource): DeskItem | null {
 
   return {
     contentType: 'story',
+    publicationType: null,
     id,
     title,
     category: String(source.category || 'General').trim() || 'General',
@@ -294,7 +349,20 @@ function buildStoryItem(source: StorySource): DeskItem | null {
     assignedToId: workflow.assignedTo?.id || '',
     assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
+    createdById: workflow.createdBy?.id || '',
+    createdByEmail: workflow.createdBy?.email || '',
     createdByName: workflow.createdBy?.name || '',
+    dueAt: workflow.dueAt?.toISOString() || null,
+    scheduledFor: workflow.scheduledFor?.toISOString() || null,
+    commentsCount: workflow.comments.length,
+    readiness: buildEditorialReadiness({
+      contentType: 'story',
+      title: source.title,
+      category: source.category,
+      thumbnail: source.thumbnail,
+      mediaUrl: source.mediaUrl,
+      mediaAssets: source.mediaAssets,
+    }),
     editHref: `/admin/stories/${encodeURIComponent(id)}/edit`,
     deskHref: '/admin/stories',
     reporterSummary: normalizeReporterMeta(source.reporterMeta),
@@ -323,6 +391,7 @@ function buildVideoItem(source: VideoSource): DeskItem | null {
 
   return {
     contentType: 'video',
+    publicationType: null,
     id,
     title,
     category: String(source.category || 'General').trim() || 'General',
@@ -333,7 +402,20 @@ function buildVideoItem(source: VideoSource): DeskItem | null {
     assignedToId: workflow.assignedTo?.id || '',
     assignedToEmail: workflow.assignedTo?.email || '',
     assignedToName: workflow.assignedTo?.name || '',
+    createdById: workflow.createdBy?.id || '',
+    createdByEmail: workflow.createdBy?.email || '',
     createdByName: workflow.createdBy?.name || '',
+    dueAt: workflow.dueAt?.toISOString() || null,
+    scheduledFor: workflow.scheduledFor?.toISOString() || null,
+    commentsCount: workflow.comments.length,
+    readiness: buildEditorialReadiness({
+      contentType: 'video',
+      title: source.title,
+      description: source.description,
+      category: source.category,
+      thumbnail: source.thumbnail,
+      videoUrl: source.videoUrl,
+    }),
     editHref: `/admin/videos/${encodeURIComponent(id)}/edit`,
     deskHref: '/admin/videos',
     reporterSummary: null,
@@ -356,9 +438,16 @@ function buildEpaperItem(source: EPaperSource): DeskItem | null {
 
   const cityName = String(source.cityName || source.city || 'Edition').trim() || 'Edition';
   const sourceLabel = String(source.sourceLabel || 'E-Paper Desk').trim() || 'E-Paper Desk';
+  const publicationType = resolveEPaperPublicationType(source.publicationType);
+  const pages = Array.isArray(source.pages) ? source.pages : [];
+  const pagesMissingImage =
+    typeof source.readiness?.pagesMissingImage === 'number'
+      ? source.readiness.pagesMissingImage
+      : Math.max(0, Number(source.pageCount || 0) - pages.filter((page) => Boolean(page?.imagePath)).length);
 
   return {
     contentType: 'epaper',
+    publicationType,
     id,
     title,
     category: cityName,
@@ -369,9 +458,24 @@ function buildEpaperItem(source: EPaperSource): DeskItem | null {
     assignedToId: production.productionAssignee?.id || '',
     assignedToEmail: production.productionAssignee?.email || '',
     assignedToName: production.productionAssignee?.name || '',
+    createdById: '',
+    createdByEmail: '',
     createdByName: '',
-    editHref: `/admin/epapers/${encodeURIComponent(id)}`,
-    deskHref: '/admin/epapers',
+    dueAt: null,
+    scheduledFor: null,
+    commentsCount: production.productionNotes.length,
+    readiness: buildPublicationReadiness({
+      publicationType,
+      title: source.title,
+      pdfPath: source.pdfPath,
+      thumbnailPath: source.thumbnailPath,
+      pageCount: source.pageCount,
+      pagesMissingImage,
+      blockers: source.readiness?.blockers,
+      warnings: source.readiness?.warnings,
+    }),
+    editHref: `/admin/${publicationType === 'emagazine' ? 'emagazines' : 'epapers'}/${encodeURIComponent(id)}`,
+    deskHref: publicationType === 'emagazine' ? '/admin/emagazines' : '/admin/epapers',
     reporterSummary: null,
     copyEditorSummary: null,
   };
@@ -440,7 +544,7 @@ async function loadArticles(): Promise<ArticleSource[]> {
   try {
     await connectDB();
     return (await Article.find({})
-      .select('_id version title category author updatedAt publishedAt workflow reporterMeta copyEditorMeta')
+      .select('_id version title summary content category author image slug isBreaking breakingTts updatedAt publishedAt workflow reporterMeta copyEditorMeta')
       .sort({ updatedAt: -1, publishedAt: -1, _id: -1 })
       .lean()) as ArticleSource[];
   } catch (error) {
@@ -458,7 +562,7 @@ async function loadStories(): Promise<StorySource[]> {
     await connectDB();
     return (await Story.find({})
       .select(
-        '_id title category author updatedAt publishedAt workflow isPublished reporterMeta copyEditorMeta thumbnail mediaUrl mediaType mediaAssets storageProvider'
+        '_id title caption category author updatedAt publishedAt workflow isPublished reporterMeta copyEditorMeta thumbnail mediaUrl mediaType mediaAssets storageProvider'
       )
       .sort({ updatedAt: -1, publishedAt: -1, _id: -1 })
       .lean()) as StorySource[];
@@ -476,7 +580,7 @@ async function loadVideos(): Promise<VideoSource[]> {
   try {
     await connectDB();
     return (await Video.find({})
-      .select('_id title category updatedAt publishedAt workflow isPublished')
+      .select('_id title description thumbnail videoUrl category updatedAt publishedAt workflow isPublished')
       .sort({ updatedAt: -1, publishedAt: -1, _id: -1 })
       .lean()) as VideoSource[];
   } catch (error) {
@@ -504,7 +608,7 @@ async function loadEPapers(): Promise<EPaperSource[]> {
     await connectDB();
     return (await EPaper.find({})
       .select(
-        '_id title cityName publishDate updatedAt createdAt status productionStatus productionAssignee productionNotes qaCompletedAt sourceLabel'
+        '_id title publicationType cityName publishDate updatedAt createdAt status productionStatus productionAssignee productionNotes qaCompletedAt sourceLabel pdfPath thumbnailPath pageCount pages readiness'
       )
       .sort({ updatedAt: -1, publishDate: -1, _id: -1 })
       .lean()) as EPaperSource[];
@@ -538,6 +642,14 @@ async function loadDeskItems() {
     ...videos.map((source) => ({ contentType: 'video' as const, source })),
     ...epapers.map((source) => ({ contentType: 'epaper' as const, source })),
   ];
+}
+
+export async function getAllWorkflowDeskItems(): Promise<DeskItem[]> {
+  const all = await loadDeskItems();
+  return all
+    .map((entry) => toDeskItem(entry))
+    .filter((item): item is DeskItem => Boolean(item))
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }
 
 function toDeskItem(entry: {

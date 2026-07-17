@@ -175,6 +175,7 @@ const QUICK_ACTION_LABELS: Record<ContentTransitionAction, string> = {
   reject: 'Reject',
   schedule: 'Schedule',
   publish: 'Publish',
+  fast_publish: 'Urgent Publish',
   archive: 'Archive',
 };
 

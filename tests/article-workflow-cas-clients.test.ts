@@ -33,19 +33,24 @@ describe('article workflow client version guards', () => {
   it('threads article versions through shared desk workflow actions only for articles', () => {
     const actions = readSource('app/(admin)/admin/DeskWorkflowActions.tsx');
     const overview = readSource('lib/admin/articleWorkflowOverview.ts');
+    const workbench = readSource('components/admin/WorkQueueWorkbench.tsx');
 
     expect(actions).toContain(
       "...(contentType === 'article' ? { expectedVersion: articleVersion } : {}),"
     );
     expect(actions).toContain('setArticleVersion(payload.data.version);');
     expect(overview).toContain(
-      ".select('_id version title category author updatedAt publishedAt workflow reporterMeta copyEditorMeta')"
+      ".select('_id version title summary content category author image slug isBreaking breakingTts updatedAt publishedAt workflow reporterMeta copyEditorMeta')"
     );
+    expect(workbench).toContain('version={previewItem.version}');
 
     for (const page of ['assignments', 'content-queue', 'copy-desk']) {
-      expect(readSource(`app/(admin)/admin/${page}/page.tsx`)).toContain(
-        'version={item.version}'
-      );
+      const pageSource = readSource(`app/(admin)/admin/${page}/page.tsx`);
+      if (page === 'copy-desk') {
+        expect(pageSource).toContain('version={item.version}');
+      } else {
+        expect(pageSource).toContain("from '@/components/admin/WorkQueuePage'");
+      }
     }
   });
 });

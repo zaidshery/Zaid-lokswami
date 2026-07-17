@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Copy, Loader2, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
+import { ChevronDown, Copy, KeyRound, Loader2, Search, ShieldCheck, ShieldOff, Trash2, UserPlus, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatUserRoleLabel, type AdminRole } from '@/lib/auth/roles';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
@@ -77,6 +77,7 @@ export default function TeamManagementClient({
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [linkActionMemberId, setLinkActionMemberId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const [linkFallback, setLinkFallback] = useState<{ href: string; actionLabel: string } | null>(null);
@@ -310,20 +311,32 @@ export default function TeamManagementClient({
     () => [...members].sort((a, b) => a.email.localeCompare(b.email)),
     [members]
   );
+  const visibleMembers = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return sortedMembers;
+    return sortedMembers.filter((member) =>
+      [member.name, member.email, member.loginId, formatUserRoleLabel(member.role), credentialLabel(member.credentialStatus)]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedQuery)
+    );
+  }, [query, sortedMembers]);
+  const activeMemberCount = members.filter((member) => member.isActive).length;
+  const setupRequiredCount = members.filter((member) => member.credentialStatus !== 'password_ready').length;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-3 sm:space-y-5">
-      <div className="rounded-[18px] border border-zinc-200 bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5 dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="mx-auto w-full max-w-[1560px] space-y-4 sm:space-y-5">
+      <div className="admin-shell-surface-strong rounded-[20px] p-4 sm:rounded-[24px] sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-600 dark:text-red-400">
               Team Access
             </p>
-            <h1 className="mt-1 text-xl font-black text-zinc-900 sm:text-2xl dark:text-zinc-100">
+            <h1 className="mt-1 text-2xl font-black text-[color:var(--admin-shell-text)] sm:text-3xl">
               Team Members
             </h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              Invite staff, review access, and manage active newsroom roles.
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
+              Invite staff, review credential readiness, and manage newsroom access from one place.
             </p>
           </div>
 
@@ -335,7 +348,7 @@ export default function TeamManagementClient({
             <button
               type="button"
               onClick={() => setInviteOpen((current) => !current)}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-100 sm:text-sm"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
               aria-expanded={inviteOpen}
             >
               <UserPlus className="h-4 w-4" />
@@ -344,11 +357,22 @@ export default function TeamManagementClient({
           </div>
         </div>
 
-        <div
-          className={`mt-5 gap-3 md:grid-cols-[1fr_1fr_220px_auto] ${
-            inviteOpen ? 'grid' : 'hidden sm:grid'
-          }`}
-        >
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <div className="admin-shell-surface-muted rounded-[16px] p-3 sm:p-4">
+            <div className="flex items-center gap-2 text-[color:var(--admin-shell-text-muted)]"><Users className="h-4 w-4" /><span className="text-[10px] font-bold uppercase tracking-[0.14em]">Members</span></div>
+            <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">{members.length}</p>
+          </div>
+          <div className="admin-shell-surface-muted rounded-[16px] p-3 sm:p-4">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-300"><ShieldCheck className="h-4 w-4" /><span className="text-[10px] font-bold uppercase tracking-[0.14em]">Active</span></div>
+            <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">{activeMemberCount}</p>
+          </div>
+          <div className="admin-shell-surface-muted rounded-[16px] p-3 sm:p-4">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-300"><KeyRound className="h-4 w-4" /><span className="text-[10px] font-bold uppercase tracking-[0.14em]">Setup needed</span></div>
+            <p className="mt-2 text-2xl font-black text-[color:var(--admin-shell-text)]">{setupRequiredCount}</p>
+          </div>
+        </div>
+
+        {inviteOpen ? <div className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_220px_auto]">
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -381,7 +405,7 @@ export default function TeamManagementClient({
             {isInviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
             <span>{isInviting ? 'Adding...' : 'Invite Team Member'}</span>
           </button>
-        </div>
+        </div> : null}
 
         {error ? (
           <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
@@ -410,7 +434,12 @@ export default function TeamManagementClient({
           </div>
         ) : null}
 
-        <div className="mt-6 hidden gap-4 sm:grid lg:grid-cols-2">
+        <details className="admin-shell-surface-muted group mt-4 rounded-[16px]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[color:var(--admin-shell-text)] [&::-webkit-details-marker]:hidden">
+            Access policy and staff login guidance
+            <ChevronDown className="h-4 w-4 text-[color:var(--admin-shell-text-muted)] transition-transform group-open:rotate-180" />
+          </summary>
+        <div className="grid gap-4 border-t border-[color:var(--admin-shell-border)] p-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
               Role Boundary
@@ -434,19 +463,33 @@ export default function TeamManagementClient({
             </p>
           </div>
         </div>
+        </details>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <section className="admin-shell-surface-strong rounded-[20px] p-4 sm:rounded-[24px] sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-[color:var(--admin-shell-text)]">Newsroom directory</h2>
+            <p className="mt-1 text-sm text-[color:var(--admin-shell-text-muted)]">Search staff, review setup state, or open access controls.</p>
+          </div>
+          <label className="relative block w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--admin-shell-text-muted)]" />
+            <span className="sr-only">Search team members</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, role..." className="w-full rounded-xl border border-[color:var(--admin-shell-border)] bg-[color:var(--admin-shell-surface)] py-2.5 pl-10 pr-4 text-sm text-[color:var(--admin-shell-text)] outline-none placeholder:text-[color:var(--admin-shell-text-muted)] focus:border-red-500/50" />
+          </label>
+        </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {isLoading ? (
           <div className="col-span-full flex items-center justify-center rounded-3xl border border-zinc-200 bg-white p-10 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
             <Loader2 className="h-6 w-6 animate-spin text-red-500" />
           </div>
-        ) : sortedMembers.length === 0 ? (
+        ) : visibleMembers.length === 0 ? (
           <div className="col-span-full rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
-            No team members found yet.
+            {query ? 'No team members match this search.' : 'No team members found yet.'}
           </div>
         ) : (
-          sortedMembers.map((member, index) => {
+          visibleMembers.map((member, index) => {
             const isBusy = activeMemberId === member.id;
             const isGeneratingLink = linkActionMemberId === member.id;
 
@@ -456,7 +499,7 @@ export default function TeamManagementClient({
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04 }}
-                className="rounded-[18px] border border-zinc-200 bg-white p-4 shadow-sm sm:rounded-2xl dark:border-zinc-800 dark:bg-zinc-950"
+                className="admin-shell-surface-muted rounded-[16px] p-4 transition hover:border-red-500/20"
               >
                 <div className="flex items-start gap-3">
                   <div className="relative inline-flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/15 dark:text-red-300">
@@ -583,6 +626,7 @@ export default function TeamManagementClient({
           })
         )}
       </div>
+      </section>
 
       {toastMessage ? (
         <div className="pointer-events-none fixed bottom-6 right-6 z-50 rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-lg dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">

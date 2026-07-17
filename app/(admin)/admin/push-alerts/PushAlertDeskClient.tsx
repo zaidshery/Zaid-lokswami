@@ -3,16 +3,14 @@
 import { useMemo, useState } from 'react';
 import { Copy, Megaphone } from 'lucide-react';
 import type { PushAlertCandidate } from '@/lib/admin/newsroomControlCenter';
+import {
+  CMS_COLLECTION_PANEL_CLASS as PANEL_CLASS,
+  CMS_COLLECTION_SOFT_CARD_CLASS as SOFT_CARD_CLASS,
+} from '@/components/admin/CmsCollectionLayout';
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
-
-const PANEL_CLASS =
-  'rounded-[28px] border border-zinc-200/80 bg-white/92 p-6 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.36)] dark:border-white/10 dark:bg-zinc-950/60';
-
-const SOFT_CARD_CLASS =
-  'rounded-[22px] border border-zinc-200/80 bg-zinc-50/78 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.03]';
 
 export default function PushAlertDeskClient({
   candidates,
@@ -43,7 +41,7 @@ export default function PushAlertDeskClient({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
+    <div className="grid gap-4 xl:grid-cols-[0.9fr,1.1fr]">
       <section className={PANEL_CLASS}>
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-red-500/10 p-3 text-red-600 dark:text-red-300">
@@ -109,7 +107,7 @@ export default function PushAlertDeskClient({
         </div>
       </section>
 
-      <section className={PANEL_CLASS}>
+      <section className={`${PANEL_CLASS} xl:sticky xl:top-4 xl:self-start`}>
         <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Push Alert Draft</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
           Build the alert copy here, then pass it to the app or channel you use for final delivery.

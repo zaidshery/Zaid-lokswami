@@ -465,7 +465,7 @@ describe('Article create manual listen audio', () => {
   it('shows the recording script and upload control when marked as breaking news', async () => {
     const { container } = await renderCreatePage();
 
-    await userEvent.click(screen.getByLabelText(/mark as breaking news/i));
+    await userEvent.click(screen.getByLabelText(/breaking news \/ live updates/i));
 
     expect(screen.getByText('Breaking News Audio')).toBeInTheDocument();
     expect(screen.getByText('Recording Script')).toBeInTheDocument();
@@ -551,7 +551,7 @@ describe('Article create manual listen audio', () => {
   it('blocks publishing a breaking article until breaking audio is staged', async () => {
     const { container } = await renderCreatePage();
     await fillRequiredArticleFields(container);
-    await userEvent.click(screen.getByLabelText(/mark as breaking news/i));
+    await userEvent.click(screen.getByLabelText(/breaking news \/ live updates/i));
 
     const form = container.querySelector('form');
     expect(form).toBeTruthy();
@@ -567,7 +567,7 @@ describe('Article create manual listen audio', () => {
     const fetchMock = fetch as ReturnType<typeof createFetchMock>;
     const { container } = await renderCreatePage();
     await fillRequiredArticleFields(container);
-    await userEvent.click(screen.getByLabelText(/mark as breaking news/i));
+    await userEvent.click(screen.getByLabelText(/breaking news \/ live updates/i));
     fillBreakingEditorialControl();
     const breakingAudio = new File(['breaking-audio'], 'breaking.mp3', { type: 'audio/mpeg' });
     uploadBreakingAudio(container, breakingAudio);
@@ -619,7 +619,7 @@ describe('Article create manual listen audio', () => {
     mocks.uploadBreakingTtsAudioDirect.mockRejectedValueOnce(new Error('Spaces CORS missing'));
     const { container } = await renderCreatePage();
     await fillRequiredArticleFields(container);
-    await userEvent.click(screen.getByLabelText(/mark as breaking news/i));
+    await userEvent.click(screen.getByLabelText(/breaking news \/ live updates/i));
     fillBreakingEditorialControl();
     uploadBreakingAudio(
       container,

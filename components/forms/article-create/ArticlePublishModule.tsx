@@ -49,9 +49,11 @@ export default function ArticlePublishModule(props: ArticlePublishModuleProps) {
   return (
     <div id="article-inspector-publish" role="tabpanel" className={props.active ? 'space-y-4' : 'hidden'}>
       <details open className="rounded-xl border border-gray-200 bg-gray-50">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">Article flags</summary>
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">Homepage placement & article flags</summary>
         <div className="space-y-3 border-t border-gray-200 p-4">
-          <label className="flex cursor-pointer items-center gap-3"><input type="checkbox" name="isBreaking" checked={props.isBreaking} onChange={props.onTextChange} className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red" /><span className="text-sm text-gray-700">Mark as Breaking News</span></label>
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" name="isBreaking" checked={props.isBreaking} onChange={props.onTextChange} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red" /><span><span className="block text-sm font-semibold text-gray-900">Breaking News / Live Updates</span><span className="mt-0.5 block text-xs leading-5 text-gray-600">Shows this story first in the homepage Live Updates rail and enables the breaking-news banner. Unused slots are filled with the latest published stories.</span></span></label>
+          </div>
           {props.isBreaking ? (
             <div className="space-y-3">
               <div className="grid gap-3 rounded-lg border border-red-200 bg-red-50/50 p-3">
@@ -72,7 +74,9 @@ export default function ArticlePublishModule(props: ArticlePublishModuleProps) {
               </div>
             </div>
           ) : null}
-          <label className="flex cursor-pointer items-center gap-3"><input type="checkbox" name="isTrending" checked={props.isTrending} onChange={props.onTextChange} className="h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red" /><span className="text-sm text-gray-700">Mark as Trending</span></label>
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" name="isTrending" checked={props.isTrending} onChange={props.onTextChange} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-spanish-red focus:ring-spanish-red" /><span><span className="block text-sm font-semibold text-gray-900">Feature in Popular News</span><span className="mt-0.5 block text-xs leading-5 text-gray-600">Pins this story near the top of the homepage Popular News rail until its expiry. Remaining slots use published stories with the strongest view counts.</span></span></label>
+          </div>
           {props.isTrending ? (
             <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
               <label className="block space-y-1.5"><span className="text-xs font-semibold uppercase tracking-wide text-amber-800">Trending reason</span><textarea value={props.editorial.trendingReason} onChange={(event) => props.onEditorialChange('trendingReason', event.target.value)} rows={2} maxLength={500} placeholder="Cite the traffic, search, social, or editorial signal." className={fieldClass} /></label>

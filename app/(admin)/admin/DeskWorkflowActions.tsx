@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { AdminRole } from '@/lib/auth/roles';
 import type { WorkflowPriority, WorkflowStatus } from '@/lib/workflow/types';
+import { useAppStore } from '@/lib/store/appStore';
 
 type SupportedDeskContentType = 'article' | 'story' | 'video' | 'epaper';
 
@@ -37,6 +38,7 @@ type DeskWorkflowActionsProps = {
   hasAssignment?: boolean;
   isAssignedToCurrentUser?: boolean;
   assignedToName?: string;
+  canFastPublish?: boolean;
 };
 
 type WorkflowAction =
@@ -48,7 +50,8 @@ type WorkflowAction =
   | 'approve'
   | 'reject'
   | 'schedule'
-  | 'publish';
+  | 'publish'
+  | 'fast_publish';
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -94,10 +97,13 @@ export default function DeskWorkflowActions({
   hasAssignment,
   isAssignedToCurrentUser,
   assignedToName,
+  canFastPublish = false,
 }: DeskWorkflowActionsProps) {
   const router = useRouter();
+  const language = useAppStore((state) => state.language) === 'hi' ? 'hi' : 'en';
   const [assignPanelOpen, setAssignPanelOpen] = useState(false);
   const [reasonPanelOpen, setReasonPanelOpen] = useState(false);
+  const [urgentPanelOpen, setUrgentPanelOpen] = useState(false);
   const [teamOptions, setTeamOptions] = useState<AssignableTeamMember[]>([]);
   const [teamOptionsLoaded, setTeamOptionsLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -289,6 +295,14 @@ export default function DeskWorkflowActions({
     void runAction('schedule', { scheduledFor });
   }
 
+  function handleFastPublish() {
+    if (reason.trim().length < 10) {
+      setFeedback({ kind: 'error', text: language === 'hi' ? '\u0924\u0924\u094d\u0915\u093e\u0932 \u092a\u094d\u0930\u0915\u093e\u0936\u0928 \u0915\u093e \u0915\u093e\u0930\u0923 \u0915\u092e \u0938\u0947 \u0915\u092e 10 \u0905\u0915\u094d\u0937\u0930\u094b\u0902 \u092e\u0947\u0902 \u0932\u093f\u0916\u0947\u0902\u0964' : 'Add an urgent-publish reason of at least 10 characters.' });
+      return;
+    }
+    void runAction('fast_publish', { comment: reason.trim() });
+  }
+
   return (
     <div className="mt-3 space-y-3 border-t border-zinc-200/80 pt-3 dark:border-white/10">
       <div className="flex flex-wrap items-center gap-2">
@@ -386,6 +400,19 @@ export default function DeskWorkflowActions({
             Publish Now
           </button>
         ) : null}
+
+        {canFastPublish ? (
+          <button
+            type="button"
+            onClick={() => setUrgentPanelOpen((current) => !current)}
+            disabled={isSubmitting}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200"
+            aria-expanded={urgentPanelOpen}
+          >
+            <Send className="h-4 w-4" />
+            {language === 'hi' ? '\u0924\u0924\u094d\u0915\u093e\u0932 \u092a\u094d\u0930\u0915\u093e\u0936\u0928' : 'Urgent Publish'}
+          </button>
+        ) : null}
       </div>
 
       {assignPanelOpen && canAssign ? (
@@ -476,6 +503,17 @@ export default function DeskWorkflowActions({
               </button>
             ) : null}
           </div>
+        </div>
+      ) : null}
+
+      {urgentPanelOpen && canFastPublish ? (
+        <div className="rounded-[22px] border border-rose-500/25 bg-rose-500/[0.06] p-4">
+          <label className="space-y-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-700 dark:text-rose-200">
+            {language === 'hi' ? '\u0911\u0921\u093f\u091f \u0915\u093f\u090f \u0917\u090f \u0905\u092a\u0935\u093e\u0926 \u0915\u093e \u0915\u093e\u0930\u0923' : 'Audited exception reason'}
+            <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder={language === 'hi' ? '\u0938\u092e\u091d\u093e\u090f\u0902 \u0915\u093f \u092f\u0939 \u0924\u0924\u094d\u0915\u093e\u0932 \u0906\u0907\u091f\u092e \u0938\u093e\u092e\u093e\u0928\u094d\u092f \u0915\u0949\u092a\u0940-\u0930\u093f\u0935\u094d\u092f\u0942 \u092e\u093e\u0930\u094d\u0917 \u0915\u094b \u0915\u094d\u092f\u094b\u0902 \u092c\u093e\u0907\u092a\u093e\u0938 \u0915\u0930\u0947\u0964' : 'Explain why this urgent item must bypass the normal copy-review path.'} className="min-h-[96px] w-full rounded-2xl border border-rose-500/25 bg-white px-4 py-3 text-sm normal-case tracking-normal text-zinc-900 outline-none dark:bg-zinc-950 dark:text-zinc-100" />
+          </label>
+          <p className="mt-2 text-xs leading-5 text-rose-700 dark:text-rose-200">{language === 'hi' ? '\u0930\u0947\u0921\u0940\u0928\u0947\u0938 \u092c\u094d\u0932\u0949\u0915\u0930 \u0932\u093e\u0917\u0942 \u0930\u0939\u0947\u0902\u0917\u0947\u0964 \u0915\u093e\u0930\u0923 \u0914\u0930 \u090f\u0915\u094d\u091f\u0930 \u090f\u0915\u094d\u091f\u093f\u0935\u093f\u091f\u0940 \u0939\u093f\u0938\u094d\u091f\u094d\u0930\u0940 \u092e\u0947\u0902 \u0938\u0947\u0935 \u0939\u094b\u0902\u0917\u0947\u0964' : 'Readiness blockers still apply. The reason and actor are stored in the activity history.'}</p>
+          <button type="button" onClick={handleFastPublish} disabled={isSubmitting} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.1em] text-white disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{language === 'hi' ? '\u0924\u0924\u094d\u0915\u093e\u0932 \u092a\u094d\u0930\u0915\u093e\u0936\u0928 \u0915\u0940 \u092a\u0941\u0937\u094d\u091f\u093f \u0915\u0930\u0947\u0902' : 'Confirm urgent publish'}</button>
         </div>
       ) : null}
 

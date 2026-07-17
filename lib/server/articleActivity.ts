@@ -90,6 +90,8 @@ export function buildArticleActivityMessage(input: BuildArticleActivityMessageIn
       return 'Article scheduled for publish.';
     case 'publish':
       return 'Article published.';
+    case 'fast_publish':
+      return 'Article urgently published with an audited desk exception.';
     case 'archive':
       return 'Article archived.';
     case 'restore_revision':

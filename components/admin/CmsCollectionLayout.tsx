@@ -49,13 +49,13 @@ const HERO_ACCENTS: Record<
   },
 };
 
-export const CMS_COLLECTION_PANEL_CLASS = 'admin-shell-surface-strong rounded-[20px] p-3 sm:rounded-[30px] sm:p-6';
+export const CMS_COLLECTION_PANEL_CLASS = 'admin-shell-surface-strong rounded-[18px] p-3 sm:rounded-[22px] sm:p-5';
 
 export const CMS_COLLECTION_SOFT_CARD_CLASS =
-  'admin-shell-surface-muted rounded-[18px] p-3 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.14)] sm:rounded-[24px] sm:p-4 dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.35)]';
+  'admin-shell-surface-muted rounded-[16px] p-3 shadow-[0_18px_48px_-40px_rgba(15,23,42,0.14)] sm:rounded-[18px] sm:p-4 dark:shadow-[0_18px_48px_-40px_rgba(0,0,0,0.35)]';
 
 export const CMS_COLLECTION_METRIC_CARD_CLASS =
-  'admin-shell-surface rounded-[18px] p-3 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.16)] sm:rounded-[26px] sm:p-5 dark:shadow-[0_22px_70px_-46px_rgba(0,0,0,0.38)]';
+  'admin-shell-surface rounded-[16px] p-3 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.16)] sm:rounded-[18px] sm:p-4 dark:shadow-[0_22px_70px_-46px_rgba(0,0,0,0.38)]';
 
 export const CMS_COLLECTION_EMPTY_STATE_CLASS =
   'rounded-[24px] border border-dashed border-[color:var(--admin-shell-border-strong)] bg-[color:var(--admin-shell-surface-muted)] p-6 text-sm leading-6 text-[color:var(--admin-shell-text-muted)]';
@@ -82,7 +82,7 @@ export function CmsCollectionPage({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={cx('mx-auto max-w-[1640px] space-y-4 sm:space-y-8', className)}>{children}</div>;
+  return <div className={cx('mx-auto max-w-[1560px] space-y-4 sm:space-y-5', className)}>{children}</div>;
 }
 
 export function CmsCollectionHero({
@@ -105,30 +105,30 @@ export function CmsCollectionHero({
   return (
     <section
       className={cx(
-        'relative overflow-hidden rounded-[24px] border p-4 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] sm:rounded-[36px] sm:p-8 lg:p-10',
+        'relative overflow-hidden rounded-[20px] border p-4 text-[color:var(--admin-shell-text)] shadow-[var(--admin-shell-shadow-strong)] sm:rounded-[24px] sm:p-6',
         tone.shell
       )}
     >
       <div className={cx('pointer-events-none absolute -right-10 top-0 h-48 w-48 rounded-full blur-3xl', tone.orbPrimary)} />
       <div className={cx('pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full blur-3xl', tone.orbSecondary)} />
 
-      <div className={cx('relative', Boolean(aside) && 'grid gap-8 xl:grid-cols-[1.25fr,0.85fr]')}>
+      <div className={cx('relative', Boolean(aside) && 'grid gap-5 xl:grid-cols-[1.25fr,0.85fr] xl:items-end')}>
         <div>
           <div
             className={cx(
-              'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] sm:px-4 sm:text-[11px] sm:tracking-[0.28em]',
+              'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[9px] font-bold uppercase tracking-[0.16em] sm:text-[10px]',
               tone.eyebrow
             )}
           >
             {eyebrow}
           </div>
-          <h1 className="mt-3 text-2xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:mt-5 sm:text-5xl">
+          <h1 className="mt-3 text-2xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-3xl">
             {title}
           </h1>
-          <p className="mt-2 max-w-4xl text-xs leading-5 text-[color:var(--admin-shell-text-muted)] sm:mt-4 sm:text-[15px] sm:leading-7">
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-[color:var(--admin-shell-text-muted)]">
             {description}
           </p>
-          {meta ? <div className="mt-4 flex flex-wrap gap-2 sm:mt-6 sm:gap-3">{meta}</div> : null}
+          {meta ? <div className="mt-4 flex flex-wrap gap-2">{meta}</div> : null}
         </div>
 
         {aside ? <div>{aside}</div> : null}
@@ -144,7 +144,7 @@ export function CmsCollectionMetricGrid({
   children: ReactNode;
   className?: string;
 }) {
-  return <section className={cx('grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4', className)}>{children}</section>;
+  return <section className={cx('grid grid-cols-2 gap-3 xl:grid-cols-4', className)}>{children}</section>;
 }
 
 export function CmsCollectionMetricCard({
@@ -163,7 +163,7 @@ export function CmsCollectionMetricCard({
       <p className="text-[10px] font-semibold uppercase leading-4 tracking-[0.1em] text-[color:var(--admin-shell-text-muted)] sm:text-[11px] sm:tracking-[0.18em]">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:mt-4 sm:text-4xl">
+      <p className="mt-2 text-2xl font-black tracking-tight text-[color:var(--admin-shell-text)] sm:text-3xl">
         {value}
       </p>
       {note ? (

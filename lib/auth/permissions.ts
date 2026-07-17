@@ -11,6 +11,8 @@ import type { WorkflowContentType, WorkflowStatus } from '@/lib/workflow/types';
 
 export const ADMIN_PAGE_KEYS = [
   'dashboard',
+  'work_queue',
+  'notifications',
   'my_work',
   'review_queue',
   'assignments',
@@ -59,6 +61,7 @@ export const CONTENT_TRANSITION_ACTIONS = [
   'reject',
   'schedule',
   'publish',
+  'fast_publish',
   'archive',
 ] as const;
 
@@ -81,6 +84,8 @@ export type PermissionContentRecord = {
 
 export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
   dashboard: ['super_admin', 'admin', 'reporter', 'copy_editor'],
+  work_queue: ['super_admin', 'admin', 'reporter', 'copy_editor'],
+  notifications: ['super_admin', 'admin', 'reporter', 'copy_editor'],
   my_work: ['admin', 'reporter', 'copy_editor'],
   review_queue: ['super_admin', 'admin'],
   assignments: ['super_admin', 'admin'],
@@ -120,6 +125,8 @@ export const PAGE_ACCESS: Record<AdminPageKey, readonly AdminRole[]> = {
 
 export const PAGE_LABELS: Record<AdminPageKey, string> = {
   dashboard: 'Dashboard',
+  work_queue: 'Work Queue',
+  notifications: 'Notifications',
   my_work: 'My Work',
   review_queue: 'Review Queue',
   assignments: 'Assignments',
