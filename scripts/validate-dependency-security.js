@@ -33,8 +33,19 @@ function packageNameFromPath(packagePath) {
 }
 
 const unsafeRules = {
-  next: (version) => isBelow(version, '15.5.20'),
-  postcss: (version) => isBelow(version, '8.5.10'),
+  next: (version) => isBelow(version, '15.5.21'),
+  'next-auth': (version) => {
+    const betaMatch = String(version || '').match(/^5\.0\.0-beta\.(\d+)$/);
+    return Boolean(betaMatch && Number.parseInt(betaMatch[1], 10) <= 31);
+  },
+  '@auth/core': (version) => isBelow(version, '0.41.3'),
+  '@auth/mongodb-adapter': (version) => isBelow(version, '3.11.3'),
+  mongoose: (version) => {
+    const parsed = parseVersion(version);
+    return Boolean(parsed && parsed[0] === 8 && isBelow(version, '8.24.1'));
+  },
+  postcss: (version) => isBelow(version, '8.5.18'),
+  sharp: (version) => isBelow(version, '0.35.0'),
   picomatch: (version) => {
     const parsed = parseVersion(version);
     if (!parsed) return true;
@@ -58,9 +69,12 @@ const unsafeRules = {
   'brace-expansion': (version) => {
     const parsed = parseVersion(version);
     if (!parsed) return true;
-    if (parsed[0] === 1) return isBelow(version, '1.1.13');
-    if (parsed[0] === 2) return isBelow(version, '2.0.3');
-    return false;
+    if (parsed[0] === 1) return isBelow(version, '1.1.17');
+    if (parsed[0] === 2) return isBelow(version, '2.1.3');
+    if (parsed[0] === 3) return isBelow(version, '3.0.3');
+    if (parsed[0] === 4) return true;
+    if (parsed[0] === 5) return isBelow(version, '5.0.8');
+    return true;
   },
 };
 
