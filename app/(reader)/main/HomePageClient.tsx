@@ -978,8 +978,8 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
                 {getSectionCopy(language, '\u091f\u0949\u092a \u0938\u094d\u091f\u094b\u0930\u0940', 'Top Story')}
               </span>
             </div>
-            <div className="sm:h-[clamp(430px,64vw,470px)] lg:h-[460px] xl:h-[450px] 2xl:h-[470px]">
-              <HeroCarousel articles={heroArticles} variant="modern" className="sm:h-full" />
+            <div className="min-w-0">
+              <HeroCarousel articles={heroArticles} variant="modern" />
             </div>
           </div>
 

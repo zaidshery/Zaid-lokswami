@@ -40,12 +40,15 @@ describe('HeroCard responsive media', () => {
 
     render(<HeroCard article={article} variant="modern" />);
 
-    expect(screen.getByRole('img', { name: article.title })).toHaveClass(
-      'object-contain'
-    );
-    expect(screen.getByRole('img', { name: article.title })).not.toHaveClass(
+    const heroImage = screen.getByRole('img', { name: article.title });
+    const mediaFrame = heroImage.parentElement?.parentElement;
+
+    expect(heroImage).toHaveClass('object-contain');
+    expect(heroImage).not.toHaveClass(
       'sm:object-cover'
     );
+    expect(mediaFrame).toHaveClass('aspect-[16/9]', 'flex-none');
+    expect(mediaFrame).not.toHaveClass('sm:aspect-auto', 'sm:flex-1');
     expect(screen.getByRole('heading', { name: article.title })).toHaveClass(
       'newsroom-hero-title-match',
       'break-words'

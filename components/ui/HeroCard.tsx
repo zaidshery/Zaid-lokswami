@@ -65,7 +65,7 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
         >
           {variant === 'modern' ? (
             <div className="flex h-full min-h-0 flex-col">
-              <div className="newsroom-image-bg relative aspect-[16/9] flex-none overflow-hidden rounded-t-[22px] sm:aspect-auto sm:min-h-0 sm:flex-1 sm:rounded-t-[30px]">
+              <div className="newsroom-image-bg relative aspect-[16/9] flex-none overflow-hidden rounded-t-[22px] sm:rounded-t-[30px]">
                 <div
                   className="absolute inset-0 transition-transform duration-700 ease-out will-change-transform"
                   style={{ transform: imageTransform }}
