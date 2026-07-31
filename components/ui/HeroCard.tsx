@@ -74,7 +74,7 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
                     src={heroImage}
                     alt={article.title}
                     fill
-                    className="object-contain object-center image-hover-zoom sm:object-cover"
+                    className="object-contain object-center image-hover-zoom"
                     sizes="(max-width: 767px) 100vw, (max-width: 1279px) 66vw, 900px"
                     priority
                   />
@@ -83,7 +83,7 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
 
               <div className="relative flex-none border-t border-zinc-200/80 bg-[var(--newsroom-hero-surface)] px-3 py-2.5 dark:border-zinc-800 sm:px-4 sm:py-3 lg:px-4">
                 <div className="flex min-w-0 flex-col gap-1.5">
-                  <h1 className="newsroom-hero-title-match line-clamp-2 max-w-[40rem] text-[clamp(1.02rem,1.95vw,1.42rem)] leading-[1.2] text-zinc-950 transition-colors group-hover:text-red-600 dark:text-white dark:group-hover:text-gray-100">
+                  <h1 className="newsroom-hero-title-match max-w-[40rem] break-words text-[clamp(1.02rem,1.95vw,1.42rem)] text-zinc-950 transition-colors group-hover:text-red-600 dark:text-white dark:group-hover:text-gray-100">
                     {article.title}
                   </h1>
 
