@@ -6,6 +6,7 @@ import { resolveReusableBreakingTts } from '@/lib/server/breakingTts';
 import { listAllStoredArticles } from '@/lib/storage/articlesFile';
 import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
+import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 
 const DEFAULT_LIMIT = 10;
 const MIN_LIMIT = 1;
@@ -49,7 +50,7 @@ function normalizeBreakingItem(source: unknown): BreakingItem | null {
   const input =
     typeof source === 'object' && source ? (source as Record<string, unknown>) : null;
   if (!input) return null;
-  if (!resolveArticleEditorialFlags(input).isBreaking) return null;
+  if (!isPubliclyPublishedArticle(input)) return null;
 
   const id = String(input._id || input.id || '').trim();
   const title = String(input.title || '').trim();
@@ -72,24 +73,30 @@ function normalizeBreakingItem(source: unknown): BreakingItem | null {
   ).trim();
   const views =
     typeof input.views === 'number' ? input.views : Number.parseInt(String(input.views ?? 0), 10);
-  const reusableTts = resolveReusableBreakingTts({
-    _id: id,
-    title,
-    city,
-    reporterMeta: input.reporterMeta,
-    category,
-    isBreaking: true,
-    breakingTts: input.breakingTts,
-  });
+  const isBreaking = resolveArticleEditorialFlags(input).isBreaking;
+  const reusableTts = isBreaking
+    ? resolveReusableBreakingTts({
+        _id: id,
+        title,
+        city,
+        reporterMeta: input.reporterMeta,
+        category,
+        isBreaking: true,
+        breakingTts: input.breakingTts,
+      })
+    : null;
+  const publishedAt = normalizeTimestamp(input.publishedAt || input.createdAt);
 
   return {
     id,
     title,
     city: city || undefined,
     category: category || undefined,
-    createdAt: normalizeTimestamp(input.publishedAt || input.createdAt),
+    createdAt: publishedAt,
     href: buildArticlePublicPath({ id, slug: String(input.slug || '') }),
-    priority: Math.max(1, Number.isFinite(views) ? views : 1),
+    // The client sorts by priority first, so use publication time to ensure a
+    // newly published story immediately leads the ticker regardless of views.
+    priority: Math.max(1, new Date(publishedAt).getTime()),
     ...(reusableTts
       ? {
           ttsAudioUrl: reusableTts.audioUrl,
@@ -100,10 +107,6 @@ function normalizeBreakingItem(source: unknown): BreakingItem | null {
 }
 
 function compareBreakingItems(a: BreakingItem, b: BreakingItem) {
-  if (b.priority !== a.priority) {
-    return b.priority - a.priority;
-  }
-
   return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
 }
 
@@ -122,8 +125,8 @@ async function shouldUseFileStore() {
 }
 
 async function listFromMongo(limit: number) {
-  const docs = await Article.find({ isBreaking: true })
-    .select('_id slug title category publishedAt views isBreaking editorial reporterMeta breakingTts')
+  const docs = await Article.find({})
+    .select('_id slug title category city cityName locationTag publishedAt createdAt updatedAt views isBreaking editorial workflow reporterMeta breakingTts')
     .sort({ publishedAt: -1, _id: -1 })
     .limit(Math.min(MAX_LIMIT * 5, Math.max(limit * 5, limit)))
     .lean();

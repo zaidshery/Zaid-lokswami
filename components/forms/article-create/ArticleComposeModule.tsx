@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, type ChangeEvent } from 'react';
+import Image from 'next/image';
+import { CheckCircle2, Upload } from 'lucide-react';
 import ArticleEditorStudio, { type ArticleEditorStudioMode } from '@/components/forms/ArticleEditorStudio';
 import { CmsEditorMain } from '@/components/admin/CmsEditorLayout';
 import { getAuthHeader } from '@/lib/auth/clientToken';
@@ -11,6 +13,9 @@ type ComposeValue = {
   content: string;
   category: string;
   author: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string;
+  authorProgramName: string;
   featuredImageAlt: string;
   featuredImageCaption: string;
   imageCredit: string;
@@ -20,7 +25,7 @@ type ComposeValue = {
   sourceConfidential: boolean;
 };
 
-type StaffOption = { id: string; name: string; role: string; profileUrl?: string };
+type StaffOption = { id: string; name: string; role: string; profileUrl?: string; image?: string };
 
 type ArticleComposeModuleProps = {
   value: ComposeValue;
@@ -35,6 +40,8 @@ type ArticleComposeModuleProps = {
   onModeChange: (mode: ArticleEditorStudioMode) => void;
   onFocusModeChange: (focusMode: boolean) => void;
   onCategoryCreated: (name: string) => void;
+  onAuthorPhotoUpload: (file: File) => Promise<void>;
+  authorPhotoUploading: boolean;
 };
 
 const fieldClass = 'w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-spanish-red focus:outline-none';
@@ -45,6 +52,10 @@ export default function ArticleComposeModule(props: ArticleComposeModuleProps) {
   const [newCategorySlug, setNewCategorySlug] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [createCategoryError, setCreateCategoryError] = useState('');
+
+  const setAuthorField = (name: 'authorDisplayName' | 'authorAvatarUrl' | 'authorProgramName', value: string) => {
+    props.onChange({ target: { name, value } } as unknown as ChangeEvent<HTMLInputElement>);
+  };
 
   const createCategory = async () => {
     setCreateCategoryError('');
@@ -141,7 +152,63 @@ export default function ArticleComposeModule(props: ArticleComposeModuleProps) {
             {props.value.author && !props.authorOptions.some((member) => member.name === props.value.author) ? <option value={props.value.author}>{props.value.author} (source byline)</option> : null}
             {props.authorOptions.map((member) => <option key={member.id} value={member.name}>{member.name} ({member.role.replace(/_/g, ' ')})</option>)}
           </select>
-          <p className="mt-1 text-xs text-gray-500">Byline identity comes from an active newsroom staff account.</p>
+          <p className="mt-1 text-xs text-gray-500">This information appears beside the article byline. You can edit or remove each item before saving.</p>
+          <div className="mt-3 grid gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.06] sm:grid-cols-[72px_1fr]">
+            <div className="relative flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full border-2 border-white bg-gray-200 text-[10px] font-bold text-gray-500 shadow-sm dark:border-gray-700">
+              {props.value.authorAvatarUrl ? (
+                <Image src={props.value.authorAvatarUrl} alt="Author profile" fill unoptimized sizes="72px" className="object-cover" />
+              ) : <span className="text-center leading-tight">No photo</span>}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200">
+                Public byline name
+                <input name="authorDisplayName" value={props.value.authorDisplayName} onChange={props.onChange} placeholder="Leave blank to hide" maxLength={120} className={`${fieldClass} mt-1`} />
+              </label>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200">
+                Program / show name
+                <input name="authorProgramName" value={props.value.authorProgramName} onChange={props.onChange} placeholder="Optional" maxLength={120} className={`${fieldClass} mt-1`} />
+              </label>
+              <div className="sm:col-span-2">
+                <span className="block text-xs font-semibold text-gray-700 dark:text-gray-200">Profile photo</span>
+                <label
+                  htmlFor="author-profile-photo-upload"
+                  className="mt-1 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-gray-300 bg-white px-3 py-2.5 transition hover:border-spanish-red hover:bg-red-50/30 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 dark:border-white/15 dark:bg-black/10 dark:hover:bg-white/[0.06]"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-spanish-red dark:bg-red-500/10">
+                      <Upload className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {props.authorPhotoUploading ? 'Uploading photo...' : 'Choose a profile photo'}
+                      </span>
+                      <span className="block text-[11px] font-normal text-gray-500">JPG, PNG, or WEBP · Maximum 5MB</span>
+                    </span>
+                  </span>
+                  {props.value.authorAvatarUrl && !props.authorPhotoUploading ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" aria-label="Photo uploaded" />
+                  ) : null}
+                </label>
+                <input
+                  id="author-profile-photo-upload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={props.authorPhotoUploading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) void props.onAuthorPhotoUpload(file);
+                  }}
+                  className="sr-only"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 sm:col-span-2">
+                <button type="button" disabled={!props.value.authorAvatarUrl || props.authorPhotoUploading} onClick={() => setAuthorField('authorAvatarUrl', '')} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-transparent dark:text-gray-200">Remove photo</button>
+                <button type="button" disabled={!props.value.authorDisplayName || props.authorPhotoUploading} onClick={() => setAuthorField('authorDisplayName', '')} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-transparent dark:text-gray-200">Remove byline</button>
+                <button type="button" disabled={!props.value.authorProgramName || props.authorPhotoUploading} onClick={() => setAuthorField('authorProgramName', '')} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:bg-transparent dark:text-gray-200">Remove program</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <details className="rounded-lg border border-gray-200 bg-gray-50">

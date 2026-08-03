@@ -9,6 +9,7 @@ type TeamOptionRecord = {
   _id?: unknown;
   name?: string;
   email?: string;
+  image?: string;
   role?: string;
   isActive?: boolean;
 };
@@ -28,6 +29,7 @@ function toOption(record: TeamOptionRecord) {
           ? record.email.trim()
           : '',
     email: typeof record.email === 'string' ? record.email.trim() : '',
+    image: typeof record.image === 'string' ? record.image.trim() : '',
     role: normalizedRole,
     isActive: record.isActive !== false,
   };
@@ -45,7 +47,7 @@ export async function GET(req: NextRequest) {
       role: { $in: ADMIN_ROLE_QUERY_VALUES },
       isActive: { $ne: false },
     })
-      .select('_id name email role isActive')
+      .select('_id name email image role isActive')
       .sort({ role: 1, name: 1, email: 1 })
       .lean()) as unknown as TeamOptionRecord[];
 

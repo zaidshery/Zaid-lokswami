@@ -33,6 +33,10 @@ export interface IArticleSeo {
   featuredImageCaption: string;
   imageCredit: string;
   authorProfileUrl: string;
+  authorDisplayName: string;
+  authorDisplayNameSet: boolean;
+  authorAvatarUrl: string;
+  authorProgramName: string;
   includeInNewsSitemap: boolean;
   majorUpdateNote: string;
 }
@@ -113,6 +117,10 @@ const SeoSchema = new mongoose.Schema<IArticleSeo>(
     featuredImageCaption: { type: String, default: '', maxlength: 300 },
     imageCredit: { type: String, default: '', maxlength: 180 },
     authorProfileUrl: { type: String, default: '' },
+    authorDisplayName: { type: String, default: '', maxlength: 120 },
+    authorDisplayNameSet: { type: Boolean, default: false },
+    authorAvatarUrl: { type: String, default: '' },
+    authorProgramName: { type: String, default: '', maxlength: 120 },
     includeInNewsSitemap: { type: Boolean, default: true },
     majorUpdateNote: { type: String, default: '', maxlength: 240 },
   },

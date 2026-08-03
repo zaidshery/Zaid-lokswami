@@ -47,6 +47,7 @@ import {
 } from '@/lib/utils/articleImageUpload';
 import { uploadArticleTtsAudioDirect } from '@/lib/utils/articleTtsUploadClient';
 import { uploadBreakingTtsAudioDirect } from '@/lib/utils/breakingTtsUploadClient';
+import { uploadAuthorProfileImage } from '@/lib/utils/authorProfileImageUpload';
 import { buildSpokenBreakingHeadline } from '@/lib/types/breaking';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
@@ -123,6 +124,10 @@ type ArticleFormState = {
   featuredImageCaption: string;
   imageCredit: string;
   authorProfileUrl: string;
+  authorDisplayName: string;
+  authorDisplayNameSet: boolean;
+  authorAvatarUrl: string;
+  authorProgramName: string;
   includeInNewsSitemap: boolean;
   majorUpdateNote: string;
   editorial: ArticleEditorialMeta;
@@ -161,6 +166,7 @@ type AssignableTeamMember = {
   role: string;
   isActive: boolean;
   profileUrl?: string;
+  image?: string;
 };
 
 type MediaLibraryItem = {
@@ -211,6 +217,10 @@ const EMPTY_FORM: ArticleFormState = {
   featuredImageCaption: '',
   imageCredit: '',
   authorProfileUrl: '',
+  authorDisplayName: '',
+  authorDisplayNameSet: false,
+  authorAvatarUrl: '',
+  authorProgramName: '',
   includeInNewsSitemap: true,
   majorUpdateNote: '',
   editorial: createEmptyArticleEditorialMeta(),
@@ -331,6 +341,10 @@ function buildArticleMutationPayload(
       featuredImageCaption: formData.featuredImageCaption,
       imageCredit: formData.imageCredit,
       authorProfileUrl: formData.authorProfileUrl,
+      authorDisplayName: formData.authorDisplayName,
+      authorDisplayNameSet: formData.authorDisplayNameSet,
+      authorAvatarUrl: formData.authorAvatarUrl,
+      authorProgramName: formData.authorProgramName,
       includeInNewsSitemap: formData.includeInNewsSitemap,
       majorUpdateNote: formData.majorUpdateNote,
     },
@@ -438,6 +452,7 @@ export default function UploadArticle() {
   const [breakingAudioStored, setBreakingAudioStored] = useState(false);
   const [breakingAudioValidationError, setBreakingAudioValidationError] = useState('');
   const [isUploadingBreakingAudio, setIsUploadingBreakingAudio] = useState(false);
+  const [isUploadingAuthorPhoto, setIsUploadingAuthorPhoto] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [isLoading, setIsLoading] = useState(false);
@@ -507,6 +522,7 @@ export default function UploadArticle() {
               profileUrl: sessionUserId
                 ? `/main/author/${encodeURIComponent(sessionUserId)}`
                 : '',
+              image: String((session.user as { image?: string | null }).image || '').trim(),
             },
           ]
         : []),
@@ -1221,8 +1237,15 @@ export default function UploadArticle() {
       }
 
       if (name === 'author') {
-        next.authorProfileUrl =
-          authorOptions.find((member) => member.name === String(nextValue))?.profileUrl || '';
+        const selectedMember = authorOptions.find((member) => member.name === String(nextValue));
+        next.authorProfileUrl = selectedMember?.profileUrl || '';
+        next.authorDisplayName = selectedMember?.name || '';
+        next.authorDisplayNameSet = Boolean(selectedMember);
+        next.authorAvatarUrl = selectedMember?.image || '';
+      }
+
+      if (name === 'authorDisplayName') {
+        next.authorDisplayNameSet = true;
       }
 
       if (name === 'isBreaking') {
@@ -1240,6 +1263,19 @@ export default function UploadArticle() {
       return next;
     });
   };
+
+  const handleAuthorPhotoUpload = useCallback(async (file: File) => {
+    setError('');
+    setIsUploadingAuthorPhoto(true);
+    try {
+      const url = await uploadAuthorProfileImage(file);
+      setFormData((current) => ({ ...current, authorAvatarUrl: url }));
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload profile photo');
+    } finally {
+      setIsUploadingAuthorPhoto(false);
+    }
+  }, []);
 
   const updateEditorialField = <Key extends keyof ArticleEditorialMeta>(
     key: Key,
@@ -2353,6 +2389,8 @@ export default function UploadArticle() {
               onContentChange={handleContentChange}
               onModeChange={setContentMode}
               onFocusModeChange={setIsFocusMode}
+              onAuthorPhotoUpload={handleAuthorPhotoUpload}
+              authorPhotoUploading={isUploadingAuthorPhoto}
               onCategoryCreated={(name) => {
                 setCategories((current) => [name, ...current.filter((category) => category !== name)]);
                 setFormData((current) => ({ ...current, category: name }));

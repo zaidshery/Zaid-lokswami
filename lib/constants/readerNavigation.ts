@@ -7,6 +7,7 @@ export type ReaderNavigationLink = {
 export const READER_NAVIGATION = {
   home: { name: '\u0939\u094b\u092e', nameEn: 'Home', href: '/main' },
   latest: { name: '\u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930\u0947\u0902', nameEn: 'Latest News', href: '/main/latest' },
+  elections: { name: '\u091a\u0941\u0928\u093e\u0935', nameEn: 'Elections', href: '/main/elections' },
   videos: { name: '\u0935\u0940\u0921\u093f\u092f\u094b', nameEn: 'Videos', href: '/main/videos' },
   epaper: { name: '\u0908-\u092a\u0947\u092a\u0930', nameEn: 'E-Paper', href: '/main/epaper' },
   emagazine: { name: '\u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928', nameEn: 'E-Magazine', href: '/main/e-magazine' },

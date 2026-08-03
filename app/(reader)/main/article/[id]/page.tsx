@@ -757,7 +757,23 @@ export default function ArticleDetailPage() {
           </h1>
 
           <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 sm:gap-2 sm:text-base">
-            <span>{article.author.name}</span>
+            <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800 sm:h-8 sm:w-8">
+              <Image
+                src={article.author.avatar}
+                alt={article.author.name || 'Author profile'}
+                fill
+                sizes="32px"
+                unoptimized
+                className="object-cover"
+              />
+            </span>
+            {article.author.name ? <span>{article.author.name}</span> : null}
+            {article.author.programName ? (
+              <>
+                <span aria-hidden="true">|</span>
+                <span>{article.author.programName}</span>
+              </>
+            ) : null}
             <span aria-hidden="true">&bull;</span>
             <span>{articleMeta.readMinutes} min read</span>
             {articleMeta.publishedText ? (

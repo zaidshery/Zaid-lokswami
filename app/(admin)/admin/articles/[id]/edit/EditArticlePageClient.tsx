@@ -39,6 +39,7 @@ import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActiv
 import WorkflowRail from '@/components/admin/WorkflowRail';
 import { CmsWorkflowPriorityBadge, CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
 import { getAuthHeader } from '@/lib/auth/clientToken';
+import { uploadAuthorProfileImage } from '@/lib/utils/authorProfileImageUpload';
 import {
   FACT_CHECK_STATUSES,
   HEADLINE_STATUSES,
@@ -168,6 +169,10 @@ type ArticleFormState = {
   featuredImageCaption: string;
   imageCredit: string;
   authorProfileUrl: string;
+  authorDisplayName: string;
+  authorDisplayNameSet: boolean;
+  authorAvatarUrl: string;
+  authorProgramName: string;
   includeInNewsSitemap: boolean;
   majorUpdateNote: string;
   sourceType: 'story' | 'direct';
@@ -196,6 +201,10 @@ type ArticleSeo = {
   featuredImageCaption?: string;
   imageCredit?: string;
   authorProfileUrl?: string;
+  authorDisplayName?: string;
+  authorDisplayNameSet?: boolean;
+  authorAvatarUrl?: string;
+  authorProgramName?: string;
   includeInNewsSitemap?: boolean;
   majorUpdateNote?: string;
 };
@@ -304,6 +313,7 @@ type AssignableUserOption = {
   email: string;
   role: AdminRole;
   profileUrl?: string;
+  image?: string;
 };
 
 const EMPTY_FORM: ArticleFormState = {
@@ -335,6 +345,10 @@ const EMPTY_FORM: ArticleFormState = {
   featuredImageCaption: '',
   imageCredit: '',
   authorProfileUrl: '',
+  authorDisplayName: '',
+  authorDisplayNameSet: false,
+  authorAvatarUrl: '',
+  authorProgramName: '',
   includeInNewsSitemap: true,
   majorUpdateNote: '',
   sourceType: 'direct',
@@ -622,6 +636,7 @@ export default function EditArticle() {
   const [createCategoryError, setCreateCategoryError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [isUploadingAuthorPhoto, setIsUploadingAuthorPhoto] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -725,6 +740,10 @@ export default function EditArticle() {
         featuredImageCaption: formData.featuredImageCaption,
         imageCredit: formData.imageCredit,
         authorProfileUrl: formData.authorProfileUrl,
+        authorDisplayName: formData.authorDisplayName,
+        authorDisplayNameSet: formData.authorDisplayNameSet,
+        authorAvatarUrl: formData.authorAvatarUrl,
+        authorProgramName: formData.authorProgramName,
         includeInNewsSitemap: formData.includeInNewsSitemap,
         majorUpdateNote: formData.majorUpdateNote,
       },
@@ -1169,6 +1188,10 @@ export default function EditArticle() {
         featuredImageCaption: article.seo?.featuredImageCaption || '',
         imageCredit: article.seo?.imageCredit || '',
         authorProfileUrl: article.seo?.authorProfileUrl || '',
+        authorDisplayName: (article.seo?.authorDisplayName ?? article.author) || '',
+        authorDisplayNameSet: article.seo?.authorDisplayNameSet ?? Boolean(article.seo?.authorDisplayName),
+        authorAvatarUrl: article.seo?.authorAvatarUrl || '',
+        authorProgramName: article.seo?.authorProgramName || '',
         includeInNewsSitemap: article.seo?.includeInNewsSitemap !== false,
         majorUpdateNote: article.seo?.majorUpdateNote || '',
         sourceType: article.sourceType === 'story' ? 'story' : 'direct',
@@ -1547,6 +1570,19 @@ export default function EditArticle() {
     });
   };
 
+  const handleAuthorPhotoUpload = useCallback(async (file: File) => {
+    setError('');
+    setIsUploadingAuthorPhoto(true);
+    try {
+      const url = await uploadAuthorProfileImage(file);
+      setFormData((current) => ({ ...current, authorAvatarUrl: url }));
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload profile photo');
+    } finally {
+      setIsUploadingAuthorPhoto(false);
+    }
+  }, []);
+
   const updateEditorialField = <Key extends keyof ArticleEditorialMeta>(
     key: Key,
     value: ArticleEditorialMeta[Key]
@@ -1877,6 +1913,10 @@ export default function EditArticle() {
         featuredImageCaption: article.seo?.featuredImageCaption || '',
         imageCredit: article.seo?.imageCredit || '',
         authorProfileUrl: article.seo?.authorProfileUrl || '',
+        authorDisplayName: (article.seo?.authorDisplayName ?? article.author) || '',
+        authorDisplayNameSet: article.seo?.authorDisplayNameSet ?? Boolean(article.seo?.authorDisplayName),
+        authorAvatarUrl: article.seo?.authorAvatarUrl || '',
+        authorProgramName: article.seo?.authorProgramName || '',
         includeInNewsSitemap: article.seo?.includeInNewsSitemap !== false,
         majorUpdateNote: article.seo?.majorUpdateNote || '',
         sourceType: article.sourceType === 'story' ? 'story' : 'direct',
@@ -2115,6 +2155,10 @@ export default function EditArticle() {
             featuredImageCaption: formData.featuredImageCaption,
             imageCredit: formData.imageCredit,
             authorProfileUrl: formData.authorProfileUrl,
+            authorDisplayName: formData.authorDisplayName,
+            authorDisplayNameSet: formData.authorDisplayNameSet,
+            authorAvatarUrl: formData.authorAvatarUrl,
+            authorProgramName: formData.authorProgramName,
             includeInNewsSitemap: formData.includeInNewsSitemap,
             majorUpdateNote: formData.majorUpdateNote,
           },
@@ -2641,16 +2685,19 @@ export default function EditArticle() {
                     <select
                       name="author"
                       value={formData.author}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const selectedMember = staffAuthorOptions.find(
+                          (member) => member.name === event.target.value
+                        );
                         setFormData((current) => ({
                           ...current,
                           author: event.target.value,
-                          authorProfileUrl:
-                            staffAuthorOptions.find(
-                              (member) => member.name === event.target.value
-                            )?.profileUrl || '',
-                        }))
-                      }
+                          authorProfileUrl: selectedMember?.profileUrl || '',
+                          authorDisplayName: selectedMember?.name || '',
+                          authorDisplayNameSet: Boolean(selectedMember),
+                          authorAvatarUrl: selectedMember?.image || '',
+                        }));
+                      }}
                       className="w-full bg-white px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-spanish-red transition-colors"
                       required
                     >
@@ -2666,8 +2713,46 @@ export default function EditArticle() {
                       ))}
                     </select>
                     <p className="mt-1 text-xs text-gray-500">
-                      Select an authenticated newsroom identity; legacy bylines remain readable.
+                      Select an authenticated newsroom identity. The photo, public name, and program can be changed or removed for this article.
                     </p>
+                    <div className="mt-3 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-[auto_1fr]">
+                      <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gray-200 text-[10px] font-bold text-gray-500">
+                        {formData.authorAvatarUrl ? <img src={formData.authorAvatarUrl} alt="Author profile" className="h-full w-full object-cover" /> : <span>Photo</span>}
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="block text-xs font-semibold text-gray-700">Public author name<input name="authorDisplayName" value={formData.authorDisplayName} onChange={(event) => setFormData((current) => ({ ...current, authorDisplayName: event.target.value, authorDisplayNameSet: true }))} placeholder="Leave blank to hide" maxLength={120} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
+                        <label className="block text-xs font-semibold text-gray-700">Program name<input name="authorProgramName" value={formData.authorProgramName} onChange={(event) => setFormData((current) => ({ ...current, authorProgramName: event.target.value }))} placeholder="Optional" maxLength={120} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
+                        <div className="sm:col-span-2">
+                          <span className="block text-xs font-semibold text-gray-700">Profile photo</span>
+                          <label htmlFor="edit-author-profile-photo-upload" className="mt-1 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-white px-3 py-2.5 transition hover:border-spanish-red hover:bg-red-50/30 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-spanish-red">
+                              <Upload className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-semibold text-gray-900">{isUploadingAuthorPhoto ? 'Uploading photo...' : 'Choose a profile photo'}</span>
+                              <span className="block text-[11px] font-normal text-gray-500">JPG, PNG, or WEBP · Maximum 5MB</span>
+                            </span>
+                          </label>
+                          <input
+                            id="edit-author-profile-photo-upload"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={isUploadingAuthorPhoto}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              event.target.value = '';
+                              if (file) void handleAuthorPhotoUpload(file);
+                            }}
+                            className="sr-only"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2 sm:col-span-2">
+                          <button type="button" onClick={() => setFormData((current) => ({ ...current, authorAvatarUrl: '' }))} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">Remove photo</button>
+                          <button type="button" onClick={() => setFormData((current) => ({ ...current, authorDisplayName: '', authorDisplayNameSet: true }))} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">Remove author name</button>
+                          <button type="button" onClick={() => setFormData((current) => ({ ...current, authorProgramName: '' }))} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">Remove program</button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

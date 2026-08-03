@@ -97,6 +97,10 @@ type NormalizedSeo = {
   featuredImageCaption: string;
   imageCredit: string;
   authorProfileUrl: string;
+  authorDisplayName?: string;
+  authorDisplayNameSet?: boolean;
+  authorAvatarUrl?: string;
+  authorProgramName?: string;
   includeInNewsSitemap: boolean;
   majorUpdateNote: string;
 };
@@ -414,6 +418,18 @@ function normalizeSeoPartial(input: unknown): Partial<NormalizedSeo> {
   if (typeof source.authorProfileUrl === 'string') {
     partial.authorProfileUrl = source.authorProfileUrl.trim();
   }
+  if (typeof source.authorDisplayName === 'string') {
+    partial.authorDisplayName = source.authorDisplayName.trim();
+  }
+  if (typeof source.authorDisplayNameSet === 'boolean') {
+    partial.authorDisplayNameSet = source.authorDisplayNameSet;
+  }
+  if (typeof source.authorAvatarUrl === 'string') {
+    partial.authorAvatarUrl = source.authorAvatarUrl.trim();
+  }
+  if (typeof source.authorProgramName === 'string') {
+    partial.authorProgramName = source.authorProgramName.trim();
+  }
   if (typeof source.includeInNewsSitemap === 'boolean') {
     partial.includeInNewsSitemap = source.includeInNewsSitemap;
   }
@@ -546,6 +562,14 @@ function validateLengths(input: Record<string, unknown>) {
       !isValidAbsoluteHttpUrl(seo.authorProfileUrl)
     ) {
       return 'Author profile URL must be a valid absolute URL or local path';
+    }
+    if (
+      typeof seo.authorAvatarUrl === 'string' &&
+      seo.authorAvatarUrl &&
+      !seo.authorAvatarUrl.startsWith('/') &&
+      !isValidAbsoluteHttpUrl(seo.authorAvatarUrl)
+    ) {
+      return 'Author photo URL must be a valid absolute URL or local path';
     }
     if (
       typeof seo.ogImage === 'string' &&

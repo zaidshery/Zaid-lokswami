@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/lib/store/appStore';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
@@ -31,6 +31,36 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+
+  if (pathname === '/main/elections') {
+    return (
+      <Suspense fallback={<MainLayoutContent pathname={pathname} isElectionObsMode={false}>{children}</MainLayoutContent>}>
+        <ElectionMainLayout pathname={pathname}>{children}</ElectionMainLayout>
+      </Suspense>
+    );
+  }
+
+  return <MainLayoutContent pathname={pathname} isElectionObsMode={false}>{children}</MainLayoutContent>;
+}
+
+function ElectionMainLayout({ children, pathname }: { children: React.ReactNode; pathname: string }) {
+  const searchParams = useSearchParams();
+  return (
+    <MainLayoutContent pathname={pathname} isElectionObsMode={searchParams.get('obs') === '1'}>
+      {children}
+    </MainLayoutContent>
+  );
+}
+
+function MainLayoutContent({
+  children,
+  pathname,
+  isElectionObsMode,
+}: {
+  children: React.ReactNode;
+  pathname: string;
+  isElectionObsMode: boolean;
+}) {
   const {
     setIsMobile,
     setIsTablet,
@@ -44,7 +74,7 @@ export default function MainLayout({
   const isEpaperRoute =
     pathname?.startsWith('/main/epaper') || pathname?.startsWith('/main/e-magazine') || false;
   const isReaderImmersiveMode = isEpaperRoute && isEpaperReaderOpen;
-  const showBottomNav = (!isImmersiveVideoMode || isVideosRoute) && !isReaderImmersiveMode;
+  const showBottomNav = (!isImmersiveVideoMode || isVideosRoute) && !isReaderImmersiveMode && !isElectionObsMode;
 
 
   useEffect(() => {
@@ -62,13 +92,13 @@ export default function MainLayout({
   return (
     <div className="min-h-screen overflow-x-clip bg-white transition-colors duration-500 dark:bg-slate-950">
       {/* Breaking News Bar (Top) */}
-      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <BreakingNews /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode && !isElectionObsMode ? <BreakingNews /> : null}
 
       {/* Header (below breaking bar) */}
-      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <Header /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode && !isElectionObsMode ? <Header /> : null}
 
       {/* Mobile Menu Drawer */}
-      <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+      {!isElectionObsMode ? <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setMobileMenuOpen(false)} /> : null}
 
       <MobileSwipeTabs
         routes={MOBILE_BOTTOM_TAB_ROUTES}
@@ -76,7 +106,9 @@ export default function MainLayout({
       >
         <main
           className={
-            isImmersiveVideoMode
+            isElectionObsMode
+              ? 'pb-0 pt-0'
+              : isImmersiveVideoMode
                 ? 'pb-0 pt-0'
                 : isReaderImmersiveMode
                   ? 'pb-0 pt-0'
@@ -85,10 +117,12 @@ export default function MainLayout({
                     : 'reader-bottom-safe-pad pt-[8rem] sm:pt-[8.5rem] md:pt-[9rem] xl:pb-4'
           }
         >
-          {!isImmersiveVideoMode && !isReaderImmersiveMode ? <SigninRoleBanner /> : null}
+          {!isImmersiveVideoMode && !isReaderImmersiveMode && !isElectionObsMode ? <SigninRoleBanner /> : null}
           <Container
             className={
-              isImmersiveVideoMode
+              isElectionObsMode
+                ? 'py-0 !max-w-none !px-0'
+                : isImmersiveVideoMode
                 ? 'py-0 !max-w-none !px-0'
                 : isReaderImmersiveMode
                   ? 'py-0 !max-w-none !px-0'
@@ -101,14 +135,14 @@ export default function MainLayout({
       </MobileSwipeTabs>
 
       {/* Footer */}
-      {!isImmersiveVideoMode && !isReaderImmersiveMode ? (
+      {!isImmersiveVideoMode && !isReaderImmersiveMode && !isElectionObsMode ? (
         <div className="block">
           <Footer />
         </div>
       ) : null}
 
-      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <DailyEpaperAlert /> : null}
-      {!isImmersiveVideoMode && !isReaderImmersiveMode ? <PopupOrchestrator /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode && !isElectionObsMode ? <DailyEpaperAlert /> : null}
+      {!isImmersiveVideoMode && !isReaderImmersiveMode && !isElectionObsMode ? <PopupOrchestrator /> : null}
 
       {/* Bottom Navigation - Mobile + Tablet (below 1280px) */}
       {showBottomNav ? (

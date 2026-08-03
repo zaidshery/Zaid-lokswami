@@ -30,6 +30,11 @@ describe('public article client helpers', () => {
               image: '/lead.jpg',
               category: 'Politics',
               author: 'Desk',
+              authorMeta: {
+                name: 'Parvez Khan',
+                avatar: '/staff/parvez.jpg',
+                programName: 'Lokswami News Desk',
+              },
               publishedAt: '2026-05-09T10:00:00.000Z',
               views: 12,
             },
@@ -56,7 +61,11 @@ describe('public article client helpers', () => {
         id: 'article-1',
         slug: 'lead-story',
         title: 'Lead Story',
-        author: expect.objectContaining({ name: 'Desk' }),
+        author: expect.objectContaining({
+          name: 'Parvez Khan',
+          avatar: '/staff/parvez.jpg',
+          programName: 'Lokswami News Desk',
+        }),
       })
     );
   });
@@ -115,6 +124,25 @@ describe('public article client helpers', () => {
       '/api/articles/latest?limit=10'
     );
     expect(page?.items[0]?._id).toBe('legacy-1');
+  });
+
+  it('preserves explicitly cleared author names while keeping a placeholder avatar', () => {
+    const article = mapPublicArticleToUiArticle({
+      id: 'article-cleared-author',
+      title: 'Byline control',
+      summary: 'Summary',
+      image: '/story.jpg',
+      category: 'General',
+      author: 'Internal Staff Identity',
+      authorMeta: { name: '', avatar: '', programName: 'Morning Programme' },
+    });
+
+    expect(article?.author).toEqual({
+      id: 'author-internal-staff-identity',
+      name: '',
+      avatar: '/logo-icon-final.png',
+      programName: 'Morning Programme',
+    });
   });
 
   it('parses public article detail envelopes into reader UI articles', () => {

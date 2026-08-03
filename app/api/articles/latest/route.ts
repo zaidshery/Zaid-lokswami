@@ -22,6 +22,11 @@ type FeedArticle = {
   image: string;
   category: string;
   author: string;
+  authorMeta?: {
+    name?: string;
+    avatar?: string;
+    programName?: string;
+  };
   publishedAt: string;
   views: number;
   isBreaking: boolean;
@@ -77,6 +82,25 @@ function normalizeDate(value: unknown) {
   return parsed.toISOString();
 }
 
+function normalizeAuthorMeta(input: Record<string, unknown>) {
+  const seo =
+    typeof input.seo === 'object' && input.seo
+      ? (input.seo as Record<string, unknown>)
+      : null;
+  if (!seo) return undefined;
+
+  const hasFields =
+    seo.authorDisplayNameSet === true ||
+    Boolean(seo.authorDisplayName || seo.authorAvatarUrl || seo.authorProgramName);
+  if (!hasFields) return undefined;
+
+  return {
+    name: typeof seo.authorDisplayName === 'string' ? seo.authorDisplayName.trim() : '',
+    avatar: typeof seo.authorAvatarUrl === 'string' ? seo.authorAvatarUrl.trim() : '',
+    programName: typeof seo.authorProgramName === 'string' ? seo.authorProgramName.trim() : '',
+  };
+}
+
 function normalizeFeedArticle(source: unknown): FeedArticle | null {
   const input =
     typeof source === 'object' && source ? (source as Record<string, unknown>) : null;
@@ -99,6 +123,8 @@ function normalizeFeedArticle(source: unknown): FeedArticle | null {
     return null;
   }
 
+  const authorMeta = normalizeAuthorMeta(input);
+
   return {
     _id: id,
     id,
@@ -109,6 +135,7 @@ function normalizeFeedArticle(source: unknown): FeedArticle | null {
     image,
     category: category || 'General',
     author: author || 'Editor',
+    ...(authorMeta ? { authorMeta } : {}),
     publishedAt,
     views: Number.isFinite(viewsRaw) ? viewsRaw : 0,
     isBreaking: activeFlags.isBreaking,

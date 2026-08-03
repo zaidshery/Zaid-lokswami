@@ -75,6 +75,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const pages = [
     READER_NAVIGATION.home,
     READER_NAVIGATION.latest,
+    READER_NAVIGATION.elections,
     READER_NAVIGATION.videos,
     READER_NAVIGATION.epaper,
     READER_NAVIGATION.emagazine,

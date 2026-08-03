@@ -2,10 +2,11 @@
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Copy, KeyRound, Loader2, Search, ShieldCheck, ShieldOff, Trash2, UserPlus, Users } from 'lucide-react';
+import { ChevronDown, Copy, KeyRound, Loader2, Search, ShieldCheck, ShieldOff, Trash2, Upload, UserPlus, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatUserRoleLabel, type AdminRole } from '@/lib/auth/roles';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
+import { uploadAuthorProfileImage } from '@/lib/utils/authorProfileImageUpload';
 
 type TeamMember = {
   id: string;
@@ -69,6 +70,7 @@ export default function TeamManagementClient({
     [assignableRoles]
   );
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [profilePhotoUploadingId, setProfilePhotoUploadingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<AdminRole>(assignableRoles[0] || 'reporter');
@@ -135,7 +137,8 @@ export default function TeamManagementClient({
         throw new Error(payload.error || 'Failed to load team members');
       }
 
-      setMembers(Array.isArray(payload.data) ? payload.data : []);
+      const nextMembers = (Array.isArray(payload.data) ? payload.data : []) as TeamMember[];
+      setMembers(nextMembers);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load team members');
     } finally {
@@ -214,7 +217,7 @@ export default function TeamManagementClient({
     }
   }
 
-  async function updateMember(id: string, updates: Partial<Pick<TeamMember, 'role' | 'isActive' | 'name'>>) {
+  async function updateMember(id: string, updates: Partial<Pick<TeamMember, 'role' | 'isActive' | 'name' | 'image'>>) {
     setActiveMemberId(id);
     setError('');
 
@@ -261,6 +264,19 @@ export default function TeamManagementClient({
       setError(err instanceof Error ? err.message : 'Failed to remove member');
     } finally {
       setActiveMemberId(null);
+    }
+  }
+
+  async function uploadMemberPhoto(memberId: string, file: File) {
+    setError('');
+    setProfilePhotoUploadingId(memberId);
+    try {
+      const image = await uploadAuthorProfileImage(file);
+      await updateMember(memberId, { image });
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload profile photo');
+    } finally {
+      setProfilePhotoUploadingId(null);
     }
   }
 
@@ -563,6 +579,40 @@ export default function TeamManagementClient({
                     <ChevronDown className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180" />
                   </summary>
                   <div className="space-y-3 border-t border-zinc-200/80 p-3 dark:border-zinc-800">
+                    <div>
+                      <div>
+                        <span className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">Profile photo</span>
+                        <label htmlFor={`team-profile-photo-${member.id}`} className="mt-1 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-zinc-300 bg-white px-3 py-2.5 text-sm transition hover:border-red-400 hover:bg-red-50/30 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300">
+                            <Upload className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                          <span>
+                            <span className="block font-semibold text-zinc-900 dark:text-zinc-100">{profilePhotoUploadingId === member.id ? 'Uploading photo...' : 'Choose a profile photo'}</span>
+                            <span className="block text-[11px] font-normal text-zinc-500">JPG, PNG, or WEBP · Maximum 5MB</span>
+                          </span>
+                        </label>
+                        <input
+                          id={`team-profile-photo-${member.id}`}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={profilePhotoUploadingId === member.id || isBusy}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = '';
+                            if (file) void uploadMemberPhoto(member.id, file);
+                          }}
+                          className="sr-only"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void updateMember(member.id, { image: '' })}
+                        disabled={isBusy}
+                        className="mt-2 rounded-xl border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        Remove photo
+                      </button>
+                    </div>
                     <select
                       value={member.role}
                       onChange={(event) =>

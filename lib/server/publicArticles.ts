@@ -46,6 +46,11 @@ export type PublicArticleItem = {
   image: string;
   category: string;
   author: string;
+  authorMeta?: {
+    name?: string;
+    avatar?: string;
+    programName?: string;
+  };
   publishedAt: string;
   updatedAt: string;
   views: number;
@@ -218,6 +223,21 @@ function getLocationFromSource(source: Record<string, unknown>) {
   );
 }
 
+function getAuthorMetaFromSource(source: Record<string, unknown>) {
+  const seo = asObject(source.seo);
+  const hasAuthorDisplayFields =
+    seo.authorDisplayNameSet === true ||
+    Boolean(toText(seo.authorDisplayName) || toText(seo.authorAvatarUrl) || toText(seo.authorProgramName));
+
+  if (!hasAuthorDisplayFields) return undefined;
+
+  return {
+    name: toText(seo.authorDisplayName),
+    avatar: toText(seo.authorAvatarUrl),
+    programName: toText(seo.authorProgramName),
+  };
+}
+
 function toPublicArticleItem(source: unknown): PublicArticleItem | null {
   const input = asObject(source);
   const activeFlags = resolveArticleEditorialFlags(input);
@@ -233,6 +253,8 @@ function toPublicArticleItem(source: unknown): PublicArticleItem | null {
 
   if (!id || !title || !summary || !image) return null;
 
+  const authorMeta = getAuthorMetaFromSource(input);
+
   return {
     _id: id,
     id,
@@ -242,6 +264,7 @@ function toPublicArticleItem(source: unknown): PublicArticleItem | null {
     image,
     category,
     author,
+    ...(authorMeta ? { authorMeta } : {}),
     publishedAt,
     updatedAt,
     views: Math.max(0, Math.floor(toNumber(input.views, 0))),

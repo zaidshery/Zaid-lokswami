@@ -98,6 +98,10 @@ type NormalizedSeo = {
   featuredImageCaption: string;
   imageCredit: string;
   authorProfileUrl: string;
+  authorDisplayName?: string;
+  authorDisplayNameSet?: boolean;
+  authorAvatarUrl?: string;
+  authorProgramName?: string;
   includeInNewsSitemap: boolean;
   majorUpdateNote: string;
 };
@@ -349,6 +353,14 @@ function validateArticleInput(input: ReturnType<typeof normalizeArticleInput>) {
     !isValidAbsoluteHttpUrl(input.seo.authorProfileUrl)
   ) {
     return 'Author profile URL must be a valid absolute URL or local path';
+  }
+
+  if (
+    input.seo.authorAvatarUrl &&
+    !input.seo.authorAvatarUrl.startsWith('/') &&
+    !isValidAbsoluteHttpUrl(input.seo.authorAvatarUrl)
+  ) {
+    return 'Author photo URL must be a valid absolute URL or local path';
   }
 
   if (input.seo.ogImage && !isValidAbsoluteHttpUrl(input.seo.ogImage) && !input.seo.ogImage.startsWith('/')) {

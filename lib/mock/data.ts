@@ -12,6 +12,7 @@ export interface Author {
   id: string;
   name: string;
   avatar: string;
+  programName?: string;
 }
 
 export interface Article {
@@ -33,6 +34,10 @@ export interface Article {
     featuredImageCaption?: string;
     imageCredit?: string;
     authorProfileUrl?: string;
+    authorDisplayName?: string;
+    authorDisplayNameSet?: boolean;
+    authorAvatarUrl?: string;
+    authorProgramName?: string;
   };
 }
 

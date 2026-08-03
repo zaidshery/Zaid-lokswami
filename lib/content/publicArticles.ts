@@ -21,7 +21,8 @@ export type PublicArticleApiItem = {
   content?: string;
   image?: string;
   category?: string;
-  author?: string | { name?: string; avatar?: string };
+  author?: string | { name?: string; avatar?: string; programName?: string };
+  authorMeta?: { name?: string; avatar?: string; programName?: string };
   publishedAt?: string;
   updatedAt?: string;
   views?: number;
@@ -114,13 +115,17 @@ function normalizeArticleImage(input: string) {
   return image;
 }
 
-function normalizeAuthor(value: PublicArticleApiItem['author']) {
+function normalizeAuthor(
+  value: PublicArticleApiItem['author'],
+  meta?: PublicArticleApiItem['authorMeta']
+) {
   if (typeof value === 'string') {
     const name = value.trim() || 'Editor';
     return {
       id: `author-${name.toLowerCase().replace(/\s+/g, '-')}`,
-      name,
-      avatar: DEFAULT_AVATAR,
+      name: typeof meta?.name === 'string' ? meta.name.trim() : name,
+      avatar: meta?.avatar?.trim() || DEFAULT_AVATAR,
+      ...(meta?.programName?.trim() ? { programName: meta.programName.trim() } : {}),
     };
   }
 
@@ -129,7 +134,22 @@ function normalizeAuthor(value: PublicArticleApiItem['author']) {
     id: `author-${name.toLowerCase().replace(/\s+/g, '-')}`,
     name,
     avatar: value?.avatar?.trim() || DEFAULT_AVATAR,
+    ...(value?.programName?.trim() ? { programName: value.programName.trim() } : {}),
   };
+}
+
+function getAuthorMetaFromSeo(seo: Article['seo']) {
+  const source = seo && typeof seo === 'object' ? seo : null;
+  if (!source) return undefined;
+  const hasFields =
+    source.authorDisplayNameSet === true ||
+    Boolean(source.authorDisplayName || source.authorAvatarUrl || source.authorProgramName);
+  if (!hasFields) return undefined;
+  return {
+    name: typeof source.authorDisplayName === 'string' ? source.authorDisplayName : '',
+    avatar: typeof source.authorAvatarUrl === 'string' ? source.authorAvatarUrl : '',
+    programName: typeof source.authorProgramName === 'string' ? source.authorProgramName : '',
+  } satisfies NonNullable<PublicArticleApiItem['authorMeta']>;
 }
 
 export function parsePublicArticlesPayload(
@@ -232,7 +252,7 @@ export function mapPublicArticleToUiArticle(
     content: String(item.content || ''),
     image,
     category: String(item.category || '').trim() || 'General',
-    author: normalizeAuthor(item.author),
+    author: normalizeAuthor(item.author, item.authorMeta || getAuthorMetaFromSeo(item.seo)),
     publishedAt: normalizeDate(item.publishedAt),
     views: Number.isFinite(Number(item.views)) ? Number(item.views) : 0,
     isBreaking: Boolean(item.isBreaking),

@@ -53,4 +53,40 @@ describe('election results configuration', () => {
       { name: 'BJP', color: '#FF6B00', won: 92, leading: 0 },
     ]);
   });
+
+  it('normalizes constituency live coverage and clamps counting progress', () => {
+    const data = normalizeElectionResultsData({
+      featuredContest: {
+        status: 'live',
+        backgroundImageUrl: '/elections/datia-bypoll-background-v2.png',
+        totalRounds: 15,
+        roundsCompleted: 19,
+        leadMargin: 1786,
+        sourceUrl: 'javascript:alert(1)',
+        candidates: [
+          {
+            id: 'ghanshyam-singh',
+            name: 'Ghanshyam Singh',
+            party: 'INC',
+            votes: '',
+          },
+        ],
+      },
+    });
+
+    expect(data.featuredContest.status).toBe('live');
+    expect(data.featuredContest.roundsCompleted).toBe(15);
+    expect(data.featuredContest.leadMargin).toBe(1786);
+    expect(data.featuredContest.candidates[0].votes).toBeNull();
+    expect(data.featuredContest.backgroundImageUrl).toBe('/elections/datia-bypoll-background-v2.png');
+    expect(data.featuredContest.sourceUrl).toBe('');
+  });
+
+  it('rejects protocol-relative election image paths', () => {
+    const data = normalizeElectionResultsData({
+      featuredContest: { backgroundImageUrl: '//example.com/untrusted.png' },
+    });
+
+    expect(data.featuredContest.backgroundImageUrl).toBe('');
+  });
 });

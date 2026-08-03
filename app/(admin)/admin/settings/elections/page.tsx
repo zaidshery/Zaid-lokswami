@@ -17,8 +17,10 @@ import {
   Save,
   Trash2,
   UploadCloud,
+  Vote,
   X,
 } from 'lucide-react';
+import DatiaElectionEditor from '@/components/admin/DatiaElectionEditor';
 import {
   ELECTION_MODES,
   ELECTION_STATES,
@@ -54,7 +56,7 @@ function activeModeLabel(mode: ElectionMode) {
 
 export default function ElectionSettingsPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'graphics' | 'results'>('graphics');
+  const [activeTab, setActiveTab] = useState<'datia' | 'graphics' | 'results'>('datia');
   const [uploading, setUploading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [messages, setMessages] = useState<MsgMap>({});
@@ -94,7 +96,7 @@ export default function ElectionSettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'results') {
+    if (activeTab !== 'graphics') {
       void loadResults();
     }
   }, [activeTab, loadResults]);
@@ -281,13 +283,14 @@ export default function ElectionSettingsPage() {
 
       <div className="flex w-fit gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800/60">
         {[
+          { id: 'datia', label: 'Datia live page', icon: Vote },
           { id: 'graphics', label: 'Graphics', icon: ImageIcon },
           { id: 'results', label: 'Results', icon: BarChart2 },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
-            onClick={() => setActiveTab(id as 'graphics' | 'results')}
+            onClick={() => setActiveTab(id as 'datia' | 'graphics' | 'results')}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
               activeTab === id
                 ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100'
@@ -300,7 +303,15 @@ export default function ElectionSettingsPage() {
         ))}
       </div>
 
-      {activeTab === 'graphics' ? (
+      {activeTab === 'datia' ? (
+        loadingResults ? (
+          <div className="flex items-center justify-center gap-3 py-16 text-zinc-500"><Loader2 className="h-5 w-5 animate-spin" />Loading Datia election coverage...</div>
+        ) : resultsData ? (
+          <DatiaElectionEditor data={resultsData} onChange={setResultsData} onSave={() => void saveResults()} saving={savingResults} message={saveMsg} />
+        ) : (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">Unable to load election coverage settings.</div>
+        )
+      ) : activeTab === 'graphics' ? (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {ELECTION_STATES.map((state) => {
             const imageUrl = `/elections/${state.id}.jpg?t=${timestamps[state.id] || 1}`;

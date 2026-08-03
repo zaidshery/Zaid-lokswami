@@ -731,6 +731,9 @@ async function updateStoredArticleUnlocked(
     current.seo.featuredImageCaption !== next.seo.featuredImageCaption ||
     current.seo.imageCredit !== next.seo.imageCredit ||
     current.seo.authorProfileUrl !== next.seo.authorProfileUrl ||
+    current.seo.authorDisplayName !== next.seo.authorDisplayName ||
+    current.seo.authorAvatarUrl !== next.seo.authorAvatarUrl ||
+    current.seo.authorProgramName !== next.seo.authorProgramName ||
     current.seo.includeInNewsSitemap !== next.seo.includeInNewsSitemap ||
     current.seo.majorUpdateNote !== next.seo.majorUpdateNote ||
     current.reporterMeta.locationTag !== next.reporterMeta.locationTag ||

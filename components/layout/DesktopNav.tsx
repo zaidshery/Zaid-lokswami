@@ -9,6 +9,7 @@ import { READER_NAVIGATION, isReaderNavigationActive } from '@/lib/constants/rea
 
 const primaryLinks = [
   READER_NAVIGATION.home,
+  READER_NAVIGATION.elections,
   READER_NAVIGATION.epaper,
   READER_NAVIGATION.emagazine,
   READER_NAVIGATION.digitalNewsroom,

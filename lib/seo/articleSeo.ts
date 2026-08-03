@@ -9,6 +9,10 @@ export type ArticleSeoFields = {
   featuredImageCaption: string;
   imageCredit: string;
   authorProfileUrl: string;
+  authorDisplayName?: string;
+  authorDisplayNameSet?: boolean;
+  authorAvatarUrl?: string;
+  authorProgramName?: string;
   includeInNewsSitemap: boolean;
   majorUpdateNote: string;
 };
@@ -44,6 +48,10 @@ export function defaultArticleSeo(): ArticleSeoFields {
     featuredImageCaption: '',
     imageCredit: '',
     authorProfileUrl: '',
+    authorDisplayName: '',
+    authorDisplayNameSet: false,
+    authorAvatarUrl: '',
+    authorProgramName: '',
     includeInNewsSitemap: true,
     majorUpdateNote: '',
   };
@@ -69,6 +77,14 @@ export function normalizeArticleSeo(input: unknown): ArticleSeoFields {
     imageCredit: typeof source.imageCredit === 'string' ? source.imageCredit.trim() : '',
     authorProfileUrl:
       typeof source.authorProfileUrl === 'string' ? source.authorProfileUrl.trim() : '',
+    authorDisplayName:
+      typeof source.authorDisplayName === 'string' ? source.authorDisplayName.trim() : '',
+    authorDisplayNameSet:
+      typeof source.authorDisplayNameSet === 'boolean' ? source.authorDisplayNameSet : false,
+    authorAvatarUrl:
+      typeof source.authorAvatarUrl === 'string' ? source.authorAvatarUrl.trim() : '',
+    authorProgramName:
+      typeof source.authorProgramName === 'string' ? source.authorProgramName.trim() : '',
     includeInNewsSitemap:
       typeof source.includeInNewsSitemap === 'boolean'
         ? source.includeInNewsSitemap

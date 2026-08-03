@@ -85,6 +85,14 @@ export const PATCH = withAdminApi<RouteContext>(
       updates.name = body.name.trim();
     }
 
+    if (typeof body.image === 'string') {
+      const image = body.image.trim();
+      if (image && !image.startsWith('/') && !/^https?:\/\//i.test(image)) {
+        return apiError('Profile photo must be a local path or an http(s) URL', 400, 'VALIDATION_ERROR');
+      }
+      updates.image = image;
+    }
+
     if (Object.keys(updates).length === 0) {
       return apiError('No valid updates provided', 400, 'VALIDATION_ERROR');
     }

@@ -101,4 +101,62 @@ describe('/api/breaking route', () => {
     expect(stale.ttsAudioUrl).toBeUndefined();
     expect(stale.ttsReady).toBeUndefined();
   });
+
+  it('shows every newly published article newest first and excludes non-public workflow states', async () => {
+    listAllStoredArticlesMock.mockResolvedValue([
+      {
+        _id: 'older-popular',
+        slug: 'older-popular',
+        title: 'Older popular article',
+        category: 'National',
+        publishedAt: '2026-07-31T09:00:00.000Z',
+        views: 100000,
+        isBreaking: true,
+        workflow: { status: 'published' },
+      },
+      {
+        _id: 'new-standard',
+        slug: 'new-standard',
+        title: 'Newest standard article',
+        category: 'Indore',
+        publishedAt: '2026-07-31T10:00:00.000Z',
+        views: 0,
+        isBreaking: false,
+        workflow: { status: 'published' },
+      },
+      {
+        _id: 'draft-article',
+        slug: 'draft-article',
+        title: 'Draft article',
+        publishedAt: '2026-07-31T11:00:00.000Z',
+        workflow: { status: 'draft' },
+      },
+      {
+        _id: 'scheduled-article',
+        slug: 'scheduled-article',
+        title: 'Scheduled article',
+        publishedAt: '2026-07-31T12:00:00.000Z',
+        workflow: { status: 'scheduled' },
+      },
+    ]);
+
+    const { GET } = await import('@/app/api/breaking/route');
+    const response = await GET(
+      new Request('http://localhost/api/breaking?limit=10') as unknown as NextRequest
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.items.map((item: { id: string }) => item.id)).toEqual([
+      'new-standard',
+      'older-popular',
+    ]);
+    expect(payload.items[0]).toEqual(
+      expect.objectContaining({
+        title: 'Newest standard article',
+        href: '/main/article/new-standard',
+      })
+    );
+    expect(payload.items[0].ttsAudioUrl).toBeUndefined();
+  });
 });

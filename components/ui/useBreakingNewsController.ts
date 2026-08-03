@@ -13,7 +13,7 @@ import {
 import { fetchTtsStatus } from '@/lib/ai/ttsClient';
 
 const BREAKING_LIMIT = 10;
-const POLL_INTERVAL_MS = 90_000;
+const POLL_INTERVAL_MS = 30_000;
 const SILENT_ROTATION_MS = 3_200;
 const SPOKEN_HEADLINE_PAUSE_MS = 800;
 const TTS_FAILURE_HOLD_MS = 3_000;

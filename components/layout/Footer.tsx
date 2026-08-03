@@ -52,6 +52,7 @@ const COMPANY_LINKS: FooterLink[] = [
 const QUICK_LINKS: FooterLink[] = [
   { href: '/main', hi: '\u0939\u094b\u092e', en: 'Home' },
   { href: '/main/latest', hi: '\u0924\u093e\u091c\u093c\u093e \u0916\u092c\u0930\u0947\u0902', en: 'Latest News' },
+  { href: '/main/elections', hi: '\u091a\u0941\u0928\u093e\u0935', en: 'Elections' },
   { href: '/main/videos', hi: '\u0935\u0940\u0921\u093f\u092f\u094b', en: 'Videos' },
   { href: '/main/epaper', hi: 'E-Paper', en: 'E-Paper' },
   { href: '/main/contact', hi: '\u0938\u0902\u092a\u0930\u094d\u0915', en: 'Contact' },
