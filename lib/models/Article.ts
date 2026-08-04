@@ -190,13 +190,16 @@ const MediaMetadataSchema = new mongoose.Schema<ArticleMediaMetadata>(
 
 const RevisionSchema = new mongoose.Schema<IArticleRevision>(
   {
-    title: { type: String, required: true, maxlength: 200 },
-    summary: { type: String, required: true, maxlength: 500 },
-    content: { type: String, required: true },
+    // Revisions snapshot drafts as well as publish-ready articles. Keep these
+    // fields as permissive as ArticleSchema so saving a legacy/incomplete draft
+    // cannot fail before the workflow publish-readiness checks run.
+    title: { type: String, default: '', maxlength: 200 },
+    summary: { type: String, default: '', maxlength: 500 },
+    content: { type: String, default: '' },
     contentJson: { type: mongoose.Schema.Types.Mixed, default: () => ({ version: 1, blocks: [] }) },
-    image: { type: String, required: true },
-    category: { type: String, required: true },
-    author: { type: String, required: true },
+    image: { type: String, default: '' },
+    category: { type: String, default: '' },
+    author: { type: String, default: '' },
     slug: { type: String, default: '', trim: true, lowercase: true },
     previousSlugs: { type: [String], default: [] },
     isBreaking: { type: Boolean, default: false },
