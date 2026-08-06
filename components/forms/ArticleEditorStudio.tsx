@@ -33,6 +33,8 @@ type ArticleEditorStudioProps = {
   showSidebar?: boolean;
   previewVariant?: 'compact' | 'article';
   author?: string;
+  authorAvatarUrl?: string;
+  authorProgramName?: string;
   image?: string;
   imageAlt?: string;
   imageCaption?: string;
@@ -65,6 +67,8 @@ function PreviewPanel({
   variant = 'compact',
   density = 'full',
   author,
+  authorAvatarUrl,
+  authorProgramName,
   image,
   imageAlt,
   imageCaption,
@@ -77,6 +81,8 @@ function PreviewPanel({
   variant?: 'compact' | 'article';
   density?: ArticlePreviewDensity;
   author?: string;
+  authorAvatarUrl?: string;
+  authorProgramName?: string;
   image?: string;
   imageAlt?: string;
   imageCaption?: string;
@@ -86,6 +92,8 @@ function PreviewPanel({
   const trimmedTitle = title.trim();
   const trimmedSummary = summary.trim();
   const trimmedAuthor = author?.trim();
+  const trimmedAuthorAvatarUrl = authorAvatarUrl?.trim();
+  const trimmedAuthorProgramName = authorProgramName?.trim();
   const trimmedImage = image?.trim();
   const trimmedImageAlt = imageAlt?.trim();
   const trimmedImageCaption = imageCaption?.trim();
@@ -177,13 +185,38 @@ function PreviewPanel({
               {trimmedSummary || 'Summary preview will appear here.'}
             </p>
             <div className={cx(
-              'flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-zinc-200 text-zinc-500',
+              'flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-y border-zinc-200 text-zinc-500',
               isSplitPreview ? 'mt-5 py-2.5 text-xs' : 'mt-6 py-3 text-sm'
             )}>
+              <span className="relative flex h-6 w-6 shrink-0 overflow-hidden rounded-full border border-zinc-300 bg-zinc-200">
+                {trimmedAuthorAvatarUrl ? (
+                  <Image
+                    src={trimmedAuthorAvatarUrl}
+                    alt={trimmedAuthor || 'Author'}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center bg-red-700 text-[10px] font-black text-white uppercase">
+                    {(trimmedAuthor || 'Z').charAt(0)}
+                  </span>
+                )}
+              </span>
               <span className="font-semibold text-zinc-900">
                 {trimmedAuthor || 'News Desk'}
               </span>
+              {trimmedAuthorProgramName ? (
+                <>
+                  <span className="text-zinc-400" aria-hidden="true">|</span>
+                  <span className="font-semibold text-red-600">
+                    {trimmedAuthorProgramName}
+                  </span>
+                </>
+              ) : null}
+              <span className="text-zinc-400" aria-hidden="true">•</span>
               <span>Draft preview</span>
+              <span className="text-zinc-400" aria-hidden="true">•</span>
               <span>Updated in newsroom</span>
             </div>
           </header>
@@ -407,6 +440,8 @@ export default function ArticleEditorStudio({
   showSidebar = true,
   previewVariant = 'compact',
   author,
+  authorAvatarUrl,
+  authorProgramName,
   image,
   imageAlt,
   imageCaption,
@@ -531,6 +566,8 @@ export default function ArticleEditorStudio({
             html={previewContentHtml}
             variant={previewVariant}
             author={author}
+            authorAvatarUrl={authorAvatarUrl}
+            authorProgramName={authorProgramName}
             image={image}
             imageAlt={imageAlt}
             imageCaption={imageCaption}
@@ -564,6 +601,8 @@ export default function ArticleEditorStudio({
                 html={previewContentHtml}
                 variant={previewVariant}
                 author={author}
+                authorAvatarUrl={authorAvatarUrl}
+                authorProgramName={authorProgramName}
                 image={image}
                 imageAlt={imageAlt}
                 imageCaption={imageCaption}

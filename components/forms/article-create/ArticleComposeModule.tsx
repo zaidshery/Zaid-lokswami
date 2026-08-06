@@ -110,6 +110,8 @@ export default function ArticleComposeModule(props: ArticleComposeModuleProps) {
           showSidebar={false}
           previewVariant="article"
           author={props.value.author}
+          authorAvatarUrl={props.value.authorAvatarUrl}
+          authorProgramName={props.value.authorProgramName}
           image={props.image}
           imageAlt={props.value.featuredImageAlt}
           imageCaption={props.value.featuredImageCaption}

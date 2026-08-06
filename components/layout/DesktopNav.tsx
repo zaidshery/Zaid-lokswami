@@ -12,7 +12,6 @@ const primaryLinks = [
   READER_NAVIGATION.elections,
   READER_NAVIGATION.epaper,
   READER_NAVIGATION.emagazine,
-  READER_NAVIGATION.digitalNewsroom,
 ];
 
 const categoryLinks = NEWS_CATEGORIES.map((category) => ({

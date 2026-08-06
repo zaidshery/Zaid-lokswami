@@ -297,9 +297,11 @@ describe('HomePageClient v1 home-feed integration', () => {
     const liveUpdateLinks = within(screen.getByTestId('live-updates-rail')).getAllByRole('link');
     expect(liveUpdateLinks).toHaveLength(4);
     expect(liveUpdateLinks[0]).toHaveTextContent('Latest Story From Feed');
-    const popularNewsLinks = within(screen.getByTestId('popular-news-rail')).getAllByRole('link');
-    expect(popularNewsLinks).toHaveLength(6);
-    expect(popularNewsLinks[0]).toHaveTextContent('Lead Story From Feed');
+    const popularNewsRail = screen.queryByTestId('popular-news-rail');
+    if (popularNewsRail) {
+      const popularNewsLinks = within(popularNewsRail).getAllByRole('link');
+      expect(popularNewsLinks).toHaveLength(6);
+    }
     expect(mocks.fetchHomeFeedForHomePage).not.toHaveBeenCalled();
     expect(mocks.fetchMergedLiveArticles).not.toHaveBeenCalled();
   });

@@ -1,7 +1,7 @@
 # Lokswami Newsroom CMS - Role SOP
 
-Version: 1.0
-Reviewed against the CMS: 14 July 2026
+Version: 1.1
+Reviewed against the CMS: 4 August 2026
 Audience: Admin, Copy Editor, and Reporter
 
 This is the daily operating guide for the Lokswami newsroom CMS. Menu names and
@@ -111,6 +111,22 @@ Leaving before **Save Draft** or **Submit For Review** can lose unsaved form dat
 4. Choose **Save Changes** first, preview the media again, then add an optional
    workflow note and choose **Submit For Review**.
 
+### Create and send a quick article
+
+1. Open **Article Create** from the CMS menu.
+2. Enter the **Short title** and full **Body**.
+3. Add any available images. Wait for every upload to finish; the first image
+   becomes the featured image.
+4. Choose **Send to Copy Editor** once.
+5. Wait for **Article sent to the copy editor**, then follow its status in
+   **My Work**.
+
+The CMS assigns the signed-in Reporter as author, creates the summary, uses the
+temporary category General, and submits the article to the desk. Copy
+Editor/Admin completes category, quality, media details, SEO, and publication.
+The quick Article screen does not have Save Draft, so do not close or refresh it
+before sending.
+
 ### Reporter handoff checklist
 
 - [ ] Names, numbers, dates, location, and spellings are verified.
@@ -121,10 +137,11 @@ Leaving before **Save Draft** or **Submit For Review** can lose unsaved form dat
 - [ ] Reporter notes explain anything the desk must know.
 - [ ] The story is submitted once; duplicate records are not created.
 
-The Reporter does not create the linked full Article. A claimed/assigned Copy
-Editor can use **Write article from this story** during desk review; the separate
-**Create Article** shortcut appears after approval/scheduling/publication. Copy
-Editor/Admin completes Article SEO, audio, and publication handoff.
+The Reporter can send a quick direct Article, but does not create the linked
+full Article from a Story package. A claimed/assigned Copy Editor can use
+**Write article from this story** during desk review; the separate **Create
+Article** shortcut appears after approval/scheduling/publication. Copy
+Editor/Admin completes linked-Article SEO, audio, and publication handoff.
 
 ## 5. Copy Editor SOP
 
@@ -306,7 +323,7 @@ Super-Admin-only boundaries.
 | Action | Reporter | Copy Editor | Admin |
 | --- | :---: | :---: | :---: |
 | Create story package | Yes | No | Yes |
-| Create direct article | No | Yes | Yes |
+| Create direct article | Yes, quick desk handoff | Yes | Yes |
 | Edit own draft / assigned review work | Yes | Yes | Yes |
 | Claim submitted work | No | Yes | Yes/assign |
 | Request changes | No | Yes | Yes |

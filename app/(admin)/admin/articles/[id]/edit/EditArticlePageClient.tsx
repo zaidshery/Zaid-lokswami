@@ -2553,6 +2553,8 @@ export default function EditArticle() {
                     showSidebar={false}
                     previewVariant="article"
                     author={formData.author}
+                    authorAvatarUrl={formData.authorAvatarUrl}
+                    authorProgramName={formData.authorProgramName}
                     image={imagePreview}
                     imageAlt={formData.featuredImageAlt}
                     imageCaption={formData.featuredImageCaption}

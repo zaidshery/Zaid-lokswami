@@ -122,8 +122,6 @@ function buildHomepageRail(
   return [...priority, ...fallback].slice(0, limit);
 }
 
-const HOME_LATEST_INITIAL_COUNT = 6;
-const HOME_LATEST_PAGE_STEP = 6;
 const CATEGORY_INITIAL_STORIES_COUNT = 4;
 const CATEGORY_STORIES_PAGE_STEP = 4;
 const CATEGORY_FETCH_LIMIT = 12;
@@ -288,10 +286,12 @@ function HeadlineImageCard({
             <Clock3 className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{timeLabel}</span>
           </span>
-          <span className="inline-flex shrink-0 items-center gap-1">
-            <Eye className="h-3.5 w-3.5" />
-            {formatCompactViews(article.views)}
-          </span>
+          {article.views > 0 ? (
+            <span className="inline-flex shrink-0 items-center gap-1">
+              <Eye className="h-3.5 w-3.5" />
+              {formatCompactViews(article.views)}
+            </span>
+          ) : null}
         </div>
       </div>
     </Link>
@@ -705,9 +705,6 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
   const hasInitialArticles = Boolean(initialHomeFeed?.articles.length);
   const hasInitialEpaper = Boolean(initialHomeFeed?.epaper);
   const hasInitialEmagazine = Boolean(initialHomeFeed?.emagazine);
-  const [visibleLatestNewsCount, setVisibleLatestNewsCount] = useState(
-    HOME_LATEST_INITIAL_COUNT
-  );
   const [visibleCategoryStoryCounts, setVisibleCategoryStoryCounts] = useState<Record<string, number>>({});
   const [categoryArticlesBySlug, setCategoryArticlesBySlug] = useState<Record<string, Article[]>>({});
   const requestedCategorySlugsRef = useRef<Set<string>>(new Set());
@@ -726,9 +723,6 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
     4,
     (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
   );
-  const latestNews = feedArticles.slice(5);
-  const visibleLatestNews = latestNews.slice(0, visibleLatestNewsCount);
-  const hasMoreLatestNews = visibleLatestNewsCount < latestNews.length;
   const featuredSidebar = buildHomepageRail(
     latestPublishedArticles,
     (article) => Boolean(article.isTrending),
@@ -769,8 +763,8 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       });
       const articles = page
         ? mapPublicArticlesToUiArticles(page.items).sort(
-            (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
-          )
+          (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
+        )
         : [];
 
       if (generation !== categoryRequestGenerationRef.current) return;
@@ -846,10 +840,6 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       active = false;
     };
   }, [hasInitialArticles, hasInitialEpaper, hasInitialEmagazine]);
-
-  useEffect(() => {
-    setVisibleLatestNewsCount(HOME_LATEST_INITIAL_COUNT);
-  }, [feedArticles.length]);
 
   useEffect(() => {
     setVisibleCategoryStoryCounts({});
@@ -971,135 +961,97 @@ export default function HomePage({ initialHomeFeed = null }: HomePageProps) {
       <div className="mx-auto w-full max-w-[98rem] px-3 py-3 sm:px-4 lg:px-5">
         <section className="newsroom-top-package rounded-[28px] border p-2 sm:p-3 lg:p-3.5">
           <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[minmax(0,1fr)_minmax(17rem,20rem)_minmax(15.5rem,17.5rem)] xl:items-stretch 2xl:grid-cols-[minmax(0,1fr)_minmax(18rem,20.5rem)_minmax(16.5rem,18rem)]">
-          <div className="newsroom-panel newsroom-hero-shell overflow-hidden rounded-[28px] p-1.5 sm:p-2 lg:p-2.5">
-            <div className="mb-1.5 flex items-center justify-start gap-2">
-              <span className="inline-flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white">
-                <Flame className="h-3 w-3" />
-                {getSectionCopy(language, '\u091f\u0949\u092a \u0938\u094d\u091f\u094b\u0930\u0940', 'Top Story')}
-              </span>
-            </div>
-            <div className="min-w-0">
-              <HeroCarousel articles={heroArticles} variant="modern" />
-            </div>
-          </div>
-
-          <aside className="newsroom-panel newsroom-live-rail rounded-lg p-3 lg:p-3.5">
-            <NewsroomSectionHeader
-              title={getSectionCopy(language, '\u0932\u093e\u0907\u0935 \u0905\u092a\u0921\u0947\u091f\u094d\u0938', 'Live Updates')}
-              href="/main/latest"
-              cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
-            />
-            <div className="grid gap-2.5" data-testid="live-updates-rail">
-              {isClientReady ? (
-                liveUpdateStories.map((article, index) => (
-                  <motion.div
-                    key={article.id}
-                    initial={{ opacity: 0, x: 16 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.28, delay: index * 0.05 }}
-                  >
-                    <LiveUpdateStory article={article} language={language} />
-                  </motion.div>
-                ))
-              ) : (
-                <TopSideStoriesFallback count={4} />
-              )}
-            </div>
-          </aside>
-
-          <aside className="newsroom-panel newsroom-edition-rail hidden rounded-lg p-3 xl:block xl:p-3.5">
-            <div className="min-h-[280px] xl:min-h-0">
-              <DesktopHeroEpaperCard
-                href={epaperHref}
-                dateLabel={desktopHeroEpaperDateLabel}
-                thumbnailSrc={epaperThumbnail}
-                thumbnailAlt={epaperThumbnailAlt}
-                eyebrowLabel={desktopHeroEpaperEyebrow}
-                title={desktopHeroEpaperTitle}
-                editionLabel={desktopHeroEpaperEdition}
-                supportLabel={desktopHeroEpaperSupport}
-                ariaLabel={desktopHeroEpaperAriaLabel}
-                primaryCtaLabel={desktopHeroEpaperPrimaryCta}
-                shareLabel={language === 'hi' ? '\u0936\u0947\u092f\u0930' : 'Share'}
-                language={language}
-              />
-            </div>
-          </aside>
-          </div>
-        </section>
-
-        <section className="mt-[var(--section-gap)] grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,0.42fr)]">
-          <div>
-            <NewsroomSectionHeader
-              title={getSectionCopy(language, '\u0924\u093e\u091c\u093e \u0914\u0930 \u092e\u0941\u0916\u094d\u092f \u0916\u092c\u0930\u0947\u0902', 'Top Story')}
-              href="/main/latest"
-              cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
-            />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {latestPublishedArticles.slice(0, 6).map((article, index) => (
-                <HeadlineImageCard
-                  key={article.id}
-                  article={article}
-                  language={language}
-                  priority={index < 2}
-                />
-              ))}
-            </div>
-          </div>
-
-          <aside className="space-y-3 lg:sticky lg:top-24 lg:self-start">
-            <RankedStoryList articles={featuredSidebar} language={language} />
-            <NewsPoll />
-          </aside>
-        </section>
-
-        <div className="mt-[var(--section-gap)]">
-          <FeaturedStoryBand articles={latestPublishedArticles.slice(1, 4)} language={language} />
-        </div>
-
-        <section className="mt-[var(--section-gap)] grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.36fr)]">
-          <div>
-            <NewsroomSectionHeader
-              title={getSectionCopy(language, '\u0932\u0947\u091f\u0947\u0938\u094d\u091f \u0928\u094d\u092f\u0942\u091c', 'Latest News')}
-              href="/main/latest"
-              cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
-            />
-
-            <div className="space-y-2.5 sm:space-y-3">
-              {visibleLatestNews.map((article, index) => (
-                <NewsCard
-                  key={article.id}
-                  article={article}
-                  variant="horizontal"
-                  index={index}
-                />
-              ))}
-            </div>
-
-            {hasMoreLatestNews ? (
-              <div className="flex justify-center pt-3.5 sm:pt-5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setVisibleLatestNewsCount((current) =>
-                      Math.min(current + HOME_LATEST_PAGE_STEP, latestNews.length)
-                    )
-                  }
-                  className="reader-touch-button reader-focus-ring newsroom-soft-button min-h-12 w-full rounded-md border px-6 py-3 text-[13px] font-semibold transition-all hover:-translate-y-0.5 sm:w-auto sm:px-8 sm:text-sm"
-                >
-                  {getSectionCopy(language, '\u0914\u0930 \u0916\u092c\u0930\u0947\u0902', 'Load More Stories')}
-                </button>
+            <div className="newsroom-panel newsroom-hero-shell overflow-hidden rounded-[28px] p-1.5 sm:p-2 lg:p-2.5">
+              <div className="mb-1.5 flex items-center justify-start gap-2">
+                <span className="inline-flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white">
+                  <Flame className="h-3 w-3" />
+                  {getSectionCopy(language, '\u091f\u0949\u092a \u0938\u094d\u091f\u094b\u0930\u0940', 'Top Story')}
+                </span>
               </div>
-            ) : null}
+              <div className="min-w-0">
+                <HeroCarousel articles={heroArticles} variant="modern" />
+              </div>
+            </div>
+
+            <aside className="newsroom-panel newsroom-live-rail rounded-lg p-3 lg:p-3.5">
+              <NewsroomSectionHeader
+                title={getSectionCopy(language, '\u0932\u093e\u0907\u0935 \u0905\u092a\u0921\u0947\u091f\u094d\u0938', 'Live Updates')}
+                href="/main/latest"
+                cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
+              />
+              <div className="grid gap-2.5" data-testid="live-updates-rail">
+                {isClientReady ? (
+                  liveUpdateStories.map((article, index) => (
+                    <motion.div
+                      key={article.id}
+                      initial={{ opacity: 0, x: 16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.28, delay: index * 0.05 }}
+                    >
+                      <LiveUpdateStory article={article} language={language} />
+                    </motion.div>
+                  ))
+                ) : (
+                  <TopSideStoriesFallback count={4} />
+                )}
+              </div>
+            </aside>
+
+            <aside className="newsroom-panel newsroom-edition-rail hidden rounded-lg p-3 xl:block xl:p-3.5">
+              <div className="min-h-[280px] xl:min-h-0">
+                <DesktopHeroEpaperCard
+                  href={epaperHref}
+                  dateLabel={desktopHeroEpaperDateLabel}
+                  thumbnailSrc={epaperThumbnail}
+                  thumbnailAlt={epaperThumbnailAlt}
+                  eyebrowLabel={desktopHeroEpaperEyebrow}
+                  title={desktopHeroEpaperTitle}
+                  editionLabel={desktopHeroEpaperEdition}
+                  supportLabel={desktopHeroEpaperSupport}
+                  ariaLabel={desktopHeroEpaperAriaLabel}
+                  primaryCtaLabel={desktopHeroEpaperPrimaryCta}
+                  shareLabel={language === 'hi' ? '\u0936\u0947\u092f\u0930' : 'Share'}
+                  language={language}
+                />
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section className="mt-[var(--section-gap)] grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,0.40fr)]">
+          <div className="space-y-4">
+            <FeaturedStoryBand articles={latestPublishedArticles.slice(1, 4)} language={language} />
+
+            <div>
+              <NewsroomSectionHeader
+                title={getSectionCopy(language, '\u0924\u093e\u091c\u093e \u0914\u0930 \u092e\u0941\u0916\u094d\u092f \u0916\u092c\u0930\u0947\u0902', 'Top Story')}
+                href="/main/latest"
+                cta={getSectionCopy(language, '\u0938\u092d\u0940 \u0926\u0947\u0916\u0947\u0902', 'View All')}
+              />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {latestPublishedArticles.slice(0, 6).map((article, index) => (
+                  <HeadlineImageCard
+                    key={article.id}
+                    article={article}
+                    language={language}
+                    priority={index < 2}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
 
-          <aside className="newsroom-panel hidden rounded-lg border p-3 xl:block">
-            <NewsroomSectionHeader
-              title={getSectionCopy(language, '\u092e\u093e\u0938\u093f\u0915 \u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928', 'Monthly E-Magazine')}
-              href={emagazineHref}
-              cta={getSectionCopy(language, '\u092e\u0948\u0917\u091c\u093c\u0940\u0928 \u092a\u0922\u093c\u0947\u0902', 'Read Magazine')}
-            />
-            <MagazinePromoTile promo={emagazinePromo} />
+          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+            <NewsPoll />
+
+            <div className="newsroom-panel rounded-2xl border border-red-500/20 p-3.5 sm:p-4">
+              <NewsroomSectionHeader
+                title={getSectionCopy(language, '\u092e\u093e\u0938\u093f\u0915 \u0908-\u092e\u0948\u0917\u091c\u093c\u0940\u0928', 'Monthly E-Magazine')}
+                href={emagazineHref}
+                cta={getSectionCopy(language, '\u092e\u0948\u0917\u091c\u093c\u0940\u0928 \u092a\u0922\u093c\u0947\u0902', 'Read Magazine')}
+              />
+              <MagazinePromoTile promo={emagazinePromo} />
+            </div>
           </aside>
         </section>
 

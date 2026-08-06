@@ -79,7 +79,6 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     READER_NAVIGATION.videos,
     READER_NAVIGATION.epaper,
     READER_NAVIGATION.emagazine,
-    READER_NAVIGATION.digitalNewsroom,
     READER_NAVIGATION.search,
     { name: '\u0905\u0915\u093e\u0909\u0902\u091f', nameEn: 'Account', href: accountHref },
     READER_NAVIGATION.contact,

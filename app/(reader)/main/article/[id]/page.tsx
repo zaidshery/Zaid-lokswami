@@ -756,22 +756,28 @@ export default function ArticleDetailPage() {
             {article.title}
           </h1>
 
-          <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 sm:gap-2 sm:text-base">
-            <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800 sm:h-8 sm:w-8">
-              <Image
-                src={article.author.avatar}
-                alt={article.author.name || 'Author profile'}
-                fill
-                sizes="32px"
-                unoptimized
-                className="object-cover"
-              />
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 sm:gap-2 sm:text-sm">
+            <span className="relative flex h-7 w-7 shrink-0 overflow-hidden rounded-full border border-zinc-300 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 sm:h-8 sm:w-8">
+              {article.author.avatar ? (
+                <Image
+                  src={article.author.avatar}
+                  alt={article.author.name || 'Author profile'}
+                  fill
+                  sizes="32px"
+                  unoptimized
+                  className="object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-red-700 text-[11px] font-black text-white uppercase">
+                  {(article.author.name || 'A').charAt(0)}
+                </span>
+              )}
             </span>
-            {article.author.name ? <span>{article.author.name}</span> : null}
+            {article.author.name ? <span className="font-bold text-zinc-900 dark:text-zinc-100">{article.author.name}</span> : null}
             {article.author.programName ? (
               <>
-                <span aria-hidden="true">|</span>
-                <span>{article.author.programName}</span>
+                <span className="text-zinc-400" aria-hidden="true">|</span>
+                <span className="font-semibold text-red-600 dark:text-red-500">{article.author.programName}</span>
               </>
             ) : null}
             <span aria-hidden="true">&bull;</span>

@@ -5,6 +5,9 @@ to a modern API-first media platform.
 
 ## Operations Guides
 
+- [Article Creation SOP](./ARTICLE_CREATION_SOP.md)
+  - Exact Reporter quick-submit and Copy Editor/Admin article creation,
+    readiness, review, scheduling, and publication steps.
 - [Newsroom CMS Role SOP](./LOKSWAMI_CMS_ROLE_SOP.md)
   - Daily workflows, permissions, checklists, and issue handling for Reporter,
     Copy Editor, and Admin.
