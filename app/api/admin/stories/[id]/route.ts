@@ -149,7 +149,10 @@ function validateStoryVideoMetadata(input: {
   return null;
 }
 
-function normalizeStoryUpdate(body: unknown) {
+function normalizeStoryUpdate(
+  body: unknown,
+  user?: { role?: string } | null
+) {
   const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
   const updates: Record<string, unknown> = {};
 
@@ -228,7 +231,7 @@ function normalizeStoryUpdate(body: unknown) {
     return { updates: null, error: 'Title is too long (max 140 characters)' };
   }
 
-  if (typeof updates.caption === 'string' && updates.caption.length > 300) {
+  if (user?.role !== 'reporter' && typeof updates.caption === 'string' && updates.caption.length > 300) {
     return { updates: null, error: 'Caption is too long (max 300 characters)' };
   }
 
@@ -859,7 +862,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { updates, error } = normalizeStoryUpdate(body);
+    const { updates, error } = normalizeStoryUpdate(body, user);
 
     if (error) {
       return NextResponse.json({ success: false, error }, { status: 400 });

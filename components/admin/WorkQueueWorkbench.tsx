@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -146,6 +147,7 @@ function readinessTone(item: WorkQueueItem) {
 }
 
 export default function WorkQueueWorkbench({ role, overview, routePath }: WorkQueueWorkbenchProps) {
+  const router = useRouter();
   const language = useAppStore((state) => state.language) === 'hi' ? 'hi' : 'en';
   const t = COPY[language];
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -227,7 +229,21 @@ export default function WorkQueueWorkbench({ role, overview, routePath }: WorkQu
       </section>
 
       <section className="admin-shell-surface rounded-[22px] p-4 sm:p-5">
-        <form method="get" action={routePath} className="space-y-4">
+        <form
+          method="get"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            const params = new URLSearchParams();
+            formData.forEach((value, key) => {
+              if (typeof value === 'string' && value.trim()) {
+                params.set(key, value.trim());
+              }
+            });
+            router.push(`${routePath}?${params.toString()}`);
+          }}
+          className="space-y-4"
+        >
           <input type="hidden" name="view" value={overview.filters.view} />
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--admin-shell-text-muted)]">
             <Filter className="h-4 w-4" /> {t.filters}

@@ -83,7 +83,7 @@ const StoryVideoProductionSchema = new mongoose.Schema<StoryVideoProduction>(
 
 const StorySchema = new mongoose.Schema<IStory>({
   title: { type: String, required: true, maxlength: 140 },
-  caption: { type: String, default: '', maxlength: 300 },
+  caption: { type: String, default: '' },
   thumbnail: { type: String, required: true },
   mediaType: { type: String, enum: ['image', 'video'], default: 'image' },
   mediaUrl: { type: String, default: '' },

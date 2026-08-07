@@ -5,7 +5,8 @@ import { useAppStore } from '@/lib/store/appStore';
 import type { WorkQueueOverview } from '@/lib/admin/workQueue';
 import { buildEditorialReadiness } from '@/lib/workflow/readiness';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+const pushMock = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: pushMock }) }));
 
 const overview: WorkQueueOverview = {
   total: 31,
@@ -22,7 +23,10 @@ const overview: WorkQueueOverview = {
 };
 
 describe('WorkQueueWorkbench interaction', () => {
-  beforeEach(() => useAppStore.setState({ language: 'en' }));
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAppStore.setState({ language: 'en' });
+  });
 
   it('opens an accessible preview, focuses close, and closes with Escape', () => {
     render(<WorkQueueWorkbench role="reporter" overview={overview} routePath="/admin/work" />);
@@ -37,5 +41,14 @@ describe('WorkQueueWorkbench interaction', () => {
     render(<WorkQueueWorkbench role="reporter" overview={overview} routePath="/admin/work" />);
     expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute('href', '/admin/work?view=mine&cursor=30');
     expect(screen.getByText('Select for triage')).toBeInTheDocument();
+  });
+
+  it('navigates cleanly via router.push when applying search filters without server action errors', () => {
+    const { container } = render(<WorkQueueWorkbench role="reporter" overview={overview} routePath="/admin/work" />);
+    const form = container.querySelector('form');
+    expect(form).not.toBeNull();
+    expect(form).not.toHaveAttribute('action');
+    fireEvent.submit(form!);
+    expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('/admin/work?view=mine'));
   });
 });

@@ -194,4 +194,46 @@ describe('/api/admin/stories/[id] route', () => {
     });
     expect(updateStoredStoryMock).not.toHaveBeenCalled();
   });
+
+  it('allows reporters to submit and update story captions without any length restrictions', async () => {
+    const reporter = {
+      id: 'reporter-1',
+      email: 'reporter@example.com',
+      name: 'Reporter One',
+      role: 'reporter',
+    };
+    const draftStory = {
+      _id: 'story-1',
+      title: 'Reporter Story',
+      author: 'Reporter One',
+      caption: 'Short',
+      isPublished: false,
+      updatedAt: '2026-04-24T10:00:00.000Z',
+      workflow: {
+        status: 'draft',
+        createdBy: {
+          id: 'reporter-1',
+          name: 'Reporter One',
+          email: 'reporter@example.com',
+          role: 'reporter',
+        },
+      },
+    };
+    getAdminSessionMock.mockResolvedValue(reporter);
+    getStoredStoryByIdMock.mockResolvedValue(draftStory);
+    updateStoredStoryMock.mockImplementation(async (_id: string, updates: Record<string, unknown>) => ({
+      ...draftStory,
+      ...updates,
+    }));
+
+    const longCaption = 'A'.repeat(10000);
+    const { PATCH } = await import('@/app/api/admin/stories/[id]/route');
+    const response = await PATCH(createPatchRequest({ caption: longCaption }), {
+      params: Promise.resolve({ id: 'story-1' }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.success).toBe(true);
+  });
 });
