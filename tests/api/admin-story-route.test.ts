@@ -207,6 +207,9 @@ describe('/api/admin/stories/[id] route', () => {
       title: 'Reporter Story',
       author: 'Reporter One',
       caption: 'Short',
+      thumbnail: 'https://example.com/thumb.jpg',
+      mediaType: 'image' as const,
+      mediaUrl: 'https://example.com/thumb.jpg',
       isPublished: false,
       updatedAt: '2026-04-24T10:00:00.000Z',
       workflow: {
