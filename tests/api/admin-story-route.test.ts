@@ -56,6 +56,14 @@ function createPatchRequest(body: Record<string, unknown>) {
   }) as unknown as NextRequest;
 }
 
+function createPutRequest(body: Record<string, unknown>) {
+  return new Request('http://localhost/api/admin/stories/story-1', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }) as unknown as NextRequest;
+}
+
 describe('/api/admin/stories/[id] route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -230,8 +238,8 @@ describe('/api/admin/stories/[id] route', () => {
     }));
 
     const longCaption = 'A'.repeat(10000);
-    const { PATCH } = await import('@/app/api/admin/stories/[id]/route');
-    const response = await PATCH(createPatchRequest({ caption: longCaption }), {
+    const { PUT } = await import('@/app/api/admin/stories/[id]/route');
+    const response = await PUT(createPutRequest({ caption: longCaption }), {
       params: Promise.resolve({ id: 'story-1' }),
     });
     const payload = await response.json();
