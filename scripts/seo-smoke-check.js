@@ -142,26 +142,63 @@ function logPass(message) {
   console.log(`PASS ${message}`);
 }
 
-async function fetchWithTimeout(url, init, timeoutMs) {
+async function fetchTextWithTimeout(url, init, timeoutMs) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const text = await response.text();
+    return { response, text };
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(
+        `${url} timed out after ${timeoutMs}ms while reading response headers or body.`,
+        { cause: error }
+      );
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
 }
 
 async function fetchTextRoute(baseUrl, pathOrUrl, accept, timeoutMs) {
-  const url = new URL(pathOrUrl, `${baseUrl}/`).toString();
-  const response = await fetchWithTimeout(
-    url,
+  const requestedUrl = new URL(pathOrUrl, `${baseUrl}/`).toString();
+  const { response, text } = await fetchTextWithTimeout(
+    requestedUrl,
     { redirect: 'follow', headers: { accept } },
     timeoutMs
   );
-  const text = await response.text();
+  const url = response.url || requestedUrl;
   assert(response.status === 200, `${url} returned ${response.status} instead of 200`);
-  return { response, text, url };
+  return { response, text, url, requestedUrl };
+}
+
+function normalizeCanonicalComparisonUrl(value) {
+  const url = new URL(value);
+  url.hash = '';
+  url.pathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/+$/, '') || '/';
+  return url;
+}
+
+function assertCanonicalMatchesPage(canonicalHref, pageUrl, expectedOrigin) {
+  const page = normalizeCanonicalComparisonUrl(pageUrl);
+  const canonical = normalizeCanonicalComparisonUrl(new URL(canonicalHref, page).toString());
+  const deploymentOrigin = new URL(expectedOrigin).origin;
+
+  assert(page.origin === deploymentOrigin, `${pageUrl} redirected to another origin`);
+  assert(canonical.origin === deploymentOrigin, `${pageUrl} canonical uses another origin`);
+  assert(
+    canonical.toString() === page.toString(),
+    `${pageUrl} canonical ${canonical.toString()} does not match the checked page URL ${page.toString()}`
+  );
+
+  return canonical;
 }
 
 async function checkRobots(baseUrl, timeoutMs) {
@@ -191,9 +228,8 @@ async function checkCanonicalHtml(baseUrl, path, timeoutMs) {
   assert(/text\/html/i.test(contentType), `${path} returned ${contentType || 'no content type'}`);
   const canonical = extractCanonicalHref(text);
   assert(canonical, `${path} has no canonical link in initial HTML`);
-  const resolvedCanonical = new URL(canonical, url);
-  assert(resolvedCanonical.origin === new URL(baseUrl).origin, `${path} canonical uses another origin`);
-  logPass(`${path} returned HTML with a same-origin canonical`);
+  const resolvedCanonical = assertCanonicalMatchesPage(canonical, url, baseUrl);
+  logPass(`${path} returned HTML with a canonical matching the checked page URL`);
   return { text, url, canonical: resolvedCanonical.toString() };
 }
 
@@ -273,8 +309,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertCanonicalMatchesPage,
+  checkCanonicalHtml,
   classifyArticleHtml,
   extractCanonicalHref,
+  fetchTextRoute,
   getPublicArticleItems,
   normalizeBaseUrl,
   parseArgs,
