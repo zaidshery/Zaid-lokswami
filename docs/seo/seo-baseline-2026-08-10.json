@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "capturedOn": "2026-08-10",
+  "source": {
+    "name": "July 2026 Digital Performance & SEO Report",
+    "status": "Imported baseline; not re-measured during Phase 0"
+  },
+  "gscExports": {
+    "capturedOn": "2026-08-10",
+    "performance": {
+      "archive": {
+        "fileName": "https___lokswami.com_main_-Performance-on-Search-2026-08-10.zip",
+        "bytes": 19598,
+        "sha256": "9b6b1d9075b5472c9437abca6a156a4878d44a2475d572da8408ab7c989cde75",
+        "validZip": true,
+        "allEntriesRead": true,
+        "allEntriesCsv": true
+      },
+      "csvFiles": [
+        { "name": "Chart.csv", "rows": 140 },
+        { "name": "Queries.csv", "rows": 214 },
+        { "name": "Pages.csv", "rows": 481 },
+        { "name": "Countries.csv", "rows": 54 },
+        { "name": "Devices.csv", "rows": 3 },
+        { "name": "Search appearance.csv", "rows": 2 },
+        { "name": "Filters.csv", "rows": 2 }
+      ],
+      "filters": {
+        "searchType": "Web",
+        "selectedDateRange": "Last 12 months"
+      },
+      "actualDateRange": {
+        "from": "2026-03-22",
+        "to": "2026-08-08",
+        "dailyRows": 140,
+        "continuous": true
+      },
+      "chartTotals": {
+        "clicks": 3265,
+        "impressions": 14719,
+        "ctr": 0.2218221347
+      },
+      "queryRows": {
+        "rows": 214,
+        "clicks": 1784,
+        "impressions": 6818,
+        "ctr": 0.2616603109,
+        "classification": {
+          "normalization": "Unicode NFKC, lowercase, punctuation removed, whitespace collapsed, Unicode combining marks preserved",
+          "latinTokens": [
+            "lokswami",
+            "lok swami",
+            "lokswamy",
+            "loksawami",
+            "loksawmi",
+            "lokaswami",
+            "loksvami",
+            "lokswaami",
+            "loksami"
+          ],
+          "devanagariTokens": [
+            "लोकस्वामी",
+            "लोक स्वामी",
+            "लोकस्वामि",
+            "लोकसवामी"
+          ],
+          "ambiguousExcludedExamples": [
+            "loksw",
+            "lokswar",
+            "swami paper",
+            "lok paper",
+            "lok samachar"
+          ]
+        },
+        "branded": {
+          "rows": 26,
+          "clicks": 1706,
+          "impressions": 4393,
+          "ctr": 0.3883450945
+        },
+        "nonBranded": {
+          "rows": 188,
+          "clicks": 78,
+          "impressions": 2425,
+          "ctr": 0.0321649485
+        },
+        "chartTotalsWithoutVisibleQueryRows": {
+          "classification": "unclassified",
+          "clicks": 1481,
+          "impressions": 7901
+        },
+        "topQueries": [
+          { "query": "lokswami epaper", "classification": "branded", "clicks": 726, "impressions": 864, "ctr": 0.8403 },
+          { "query": "lokswami paper", "classification": "branded", "clicks": 422, "impressions": 697, "ctr": 0.6055 },
+          { "query": "lok swami epaper indore", "classification": "branded", "clicks": 94, "impressions": 124, "ctr": 0.7581 },
+          { "query": "lokswami epaper indore", "classification": "branded", "clicks": 63, "impressions": 150, "ctr": 0.42 },
+          { "query": "lokswami", "classification": "branded", "clicks": 52, "impressions": 540, "ctr": 0.0963 },
+          { "query": "लोकस्वामी पेपर इंदौर", "classification": "branded", "clicks": 43, "impressions": 115, "ctr": 0.3739 },
+          { "query": "lok swami newspaper", "classification": "branded", "clicks": 41, "impressions": 300, "ctr": 0.1367 },
+          { "query": "lokswami news indore today", "classification": "branded", "clicks": 40, "impressions": 195, "ctr": 0.2051 },
+          { "query": "lokswami e paper today", "classification": "branded", "clicks": 40, "impressions": 82, "ctr": 0.4878 },
+          { "query": "lokswami newspaper", "classification": "branded", "clicks": 38, "impressions": 178, "ctr": 0.2135 }
+        ],
+        "topNonBrandedQueries": [
+          { "query": "ऐश्वर्या राय बच्चन", "clicks": 18, "impressions": 115, "ctr": 0.1565 },
+          { "query": "khushi kulwal", "clicks": 13, "impressions": 51, "ctr": 0.2549 },
+          { "query": "अभिषेक बच्चन", "clicks": 9, "impressions": 64, "ctr": 0.1406 },
+          { "query": "कियारा आडवाणी", "clicks": 6, "impressions": 82, "ctr": 0.0732 },
+          { "query": "epaper indore", "clicks": 4, "impressions": 44, "ctr": 0.0909 }
+        ]
+      },
+      "pageRows": {
+        "rows": 481,
+        "clicks": 3329,
+        "impressions": 25602,
+        "ctr": 0.130028904,
+        "reconcilesToChartTotals": false,
+        "topPages": [
+          { "url": "https://lokswami.com/main/epaper", "clicks": 2648, "impressions": 7526, "ctr": 0.3518 },
+          { "url": "https://lokswami.com/main/epaper?city=indore", "clicks": 107, "impressions": 3210, "ctr": 0.0333 },
+          { "url": "https://lokswami.com/main/article/khushi-kulwal-suicide-case-reinvestigation-indore-crime-branch", "clicks": 35, "impressions": 175, "ctr": 0.2 },
+          { "url": "https://lokswami.com/main/article/abhishek-bachchan-aishwarya-rai-new-york-selfie-with-fan-viral", "clicks": 27, "impressions": 185, "ctr": 0.1459 },
+          { "url": "https://lokswami.com/main/epaper?city=indore&date=2026-07-21", "clicks": 24, "impressions": 118, "ctr": 0.2034 },
+          { "url": "https://lokswami.com/main/epaper?city=indore&date=2026-06-24", "clicks": 19, "impressions": 71, "ctr": 0.2676 },
+          { "url": "https://lokswami.com/main/epaper?city=indore&date=2026-06-25", "clicks": 18, "impressions": 49, "ctr": 0.3673 },
+          { "url": "https://lokswami.com/main/epaper?city=indore&date=2026-05-29", "clicks": 16, "impressions": 171, "ctr": 0.0936 },
+          { "url": "https://lokswami.com/main/contact", "clicks": 15, "impressions": 276, "ctr": 0.0543 },
+          { "url": "https://lokswami.com/main/latest", "clicks": 14, "impressions": 1509, "ctr": 0.0093 }
+        ]
+      },
+      "devices": [
+        { "device": "Mobile", "clicks": 2835, "clickShare": 0.8683001531, "impressions": 12379, "impressionShare": 0.8410218085, "ctr": 0.229 },
+        { "device": "Desktop", "clicks": 405, "clickShare": 0.124042879, "impressions": 2261, "impressionShare": 0.153610979, "ctr": 0.1791 },
+        { "device": "Tablet", "clicks": 25, "clickShare": 0.0076569678, "impressions": 79, "impressionShare": 0.0053672124, "ctr": 0.3165 }
+      ],
+      "countries": {
+        "rows": 54,
+        "reconcilesToChartTotals": true,
+        "topByClicks": [
+          { "country": "India", "clicks": 3228, "impressions": 14138, "ctr": 0.2283 },
+          { "country": "United Arab Emirates", "clicks": 10, "impressions": 60, "ctr": 0.1667 },
+          { "country": "Kuwait", "clicks": 9, "impressions": 28, "ctr": 0.3214 },
+          { "country": "Armenia", "clicks": 5, "impressions": 9, "ctr": 0.5556 },
+          { "country": "Singapore", "clicks": 3, "impressions": 10, "ctr": 0.3 },
+          { "country": "Saudi Arabia", "clicks": 3, "impressions": 3, "ctr": 1.0 }
+        ],
+        "other48Countries": {
+          "clicks": 7,
+          "impressions": 471,
+          "ctr": 0.0148619958
+        }
+      },
+      "searchAppearance": [
+        { "type": "Videos", "clicks": 1, "impressions": 3, "ctr": 0.3333, "position": 6.67 },
+        { "type": "Translated results", "clicks": 0, "impressions": 7, "ctr": 0, "position": 8.43 }
+      ],
+      "limitations": [
+        "Query and page row totals may differ from Chart.csv because of GSC export limits, anonymized queries, privacy filtering, and aggregation behavior.",
+        "Branded and non-branded metrics cover only visible Queries.csv rows; chart totals without query rows remain unclassified.",
+        "The selected date filter is Last 12 months, but the available Chart.csv range begins on 2026-03-22."
+      ]
+    },
+    "coverage": {
+      "archive": {
+        "fileName": "https___lokswami.com_main_-Coverage-2026-08-10.zip",
+        "bytes": 1320,
+        "sha256": "2692f0f8ead6b2055ceaaac3fa08724043f87d6e563e651df7776490827e59be",
+        "validZip": true,
+        "allEntriesRead": true,
+        "allEntriesCsv": true
+      },
+      "csvFiles": [
+        { "name": "Chart.csv", "rows": 88 },
+        { "name": "Critical issues.csv", "rows": 7 },
+        { "name": "Non-critical issues.csv", "rows": 0 },
+        { "name": "Metadata.csv", "rows": 1 }
+      ],
+      "metadata": {
+        "property": "Sitemap",
+        "value": "All known pages"
+      },
+      "actualDateRange": {
+        "from": "2026-05-12",
+        "to": "2026-08-07",
+        "dailyRows": 88,
+        "continuous": true,
+        "rowsWithBlankIndexCounts": 3,
+        "firstCompleteCountDate": "2026-05-15"
+      },
+      "latest": {
+        "date": "2026-08-07",
+        "indexedPages": 635,
+        "notIndexedPages": 209,
+        "totalKnownPages": 844,
+        "indexingRatio": 0.7523696682,
+        "notIndexedRatio": 0.2476303318
+      },
+      "issues": [
+        { "reason": "Alternate page with proper canonical tag", "source": "Website", "validation": "Not Started", "pages": 94 },
+        { "reason": "Not found (404)", "source": "Website", "validation": "Not Started", "pages": 37 },
+        { "reason": "Duplicate without user-selected canonical", "source": "Website", "validation": "Not Started", "pages": 29 },
+        { "reason": "Excluded by ‘noindex’ tag", "source": "Website", "validation": "Not Started", "pages": 16 },
+        { "reason": "Page with redirect", "source": "Website", "validation": "Not Started", "pages": 10 },
+        { "reason": "Crawled - currently not indexed", "source": "Google systems", "validation": "Not Started", "pages": 23 },
+        { "reason": "Discovered - currently not indexed", "source": "Google systems", "validation": "N/A", "pages": 0 }
+      ],
+      "reconciliation": {
+        "issuePageTotal": 209,
+        "latestNotIndexedPages": 209,
+        "difference": 0,
+        "reconciles": true
+      },
+      "limitations": [
+        "The archive contains aggregate issue counts but no affected URL examples or URL column.",
+        "Redirect, canonical, noindex, 404/410, sitemap, and URL-disposition decisions cannot be made from this archive.",
+        "Phase 1 requires a URL-level Page Indexing examples export or list mapping affected URLs to issue reasons."
+      ]
+    },
+    "phase1Started": false,
+    "missingPhase1Inputs": [
+      "URL-level Page Indexing examples for affected URLs",
+      "A mapping from each affected URL to its GSC issue reason"
+    ]
+  },
+  "repository": {
+    "head": "4c4a0a56c8e5dcdd75d17dcc4124a8cc6f5ed042",
+    "requiredNode": "20.x",
+    "ciNode": "20",
+    "localObservedNode": "24.13.0"
+  },
+  "baseCommitCi": {
+    "commit": "4c4a0a56c8e5dcdd75d17dcc4124a8cc6f5ed042",
+    "verifiedAt": "2026-08-10T07:26:15Z",
+    "checks": [
+      {
+        "name": "build",
+        "conclusion": "success",
+        "url": "https://github.com/zaidshery/Zaid-lokswami/actions/runs/31170356583/job/92840571673"
+      },
+      {
+        "name": "package",
+        "conclusion": "success",
+        "url": "https://github.com/zaidshery/Zaid-lokswami/actions/runs/31170356581/job/92840571876"
+      }
+    ]
+  },
+  "liveSeoSmoke": {
+    "verifiedAt": "2026-08-10T07:26:15Z",
+    "baseUrl": "https://lokswami.com",
+    "passing": [
+      "robots",
+      "standard-sitemap",
+      "news-sitemap",
+      "homepage-canonical",
+      "category-canonical",
+      "epaper-canonical",
+      "article-canonical"
+    ],
+    "knownFailure": {
+      "id": "article-ssr",
+      "articleUrl": "https://lokswami.com/main/article/bhopal-berasia-road-closed-halali-banganga-river-heavy-rain-school-holiday",
+      "issues": [
+        "initial HTML has no substantive H1",
+        "initial HTML has no marked article body with a substantive paragraph",
+        "initial HTML still contains the article loading placeholder"
+      ]
+    }
+  },
+  "julyKpis": {
+    "googleClicks": 1340,
+    "googleImpressions": 5240,
+    "duplicateWithoutUserSelectedCanonicalUrls": 42,
+    "crawledCurrentlyNotIndexedUrls": 29,
+    "noindexUrls": 13,
+    "notFoundUrls": 9,
+    "redirectUrls": 8,
+    "poorMobileUrls": 106,
+    "articleShareOfViewsPercent": 15.3
+  },
+  "capabilities": [
+    { "id": "article-seo-fields", "status": "implemented" },
+    { "id": "self-canonical-and-previous-slug-redirect", "status": "partial" },
+    { "id": "newsarticle-json-ld", "status": "implemented" },
+    { "id": "standard-sitemap", "status": "implemented" },
+    { "id": "google-news-sitemap", "status": "implemented" },
+    { "id": "full-article-in-initial-html", "status": "missing" },
+    { "id": "sitemap-index-or-chunking", "status": "missing" },
+    { "id": "core-web-vitals-field-events", "status": "missing" },
+    { "id": "newsroom-engagement-events", "status": "missing" }
+  ],
+  "knownGaps": [
+    {
+      "id": "article-ssr",
+      "severity": "P0",
+      "evidence": "The public article route is a Client Component and its initial render is the article-loading placeholder.",
+      "plannedPhase": 2
+    },
+    {
+      "id": "local-node-mismatch",
+      "severity": "verification",
+      "evidence": "The local shell uses Node 24.13.0 while package.json and CI require Node 20.x.",
+      "plannedPhase": 0
+    }
+  ]
+}
