@@ -71,6 +71,20 @@ function getPublicArticleItems(payload) {
   return [];
 }
 
+function getPublicArticleDetail(payload) {
+  const candidates = [
+    payload?.data?.article,
+    payload?.data,
+    payload?.article,
+    payload?.item,
+  ];
+  return (
+    candidates.find(
+      (candidate) => candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+    ) || null
+  );
+}
+
 function extractHtmlAttributes(tag) {
   const attributes = {};
   const pattern = /([:\w-]+)\s*=\s*(["'])(.*?)\2/g;
@@ -142,26 +156,99 @@ function logPass(message) {
   console.log(`PASS ${message}`);
 }
 
-async function fetchWithTimeout(url, init, timeoutMs) {
+async function fetchTextWithTimeout(url, init, timeoutMs) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const text = await response.text();
+    return { response, text };
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(
+        `${url} timed out after ${timeoutMs}ms while reading response headers or body.`,
+        { cause: error }
+      );
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
 }
 
 async function fetchTextRoute(baseUrl, pathOrUrl, accept, timeoutMs) {
-  const url = new URL(pathOrUrl, `${baseUrl}/`).toString();
-  const response = await fetchWithTimeout(
-    url,
+  const requestedUrl = new URL(pathOrUrl, `${baseUrl}/`).toString();
+  const { response, text } = await fetchTextWithTimeout(
+    requestedUrl,
     { redirect: 'follow', headers: { accept } },
     timeoutMs
   );
-  const text = await response.text();
+  const url = response.url || requestedUrl;
   assert(response.status === 200, `${url} returned ${response.status} instead of 200`);
-  return { response, text, url };
+  return { response, text, url, requestedUrl };
+}
+
+function normalizeCanonicalComparisonUrl(value) {
+  const url = new URL(value);
+  url.hash = '';
+  url.pathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/+$/, '') || '/';
+  return url;
+}
+
+function assertCanonicalMatchesExpected(
+  canonicalHref,
+  pageUrl,
+  expectedCanonicalUrl,
+  expectedOrigin
+) {
+  const page = normalizeCanonicalComparisonUrl(pageUrl);
+  const canonical = normalizeCanonicalComparisonUrl(new URL(canonicalHref, page).toString());
+  const expected = normalizeCanonicalComparisonUrl(expectedCanonicalUrl);
+  const deploymentOrigin = new URL(expectedOrigin).origin;
+
+  assert(page.origin === deploymentOrigin, `${pageUrl} redirected to another origin`);
+  assert(canonical.origin === deploymentOrigin, `${pageUrl} canonical uses another origin`);
+  assert(
+    expected.origin === deploymentOrigin,
+    `${pageUrl} expected canonical uses an unsupported origin`
+  );
+  assert(
+    canonical.toString() === expected.toString(),
+    `${pageUrl} canonical ${canonical.toString()} does not match the checked page URL expectation ${expected.toString()}`
+  );
+
+  return canonical;
+}
+
+function assertCanonicalMatchesPage(canonicalHref, pageUrl, expectedOrigin) {
+  return assertCanonicalMatchesExpected(canonicalHref, pageUrl, pageUrl, expectedOrigin);
+}
+
+function resolveSupportedArticleCanonical(baseUrl, rawCanonicalUrl) {
+  const configured = typeof rawCanonicalUrl === 'string' ? rawCanonicalUrl.trim() : '';
+  if (!configured) return '';
+
+  let canonical;
+  try {
+    canonical = new URL(configured);
+  } catch {
+    throw new Error('Configured article canonical override must be a valid absolute HTTP(S) URL.');
+  }
+
+  assert(
+    canonical.protocol === 'http:' || canonical.protocol === 'https:',
+    'Configured article canonical override must be a valid absolute HTTP(S) URL.'
+  );
+  assert(
+    canonical.origin === new URL(baseUrl).origin,
+    'Configured article canonical override uses an unsupported origin.'
+  );
+  return canonical.toString();
 }
 
 async function checkRobots(baseUrl, timeoutMs) {
@@ -185,21 +272,64 @@ async function checkSitemap(baseUrl, path, options, timeoutMs) {
   logPass(`${path} is fetchable XML`);
 }
 
-async function checkCanonicalHtml(baseUrl, path, timeoutMs) {
+async function checkCanonicalHtml(baseUrl, path, timeoutMs, expectedCanonicalUrl = '') {
   const { response, text, url } = await fetchTextRoute(baseUrl, path, 'text/html', timeoutMs);
   const contentType = response.headers.get('content-type') || '';
   assert(/text\/html/i.test(contentType), `${path} returned ${contentType || 'no content type'}`);
   const canonical = extractCanonicalHref(text);
   assert(canonical, `${path} has no canonical link in initial HTML`);
-  const resolvedCanonical = new URL(canonical, url);
-  assert(resolvedCanonical.origin === new URL(baseUrl).origin, `${path} canonical uses another origin`);
-  logPass(`${path} returned HTML with a same-origin canonical`);
+  const expected = expectedCanonicalUrl || url;
+  const resolvedCanonical = assertCanonicalMatchesExpected(canonical, url, expected, baseUrl);
+  logPass(`${path} returned HTML with the expected canonical`);
   return { text, url, canonical: resolvedCanonical.toString() };
 }
 
-async function discoverArticleUrl(baseUrl, configuredArticleUrl, timeoutMs) {
+function getArticleTokenFromUrl(articleUrl) {
+  const match = new URL(articleUrl).pathname.match(/^\/main\/article\/([^/]+)\/?$/i);
+  if (!match) return '';
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+async function fetchArticleCanonicalOverride(baseUrl, token, timeoutMs) {
+  if (!token) return '';
+  const { response, text } = await fetchTextRoute(
+    baseUrl,
+    `/api/v1/public/articles/${encodeURIComponent(token)}`,
+    'application/json',
+    timeoutMs
+  );
+  const contentType = response.headers.get('content-type') || '';
+  assert(/json/i.test(contentType), `Public article detail returned ${contentType || 'no content type'}`);
+
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error('Public article detail did not return valid JSON.');
+  }
+
+  const article = getPublicArticleDetail(payload);
+  assert(article, 'Public article detail returned no article metadata.');
+  const seo = article.seo && typeof article.seo === 'object' ? article.seo : {};
+  return resolveSupportedArticleCanonical(baseUrl, seo.canonicalUrl);
+}
+
+async function discoverArticleTarget(baseUrl, configuredArticleUrl, timeoutMs) {
   const configured = resolveConfiguredArticleUrl(baseUrl, configuredArticleUrl);
-  if (configured) return configured;
+  if (configured) {
+    return {
+      url: configured,
+      expectedCanonicalUrl: await fetchArticleCanonicalOverride(
+        baseUrl,
+        getArticleTokenFromUrl(configured),
+        timeoutMs
+      ),
+    };
+  }
 
   const { response, text } = await fetchTextRoute(
     baseUrl,
@@ -220,18 +350,26 @@ async function discoverArticleUrl(baseUrl, configuredArticleUrl, timeoutMs) {
   const article = getPublicArticleItems(payload).find((item) => item && (item.slug || item._id || item.id));
   assert(article, 'Public article feed returned no article that can be smoke tested.');
   const token = String(article.slug || article._id || article.id).trim();
-  return new URL(`/main/article/${encodeURIComponent(token)}`, `${baseUrl}/`).toString();
+  return {
+    url: new URL(`/main/article/${encodeURIComponent(token)}`, `${baseUrl}/`).toString(),
+    expectedCanonicalUrl: await fetchArticleCanonicalOverride(baseUrl, token, timeoutMs),
+  };
 }
 
 async function checkArticleHtml(baseUrl, configuredArticleUrl, timeoutMs) {
-  const articleUrl = await discoverArticleUrl(baseUrl, configuredArticleUrl, timeoutMs);
-  const article = await checkCanonicalHtml(baseUrl, articleUrl, timeoutMs);
+  const target = await discoverArticleTarget(baseUrl, configuredArticleUrl, timeoutMs);
+  const article = await checkCanonicalHtml(
+    baseUrl,
+    target.url,
+    timeoutMs,
+    target.expectedCanonicalUrl
+  );
   const assessment = classifyArticleHtml(article.text);
   assert(
     assessment.ready,
-    `Known Phase 2 article SSR gap at ${articleUrl}: ${assessment.issues.join('; ')}`
+    `Known Phase 2 article SSR gap at ${target.url}: ${assessment.issues.join('; ')}`
   );
-  logPass(`Article initial HTML contains a substantive H1 and server-rendered body (${articleUrl})`);
+  logPass(`Article initial HTML contains a substantive H1 and server-rendered body (${target.url})`);
 }
 
 function printHelp() {
@@ -273,11 +411,18 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertCanonicalMatchesExpected,
+  assertCanonicalMatchesPage,
+  checkArticleHtml,
+  checkCanonicalHtml,
   classifyArticleHtml,
   extractCanonicalHref,
+  fetchTextRoute,
+  getPublicArticleDetail,
   getPublicArticleItems,
   normalizeBaseUrl,
   parseArgs,
   resolveConfiguredArticleUrl,
+  resolveSupportedArticleCanonical,
   runSeoSmoke,
 };
