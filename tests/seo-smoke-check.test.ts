@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 const requireFromTest = createRequire(import.meta.url);
 const {
   assertCanonicalMatchesPage,
+  checkArticleHtml,
   checkCanonicalHtml,
   classifyArticleHtml,
   extractCanonicalHref,
@@ -12,12 +13,19 @@ const {
   normalizeBaseUrl,
   parseArgs,
   resolveConfiguredArticleUrl,
+  resolveSupportedArticleCanonical,
+  runSeoSmoke,
 } = requireFromTest('../scripts/seo-smoke-check.js') as {
   assertCanonicalMatchesPage: (
     canonicalHref: string,
     pageUrl: string,
     expectedOrigin: string
   ) => URL;
+  checkArticleHtml: (
+    baseUrl: string,
+    articleUrl: string,
+    timeoutMs: number
+  ) => Promise<void>;
   checkCanonicalHtml: (
     baseUrl: string,
     path: string,
@@ -46,6 +54,12 @@ const {
     timeoutMs: number;
   };
   resolveConfiguredArticleUrl: (baseUrl: string, articleUrl: string) => string | null;
+  resolveSupportedArticleCanonical: (baseUrl: string, canonicalUrl: unknown) => string;
+  runSeoSmoke: (options: {
+    baseUrl: string;
+    articleUrl: string;
+    timeoutMs: number;
+  }) => Promise<void>;
 };
 
 function createResponse(body: string, url: string, contentType = 'text/html') {
@@ -55,6 +69,18 @@ function createResponse(body: string, url: string, contentType = 'text/html') {
     headers: new Headers({ 'content-type': contentType }),
     text: vi.fn().mockResolvedValue(body),
   } as unknown as Response;
+}
+
+function createReadyArticleHtml(canonical: string) {
+  return `
+    <html>
+      <head><link rel="canonical" href="${canonical}"></head>
+      <body>
+        <h1>A substantive article headline</h1>
+        <article data-article-body><p>${'A'.repeat(100)}</p></article>
+      </body>
+    </html>
+  `;
 }
 
 afterEach(() => {
@@ -208,6 +234,128 @@ describe('SEO smoke canonical validation', () => {
         baseUrl
       ).toString()
     ).toBe('https://lokswami.com/main/epaper');
+  });
+
+  it('accepts a supported configured article canonical override from article detail', async () => {
+    const articleUrl = `${baseUrl}/main/article/story-one`;
+    const canonicalOverride = `${baseUrl}/main/article/preferred-story?edition=evening`;
+    const articleHtml = createReadyArticleHtml(canonicalOverride);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        if (url.pathname === '/robots.txt') {
+          return createResponse(
+            `User-agent: *\nSitemap: ${baseUrl}/sitemap.xml\nSitemap: ${baseUrl}/news-sitemap.xml`,
+            url.toString(),
+            'text/plain'
+          );
+        }
+        if (url.pathname === '/sitemap.xml') {
+          return createResponse('<urlset></urlset>', url.toString(), 'application/xml');
+        }
+        if (url.pathname === '/news-sitemap.xml') {
+          return createResponse(
+            '<urlset xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"></urlset>',
+            url.toString(),
+            'application/xml'
+          );
+        }
+        if (url.pathname === '/api/v1/public/articles' && url.searchParams.has('limit')) {
+          return createResponse(
+            JSON.stringify({ data: { items: [{ id: 'one', slug: 'story-one' }] } }),
+            url.toString(),
+            'application/json'
+          );
+        }
+        if (url.pathname === '/api/v1/public/articles/story-one') {
+          return createResponse(
+            JSON.stringify({
+              data: {
+                id: 'one',
+                slug: 'story-one',
+                seo: { canonicalUrl: canonicalOverride },
+              },
+            }),
+            url.toString(),
+            'application/json'
+          );
+        }
+        if (url.toString() === articleUrl) {
+          return createResponse(articleHtml, articleUrl);
+        }
+
+        return createResponse(
+          `<html><head><link rel="canonical" href="${url.toString()}"></head></html>`,
+          url.toString()
+        );
+      })
+    );
+
+    await expect(
+      runSeoSmoke({ baseUrl, articleUrl: '', timeoutMs: 1000 })
+    ).resolves.toBeUndefined();
+  });
+
+  it('uses the final public article URL when no canonical override is configured', async () => {
+    const requestedUrl = `${baseUrl}/main/article/legacy-story`;
+    const finalUrl = `${baseUrl}/main/article/current-story?edition=morning`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        if (url.pathname === '/api/v1/public/articles/legacy-story') {
+          return createResponse(
+            JSON.stringify({ data: { id: 'one', slug: 'current-story', seo: { canonicalUrl: '' } } }),
+            url.toString(),
+            'application/json'
+          );
+        }
+        return createResponse(createReadyArticleHtml(finalUrl), finalUrl);
+      })
+    );
+
+    await expect(checkArticleHtml(baseUrl, requestedUrl, 1000)).resolves.toBeUndefined();
+  });
+
+  it('rejects a same-origin article canonical that is not the configured override', async () => {
+    const articleUrl = `${baseUrl}/main/article/story-one`;
+    const configuredCanonical = `${baseUrl}/main/article/preferred-story`;
+    const renderedCanonical = `${baseUrl}/main/article/different-story`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        if (url.pathname === '/api/v1/public/articles/story-one') {
+          return createResponse(
+            JSON.stringify({
+              data: {
+                id: 'one',
+                slug: 'story-one',
+                seo: { canonicalUrl: configuredCanonical },
+              },
+            }),
+            url.toString(),
+            'application/json'
+          );
+        }
+        return createResponse(createReadyArticleHtml(renderedCanonical), articleUrl);
+      })
+    );
+
+    await expect(checkArticleHtml(baseUrl, articleUrl, 1000)).rejects.toThrow(
+      /does not match the checked page URL expectation.*preferred-story/i
+    );
+  });
+
+  it('rejects invalid or unsupported configured canonical overrides', () => {
+    expect(() => resolveSupportedArticleCanonical(baseUrl, '/main/article/preferred')).toThrow(
+      /valid absolute HTTP\(S\) URL/i
+    );
+    expect(() =>
+      resolveSupportedArticleCanonical(baseUrl, 'https://example.com/main/article/preferred')
+    ).toThrow(/unsupported origin/i);
   });
 });
 
