@@ -983,6 +983,15 @@ export function classifyRecord(row: SourceRow, page: PageInspection): Classifica
   if (page.fetchError) return manual('The live URL could not be inspected reliably.');
   if (page.redirectLoop) return manual('Redirect loop detected.');
   if (page.externalRedirect) return manual('Redirect leaves the configured production origin.');
+  if (page.publishedPublicStatus === 'not_public' && (page.standardSitemapMember || page.newsSitemapMember)) {
+    return {
+      proposedAction: 'REMOVE_FROM_SITEMAP',
+      proposedTarget: null,
+      confidence: 'high',
+      evidence,
+      manualReviewReason: null,
+    };
+  }
   if (uniqueNormalized(page.canonicals).size > 1) return manual('Multiple conflicting canonicals were found.');
   const canonicalState = page.canonical
     ? inspectCanonicalUrl(page.canonical, page.finalUrl || row.rawUrl)
@@ -1000,15 +1009,6 @@ export function classifyRecord(row: SourceRow, page: PageInspection): Classifica
     !page.newsSitemapMember
   ) {
     return manual('The article is proven not public, but its current HTTP 200 response is indexable.');
-  }
-  if (page.publishedPublicStatus === 'not_public' && (page.standardSitemapMember || page.newsSitemapMember)) {
-    return {
-      proposedAction: 'REMOVE_FROM_SITEMAP',
-      proposedTarget: null,
-      confidence: 'high',
-      evidence,
-      manualReviewReason: null,
-    };
   }
   if ((page.standardSitemapMember || page.newsSitemapMember) && page.httpStatus !== 200) {
     return {

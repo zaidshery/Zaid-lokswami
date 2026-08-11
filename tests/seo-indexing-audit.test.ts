@@ -358,16 +358,59 @@ describe('read-only classification safety', () => {
     expect(result.manualReviewReason).toMatch(/not public.*indexable/i);
   });
 
-  it('prioritizes sitemap removal for an indexable article proven not public', () => {
+  it.each([
+    {
+      label: 'standard sitemap with a self-canonical',
+      canonical: 'https://lokswami.com/main/article/example',
+      canonicals: ['https://lokswami.com/main/article/example'],
+      standardSitemapMember: true,
+      newsSitemapMember: false,
+    },
+    {
+      label: 'news sitemap with a self-canonical',
+      canonical: 'https://lokswami.com/main/article/example',
+      canonicals: ['https://lokswami.com/main/article/example'],
+      standardSitemapMember: false,
+      newsSitemapMember: true,
+    },
+    {
+      label: 'standard sitemap with no canonical',
+      canonical: null,
+      canonicals: [],
+      standardSitemapMember: true,
+      newsSitemapMember: false,
+    },
+    {
+      label: 'standard sitemap with conflicting canonicals',
+      canonical: 'https://lokswami.com/main/article/example',
+      canonicals: [
+        'https://lokswami.com/main/article/example',
+        'https://lokswami.com/main/article/other',
+      ],
+      standardSitemapMember: true,
+      newsSitemapMember: false,
+    },
+    {
+      label: 'standard sitemap with a malformed canonical',
+      canonical: 'https://[invalid',
+      canonicals: ['https://[invalid'],
+      standardSitemapMember: true,
+      newsSitemapMember: false,
+    },
+    {
+      label: 'news sitemap with an external canonical',
+      canonical: 'https://example.com/article',
+      canonicals: ['https://example.com/article'],
+      standardSitemapMember: false,
+      newsSitemapMember: true,
+    },
+  ])('prioritizes sitemap removal for an indexable article proven not public: $label', (overrides) => {
     const result = classifyRecord(
       makeSourceRow({ sourceIssue: 'Duplicate without user-selected canonical' }),
       makePageInspection({
-        canonical: null,
-        canonicals: [],
+        ...overrides,
         contentType: 'article',
         publishedPublicStatus: 'not_public',
-        standardSitemapMember: true,
-        newsSitemapMember: false,
         httpStatus: 200,
         noindex: false,
       })
