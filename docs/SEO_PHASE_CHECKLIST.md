@@ -4,8 +4,8 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 
 | Phase | Scope | Status | Approval/evidence gate |
 | --- | --- | --- | --- |
-| 0 | Baseline lock and read-only SEO smoke | In progress | Node 20 quality gate and live read-only evidence |
-| 1 | Search Console URL inventory and canonical dry run | Pending | Current GSC CSV/export and manual review of ambiguous URLs |
+| 0 | Baseline lock and read-only SEO smoke | Complete | Node 20 quality gate and live read-only evidence |
+| 1 | Search Console URL inventory and canonical dry run | In progress | Current GSC CSV/export and manual review of ambiguous URLs |
 | 2 | Full article SSR and crawlable related links | Pending | Approved server/client boundary and publication-safety tests |
 | 3 | URL governance, schema and sitemap hardening | Pending | Approved Phase 1 mappings; no guessed redirects |
 | 4 | Core Web Vitals instrumentation and budgets | Pending | Event/privacy design and 48-hour field baseline |
@@ -25,8 +25,32 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 - [x] Focused tests pass (6 tests).
 - [x] Typecheck passes locally; Node 20 CI remains authoritative.
 - [x] Full lint, tests and build pass locally (Node 24 diagnostic).
-- [ ] Current Phase 0 branch passes Node 20 CI before merge.
+- [x] Phase 0 and its review-fix follow-up passed Node 20 CI and were merged.
 - [x] Live evidence is recorded for the deployed base commit, including the expected article SSR failure.
+
+## Phase 1 acceptance
+
+- [x] Seven native GSC archives validated by ZIP structure, CRC, CSV schema, metadata, chart range, and row count.
+- [x] Six URL-level issue exports reconcile to 209 exact-unique rows with no cross-issue overlap and zero difference from Coverage.
+- [x] Read-only audit tooling preserves raw RFC 4180 values and associates issue names from `Metadata.csv`.
+- [x] All 209 source rows have an allowed classification or an explicit processing error plus safe manual review.
+- [x] Query-order equivalents, malformed values, redirects, canonicals, robots directives, sitemap membership, and public article state are reported.
+- [x] Generated reports are written only beneath the ignored `.seo-audit/` directory.
+- [x] At least ten live representative rows were independently spot-checked across all six issue categories.
+- [x] No redirect, canonical, noindex, sitemap, database, content, Phase 2, or Phase 3 change was implemented.
+- [ ] Manual-review dispositions and the complete dry-run mapping are approved before any Phase 3 URL-governance work.
+- [ ] Phase 1 branch passes Node 20 CI before merge.
+
+### 2026-08-10 dry-run classification totals
+
+| Issue | Classification totals |
+| --- | --- |
+| Alternate page with proper canonical tag | `KEEP` 92; `MANUAL_REVIEW` 2 |
+| Not found (404) | `INVESTIGATE_CONTENT` 37 |
+| Duplicate without user-selected canonical | `SELF_CANONICAL` 3; `MANUAL_REVIEW` 26 |
+| Excluded by `noindex` tag | `INTENTIONAL_NOINDEX` 6; `REDIRECT_TO_REPLACEMENT` 8; `MANUAL_REVIEW` 2 |
+| Page with redirect | `KEEP` 6; `MANUAL_REVIEW` 2; `REDIRECT_TO_REPLACEMENT` 2 |
+| Crawled - currently not indexed | `INVESTIGATE_CONTENT` 21; `MANUAL_REVIEW` 1; `INTENTIONAL_NOINDEX` 1 |
 
 ## Non-negotiable safeguards
 

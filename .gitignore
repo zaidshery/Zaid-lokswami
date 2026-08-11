@@ -39,6 +39,7 @@ edge-dom.txt
 git-output.txt
 test-results/
 playwright-report/
+.seo-audit/
 
 # Local content / uploads
 data/articles.json
