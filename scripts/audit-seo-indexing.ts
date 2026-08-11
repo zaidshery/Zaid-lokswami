@@ -995,7 +995,9 @@ export function classifyRecord(row: SourceRow, page: PageInspection): Classifica
     page.contentType === 'article' &&
     page.publishedPublicStatus === 'not_public' &&
     page.httpStatus === 200 &&
-    !page.noindex
+    !page.noindex &&
+    !page.standardSitemapMember &&
+    !page.newsSitemapMember
   ) {
     return manual('The article is proven not public, but its current HTTP 200 response is indexable.');
   }

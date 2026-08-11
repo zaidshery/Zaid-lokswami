@@ -358,6 +358,27 @@ describe('read-only classification safety', () => {
     expect(result.manualReviewReason).toMatch(/not public.*indexable/i);
   });
 
+  it('prioritizes sitemap removal for an indexable article proven not public', () => {
+    const result = classifyRecord(
+      makeSourceRow({ sourceIssue: 'Duplicate without user-selected canonical' }),
+      makePageInspection({
+        canonical: null,
+        canonicals: [],
+        contentType: 'article',
+        publishedPublicStatus: 'not_public',
+        standardSitemapMember: true,
+        newsSitemapMember: false,
+        httpStatus: 200,
+        noindex: false,
+      })
+    );
+    expect(result).toMatchObject({
+      proposedAction: 'REMOVE_FROM_SITEMAP',
+      proposedTarget: null,
+      confidence: 'high',
+    });
+  });
+
   it('allows self-canonical review only when an article is positively verified public', () => {
     const publicArticle = classifyRecord(
       makeSourceRow({ sourceIssue: 'Duplicate without user-selected canonical' }),
