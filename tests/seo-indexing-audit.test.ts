@@ -1,5 +1,7 @@
 import { vi } from 'vitest';
 import {
+  GSC_ISSUES,
+  MAX_RESPONSE_BYTES,
   analyzeRawUrl,
   calculateCrc32,
   classifyRecord,
@@ -11,6 +13,8 @@ import {
   parseCsv,
   parseGscArchive,
   readZipEntries,
+  readResponseText,
+  reconcileGscArchives,
   recordsToCsv,
   resolvePublicArticle,
 } from '../scripts/audit-seo-indexing';
@@ -67,12 +71,59 @@ function buildStoredZip(files: Record<string, string> | Array<[string, string]>)
 }
 
 function response(body: string, url: string, status = 200, headers: Record<string, string> = {}) {
-  return {
-    status,
-    url,
-    headers: new Headers(headers),
-    text: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
+  const result = new Response(body, { status, headers });
+  Object.defineProperty(result, 'url', { value: url });
+  return result;
+}
+
+function issueArchive(issue: (typeof GSC_ISSUES)[number], index: number, date = '2026-08-08') {
+  return buildStoredZip({
+    'Chart.csv': `Date,Affected pages\r\n${date},1\r\n`,
+    'Table.csv': `URL,Last crawled\r\nhttps://lokswami.com/main/test-${index},${date}\r\n`,
+    'Metadata.csv': `Property,Value\r\nSitemap,All known pages\r\nIssue,${issue}\r\n`,
+  });
+}
+
+function coverageArchive(
+  issueCounts: number[],
+  date = '2026-08-08',
+  reasons: readonly string[] = GSC_ISSUES
+) {
+  const total = issueCounts.reduce((sum, count) => sum + count, 0);
+  const issueRows = reasons.map(
+    (issue, index) => `${issue},Website,Not Started,${issueCounts[index]}`
+  ).join('\r\n');
+  return buildStoredZip({
+    'Chart.csv': `Date,Not indexed,Indexed,Impressions\r\n${date},${total},1,0\r\n`,
+    'Critical issues.csv': `Reason,Source,Validation,Pages\r\n${issueRows}\r\n`,
+    'Non-critical issues.csv': 'Reason,Source,Validation,Pages\r\n',
+    'Metadata.csv': 'Property,Value\r\nSitemap,All known pages\r\n',
+  });
+}
+
+function parseSyntheticArchives(
+  issueCounts: number[],
+  options: {
+    issueDates?: string[];
+    coverageDate?: string;
+    coverageReasons?: readonly string[];
+  } = {}
+) {
+  const parsed = GSC_ISSUES.map((issue, index) =>
+    parseGscArchive(
+      issueArchive(issue, index, options.issueDates?.[index]),
+      `deliberately-unrelated-${GSC_ISSUES.length - index}.zip`,
+      'https://lokswami.com'
+    )
+  );
+  parsed.push(
+    parseGscArchive(
+      coverageArchive(issueCounts, options.coverageDate, options.coverageReasons),
+      'aggregate-with-unrelated-name.zip',
+      'https://lokswami.com'
+    )
+  );
+  return parsed;
 }
 
 afterEach(() => {
@@ -157,6 +208,73 @@ describe('GSC input parsing', () => {
       /unexpected ZIP entries/i
     );
   });
+
+  it('reconciles every metadata-identified issue independently of archive filenames', () => {
+    const parsed = parseSyntheticArchives(
+      [1, 1, 1, 1, 1, 1, 0],
+      { coverageReasons: [...GSC_ISSUES, 'Discovered – currently not indexed'] }
+    );
+    const result = reconcileGscArchives(parsed);
+    expect(result).toMatchObject({
+      exactUniqueUrls: 6,
+      issueTotal: 6,
+      coverage: { notIndexed: 6, latestDate: '2026-08-08' },
+    });
+    expect(result.perIssue).toHaveLength(6);
+    expect(result.perIssue[0]).toMatchObject({
+      issue: 'Alternate page with proper canonical tag',
+      archive: 'deliberately-unrelated-6.zip',
+      archiveRows: 1,
+      coveragePages: 1,
+      archiveLatestDate: '2026-08-08',
+      coverageLatestDate: '2026-08-08',
+    });
+  });
+
+  it('rejects offsetting per-issue count mismatches even when aggregate totals match', () => {
+    const parsed = parseSyntheticArchives([2, 0, 1, 1, 1, 1]);
+    expect(() => reconcileGscArchives(parsed)).toThrow(
+      /per-issue reconciliation.*alternate page.*coverage.*2.*archive.*1/i
+    );
+  });
+
+  it('rejects an issue export whose latest reporting date differs from Coverage', () => {
+    const parsed = parseSyntheticArchives(
+      [1, 1, 1, 1, 1, 1],
+      { issueDates: ['2026-08-07', ...Array(5).fill('2026-08-08')] }
+    );
+    expect(() => reconcileGscArchives(parsed)).toThrow(
+      /snapshot date mismatch.*alternate page.*2026-08-08.*2026-08-07/i
+    );
+  });
+
+  it('rejects a missing Coverage issue reason', () => {
+    const reasons = GSC_ISSUES.slice(0, -1);
+    const parsed = parseSyntheticArchives([1, 1, 1, 1, 1], { coverageReasons: reasons });
+    expect(() => reconcileGscArchives(parsed)).toThrow(/coverage is missing.*crawled/i);
+  });
+
+  it('rejects duplicate or ambiguous Coverage reason mappings', () => {
+    const reasons = [...GSC_ISSUES.slice(0, -1), GSC_ISSUES[0]];
+    const parsed = parseSyntheticArchives([1, 1, 1, 1, 1, 1], { coverageReasons: reasons });
+    expect(() => reconcileGscArchives(parsed)).toThrow(/duplicate or ambiguous issue-reason mapping/i);
+  });
+
+  it('rejects an unknown Coverage issue reason', () => {
+    const reasons = [...GSC_ISSUES.slice(0, -1), 'Unexpected coverage issue'];
+    const parsed = parseSyntheticArchives([1, 1, 1, 1, 1, 1], { coverageReasons: reasons });
+    expect(() => reconcileGscArchives(parsed)).toThrow(/unknown issue reason.*unexpected coverage issue/i);
+  });
+
+  it('rejects duplicate issue-archive metadata mappings', () => {
+    const parsed = parseSyntheticArchives([1, 1, 1, 1, 1, 1]);
+    parsed[1] = parseGscArchive(
+      issueArchive(GSC_ISSUES[0], 10),
+      'another-unrelated-name.zip',
+      'https://lokswami.com'
+    );
+    expect(() => reconcileGscArchives(parsed)).toThrow(/duplicate or ambiguous metadata.*alternate page/i);
+  });
 });
 
 describe('URL normalization and SEO extraction', () => {
@@ -218,6 +336,71 @@ describe('read-only classification safety', () => {
       proposedAction: 'SELF_CANONICAL',
       proposedTarget: 'https://lokswami.com/main/article/example',
     });
+  });
+
+  it('does not propose a self-canonical for an indexable article proven not public', () => {
+    const result = classifyRecord(
+      makeSourceRow({ sourceIssue: 'Duplicate without user-selected canonical' }),
+      makePageInspection({
+        canonical: null,
+        canonicals: [],
+        contentType: 'article',
+        publishedPublicStatus: 'not_public',
+        standardSitemapMember: false,
+        newsSitemapMember: false,
+      })
+    );
+    expect(result).toMatchObject({
+      proposedAction: 'MANUAL_REVIEW',
+      proposedTarget: null,
+      confidence: 'low',
+    });
+    expect(result.manualReviewReason).toMatch(/not public.*indexable/i);
+  });
+
+  it('allows self-canonical review only when an article is positively verified public', () => {
+    const publicArticle = classifyRecord(
+      makeSourceRow({ sourceIssue: 'Duplicate without user-selected canonical' }),
+      makePageInspection({
+        canonical: null,
+        canonicals: [],
+        contentType: 'article',
+        publishedPublicStatus: 'public',
+      })
+    );
+    expect(publicArticle).toMatchObject({
+      proposedAction: 'SELF_CANONICAL',
+      proposedTarget: 'https://lokswami.com/main/article/example',
+      confidence: 'medium',
+    });
+
+    const unknownArticle = classifyRecord(
+      makeSourceRow({ sourceIssue: 'Duplicate without user-selected canonical' }),
+      makePageInspection({
+        canonical: null,
+        canonicals: [],
+        contentType: 'article',
+        publishedPublicStatus: 'unknown',
+      })
+    );
+    expect(unknownArticle).toMatchObject({ proposedAction: 'MANUAL_REVIEW', confidence: 'low' });
+    expect(unknownArticle.manualReviewReason).toMatch(/not positively verified as public/i);
+  });
+
+  it('does not downgrade conflicting public-status evidence to a medium canonical action', () => {
+    const result = classifyRecord(
+      makeSourceRow({ sourceIssue: 'Duplicate without user-selected canonical' }),
+      makePageInspection({
+        canonical: 'https://lokswami.com/main/article/example',
+        canonicals: ['https://lokswami.com/main/article/example'],
+        contentType: 'article',
+        publishedPublicStatus: 'not_public',
+        httpStatus: 200,
+        noindex: false,
+      })
+    );
+    expect(result).toMatchObject({ proposedAction: 'MANUAL_REVIEW', confidence: 'low' });
+    expect(result.manualReviewReason).toMatch(/not public.*indexable/i);
   });
 
   it('sends search duplicates and external canonicals to manual review', () => {
@@ -336,6 +519,78 @@ describe('read-only classification safety', () => {
       proposedTarget: null,
       confidence: 'high',
     });
+  });
+});
+
+describe('bounded response-body reading', () => {
+  it('rejects an oversized Content-Length before acquiring a body reader', async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const getReader = vi.fn();
+    const oversized = {
+      headers: new Headers({ 'content-length': String(MAX_RESPONSE_BYTES + 1) }),
+      body: { cancel, getReader },
+    } as unknown as Response;
+
+    await expect(readResponseText(oversized)).rejects.toThrow(
+      `Response exceeds ${MAX_RESPONSE_BYTES} bytes.`
+    );
+    expect(getReader).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts a response body exactly at the limit and a smaller normal body', async () => {
+    const exactBytes = new Uint8Array(MAX_RESPONSE_BYTES).fill(97);
+    const exactStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(exactBytes);
+        controller.close();
+      },
+    });
+    const exact = new Response(exactStream);
+    const exactText = await readResponseText(exact);
+    expect(Buffer.byteLength(exactText, 'utf8')).toBe(MAX_RESPONSE_BYTES);
+
+    await expect(readResponseText(new Response('normal body'))).resolves.toBe('normal body');
+  });
+
+  it('handles a response with no body and releases the reader after success', async () => {
+    await expect(
+      readResponseText({ headers: new Headers(), body: null } as Response)
+    ).resolves.toBe('');
+
+    const releaseLock = vi.fn();
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('ok') })
+      .mockResolvedValueOnce({ done: true, value: undefined });
+    const withTrackedReader = {
+      headers: new Headers(),
+      body: { getReader: () => ({ read, cancel, releaseLock }) },
+    } as unknown as Response;
+    await expect(readResponseText(withTrackedReader)).resolves.toBe('ok');
+    expect(cancel).not.toHaveBeenCalled();
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels and releases the reader when body streaming fails', async () => {
+    const streamError = new Error('stream failed');
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const releaseLock = vi.fn();
+    const failed = {
+      headers: new Headers(),
+      body: {
+        getReader: () => ({
+          read: vi.fn().mockRejectedValue(streamError),
+          cancel,
+          releaseLock,
+        }),
+      },
+    } as unknown as Response;
+
+    await expect(readResponseText(failed)).rejects.toThrow('stream failed');
+    expect(cancel).toHaveBeenCalledWith(streamError);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -464,24 +719,24 @@ describe('read-only redirect inspection', () => {
 
   it('keeps the timeout active while the response body is stalled', async () => {
     vi.useFakeTimers();
-    let signal: AbortSignal | null = null;
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const releaseLock = vi.fn();
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-        signal = init?.signal || null;
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
         return {
           status: 200,
           url: 'https://lokswami.com/main',
           headers: new Headers({ 'content-type': 'text/html' }),
-          text: () =>
-            new Promise<string>((_resolve, reject) => {
-              signal?.addEventListener(
-                'abort',
-                () => reject(new DOMException('aborted', 'AbortError')),
-                { once: true }
-              );
+          body: {
+            getReader: () => ({
+              read: () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => undefined),
+              cancel,
+              releaseLock,
             }),
-        } as Response;
+          },
+        } as unknown as Response;
       })
     );
     const request = fetchRedirectChain(
@@ -493,7 +748,70 @@ describe('read-only redirect inspection', () => {
     const assertion = expect(request).rejects.toThrow(/timed out after 50ms.*headers or body/i);
     await vi.advanceTimersByTimeAsync(50);
     await assertion;
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('times out when response headers never arrive and clears the timer', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('aborted', 'AbortError')),
+            { once: true }
+          );
+        })
+      )
+    );
+    const request = fetchRedirectChain(
+      'https://lokswami.com/main',
+      'https://lokswami.com',
+      50,
+      1
+    );
+    const assertion = expect(request).rejects.toThrow(/timed out after 50ms.*headers or body/i);
+    await vi.advanceTimersByTimeAsync(50);
+    await assertion;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('clears the timeout after a successful body read', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response('<html>ok</html>', 'https://lokswami.com/main'))
+    );
+    await expect(
+      fetchRedirectChain('https://lokswami.com/main', 'https://lokswami.com', 1000, 1)
+    ).resolves.toMatchObject({ status: 200, text: '<html>ok</html>' });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cancels an unknown-length response stream as soon as it exceeds the body limit', async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const releaseLock = vi.fn();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array(MAX_RESPONSE_BYTES) })
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array([1]) });
+    const oversized = {
+      status: 200,
+      url: 'https://lokswami.com/main',
+      headers: new Headers({ 'content-type': 'text/html' }),
+      body: { getReader: () => ({ read, cancel, releaseLock }) },
+    } as unknown as Response;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(oversized));
+
+    await expect(
+      fetchRedirectChain('https://lokswami.com/main', 'https://lokswami.com', 1000, 1)
+    ).rejects.toThrow(/response exceeds 5242880 bytes/i);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 });
 

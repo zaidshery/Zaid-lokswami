@@ -95,7 +95,7 @@ export type AuditRecord = SourceRow &
     detections: string[];
   };
 
-type ArchiveInventory = {
+export type ArchiveInventory = {
   fileName: string;
   bytes: number;
   sha256: string;
@@ -118,12 +118,27 @@ type ArchiveInventory = {
   };
 };
 
-type CoverageSummary = {
+export type CoverageSummary = {
   latestDate: string;
   indexed: number;
   notIndexed: number;
   totalKnown: number;
   issues: Array<{ reason: string; source: string; validation: string; pages: number }>;
+};
+
+export type ParsedGscArchive = {
+  inventory: ArchiveInventory;
+  rows: SourceRow[];
+  coverage: CoverageSummary | null;
+};
+
+export type IssueReconciliation = {
+  issue: GscIssue;
+  archive: string;
+  archiveRows: number;
+  coveragePages: number;
+  archiveLatestDate: string;
+  coverageLatestDate: string;
 };
 
 type AuditOptions = {
@@ -141,7 +156,7 @@ const EXPECTED_COVERAGE_CHART_HEADER = ['Date', 'Not indexed', 'Indexed', 'Impre
 const EXPECTED_METADATA_HEADER = ['Property', 'Value'];
 const EXPECTED_COVERAGE_ISSUES_HEADER = ['Reason', 'Source', 'Validation', 'Pages'];
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+export const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const MAX_ZIP_ARCHIVE_BYTES = 10 * 1024 * 1024;
 const MAX_ZIP_ENTRY_BYTES = 5 * 1024 * 1024;
 const MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES = 10 * 1024 * 1024;
@@ -153,6 +168,8 @@ const COVERAGE_ARCHIVE_ENTRIES = [
   'Metadata.csv',
   'Non-critical issues.csv',
 ] as const;
+const COVERAGE_ONLY_ISSUES = ['Discovered - currently not indexed'] as const;
+type CoverageIssue = GscIssue | (typeof COVERAGE_ONLY_ISSUES)[number];
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -382,24 +399,28 @@ function requireEntry(entries: Map<string, ZipEntry>, name: string, archive: str
   return entry;
 }
 
-function normalizeIssue(value: string): GscIssue | null {
-  const normalized = value
+function normalizeIssueText(value: string) {
+  return value
     .normalize('NFKC')
     .replace(/[‘’]/g, "'")
     .replace(/[–—]/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+function normalizeIssue(value: string): GscIssue | null {
+  const normalized = normalizeIssueText(value);
   return (
-    GSC_ISSUES.find(
-      (issue) =>
-        issue
-          .normalize('NFKC')
-          .replace(/[‘’]/g, "'")
-          .replace(/[–—]/g, '-')
-          .toLowerCase() === normalized
-    ) || null
+    GSC_ISSUES.find((issue) => normalizeIssueText(issue) === normalized) || null
   );
+}
+
+function normalizeCoverageIssue(value: string): CoverageIssue | null {
+  const issue = normalizeIssue(value);
+  if (issue) return issue;
+  const normalized = normalizeIssueText(value);
+  return COVERAGE_ONLY_ISSUES.find((candidate) => normalizeIssueText(candidate) === normalized) || null;
 }
 
 function parseIsoDate(value: string, context: string) {
@@ -541,15 +562,77 @@ export function extractSitemapLocations(xml: string) {
     .filter(Boolean);
 }
 
-async function readResponseText(response: Response) {
+function abortError(signal: AbortSignal) {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The operation was aborted.', 'AbortError');
+}
+
+function readStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal?: AbortSignal
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (!signal) return reader.read();
+  if (signal.aborted) return Promise.reject(abortError(signal));
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      reject(abortError(signal));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    reader.read().then(
+      (result) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        resolve(result);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+export async function readResponseText(response: Response, signal?: AbortSignal) {
   const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
-  invariant(
-    !Number.isFinite(contentLength) || contentLength <= MAX_RESPONSE_BYTES,
-    `Response exceeds ${MAX_RESPONSE_BYTES} bytes.`
-  );
-  const text = await response.text();
-  invariant(Buffer.byteLength(text, 'utf8') <= MAX_RESPONSE_BYTES, `Response exceeds ${MAX_RESPONSE_BYTES} bytes.`);
-  return text;
+  if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
+    const error = new Error(`Response exceeds ${MAX_RESPONSE_BYTES} bytes.`);
+    if (response.body) await response.body.cancel(error).catch(() => undefined);
+    throw error;
+  }
+  if (!response.body) return '';
+
+  const reader = response.body.getReader();
+  const bytes = Buffer.allocUnsafe(MAX_RESPONSE_BYTES);
+  let byteLength = 0;
+  let cancelled = false;
+  try {
+    while (true) {
+      const result = await readStreamChunk(reader, signal);
+      if (result.done) break;
+      if (result.value.byteLength === 0) continue;
+      if (byteLength + result.value.byteLength > MAX_RESPONSE_BYTES) {
+        const error = new Error(`Response exceeds ${MAX_RESPONSE_BYTES} bytes.`);
+        await reader.cancel(error).catch(() => undefined);
+        cancelled = true;
+        throw error;
+      }
+      Buffer.from(result.value.buffer, result.value.byteOffset, result.value.byteLength).copy(bytes, byteLength);
+      byteLength += result.value.byteLength;
+    }
+    return bytes.subarray(0, byteLength).toString('utf8');
+  } catch (error) {
+    if (!cancelled) await reader.cancel(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 async function fetchTextWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
@@ -561,7 +644,7 @@ async function fetchTextWithTimeout(url: string, init: RequestInit, timeoutMs: n
   }, timeoutMs);
   try {
     const response = await fetch(url, { ...init, signal: controller.signal });
-    const text = await readResponseText(response);
+    const text = await readResponseText(response, controller.signal);
     return { response, text };
   } catch (error) {
     if (timedOut) {
@@ -908,6 +991,14 @@ export function classifyRecord(row: SourceRow, page: PageInspection): Classifica
   if (canonicalState?.external) {
     return manual('Canonical points to an external origin.');
   }
+  if (
+    page.contentType === 'article' &&
+    page.publishedPublicStatus === 'not_public' &&
+    page.httpStatus === 200 &&
+    !page.noindex
+  ) {
+    return manual('The article is proven not public, but its current HTTP 200 response is indexable.');
+  }
   if (page.publishedPublicStatus === 'not_public' && (page.standardSitemapMember || page.newsSitemapMember)) {
     return {
       proposedAction: 'REMOVE_FROM_SITEMAP',
@@ -1001,6 +1092,9 @@ export function classifyRecord(row: SourceRow, page: PageInspection): Classifica
         return manual('Search-result URL policy is not explicit enough to choose canonical versus noindex automatically.');
       }
       if (page.httpStatus === 200 && !page.canonical && !page.noindex) {
+        if (page.contentType === 'article' && page.publishedPublicStatus !== 'public') {
+          return manual('Article publication status is not positively verified as public.');
+        }
         return {
           proposedAction: 'SELF_CANONICAL',
           proposedTarget: page.finalUrl,
@@ -1109,7 +1203,7 @@ function assertExactArchiveEntries(
   );
 }
 
-export function parseGscArchive(buffer: Buffer, fileName: string, baseUrl: string) {
+export function parseGscArchive(buffer: Buffer, fileName: string, baseUrl: string): ParsedGscArchive {
   const zipEntries = readZipEntries(buffer);
   invariant(zipEntries.every((entry) => entry.name.toLowerCase().endsWith('.csv')), `${fileName} contains a non-CSV file.`);
   const entries = new Map(zipEntries.map((entry) => [entry.name, entry]));
@@ -1226,6 +1320,98 @@ export function parseGscArchive(buffer: Buffer, fileName: string, baseUrl: strin
     chart: { from: chartRows[0].Date, to: latest.Date, rows: chartRows.length },
   };
   return { inventory, rows: [] as SourceRow[], coverage };
+}
+
+export function reconcileGscArchives(parsedArchives: ParsedGscArchive[]) {
+  const inventories = parsedArchives.map((archive) => archive.inventory);
+  const issueArchives = parsedArchives.filter((archive) => archive.inventory.kind === 'issue');
+  const coverageArchives = parsedArchives.filter((archive) => archive.coverage !== null);
+  invariant(
+    issueArchives.length === GSC_ISSUES.length,
+    `Expected ${GSC_ISSUES.length} issue archives; received ${issueArchives.length}.`
+  );
+  invariant(
+    coverageArchives.length === 1,
+    `Expected one Coverage summary archive; received ${coverageArchives.length}.`
+  );
+
+  const archivesByIssue = new Map<GscIssue, ParsedGscArchive>();
+  for (const archive of issueArchives) {
+    const issue = archive.inventory.issue;
+    invariant(issue, `${archive.inventory.fileName} has no validated Metadata.csv issue.`);
+    invariant(
+      !archivesByIssue.has(issue),
+      `Issue archives contain a duplicate or ambiguous Metadata.csv mapping for ${issue}.`
+    );
+    archivesByIssue.set(issue, archive);
+  }
+  for (const issue of GSC_ISSUES) {
+    invariant(archivesByIssue.has(issue), `Issue archives are missing the Metadata.csv mapping for ${issue}.`);
+  }
+
+  const coverage = coverageArchives[0].coverage as CoverageSummary;
+  const coverageByIssue = new Map<CoverageIssue, CoverageSummary['issues'][number]>();
+  for (const coverageIssue of coverage.issues) {
+    const issue = normalizeCoverageIssue(coverageIssue.reason);
+    invariant(issue, `Coverage contains unknown issue reason: ${coverageIssue.reason}.`);
+    invariant(
+      !coverageByIssue.has(issue),
+      `Coverage contains a duplicate or ambiguous issue-reason mapping for ${issue}.`
+    );
+    coverageByIssue.set(issue, coverageIssue);
+  }
+
+  const perIssue: IssueReconciliation[] = GSC_ISSUES.map((issue) => {
+    const archive = archivesByIssue.get(issue) as ParsedGscArchive;
+    const coverageIssue = coverageByIssue.get(issue);
+    invariant(coverageIssue, `Coverage is missing the issue reason required for ${issue}.`);
+    const archiveLatestDate = archive.inventory.chart?.to || '';
+    invariant(
+      archiveLatestDate.length > 0,
+      `${archive.inventory.fileName} has no validated latest chart reporting date.`
+    );
+    invariant(
+      archive.rows.length === coverageIssue.pages,
+      `Per-issue reconciliation failed for ${issue}: Coverage reports ${coverageIssue.pages} pages, but issue archive ${archive.inventory.fileName} contains ${archive.rows.length} Table.csv rows.`
+    );
+    invariant(
+      archiveLatestDate === coverage.latestDate,
+      `Per-issue snapshot date mismatch for ${issue}: Coverage reports ${coverage.latestDate}, but issue archive ${archive.inventory.fileName} reports ${archiveLatestDate}.`
+    );
+    return {
+      issue,
+      archive: archive.inventory.fileName,
+      archiveRows: archive.rows.length,
+      coveragePages: coverageIssue.pages,
+      archiveLatestDate,
+      coverageLatestDate: coverage.latestDate,
+    };
+  });
+
+  const sourceRows = issueArchives.flatMap((archive) => archive.rows);
+  const exactUrls = new Set(sourceRows.map((row) => row.rawUrl));
+  invariant(
+    exactUrls.size === sourceRows.length,
+    `Expected exact-unique input rows; found ${sourceRows.length - exactUrls.size} duplicates.`
+  );
+  const issueTotal = coverage.issues.reduce((total, issue) => total + issue.pages, 0);
+  invariant(
+    issueTotal === coverage.notIndexed,
+    `Coverage issues total ${issueTotal}, not-indexed total ${coverage.notIndexed}.`
+  );
+  invariant(
+    sourceRows.length === coverage.notIndexed,
+    `Issue exports contain ${sourceRows.length} rows, Coverage reports ${coverage.notIndexed}.`
+  );
+
+  return {
+    inventories,
+    sourceRows,
+    coverage,
+    issueTotal,
+    exactUniqueUrls: exactUrls.size,
+    perIssue,
+  };
 }
 
 export async function fetchSitemap(
@@ -1419,20 +1605,14 @@ export async function runAudit(options: AuditOptions) {
       return parseGscArchive(buffer, basename(zipPath), options.baseUrl);
     })
   );
-  const inventories = parsedArchives.map((archive) => archive.inventory);
-  const issueInventories = inventories.filter((archive) => archive.kind === 'issue');
-  const coverageArchives = parsedArchives.filter((archive) => archive.coverage);
-  invariant(issueInventories.length === GSC_ISSUES.length, `Expected ${GSC_ISSUES.length} issue archives; received ${issueInventories.length}.`);
-  invariant(coverageArchives.length === 1, `Expected one Coverage summary archive; received ${coverageArchives.length}.`);
-  invariant(new Set(issueInventories.map((archive) => archive.issue)).size === GSC_ISSUES.length, 'Issue archives are duplicated or missing an expected Metadata.csv issue.');
-
-  const sourceRows = parsedArchives.flatMap((archive) => archive.rows);
-  const exactUrls = new Set(sourceRows.map((row) => row.rawUrl));
-  invariant(exactUrls.size === sourceRows.length, `Expected exact-unique input rows; found ${sourceRows.length - exactUrls.size} duplicates.`);
-  const coverage = coverageArchives[0].coverage as CoverageSummary;
-  const issueTotal = coverage.issues.reduce((total, issue) => total + issue.pages, 0);
-  invariant(issueTotal === coverage.notIndexed, `Coverage issues total ${issueTotal}, not-indexed total ${coverage.notIndexed}.`);
-  invariant(sourceRows.length === coverage.notIndexed, `Issue exports contain ${sourceRows.length} rows, Coverage reports ${coverage.notIndexed}.`);
+  const {
+    inventories,
+    sourceRows,
+    coverage,
+    issueTotal,
+    exactUniqueUrls,
+    perIssue,
+  } = reconcileGscArchives(parsedArchives);
 
   const [standardSitemapResult, newsSitemapResult] = await Promise.all([
     fetchSitemap(options.baseUrl, '/sitemap.xml', options.timeoutMs, options.maxRedirects),
@@ -1498,14 +1678,15 @@ export async function runAudit(options: AuditOptions) {
     archives: inventories,
     reconciliation: {
       issueExportRows: sourceRows.length,
-      exactUniqueUrls: exactUrls.size,
-      crossIssueExactOverlaps: sourceRows.length - exactUrls.size,
+      exactUniqueUrls,
+      crossIssueExactOverlaps: sourceRows.length - exactUniqueUrls,
       coverageIndexed: coverage.indexed,
       coverageNotIndexed: coverage.notIndexed,
       coverageTotalKnown: coverage.totalKnown,
       coverageLatestDate: coverage.latestDate,
       coverageIssueTotal: issueTotal,
       difference: sourceRows.length - coverage.notIndexed,
+      perIssue,
     },
     sitemaps: {
       standard: { url: standardSitemapResult.url, status: standardSitemapResult.status, locations: standardSitemap.size },

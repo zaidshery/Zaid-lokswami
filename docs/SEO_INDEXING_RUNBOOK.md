@@ -18,7 +18,7 @@ Export the six URL-level Page Indexing issue archives and one aggregate Page Ind
 6. Crawled - currently not indexed
 7. Overall Page Indexing/Coverage summary
 
-Pass every archive explicitly with a separate `--zip` option. Issue identity comes from each archive's `Metadata.csv`, not its filename. The tool validates ZIP structure and CRCs, requires the native GSC headers, checks chart date continuity, and reconciles every `Table.csv` row count with its latest chart count and the aggregate not-indexed total.
+Pass every archive explicitly with a separate `--zip` option. Issue identity comes from each archive's `Metadata.csv`, not its filename. The tool validates ZIP structure and CRCs, requires the native GSC headers, checks chart date continuity, and maps each issue archive to the corresponding Coverage reason. Every issue's `Table.csv` row count must match both its latest issue-chart count and its Coverage reason count, and every issue chart must end on the same latest reporting date as the Coverage chart. Aggregate issue and not-indexed totals are then reconciled separately.
 
 CSV parsing follows RFC 4180, including quoted fields containing commas, quotes, CRLFs, or embedded newlines. The raw URL is retained exactly. Whitespace-containing or malformed URLs are not trimmed or repaired; they receive a processing error and `MANUAL_REVIEW` classification.
 
@@ -55,7 +55,7 @@ npm.cmd run audit:seo-indexing -- `
   --zip="D:\#1 zaidshery-lok\July report\07-indexed-pages-2026-08-10.zip"
 ```
 
-The tool refuses duplicate/missing issue archives, duplicate or unexpected ZIP entries, unsafe member paths, oversized archives/entries, cross-row exact duplicates, invalid headers, corrupt ZIP entries, chart/Table mismatches, or a Coverage reconciliation difference. ZIPs are limited to 20 entries, 10 MiB compressed/archive bytes, 5 MiB per uncompressed entry, and 10 MiB total declared uncompressed bytes. `--concurrency` is limited to 1-10, `--max-redirects` to 0-20, and the response-body limit is 5 MiB. Redirects are followed manually only while they stay on the configured production origin.
+The tool refuses duplicate/missing/unknown issue mappings, duplicate or unexpected ZIP entries, unsafe member paths, oversized archives/entries, cross-row exact duplicates, invalid headers, corrupt ZIP entries, chart/Table mismatches, per-issue Coverage count differences, mixed latest reporting dates, or an aggregate Coverage reconciliation difference. ZIPs are limited to 20 entries, 10 MiB compressed/archive bytes, 5 MiB per uncompressed entry, and 10 MiB total declared uncompressed bytes. `--concurrency` is limited to 1-10, `--max-redirects` to 0-20, and the response-body limit is 5 MiB. Oversized declared bodies are rejected before reading; unknown-length bodies are counted incrementally and cancelled as soon as they exceed the limit. Redirects are followed manually only while they stay on the configured production origin, and request timeouts remain active through complete body consumption.
 
 ## Output
 
@@ -64,6 +64,8 @@ The ignored output directory contains:
 - `seo-indexing-audit.json`: complete source metadata, reconciliation, summary, and row evidence.
 - `seo-indexing-audit.csv`: spreadsheet-friendly copy of every row; formula-leading cells are prefixed in this CSV only, while JSON retains the exact source value.
 - `seo-indexing-summary.json`: compact reconciliation and classification totals.
+
+The JSON reconciliation section records each metadata-identified issue's archive row count, matching Coverage count, issue-chart latest date, and Coverage latest date so the accepted snapshot can be audited without relying on archive filenames or argument order.
 
 Each original input row remains independently traceable through `rowId`, archive name, CSV row number, source issue, raw URL, and last-crawled date. The report captures:
 
@@ -84,7 +86,7 @@ Fragments, default ports, and trailing slashes are normalized for comparison. Me
 | Action | Dry-run meaning |
 | --- | --- |
 | `KEEP` | Current evidence is consistent; no Phase 1 disposition change is proposed. |
-| `SELF_CANONICAL` | A clean, indexable non-search 200 route lacks a canonical and may require its own final URL. |
+| `SELF_CANONICAL` | A clean, indexable non-search 200 route lacks a canonical and may require its own final URL; an article also requires positive published/public resolution. |
 | `REDIRECT_TO_REPLACEMENT` | A current redirect supplies an observed internal 200 target; the target is never guessed. |
 | `INTENTIONAL_NOINDEX` | Current public-status/route evidence supports retaining noindex. |
 | `REMOVE_FROM_SITEMAP` | A supplied URL is a sitemap member but is non-200, noindex, or proven non-public. |
