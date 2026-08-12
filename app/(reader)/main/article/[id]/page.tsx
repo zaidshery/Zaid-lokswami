@@ -73,5 +73,5 @@ export default async function ArticleDetailPage({ params }: ArticleDetailPagePro
   const { id } = await params;
   const data = await loadArticleDetailPageData(id);
 
-  return <ArticleDetailClient {...data} />;
+  return <ArticleDetailClient key={data.article?.id || id} {...data} />;
 }

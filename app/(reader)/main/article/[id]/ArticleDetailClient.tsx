@@ -110,6 +110,7 @@ export default function ArticleDetailClient({
   const listenRequestIdRef = useRef(0);
   const listenPrefetchRequestIdRef = useRef(0);
   const listenPrefetchPromiseRef = useRef<Promise<PreparedArticleAudio | null> | null>(null);
+  const summaryAbortControllerRef = useRef<AbortController | null>(null);
   const hasTrackedReadRef = useRef(false);
   const readingProgressRef = useRef(0);
   const isSignedIn = Boolean(currentUser);
@@ -146,7 +147,6 @@ export default function ArticleDetailClient({
       setReadingProgress(nextValue);
     };
 
-    updateReadingProgress();
     window.addEventListener('scroll', updateReadingProgress, { passive: true });
     window.addEventListener('resize', updateReadingProgress);
 
@@ -352,12 +352,16 @@ export default function ArticleDetailClient({
 
   const handleGenerateSummary = async () => {
     if (!article) return;
+    summaryAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    summaryAbortControllerRef.current = controller;
     setAiSummaryError('');
     setIsGeneratingSummary(true);
 
     try {
       const response = await fetch('/api/ai/summary', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -366,6 +370,8 @@ export default function ArticleDetailClient({
           language: articleContentLanguage,
         }),
       });
+
+      if (controller.signal.aborted) return;
 
       const payload = (await response.json().catch(() => ({}))) as {
         success?: boolean;
@@ -387,11 +393,16 @@ export default function ArticleDetailClient({
         throw new Error('Summary was empty');
       }
 
+      if (controller.signal.aborted) return;
       setAiBullets(bullets.slice(0, 3));
     } catch (error) {
+      if (controller.signal.aborted) return;
       setAiSummaryError(error instanceof Error ? error.message : 'Failed to generate summary');
     } finally {
-      setIsGeneratingSummary(false);
+      if (summaryAbortControllerRef.current === controller) {
+        summaryAbortControllerRef.current = null;
+        setIsGeneratingSummary(false);
+      }
     }
   };
 
@@ -474,6 +485,8 @@ export default function ArticleDetailClient({
 
   useEffect(() => {
     return () => {
+      summaryAbortControllerRef.current?.abort();
+      summaryAbortControllerRef.current = null;
       stopListening(true);
     };
   }, []);

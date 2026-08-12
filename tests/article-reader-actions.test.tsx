@@ -1,5 +1,5 @@
 import { act, createElement, type ReactNode } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -108,7 +108,9 @@ describe('article reader actions', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('does not request article audio until the reader chooses Listen', async () => {
@@ -182,6 +184,172 @@ describe('article reader actions', () => {
       '/api/ai/summary',
       expect.objectContaining({ method: 'POST' })
     );
+  });
+
+  it('clears a completed article summary when navigation replaces the article', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        success: true,
+        data: { bullets: ['Article A verified point'] },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const ArticleDetailClient = (
+      await import('@/app/(reader)/main/article/[id]/ArticleDetailClient')
+    ).default;
+    const user = userEvent.setup();
+    const articleB = {
+      ...article,
+      id: '507f191e810c19729de860ea',
+      slug: 'reader-story-b',
+      title: 'Reader story B headline',
+    };
+    const view = render(
+      createElement(ArticleDetailClient, {
+        key: article.id,
+        article,
+        relatedArticles,
+      })
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Summary' }));
+    expect(await screen.findByText('Article A verified point')).toBeInTheDocument();
+
+    view.rerender(
+      createElement(ArticleDetailClient, {
+        key: articleB.id,
+        article: articleB,
+        relatedArticles: [],
+      })
+    );
+
+    expect(screen.getByRole('heading', { name: articleB.title })).toBeInTheDocument();
+    expect(screen.queryByText('Article A verified point')).not.toBeInTheDocument();
+  });
+
+  it('does not apply a late summary response from the previous article', async () => {
+    let resolveSummary!: (response: Response) => void;
+    const summaryResponse = new Promise<Response>((resolve) => {
+      resolveSummary = resolve;
+    });
+    const fetchMock = vi.fn().mockReturnValue(summaryResponse);
+    vi.stubGlobal('fetch', fetchMock);
+    const ArticleDetailClient = (
+      await import('@/app/(reader)/main/article/[id]/ArticleDetailClient')
+    ).default;
+    const user = userEvent.setup();
+    const articleB = {
+      ...article,
+      id: '507f191e810c19729de860ea',
+      slug: 'reader-story-b',
+      title: 'Reader story B headline',
+    };
+    const view = render(
+      createElement(ArticleDetailClient, {
+        key: article.id,
+        article,
+        relatedArticles,
+      })
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Summary' }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/ai/summary',
+      expect.objectContaining({ method: 'POST' })
+    );
+
+    view.rerender(
+      createElement(ArticleDetailClient, {
+        key: articleB.id,
+        article: articleB,
+        relatedArticles: [],
+      })
+    );
+    resolveSummary({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        success: true,
+        data: { bullets: ['Late Article A point'] },
+      }),
+    } as unknown as Response);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('heading', { name: articleB.title })).toBeInTheDocument();
+    expect(screen.queryByText('Late Article A point')).not.toBeInTheDocument();
+  });
+
+  it('does not inherit reading progress and tracks the new article once after its own threshold', async () => {
+    let scrollY = 0;
+    const scrollYSpy = vi.spyOn(window, 'scrollY', 'get').mockImplementation(() => scrollY);
+    const scrollHeightSpy = vi
+      .spyOn(document.documentElement, 'scrollHeight', 'get')
+      .mockReturnValue(1000);
+    const clientHeightSpy = vi
+      .spyOn(document.documentElement, 'clientHeight', 'get')
+      .mockReturnValue(100);
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const ArticleDetailClient = (
+      await import('@/app/(reader)/main/article/[id]/ArticleDetailClient')
+    ).default;
+    const articleB = {
+      ...article,
+      id: '507f191e810c19729de860ea',
+      slug: 'reader-story-b',
+      title: 'Reader story B headline',
+    };
+    const view = render(
+      createElement(ArticleDetailClient, {
+        key: article.id,
+        article,
+        relatedArticles,
+      })
+    );
+
+    scrollY = 810;
+    fireEvent.scroll(window);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/user/track',
+      expect.objectContaining({ body: expect.stringContaining(article.id) })
+    );
+
+    view.rerender(
+      createElement(ArticleDetailClient, {
+        key: articleB.id,
+        article: articleB,
+        relatedArticles: [],
+      })
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    scrollY = 810;
+    fireEvent.scroll(window);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/user/track',
+      expect.objectContaining({ body: expect.stringContaining(articleB.id) })
+    );
+    fireEvent.scroll(window);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    scrollYSpy.mockRestore();
+    scrollHeightSpy.mockRestore();
+    clientHeightSpy.mockRestore();
+    clearTimeoutSpy.mockRestore();
   });
 
   it('preserves saved-article state and emits the bookmark update after a signed-in toggle', async () => {

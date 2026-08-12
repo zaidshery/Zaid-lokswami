@@ -301,7 +301,6 @@ describe('public articles service', () => {
       _id: 'published-related',
       slug: 'published-related',
       title: 'Published Related',
-      content: '<p>Published body</p>',
       category: 'Politics',
       publishedAt: '2026-08-12T09:00:00.000Z',
       updatedAt: '2026-08-12T09:00:00.000Z',
@@ -338,6 +337,71 @@ describe('public articles service', () => {
     expect(result.items[0]).not.toHaveProperty('content');
   });
 
+  it('uses bounded body-free Mongo projections and still filters non-public candidates', async () => {
+    const selectedFields: string[] = [];
+    const candidateLimits: number[] = [];
+    const makeQuery = (docs: Array<Record<string, unknown>>) => ({
+      select: vi.fn((fields: string) => {
+        selectedFields.push(fields);
+        return {
+          sort: vi.fn(() => ({
+            limit: vi.fn((limit: number) => {
+              candidateLimits.push(limit);
+              return { lean: vi.fn().mockResolvedValue(docs) };
+            }),
+          })),
+        };
+      }),
+    });
+    const sameCategory = {
+      ...publishedBase,
+      _id: 'same-category',
+      slug: 'same-category',
+      title: 'Same Category',
+      category: 'Politics',
+      publishedAt: '2026-08-12T09:00:00.000Z',
+      updatedAt: '2026-08-12T09:00:00.000Z',
+      content: '<p>A very large body that related-card mapping must ignore.</p>',
+    };
+    const nonPublic = {
+      ...sameCategory,
+      _id: 'draft-candidate',
+      slug: 'draft-candidate',
+      title: 'Draft Candidate',
+      workflow: { status: 'draft' },
+    };
+    const fallback = {
+      ...publishedBase,
+      _id: 'fallback',
+      slug: 'fallback',
+      title: 'Fallback',
+      category: 'Sports',
+      publishedAt: '2026-08-12T08:00:00.000Z',
+      updatedAt: '2026-08-12T08:00:00.000Z',
+      content: '<p>Another large body that must not be selected.</p>',
+    };
+    articleFindMock
+      .mockReturnValueOnce(makeQuery([sameCategory, nonPublic]))
+      .mockReturnValueOnce(makeQuery([fallback]));
+
+    const { listRelatedPublicArticles } = await import('@/lib/server/publicArticles');
+    const result = await listRelatedPublicArticles(
+      { id: 'current', href: '/main/article/current', category: 'Politics' },
+      { source: 'mongo' }
+    );
+
+    expect(articleFindMock).toHaveBeenCalledTimes(2);
+    expect(selectedFields).toHaveLength(2);
+    for (const fields of selectedFields) {
+      expect(fields.split(/\s+/)).not.toContain('content');
+      expect(fields.split(/\s+/)).not.toContain('contentJson');
+      expect(fields).toContain('workflow.status');
+    }
+    expect(candidateLimits).toEqual([60, 60]);
+    expect(result.items.map((item) => item.id)).toEqual(['same-category', 'fallback']);
+    expect(result.items.every((item) => !('content' in item))).toBe(true);
+  });
+
   it('returns equivalent bounded related output from Mongo and the file store', async () => {
     const fixtures = [
       {
@@ -360,15 +424,18 @@ describe('public articles service', () => {
       },
     ];
     listAllStoredArticlesMock.mockResolvedValue(fixtures);
-    articleFindMock.mockReturnValue({
+    const makeQuery = (docs: typeof fixtures) => ({
       select: vi.fn().mockReturnValue({
         sort: vi.fn().mockReturnValue({
           limit: vi.fn().mockReturnValue({
-            lean: vi.fn().mockResolvedValue(fixtures),
+            lean: vi.fn().mockResolvedValue(docs),
           }),
         }),
       }),
     });
+    articleFindMock
+      .mockReturnValueOnce(makeQuery([fixtures[0]]))
+      .mockReturnValueOnce(makeQuery([fixtures[1]]));
 
     const { listRelatedPublicArticles } = await import('@/lib/server/publicArticles');
     const current = { id: 'current', href: '/main/article/current', category: 'Politics' };

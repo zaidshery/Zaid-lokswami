@@ -168,6 +168,7 @@ describe('article page server rendering', () => {
       unknown
     > & { seo?: Record<string, unknown> };
 
+    expect(element.key).toBe('article-1');
     expect(serializedArticle.seo).toEqual({
       featuredImageAlt: 'Public featured image alt',
       featuredImageCaption: 'Public featured image caption',
