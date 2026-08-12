@@ -7,7 +7,7 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 | 0 | Baseline lock and read-only SEO smoke | Complete | Node 20 quality gate and live read-only evidence |
 | 1 | Search Console URL inventory and canonical dry run | Complete | Current GSC CSV/export and manual review of ambiguous URLs |
 | 2 | Full article SSR and crawlable related links | Implemented locally | Approved server/client boundary and publication-safety tests |
-| 3 | URL governance, schema and sitemap hardening | Pending | Approved Phase 1 mappings; no guessed redirects |
+| 3 | URL governance, schema and sitemap hardening | 3A implemented locally; 3B pending | Approved Phase 1 mappings; no guessed redirects |
 | 4 | Core Web Vitals instrumentation and budgets | Pending | Event/privacy design and 48-hour field baseline |
 | 5 | Mobile performance remediation | Pending | Phase 4 evidence identifies the worst template |
 | 6 | Analytics correctness, engagement and privacy | Pending | Retention/IP decision; no TTL or deletion without approval |
@@ -60,15 +60,30 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 - [x] Related articles are published-only, same-category first, destination-deduplicated, current-article-excluding, and capped at 20.
 - [x] Four related links render initially and each load-more action reveals four more.
 - [x] `data-related-articles` scopes crawlable-link smoke checks to the genuine related section.
-- [x] Missing and non-public articles retain the existing soft-unavailable page and noindex behavior.
+- [x] Missing and non-public articles retained the existing soft-unavailable page in Phase 2 (superseded by the real 404 boundary in Phase 3A).
 - [x] MongoDB and file-store related results use the same public mapping and ordering contract.
 - [x] Client interactions remain hydrated: reading progress, AI summary, listen/audio, bookmarks, sharing, analytics, language, images, and load more.
 - [x] Focused Phase 2 and regression tests pass (110 tests across 8 files).
 - [x] Typecheck passes locally.
 - [x] Lint passes locally with only existing unrelated warnings.
 - [x] Production CI build passes locally; the article route is emitted as dynamic SSR.
-- [ ] The exact full test command is clean under parallel load (675/676 pass; the one unrelated recovery test passes in isolation but exceeds its five-second timeout in the full run).
+- [x] The exact full test command is clean under parallel load in Phase 3A validation (714/714 tests across 157 files).
 - [ ] Live crawl/indexing acceptance is recorded separately; local tests are not production indexing evidence.
+
+## Phase 3A acceptance
+
+- [x] One typed public resolver classifies current slugs, previous slugs, legacy IDs, missing tokens, ambiguous ownership, and selected-store unavailability.
+- [x] Request parsing decodes safely once and never applies creation-time punctuation or whitespace replacement.
+- [x] Published current slugs render at their authority; previous slugs, Object IDs, case variants, and legacy routes redirect directly with permanent semantics.
+- [x] Missing, malformed, deleted, and every non-public workflow state reach the real not-found boundary; ambiguity and active-store failures fail closed as server errors.
+- [x] Article-only trailing-slash normalization avoids the Hostinger site-wide bounce constraint and strips framework-only query parameters.
+- [x] Create, update, and revision-restore ownership checks cover current and historical slugs with same-article exclusion where applicable.
+- [x] Metadata, JSON-LD authority, related destinations, and saved-article links agree on the current slug, with ID fallback only when no slug exists.
+- [x] New or edited canonical overrides are limited to the clean same-origin current article URL; unsafe existing values are ignored as authority without rewriting records.
+- [x] No production records, schema, index, migration, dependency, deployment setting, sitemap architecture, or Phase 3B structured-data feature changed.
+- [ ] Cross-field atomic uniqueness between `slug` and `previousSlugs` remains deferred. Closing the final concurrent-write race requires a separately approved reservation model or database index/data migration.
+
+Rollback: revert the single Phase 3A commit. No data rollback is required because Phase 3A performs no migration or bulk record mutation.
 
 ## Non-negotiable safeguards
 

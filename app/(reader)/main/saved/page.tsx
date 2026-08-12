@@ -7,9 +7,11 @@ import { BookmarkX, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import { buildArticleImageVariantUrl } from '@/lib/utils/articleMedia';
 import { formatUiDate } from '@/lib/utils/dateFormat';
+import { buildArticlePublicPath } from '@/lib/seo/articleSeo';
 
 type SavedArticle = {
   id: string;
+  slug: string;
   title: string;
   summary: string;
   image: string;
@@ -245,7 +247,7 @@ export default function SavedArticlesPage() {
               >
                 <div className="flex items-start gap-3">
                   <Link
-                    href={`/main/article/${encodeURIComponent(item.id)}`}
+                    href={buildArticlePublicPath({ id: item.id, slug: item.slug })}
                     className="flex min-w-0 flex-1 items-start gap-3"
                   >
                     <div className="relative h-20 w-24 flex-shrink-0 overflow-hidden rounded-xl sm:h-24 sm:w-32">

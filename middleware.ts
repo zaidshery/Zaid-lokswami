@@ -15,6 +15,8 @@ import {
   isCacheablePublicReadApiRoute,
 } from '@/lib/security/publicApiRateLimitPolicy';
 import { logApiRequestFromMiddleware } from '@/lib/security/requestLogger';
+import { buildArticleRedirectPath } from '@/lib/seo/articleSeo';
+import { resolvePublicArticleToken } from '@/lib/server/publicArticles';
 
 async function getSessionToken(request: NextRequest) {
   const secret = getJwtSecretOrNull();
@@ -103,6 +105,25 @@ function getSessionAwareRateLimitKey(
 /** Protects admin and signed-in reader routes with the active NextAuth session. */
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
+  if (/^\/main\/article\/[^/]+\/+$/u.test(pathname)) {
+    const requestToken = pathname.replace(/\/+$/, '').split('/').pop() || '';
+    const resolution = await resolvePublicArticleToken(requestToken);
+    if (
+      resolution.kind === 'current' ||
+      resolution.kind === 'previous' ||
+      resolution.kind === 'legacyId'
+    ) {
+      const targetPath = buildArticleRedirectPath(
+        resolution.article,
+        request.nextUrl.searchParams
+      );
+      return NextResponse.redirect(new URL(targetPath, request.url), 308);
+    }
+    return NextResponse.next();
+  }
+  if (/^\/main\/article\/[^/]+$/u.test(pathname)) {
+    return NextResponse.next();
+  }
   const isApiRequest = pathname.startsWith('/api/');
   const contentType = request.headers.get('content-type') || '';
   
@@ -252,5 +273,6 @@ export const config = {
     '/main/account/:path*',
     '/main/saved/:path*',
     '/main/preferences/:path*',
+    '/main/article/:path*',
   ],
 };

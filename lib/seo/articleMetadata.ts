@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import { COMPANY_INFO } from '@/lib/constants/company';
 import type { ServerArticle } from '@/lib/content/serverArticles';
 import {
-  buildArticlePublicPath,
   getSiteUrl,
+  resolveArticleCanonicalUrl,
   toAbsoluteArticleUrl,
 } from '@/lib/seo/articleSeo';
 
@@ -73,9 +73,10 @@ export function buildArticlePageMetadata({
   const seoTitle = article.seo.metaTitle || article.title;
   const title = `${seoTitle} | ${COMPANY_INFO.name}`;
   const description = article.seo.metaDescription || article.summary;
-  const canonical =
-    article.seo.canonicalUrl ||
-    `${siteUrl}${buildArticlePublicPath({ id: article.id, slug: article.slug })}`;
+  const canonical = resolveArticleCanonicalUrl(
+    { id: article.id, slug: article.slug, canonicalUrl: article.seo.canonicalUrl },
+    siteUrl
+  );
   const ogImage = buildArticleSocialImageUrl(article, siteUrl);
 
   return {

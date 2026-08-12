@@ -12,6 +12,7 @@ const getPrimaryArticleForStoryMock = vi.fn();
 const getStoryRecordForArticleLinkingMock = vi.fn();
 const syncStoryLinkedArticleMock = vi.fn();
 const validateStoryForArticleCreationMock = vi.fn();
+const articleExistsMock = vi.fn();
 
 vi.mock('@/lib/auth/admin', () => ({
   getAdminSession: getAdminSessionMock,
@@ -31,7 +32,7 @@ vi.mock('@/lib/db/mongoose', () => ({
 
 vi.mock('@/lib/models/Article', () => ({
   default: {
-    exists: vi.fn(),
+    exists: articleExistsMock,
     find: vi.fn(),
   },
 }));
@@ -366,10 +367,15 @@ describe('/api/admin/articles route', () => {
         slug: 'indore-metro-update',
         previousSlugs: [],
       },
+      {
+        _id: 'existing-2',
+        slug: 'another-current-slug',
+        previousSlugs: ['indore-metro-update-2'],
+      },
     ]);
     createStoredArticleMock.mockResolvedValue({
       _id: 'article-3',
-      slug: 'indore-metro-update-2',
+      slug: 'indore-metro-update-3',
       title: 'Indore Metro update',
       workflow: { status: 'published', createdBy: { id: 'admin-1' } },
     });
@@ -401,7 +407,7 @@ describe('/api/admin/articles route', () => {
     expect(response.status).toBe(201);
     expect(createStoredArticleMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        slug: 'indore-metro-update-2',
+        slug: 'indore-metro-update-3',
         seo: expect.objectContaining({
           focusKeyword: 'Indore Metro',
           featuredImageAlt: 'Metro construction',
@@ -410,6 +416,71 @@ describe('/api/admin/articles route', () => {
         }),
       })
     );
+  });
+
+  it('checks Mongo create ownership across current and historical slugs', async () => {
+    process.env.MONGODB_URI = 'mongodb://example.test/lokswami';
+    connectDBMock.mockResolvedValue(undefined);
+    articleExistsMock.mockResolvedValue(false);
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk Admin',
+      role: 'admin',
+    });
+
+    const { POST } = await import('@/app/api/admin/articles/route');
+    const response = await POST(
+      new Request('http://localhost/api/admin/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: 'draft',
+          title: 'Historical slug check',
+          slug: 'historical-slug-check',
+          seo: { canonicalUrl: 'https://example.com/external' },
+        }),
+      }) as unknown as NextRequest
+    );
+
+    expect(response.status).toBe(400);
+    expect(articleExistsMock).toHaveBeenCalledWith({
+      $or: [
+        { slug: 'historical-slug-check' },
+        { previousSlugs: 'historical-slug-check' },
+      ],
+    });
+    expect(createStoredArticleMock).not.toHaveBeenCalled();
+    delete process.env.MONGODB_URI;
+  });
+
+  it('rejects an external canonical override before creating an article', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'desk@example.com',
+      name: 'Desk Admin',
+      role: 'admin',
+    });
+    listAllStoredArticlesMock.mockResolvedValue([]);
+
+    const { POST } = await import('@/app/api/admin/articles/route');
+    const response = await POST(
+      new Request('http://localhost/api/admin/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: 'draft',
+          title: 'Canonical governance',
+          slug: 'canonical-governance',
+          seo: { canonicalUrl: 'https://example.com/canonical-governance' },
+        }),
+      }) as unknown as NextRequest
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toMatch(/public site origin/i);
+    expect(createStoredArticleMock).not.toHaveBeenCalled();
   });
 
   it('rejects submit and publish requests with readiness blockers', async () => {

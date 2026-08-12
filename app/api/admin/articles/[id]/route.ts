@@ -77,6 +77,7 @@ import {
   normalizeArticleSeo,
   normalizeArticleSlug,
   resolveUniqueArticleSlug,
+  validateArticleCanonicalOverride,
   type ArticleSeoFields,
 } from '@/lib/seo/articleSeo';
 import {
@@ -628,6 +629,17 @@ function validateLengths(input: Record<string, unknown>) {
   }
 
   return null;
+}
+
+function validateEditedCanonical(
+  input: Record<string, unknown>,
+  article: { id: string; slug: string }
+) {
+  const seo = typeof input.seo === 'object' && input.seo
+    ? (input.seo as Record<string, unknown>)
+    : null;
+  if (!seo || !Object.prototype.hasOwnProperty.call(seo, 'canonicalUrl')) return null;
+  return validateArticleCanonicalOverride(String(seo.canonicalUrl || ''), article);
 }
 
 function normalizeFullInput(body: unknown) {
@@ -1522,6 +1534,14 @@ export async function PATCH(
         updates.previousSlugs = Array.from(previousSlugs).filter((item) => item !== resolvedSlug);
       }
 
+      const canonicalError = validateEditedCanonical(
+        updates as Record<string, unknown>,
+        { id, slug: String(updates.slug || currentArticle.slug || '') }
+      );
+      if (canonicalError) {
+        return NextResponse.json({ success: false, error: canonicalError }, { status: 400 });
+      }
+
       const previousBreakingAudioUrl = resolveBreakingAudioUrl(
         currentArticle as unknown as Record<string, unknown>
       );
@@ -1643,6 +1663,14 @@ export async function PATCH(
       if (currentSlug && currentSlug !== resolvedSlug) previousSlugs.add(currentSlug);
       updates.slug = resolvedSlug;
       updates.previousSlugs = Array.from(previousSlugs).filter((item) => item && item !== resolvedSlug);
+    }
+
+    const canonicalError = validateEditedCanonical(
+      updates as Record<string, unknown>,
+      { id, slug: String(updates.slug || current.slug || '') }
+    );
+    if (canonicalError) {
+      return NextResponse.json({ success: false, error: canonicalError }, { status: 400 });
     }
 
     const previousBreakingAudioUrl = resolveBreakingAudioUrl(
@@ -1816,6 +1844,14 @@ export async function PUT(
         input.previousSlugs = Array.from(previousSlugs).filter((item) => item !== resolvedSlug);
       }
 
+      const canonicalError = validateEditedCanonical(
+        input as unknown as Record<string, unknown>,
+        { id, slug: input.slug }
+      );
+      if (canonicalError) {
+        return NextResponse.json({ success: false, error: canonicalError }, { status: 400 });
+      }
+
       const previousBreakingAudioUrl = resolveBreakingAudioUrl(
         currentArticle as unknown as Record<string, unknown>
       );
@@ -1916,6 +1952,14 @@ export async function PUT(
       if (currentSlug && currentSlug !== resolvedSlug) previousSlugs.add(currentSlug);
       input.slug = resolvedSlug;
       input.previousSlugs = Array.from(previousSlugs).filter((item) => item && item !== resolvedSlug);
+    }
+
+    const canonicalError = validateEditedCanonical(
+      input as unknown as Record<string, unknown>,
+      { id, slug: input.slug }
+    );
+    if (canonicalError) {
+      return NextResponse.json({ success: false, error: canonicalError }, { status: 400 });
     }
 
     const currentVersion = resolveArticleVersion(current.version);

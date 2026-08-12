@@ -1,15 +1,11 @@
 import type { Metadata } from 'next';
-import { permanentRedirect } from 'next/navigation';
 import { getArticleForMetadata } from '@/lib/content/serverArticles';
 import { resolveArticleOgImageUrl } from '@/lib/utils/articleMedia';
 import {
   buildArticlePageMetadata,
   normalizeMetadataSiteUrl,
 } from '@/lib/seo/articleMetadata';
-import {
-  buildArticlePublicPath,
-  buildNewsArticleJsonLd,
-} from '@/lib/seo/articleSeo';
+import { buildNewsArticleJsonLd } from '@/lib/seo/articleSeo';
 
 type LayoutContext = {
   params: Promise<{ id: string }>;
@@ -17,10 +13,9 @@ type LayoutContext = {
 
 export async function generateMetadata(context: LayoutContext): Promise<Metadata> {
   const { id } = await context.params;
-  const decodedId = decodeURIComponent(id);
   const siteUrl = normalizeMetadataSiteUrl();
 
-  const article = await getArticleForMetadata(decodedId);
+  const article = await getArticleForMetadata(id);
   return buildArticlePageMetadata({ article, siteUrl });
 }
 
@@ -42,17 +37,8 @@ async function ArticleStructuredData({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const decodedId = decodeURIComponent(id);
   const siteUrl = normalizeMetadataSiteUrl();
-  const article = await getArticleForMetadata(decodedId);
-
-  if (
-    article?.slug &&
-    decodedId !== article.slug &&
-    (decodedId === article.id || article.previousSlugs.includes(decodedId))
-  ) {
-    permanentRedirect(buildArticlePublicPath({ id: article.id, slug: article.slug }));
-  }
+  const article = await getArticleForMetadata(id);
 
   const jsonLd = article
     ? buildNewsArticleJsonLd({

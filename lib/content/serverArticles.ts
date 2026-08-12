@@ -1,14 +1,9 @@
-import { Types } from 'mongoose';
-import connectDB from '@/lib/db/mongoose';
 import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 import Article from '@/lib/models/Article';
-import type { ArticleSeo, StoredArticle } from '@/lib/storage/articlesFile';
-import {
-  getStoredArticleById,
-  getStoredArticleByIdOrSlug,
-  listAllStoredArticles,
-} from '@/lib/storage/articlesFile';
+import type { ArticleSeo } from '@/lib/storage/articlesFile';
+import { listAllStoredArticles } from '@/lib/storage/articlesFile';
+import { resolvePublicArticleToken } from '@/lib/server/publicArticles';
 import {
   buildArticlePublicPath,
   normalizeArticleSeo,
@@ -63,118 +58,31 @@ function normalizeSeo(input: unknown): ArticleSeo {
   };
 }
 
-function stringifyId(value: unknown) {
-  if (typeof value === 'string') return value.trim();
-  if (value && typeof value === 'object' && 'toString' in value) {
-    return String(value).trim();
-  }
-  return '';
-}
-
 function stringifyField(value: unknown) {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return '';
 }
 
-function normalizeFromUnknown(input: unknown): ServerArticle | null {
-  const source = typeof input === 'object' && input ? (input as Record<string, unknown>) : null;
-  if (!source) return null;
-
-  const title = stringifyField(source.title);
-  const summary = stringifyField(source.summary);
-  const image = normalizeMediaUrl(
-    typeof source.image === 'string' ? source.image : ''
-  );
-  const category = stringifyField(source.category);
-  const author = stringifyField(source.author);
-  if (!title || !summary || !image || !category || !author) return null;
-  const id = stringifyId(source._id) || stringifyId(source.id);
-  const slug = normalizeArticleSlug(stringifyField(source.slug));
-  const previousSlugs = Array.isArray(source.previousSlugs)
-    ? source.previousSlugs
-        .map((item) => normalizeArticleSlug(String(item || '')))
-        .filter(Boolean)
-    : [];
-
-  const publishedAtSource = source.publishedAt;
-  const updatedAtSource = source.updatedAt;
-  const publishedAtValue = new Date(
-    typeof publishedAtSource === 'string' || typeof publishedAtSource === 'number'
-      ? publishedAtSource
-      : Date.now()
-  );
-  const updatedAtValue = new Date(
-    typeof updatedAtSource === 'string' || typeof updatedAtSource === 'number'
-      ? updatedAtSource
-      : Date.now()
-  );
-  const publishedAt = Number.isNaN(publishedAtValue.getTime())
-    ? new Date().toISOString()
-    : publishedAtValue.toISOString();
-  const updatedAt = Number.isNaN(updatedAtValue.getTime())
-    ? publishedAt
-    : updatedAtValue.toISOString();
-
-  return {
-    id,
-    slug,
-    previousSlugs,
-    title,
-    summary,
-    image,
-    category,
-    author,
-    publishedAt,
-    updatedAt,
-    seo: normalizeSeo(source.seo),
-  };
-}
-
-function normalizeFromStored(article: StoredArticle): ServerArticle {
-  return {
-    id: article._id,
-    slug: article.slug,
-    previousSlugs: article.previousSlugs,
-    title: article.title,
-    summary: article.summary,
-    image: normalizeMediaUrl(article.image),
-    category: article.category,
-    author: article.author,
-    publishedAt: article.publishedAt,
-    updatedAt: article.updatedAt,
-    seo: {
-      ...article.seo,
-      ogImage: normalizeMediaUrl(article.seo.ogImage, ''),
-    },
-  };
-}
-
 export async function getArticleForMetadata(id: string) {
-  const token = id.trim();
-  const slug = normalizeArticleSlug(token);
-  if (process.env.MONGODB_URI) {
-    try {
-      await connectDB();
-      const article = Types.ObjectId.isValid(token)
-        ? await Article.findById(token).lean()
-        : slug
-          ? await Article.findOne({
-              $or: [{ slug }, { previousSlugs: slug }],
-            }).lean()
-          : null;
-      if (article && isPubliclyPublishedArticle(article)) {
-        const normalized = normalizeFromUnknown(article);
-        if (normalized) return normalized;
-      }
-    } catch (error) {
-      console.error('Failed to load article metadata from MongoDB, falling back.', error);
-    }
+  const resolution = await resolvePublicArticleToken(id);
+  if (resolution.kind === 'missing') return null;
+  if (resolution.kind === 'ambiguous' || resolution.kind === 'unavailable') {
+    throw new Error(`Article metadata resolution ${resolution.kind}`);
   }
-
-  const fileArticle = await getStoredArticleByIdOrSlug(token) || await getStoredArticleById(token);
-  if (!fileArticle || !isPubliclyPublishedArticle(fileArticle)) return null;
-  return normalizeFromStored(fileArticle);
+  return {
+    id: resolution.article.id,
+    slug: resolution.article.slug,
+    previousSlugs: resolution.article.previousSlugs,
+    title: resolution.article.title,
+    summary: resolution.article.summary,
+    image: resolution.article.image,
+    category: resolution.article.category,
+    author: resolution.article.author,
+    publishedAt: resolution.article.publishedAt,
+    updatedAt: resolution.article.updatedAt,
+    seo: resolution.article.seo,
+  } satisfies ServerArticle;
 }
 
 function toSitemapItem(input: unknown): ServerArticleSitemapItem | null {

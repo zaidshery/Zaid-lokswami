@@ -4,14 +4,17 @@ import { hydrateRoot, type Root } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getPublicArticleBySlug: vi.fn(),
+  getPublicArticleByResolution: vi.fn(),
+  resolvePublicArticleToken: vi.fn(),
   listRelatedPublicArticles: vi.fn(),
   requestArticleTtsAudio: vi.fn(),
   routerPush: vi.fn(),
 }));
 
 vi.mock('@/lib/server/publicArticles', () => ({
-  getPublicArticleBySlug: mocks.getPublicArticleBySlug,
+  getPublicArticleByResolution: mocks.getPublicArticleByResolution,
+  resolvePublicArticleToken: mocks.resolvePublicArticleToken,
+  PublicArticleResolutionError: class PublicArticleResolutionError extends Error {},
   listRelatedPublicArticles: mocks.listRelatedPublicArticles,
 }));
 
@@ -114,7 +117,14 @@ async function renderArticlePage(token = 'published-story') {
 describe('article page server rendering', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getPublicArticleBySlug.mockResolvedValue({
+    mocks.resolvePublicArticleToken.mockResolvedValue({
+      kind: 'current',
+      source: 'file',
+      article: publicArticle,
+      authoritativePath: '/main/article/published-story',
+      isExactAuthority: true,
+    });
+    mocks.getPublicArticleByResolution.mockResolvedValue({
       article: publicArticle,
       source: 'file',
     });
@@ -187,26 +197,25 @@ describe('article page server rendering', () => {
   it.each(['draft', 'scheduled', 'rejected', 'approved', 'archived'])(
     'exposes neither body nor related links for a %s article',
     async () => {
-      mocks.getPublicArticleBySlug.mockResolvedValue(null);
-
-      const { html } = await renderArticlePage();
-
-      expect(html).not.toContain('Published story headline');
-      expect(html).not.toContain('data-article-body');
-      expect(html).not.toContain('data-related-articles');
+      mocks.resolvePublicArticleToken.mockResolvedValue({ kind: 'missing' });
+      const { loadArticleDetailPageData } = await import(
+        '@/app/(reader)/main/article/[id]/page'
+      );
+      await expect(loadArticleDetailPageData('hidden-story')).resolves.toEqual({
+        article: null,
+        relatedArticles: [],
+      });
       expect(mocks.listRelatedPublicArticles).not.toHaveBeenCalled();
     }
   );
 
   it('fails closed without rendering mock content when the public service errors', async () => {
-    mocks.getPublicArticleBySlug.mockRejectedValue(new Error('storage unavailable'));
-
-    const { html } = await renderArticlePage();
-
-    expect(html).toContain('Article not found');
-    expect(html).not.toContain('data-article-body');
-    expect(html).not.toContain('data-related-articles');
-    expect(html).not.toMatch(/IPL 2024|G20 Summit/);
+    mocks.resolvePublicArticleToken.mockResolvedValue({ kind: 'unavailable' });
+    const { loadArticleDetailPageData } = await import(
+      '@/app/(reader)/main/article/[id]/page'
+    );
+    await expect(loadArticleDetailPageData('published-story')).rejects.toThrow();
+    expect(mocks.getPublicArticleByResolution).not.toHaveBeenCalled();
   });
 
   it('hydrates the same server markup without warnings and does not request audio', async () => {

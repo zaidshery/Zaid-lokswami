@@ -4,6 +4,7 @@ const connectDBMock = vi.fn();
 const getStoredArticleByIdMock = vi.fn();
 const getStoredArticleByIdOrSlugMock = vi.fn();
 const listAllStoredArticlesMock = vi.fn();
+const resolvePublicArticleTokenMock = vi.fn();
 
 vi.mock('@/lib/db/mongoose', () => ({
   default: connectDBMock,
@@ -23,6 +24,10 @@ vi.mock('@/lib/storage/articlesFile', () => ({
   listAllStoredArticles: listAllStoredArticlesMock,
 }));
 
+vi.mock('@/lib/server/publicArticles', () => ({
+  resolvePublicArticleToken: resolvePublicArticleTokenMock,
+}));
+
 describe('server article publication helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -30,6 +35,7 @@ describe('server article publication helpers', () => {
     getStoredArticleByIdOrSlugMock.mockImplementation((token: string) =>
       getStoredArticleByIdMock(token)
     );
+    resolvePublicArticleTokenMock.mockResolvedValue({ kind: 'missing' });
   });
 
   it('hides unpublished articles from metadata lookups', async () => {
@@ -94,8 +100,13 @@ describe('server article publication helpers', () => {
   });
 
   it('resolves metadata by slug and preserves canonical slug fields', async () => {
-    getStoredArticleByIdOrSlugMock.mockResolvedValue({
-      _id: 'article-1',
+    resolvePublicArticleTokenMock.mockResolvedValue({
+      kind: 'previous',
+      source: 'file',
+      authoritativePath: '/main/article/indore-metro-update',
+      isExactAuthority: false,
+      article: {
+      id: 'article-1',
       slug: 'indore-metro-update',
       previousSlugs: ['old-indore-metro-update'],
       title: 'Indore Metro update',
@@ -113,8 +124,7 @@ describe('server article publication helpers', () => {
         canonicalUrl: '',
         includeInNewsSitemap: true,
       },
-      workflow: {
-        status: 'published',
+      href: '/main/article/indore-metro-update',
       },
     });
 

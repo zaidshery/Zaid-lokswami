@@ -7,14 +7,17 @@ import {
 } from '@/lib/constants/newsCategories';
 import Article from '@/lib/models/Article';
 import {
-  getStoredArticleByIdOrSlug,
+  getStoredArticleByIdStrict,
   listAllStoredArticles,
+  listStoredArticleResolutionRecords,
 } from '@/lib/storage/articlesFile';
 import type { ArticleSeo } from '@/lib/storage/articlesFile';
 import {
   buildArticlePublicPath,
   normalizeArticleSeo,
   normalizeArticleSlug,
+  parseArticleRequestToken,
+  isValidArticleSlug,
 } from '@/lib/seo/articleSeo';
 import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
 import { WORKFLOW_STATUSES } from '@/lib/workflow/types';
@@ -80,6 +83,42 @@ export type PublicArticleDetailResult = {
   article: PublicArticleDetail;
   source: PublicArticleSource;
 };
+
+export type PublicArticleAuthority = {
+  id: string;
+  slug: string;
+  previousSlugs: string[];
+  title: string;
+  summary: string;
+  image: string;
+  category: string;
+  author: string;
+  publishedAt: string;
+  updatedAt: string;
+  seo: ArticleSeo;
+  href: string;
+};
+
+type ResolvedPublicArticleToken = {
+  kind: 'current' | 'previous' | 'legacyId';
+  source: PublicArticleSource;
+  article: PublicArticleAuthority;
+  authoritativePath: string;
+  isExactAuthority: boolean;
+};
+
+export type PublicArticleResolution =
+  | ResolvedPublicArticleToken
+  | { kind: 'missing' }
+  | { kind: 'ambiguous' }
+  | { kind: 'unavailable' };
+
+export class PublicArticleResolutionError extends Error {
+  constructor(public readonly resolution: 'ambiguous' | 'unavailable') {
+    super(`Public article resolution ${resolution}`);
+    this.name = 'PublicArticleResolutionError';
+  }
+}
 
 export type PublicRelatedArticlesResult = {
   items: PublicArticleItem[];
@@ -606,39 +645,175 @@ export async function listRelatedPublicArticles(
   };
 }
 
-async function getMongoArticleByToken(token: string) {
-  const slug = normalizeArticleSlug(token);
-  let article: unknown = null;
+const ARTICLE_RESOLUTION_PROJECTION = [
+  '_id',
+  'slug',
+  'previousSlugs',
+  'title',
+  'summary',
+  'image',
+  'category',
+  'author',
+  'publishedAt',
+  'updatedAt',
+  'seo',
+  'workflow.status',
+  'workflow.publishedAt',
+  'workflow.scheduledFor',
+].join(' ');
 
-  if (Types.ObjectId.isValid(token)) {
-    article = await Article.findById(token).lean();
+function normalizedStoredSlug(value: unknown) {
+  const text = toText(value);
+  return text ? text.normalize('NFKC').toLowerCase() : '';
+}
+
+function matchesResolutionToken(
+  raw: unknown,
+  token: Extract<ReturnType<typeof parseArticleRequestToken>, { ok: true }>
+) {
+  const source = asObject(raw);
+  const id = toId(source._id) || toId(source.id);
+  const currentSlug = normalizedStoredSlug(source.slug);
+  const previousSlugs = Array.isArray(source.previousSlugs)
+    ? source.previousSlugs.map(normalizedStoredSlug).filter(Boolean)
+    : [];
+  return Boolean(
+    id === token.decoded ||
+      (token.objectId && id.toLowerCase() === token.objectId.toLowerCase()) ||
+      (token.normalizedSlug &&
+        (currentSlug === token.normalizedSlug || previousSlugs.includes(token.normalizedSlug)))
+  );
+}
+
+function toPublicArticleAuthority(raw: unknown): PublicArticleAuthority | null {
+  const source = asObject(raw);
+  const id = toId(source._id) || toId(source.id);
+  const slug = toText(source.slug);
+  const title = toText(source.title);
+  const summary = toText(source.summary);
+  const image = normalizeMediaUrl(source.image);
+  const category = toText(source.category);
+  const author = toText(source.author);
+  if (!id || !title || !summary || !category || !author) return null;
+  const previousSlugs = Array.isArray(source.previousSlugs)
+    ? source.previousSlugs.map(toText).filter(Boolean)
+    : [];
+  return {
+    id,
+    slug,
+    previousSlugs,
+    title,
+    summary,
+    image,
+    category,
+    author,
+    publishedAt: toIsoDate(source.publishedAt),
+    updatedAt: toIsoDate(source.updatedAt),
+    seo: normalizeSeo(source.seo, image),
+    href: buildArticlePublicPath({ id, slug }),
+  };
+}
+
+async function getMongoResolutionCandidates(
+  token: Extract<ReturnType<typeof parseArticleRequestToken>, { ok: true }>
+) {
+  const or: Record<string, unknown>[] = [];
+  if (token.objectId && Types.ObjectId.isValid(token.objectId)) {
+    or.push({ _id: token.objectId });
+  }
+  if (token.normalizedSlug) {
+    or.push({ slug: token.normalizedSlug }, { previousSlugs: token.normalizedSlug });
+  }
+  if (!or.length) return [];
+  return Article.find({ $or: or })
+    .select(ARTICLE_RESOLUTION_PROJECTION)
+    .limit(3)
+    .lean();
+}
+
+export async function resolvePublicArticleToken(
+  requestToken: string
+): Promise<PublicArticleResolution> {
+  const token = parseArticleRequestToken(requestToken);
+  if (!token.ok) return { kind: 'missing' };
+
+  let source: PublicArticleSource;
+  let candidates: unknown[];
+  try {
+    source = await resolveSource();
+    candidates = source === 'mongo'
+      ? await getMongoResolutionCandidates(token)
+      : (await listStoredArticleResolutionRecords()).filter((item) =>
+          matchesResolutionToken(item, token)
+        );
+  } catch (error) {
+    console.error('Public article resolver store failure.', error);
+    return { kind: 'unavailable' };
   }
 
-  if (!article && slug) {
-    article = await Article.findOne({
-      $or: [{ slug }, { previousSlugs: slug }],
-    }).lean();
+  const owners = new Map<string, unknown>();
+  for (const candidate of candidates.filter((item) => matchesResolutionToken(item, token))) {
+    const sourceRecord = asObject(candidate);
+    const id = toId(sourceRecord._id) || toId(sourceRecord.id);
+    if (id) owners.set(id, candidate);
   }
+  if (owners.size > 1 || candidates.length > 2) return { kind: 'ambiguous' };
+  if (owners.size === 0) return { kind: 'missing' };
 
-  return article;
+  const raw = owners.values().next().value;
+  if (!raw || !isPubliclyPublishedArticle(raw)) return { kind: 'missing' };
+  const article = toPublicArticleAuthority(raw);
+  if (!article) return { kind: 'missing' };
+
+  const normalizedCurrent = normalizedStoredSlug(article.slug);
+  const idMatch = Boolean(
+    article.id === token.decoded ||
+      (token.objectId && article.id.toLowerCase() === token.objectId.toLowerCase())
+  );
+  const hasSlugAuthority = isValidArticleSlug(article.slug);
+  const kind: ResolvedPublicArticleToken['kind'] = idMatch && hasSlugAuthority
+    ? 'legacyId'
+    : token.normalizedSlug === normalizedCurrent
+      ? 'current'
+      : idMatch
+        ? 'current'
+        : 'previous';
+  const authoritativePath = article.href;
+  const authoritativeToken = hasSlugAuthority ? article.slug : article.id;
+  const isExactAuthority = kind === 'current' && token.decoded === authoritativeToken;
+
+  return { kind, source, article, authoritativePath, isExactAuthority };
+}
+
+export async function getPublicArticleByResolution(
+  resolution: ResolvedPublicArticleToken
+): Promise<PublicArticleDetailResult> {
+  let raw: unknown;
+  try {
+    raw = resolution.source === 'mongo'
+      ? await Article.findById(resolution.article.id).lean()
+      : await getStoredArticleByIdStrict(resolution.article.id);
+  } catch (error) {
+    console.error('Public article detail store failure.', error);
+    throw new PublicArticleResolutionError('unavailable');
+  }
+  if (!raw || !isPubliclyPublishedArticle(raw)) {
+    throw new PublicArticleResolutionError('unavailable');
+  }
+  const article = toPublicArticleDetail(raw);
+  if (!article) throw new PublicArticleResolutionError('unavailable');
+  return { article, source: resolution.source };
 }
 
 export async function getPublicArticleBySlug(
   slugOrId: string
 ): Promise<PublicArticleDetailResult | null> {
-  const token = decodeURIComponent(slugOrId).trim();
-  if (!token) return null;
-
-  const source = await resolveSource();
-  const raw =
-    source === 'mongo'
-      ? await getMongoArticleByToken(token)
-      : await getStoredArticleByIdOrSlug(token);
-
-  if (!raw || !isPubliclyPublishedArticle(raw)) return null;
-
-  const article = toPublicArticleDetail(raw);
-  return article ? { article, source } : null;
+  const resolution = await resolvePublicArticleToken(slugOrId);
+  if (resolution.kind === 'missing') return null;
+  if (resolution.kind === 'ambiguous' || resolution.kind === 'unavailable') {
+    throw new PublicArticleResolutionError(resolution.kind);
+  }
+  return getPublicArticleByResolution(resolution);
 }
 
 export const PUBLIC_ARTICLE_FILTER_FIELDS = [

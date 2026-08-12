@@ -472,7 +472,7 @@ function createRevisionSnapshot(article: StoredArticle): StoredArticleRevision {
   };
 }
 
-async function readAllArticles(): Promise<StoredArticle[]> {
+async function readAllArticles(options: { failOnReadError?: boolean } = {}): Promise<StoredArticle[]> {
   try {
     const raw = await fs.readFile(dataPath, 'utf-8');
     const parsed = JSON.parse(raw || '[]');
@@ -482,7 +482,13 @@ async function readAllArticles(): Promise<StoredArticle[]> {
           .filter((item): item is StoredArticle => Boolean(item))
       : [];
     return normalized;
-  } catch {
+  } catch (error) {
+    if (
+      options.failOnReadError &&
+      !(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+    ) {
+      throw error;
+    }
     return [];
   }
 }
@@ -523,6 +529,29 @@ export async function listAllStoredArticles() {
 export async function getStoredArticleById(id: string) {
   const all = await readAllArticles();
   return all.find((item) => item._id === id) || null;
+}
+
+export async function getStoredArticleByIdStrict(id: string) {
+  const all = await readAllArticles({ failOnReadError: true });
+  return all.find((item) => item._id === id) || null;
+}
+
+export async function listStoredArticleResolutionRecords() {
+  const all = await readAllArticles({ failOnReadError: true });
+  return all.map((article) => ({
+    _id: article._id,
+    slug: article.slug,
+    previousSlugs: article.previousSlugs,
+    title: article.title,
+    summary: article.summary,
+    image: article.image,
+    category: article.category,
+    author: article.author,
+    publishedAt: article.publishedAt,
+    updatedAt: article.updatedAt,
+    seo: article.seo,
+    workflow: article.workflow,
+  }));
 }
 
 export async function getStoredArticleByIdOrSlug(token: string) {
