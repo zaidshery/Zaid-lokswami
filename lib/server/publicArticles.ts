@@ -17,6 +17,7 @@ import {
   normalizeArticleSlug,
 } from '@/lib/seo/articleSeo';
 import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
+import { WORKFLOW_STATUSES } from '@/lib/workflow/types';
 
 export type PublicArticleSource = 'mongo' | 'file';
 
@@ -80,9 +81,43 @@ export type PublicArticleDetailResult = {
   source: PublicArticleSource;
 };
 
+export type PublicRelatedArticlesResult = {
+  items: PublicArticleItem[];
+  source: PublicArticleSource;
+  limit: number;
+};
+
 const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 200;
+const MAX_RELATED_LIMIT = 20;
+const MAX_RELATED_MONGO_CANDIDATES = MAX_RELATED_LIMIT * 3;
+const RELATED_ARTICLE_MONGO_PROJECTION = [
+  '_id',
+  'slug',
+  'title',
+  'summary',
+  'image',
+  'category',
+  'author',
+  'publishedAt',
+  'updatedAt',
+  'views',
+  'isBreaking',
+  'isTrending',
+  'editorial.breakingStartsAt',
+  'editorial.breakingExpiresAt',
+  'editorial.trendingExpiresAt',
+  'workflow.status',
+  'reporterMeta.locationTag',
+  'city',
+  'cityName',
+  'locationTag',
+  'seo.authorDisplayName',
+  'seo.authorDisplayNameSet',
+  'seo.authorAvatarUrl',
+  'seo.authorProgramName',
+].join(' ');
 const USE_REMOTE_DEMO_MEDIA =
   process.env.NEXT_PUBLIC_USE_REMOTE_DEMO_MEDIA === 'true';
 const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
@@ -468,6 +503,107 @@ export async function listPublicArticles(
   const source = await resolveSource();
   const items = source === 'mongo' ? await listMongoArticles(options) : await listFileArticles();
   return buildListResult(items, source, options);
+}
+
+function buildRelatedPublicArticles(
+  items: PublicArticleItem[],
+  current: Pick<PublicArticleDetail, 'id' | 'href' | 'category'>,
+  limit: number
+) {
+  const currentCategory = normalizeComparable(current.category);
+  const seenDestinations = new Set<string>();
+  const sameCategory: PublicArticleItem[] = [];
+  const fallback: PublicArticleItem[] = [];
+
+  for (const item of items.sort(compareArticles)) {
+    if (item.id === current.id || item.href === current.href) continue;
+    if (seenDestinations.has(item.href)) continue;
+    seenDestinations.add(item.href);
+
+    if (normalizeComparable(item.category) === currentCategory) {
+      sameCategory.push(item);
+    } else {
+      fallback.push(item);
+    }
+  }
+
+  return [...sameCategory, ...fallback].slice(0, limit);
+}
+
+function buildMongoPublishedArticleFilter() {
+  const hasLegacyPublicationDate = {
+    $or: [
+      { publishedAt: { $exists: true, $ne: null } },
+      { updatedAt: { $exists: true, $ne: null } },
+    ],
+  };
+
+  return {
+    $or: [
+      { 'workflow.status': 'published' },
+      {
+        $and: [
+          { 'workflow.status': { $nin: [...WORKFLOW_STATUSES] } },
+          hasLegacyPublicationDate,
+        ],
+      },
+    ],
+  };
+}
+
+async function listMongoRelatedArticles(
+  current: Pick<PublicArticleDetail, 'id' | 'href' | 'category'>,
+  limit: number
+) {
+  const categoryPattern = `^${escapeRegExp(current.category.trim())}$`;
+  const categoryFilter = { $regex: categoryPattern, $options: 'i' };
+  const candidateLimit = Math.min(
+    MAX_RELATED_MONGO_CANDIDATES,
+    Math.max(limit * 3, limit + 10)
+  );
+  const publishedFilter = buildMongoPublishedArticleFilter();
+
+  const sameCategoryDocs = await Article.find({
+    $and: [publishedFilter, { category: categoryFilter }],
+  })
+    .select(RELATED_ARTICLE_MONGO_PROJECTION)
+    .sort({ publishedAt: -1, _id: -1 })
+    .limit(candidateLimit)
+    .lean();
+  const fallbackDocs = await Article.find({
+    $and: [publishedFilter, { category: { $not: categoryFilter } }],
+  })
+    .select(RELATED_ARTICLE_MONGO_PROJECTION)
+    .sort({ publishedAt: -1, _id: -1 })
+    .limit(candidateLimit)
+    .lean();
+
+  const items = [...sameCategoryDocs, ...fallbackDocs]
+    .filter((item) => isPubliclyPublishedArticle(item))
+    .map((item) => toPublicArticleItem(item))
+    .filter((item): item is PublicArticleItem => Boolean(item));
+
+  return buildRelatedPublicArticles(items, current, limit);
+}
+
+export async function listRelatedPublicArticles(
+  current: Pick<PublicArticleDetail, 'id' | 'href' | 'category'>,
+  options: { limit?: number; source?: PublicArticleSource } = {}
+): Promise<PublicRelatedArticlesResult> {
+  const limit = Math.min(
+    MAX_RELATED_LIMIT,
+    Math.max(MIN_LIMIT, normalizePublicArticleLimit(options.limit))
+  );
+  const source = options.source || (await resolveSource());
+  const items = source === 'mongo'
+    ? await listMongoRelatedArticles(current, limit)
+    : buildRelatedPublicArticles(await listFileArticles(), current, limit);
+
+  return {
+    items,
+    source,
+    limit,
+  };
 }
 
 async function getMongoArticleByToken(token: string) {

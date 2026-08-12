@@ -31,11 +31,13 @@ const {
     path: string,
     timeoutMs: number
   ) => Promise<{ text: string; url: string; canonical: string }>;
-  classifyArticleHtml: (html: string) => {
+  classifyArticleHtml: (html: string, options?: { requireRelatedLink?: boolean }) => {
     ready: boolean;
     hasHeadline: boolean;
     hasBody: boolean;
+    hasRelatedLink: boolean;
     hasLoadingPlaceholder: boolean;
+    relatedLinkCount: number;
     issues: string[];
   };
   extractCanonicalHref: (html: string) => string;
@@ -71,13 +73,16 @@ function createResponse(body: string, url: string, contentType = 'text/html') {
   } as unknown as Response;
 }
 
-function createReadyArticleHtml(canonical: string) {
+function createReadyArticleHtml(canonical: string, includeRelatedLink = true) {
   return `
     <html>
       <head><link rel="canonical" href="${canonical}"></head>
       <body>
         <h1>A substantive article headline</h1>
         <article data-article-body><p>${'A'.repeat(100)}</p></article>
+        <section data-related-articles>
+          ${includeRelatedLink ? '<a href="/main/article/related-story">Related story</a>' : ''}
+        </section>
       </body>
     </html>
   `;
@@ -155,6 +160,40 @@ describe('SEO deploy smoke parser', () => {
       hasHeadline: true,
       hasBody: true,
       hasLoadingPlaceholder: false,
+    });
+  });
+
+  it('does not allow a paragraph outside data-article-body to satisfy the body check', () => {
+    const result = classifyArticleHtml(`
+      <main>
+        <h1>A substantive article headline</h1>
+        <p>${'Unrelated layout paragraph. '.repeat(6)}</p>
+        <div data-article-body><span>Short body</span></div>
+      </main>
+    `);
+
+    expect(result.ready).toBe(false);
+    expect(result.hasBody).toBe(false);
+    expect(result.issues).toContain(
+      'initial HTML has no marked article body with a substantive paragraph'
+    );
+  });
+
+  it('requires a valid internal anchor inside the marked related section only when eligible', () => {
+    const html = `
+      <main>
+        <h1>A substantive article headline</h1>
+        <div data-article-body><p>${'A'.repeat(100)}</p></div>
+        <a href="/main/article/outside">Outside link</a>
+        <section data-related-articles><a href="https://example.com/story">External</a></section>
+      </main>
+    `;
+
+    expect(classifyArticleHtml(html)).toMatchObject({ ready: true, hasRelatedLink: false });
+    expect(classifyArticleHtml(html, { requireRelatedLink: true })).toMatchObject({
+      ready: false,
+      hasRelatedLink: false,
+      relatedLinkCount: 0,
     });
   });
 });
@@ -305,6 +344,13 @@ describe('SEO smoke canonical validation', () => {
       'fetch',
       vi.fn(async (input: string | URL | Request) => {
         const url = new URL(String(input));
+        if (url.pathname === '/api/v1/public/articles' && url.searchParams.has('limit')) {
+          return createResponse(
+            JSON.stringify({ data: { items: [{ id: 'one', slug: 'current-story' }] } }),
+            url.toString(),
+            'application/json'
+          );
+        }
         if (url.pathname === '/api/v1/public/articles/legacy-story') {
           return createResponse(
             JSON.stringify({ data: { id: 'one', slug: 'current-story', seo: { canonicalUrl: '' } } }),
@@ -319,6 +365,73 @@ describe('SEO smoke canonical validation', () => {
     await expect(checkArticleHtml(baseUrl, requestedUrl, 1000)).resolves.toBeUndefined();
   });
 
+  it('rejects article HTML without a marked related anchor when the feed has another eligible article', async () => {
+    const articleUrl = `${baseUrl}/main/article/current-story`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        if (url.pathname === '/api/v1/public/articles' && url.searchParams.has('limit')) {
+          return createResponse(
+            JSON.stringify({
+              data: {
+                items: [
+                  { id: 'current', slug: 'current-story' },
+                  { id: 'related', slug: 'eligible-related-story' },
+                ],
+              },
+            }),
+            url.toString(),
+            'application/json'
+          );
+        }
+        if (url.pathname === '/api/v1/public/articles/current-story') {
+          return createResponse(
+            JSON.stringify({
+              data: { id: 'current', slug: 'current-story', seo: { canonicalUrl: '' } },
+            }),
+            url.toString(),
+            'application/json'
+          );
+        }
+        return createResponse(createReadyArticleHtml(articleUrl, false), articleUrl);
+      })
+    );
+
+    await expect(checkArticleHtml(baseUrl, articleUrl, 1000)).rejects.toThrow(
+      /no valid internal link inside the related-article section/i
+    );
+  });
+
+  it('permits article HTML without a related anchor when the feed has no eligible related article', async () => {
+    const articleUrl = `${baseUrl}/main/article/current-story`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        if (url.pathname === '/api/v1/public/articles' && url.searchParams.has('limit')) {
+          return createResponse(
+            JSON.stringify({ data: { items: [{ id: 'current', slug: 'current-story' }] } }),
+            url.toString(),
+            'application/json'
+          );
+        }
+        if (url.pathname === '/api/v1/public/articles/current-story') {
+          return createResponse(
+            JSON.stringify({
+              data: { id: 'current', slug: 'current-story', seo: { canonicalUrl: '' } },
+            }),
+            url.toString(),
+            'application/json'
+          );
+        }
+        return createResponse(createReadyArticleHtml(articleUrl, false), articleUrl);
+      })
+    );
+
+    await expect(checkArticleHtml(baseUrl, articleUrl, 1000)).resolves.toBeUndefined();
+  });
+
   it('rejects a same-origin article canonical that is not the configured override', async () => {
     const articleUrl = `${baseUrl}/main/article/story-one`;
     const configuredCanonical = `${baseUrl}/main/article/preferred-story`;
@@ -327,6 +440,13 @@ describe('SEO smoke canonical validation', () => {
       'fetch',
       vi.fn(async (input: string | URL | Request) => {
         const url = new URL(String(input));
+        if (url.pathname === '/api/v1/public/articles' && url.searchParams.has('limit')) {
+          return createResponse(
+            JSON.stringify({ data: { items: [{ id: 'one', slug: 'story-one' }] } }),
+            url.toString(),
+            'application/json'
+          );
+        }
         if (url.pathname === '/api/v1/public/articles/story-one') {
           return createResponse(
             JSON.stringify({
