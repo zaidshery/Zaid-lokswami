@@ -120,29 +120,64 @@ function visibleTextFromHtml(html) {
     .trim();
 }
 
-function classifyArticleHtml(html) {
+function extractMarkedRegion(html, attributeName) {
+  const source = String(html || '');
+  const openingTagPattern = new RegExp(
+    `<([a-z][\\w:-]*)\\b[^>]*\\b${attributeName}(?:\\s*=\\s*(?:["'][^"']*["']|[^\\s>]+))?[^>]*>`,
+    'i'
+  );
+  const opening = openingTagPattern.exec(source);
+  if (!opening) return '';
+
+  const tagPattern = new RegExp(`<\\/?${opening[1]}\\b[^>]*>`, 'gi');
+  tagPattern.lastIndex = opening.index + opening[0].length;
+  let depth = 1;
+  for (const tag of source.matchAll(tagPattern)) {
+    if (/^<\//.test(tag[0])) {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(opening.index + opening[0].length, tag.index);
+      }
+    } else if (!/\/>$/.test(tag[0])) {
+      depth += 1;
+    }
+  }
+  return '';
+}
+
+function classifyArticleHtml(html, options = {}) {
   const source = String(html || '');
   const visibleText = visibleTextFromHtml(source);
   const h1Matches = Array.from(source.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi));
   const hasHeadline = h1Matches.some((match) => visibleTextFromHtml(match[1]).length >= 8);
-  const paragraphMatches = Array.from(source.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi));
+  const bodyRegion = extractMarkedRegion(source, 'data-article-body');
+  const paragraphMatches = Array.from(bodyRegion.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi));
   const substantialParagraphs = paragraphMatches
     .map((match) => visibleTextFromHtml(match[1]))
     .filter((text) => text.length >= 80);
-  const hasBodyMarker = /<article\b|data-article-body(?:\s*=|\s|>)/i.test(source);
-  const hasBody = hasBodyMarker && substantialParagraphs.length > 0;
+  const hasBody = substantialParagraphs.length > 0;
+  const relatedRegion = extractMarkedRegion(source, 'data-related-articles');
+  const relatedLinks = Array.from(relatedRegion.matchAll(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1/gi))
+    .map((match) => match[2].trim())
+    .filter((href) => /^\/main\/article\/[^/?#]+(?:[?#].*)?$/i.test(href));
+  const hasRelatedLink = relatedLinks.length > 0;
   const hasLoadingPlaceholder = ARTICLE_LOADING_PATTERNS.some((pattern) => pattern.test(visibleText));
   const issues = [];
 
   if (!hasHeadline) issues.push('initial HTML has no substantive H1');
   if (!hasBody) issues.push('initial HTML has no marked article body with a substantive paragraph');
   if (hasLoadingPlaceholder) issues.push('initial HTML still contains the article loading placeholder');
+  if (options.requireRelatedLink && !hasRelatedLink) {
+    issues.push('initial HTML has no valid internal link inside the related-article section');
+  }
 
   return {
     ready: issues.length === 0,
     hasHeadline,
     hasBody,
+    hasRelatedLink,
     hasLoadingPlaceholder,
+    relatedLinkCount: relatedLinks.length,
     substantialParagraphCount: substantialParagraphs.length,
     issues,
   };
@@ -295,7 +330,7 @@ function getArticleTokenFromUrl(articleUrl) {
 }
 
 async function fetchArticleCanonicalOverride(baseUrl, token, timeoutMs) {
-  if (!token) return '';
+  if (!token) return { article: null, canonicalUrl: '' };
   const { response, text } = await fetchTextRoute(
     baseUrl,
     `/api/v1/public/articles/${encodeURIComponent(token)}`,
@@ -315,44 +350,63 @@ async function fetchArticleCanonicalOverride(baseUrl, token, timeoutMs) {
   const article = getPublicArticleDetail(payload);
   assert(article, 'Public article detail returned no article metadata.');
   const seo = article.seo && typeof article.seo === 'object' ? article.seo : {};
-  return resolveSupportedArticleCanonical(baseUrl, seo.canonicalUrl);
+  return {
+    article,
+    canonicalUrl: resolveSupportedArticleCanonical(baseUrl, seo.canonicalUrl),
+  };
 }
 
-async function discoverArticleTarget(baseUrl, configuredArticleUrl, timeoutMs) {
-  const configured = resolveConfiguredArticleUrl(baseUrl, configuredArticleUrl);
-  if (configured) {
-    return {
-      url: configured,
-      expectedCanonicalUrl: await fetchArticleCanonicalOverride(
-        baseUrl,
-        getArticleTokenFromUrl(configured),
-        timeoutMs
-      ),
-    };
-  }
-
+async function fetchPublicArticleFeed(baseUrl, timeoutMs) {
   const { response, text } = await fetchTextRoute(
     baseUrl,
-    '/api/v1/public/articles?limit=5',
+    '/api/v1/public/articles?limit=21',
     'application/json',
     timeoutMs
   );
   const contentType = response.headers.get('content-type') || '';
   assert(/json/i.test(contentType), `Public article feed returned ${contentType || 'no content type'}`);
 
-  let payload;
   try {
-    payload = JSON.parse(text);
+    return getPublicArticleItems(JSON.parse(text));
   } catch {
     throw new Error('Public article feed did not return valid JSON.');
   }
+}
 
-  const article = getPublicArticleItems(payload).find((item) => item && (item.slug || item._id || item.id));
+function hasEligibleRelatedArticle(items, currentArticle, routeToken) {
+  const currentTokens = new Set(
+    [routeToken, currentArticle?.slug, currentArticle?._id, currentArticle?.id]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  return items.some((item) => {
+    const token = String(item?.slug || item?._id || item?.id || '').trim().toLowerCase();
+    return Boolean(token) && !currentTokens.has(token);
+  });
+}
+
+async function discoverArticleTarget(baseUrl, configuredArticleUrl, timeoutMs) {
+  const configured = resolveConfiguredArticleUrl(baseUrl, configuredArticleUrl);
+  const feedItems = await fetchPublicArticleFeed(baseUrl, timeoutMs);
+  if (configured) {
+    const routeToken = getArticleTokenFromUrl(configured);
+    const detail = await fetchArticleCanonicalOverride(baseUrl, routeToken, timeoutMs);
+    return {
+      url: configured,
+      expectedCanonicalUrl: detail.canonicalUrl,
+      requireRelatedLink: hasEligibleRelatedArticle(feedItems, detail.article, routeToken),
+    };
+  }
+
+  const article = feedItems.find((item) => item && (item.slug || item._id || item.id));
   assert(article, 'Public article feed returned no article that can be smoke tested.');
   const token = String(article.slug || article._id || article.id).trim();
+  const detail = await fetchArticleCanonicalOverride(baseUrl, token, timeoutMs);
   return {
     url: new URL(`/main/article/${encodeURIComponent(token)}`, `${baseUrl}/`).toString(),
-    expectedCanonicalUrl: await fetchArticleCanonicalOverride(baseUrl, token, timeoutMs),
+    expectedCanonicalUrl: detail.canonicalUrl,
+    requireRelatedLink: hasEligibleRelatedArticle(feedItems, detail.article, token),
   };
 }
 
@@ -364,12 +418,14 @@ async function checkArticleHtml(baseUrl, configuredArticleUrl, timeoutMs) {
     timeoutMs,
     target.expectedCanonicalUrl
   );
-  const assessment = classifyArticleHtml(article.text);
+  const assessment = classifyArticleHtml(article.text, {
+    requireRelatedLink: target.requireRelatedLink,
+  });
   assert(
     assessment.ready,
-    `Known Phase 2 article SSR gap at ${target.url}: ${assessment.issues.join('; ')}`
+    `Article SSR check failed at ${target.url}: ${assessment.issues.join('; ')}`
   );
-  logPass(`Article initial HTML contains a substantive H1 and server-rendered body (${target.url})`);
+  logPass(`Article initial HTML contains a substantive H1, server-rendered body, and eligible related links (${target.url})`);
 }
 
 function printHelp() {
@@ -416,6 +472,7 @@ module.exports = {
   checkArticleHtml,
   checkCanonicalHtml,
   classifyArticleHtml,
+  extractMarkedRegion,
   extractCanonicalHref,
   fetchTextRoute,
   getPublicArticleDetail,

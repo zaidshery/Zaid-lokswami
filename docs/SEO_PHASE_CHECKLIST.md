@@ -5,8 +5,8 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 | Phase | Scope | Status | Approval/evidence gate |
 | --- | --- | --- | --- |
 | 0 | Baseline lock and read-only SEO smoke | Complete | Node 20 quality gate and live read-only evidence |
-| 1 | Search Console URL inventory and canonical dry run | In progress | Current GSC CSV/export and manual review of ambiguous URLs |
-| 2 | Full article SSR and crawlable related links | Pending | Approved server/client boundary and publication-safety tests |
+| 1 | Search Console URL inventory and canonical dry run | Complete | Current GSC CSV/export and manual review of ambiguous URLs |
+| 2 | Full article SSR and crawlable related links | Implemented locally | Approved server/client boundary and publication-safety tests |
 | 3 | URL governance, schema and sitemap hardening | Pending | Approved Phase 1 mappings; no guessed redirects |
 | 4 | Core Web Vitals instrumentation and budgets | Pending | Event/privacy design and 48-hour field baseline |
 | 5 | Mobile performance remediation | Pending | Phase 4 evidence identifies the worst template |
@@ -38,8 +38,8 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 - [x] Generated reports are written only beneath the ignored `.seo-audit/` directory.
 - [x] At least ten live representative rows were independently spot-checked across all six issue categories.
 - [x] No redirect, canonical, noindex, sitemap, database, content, Phase 2, or Phase 3 change was implemented.
-- [ ] Manual-review dispositions and the complete dry-run mapping are approved before any Phase 3 URL-governance work.
-- [ ] Phase 1 branch passes Node 20 CI before merge.
+- [x] Manual-review dispositions and the complete dry-run mapping were approved for the archived Phase 1 scope.
+- [x] Phase 1 passed its required verification and was merged before Phase 2 began.
 
 ### 2026-08-10 dry-run classification totals
 
@@ -51,6 +51,24 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 | Excluded by `noindex` tag | `INTENTIONAL_NOINDEX` 6; `REDIRECT_TO_REPLACEMENT` 8; `MANUAL_REVIEW` 2 |
 | Page with redirect | `KEEP` 6; `MANUAL_REVIEW` 2; `REDIRECT_TO_REPLACEMENT` 2 |
 | Crawled - currently not indexed | `INVESTIGATE_CONTENT` 21; `MANUAL_REVIEW` 1; `INTENTIONAL_NOINDEX` 1 |
+
+## Phase 2 acceptance
+
+- [x] Article detail is resolved in the async server page through the published-only public service.
+- [x] Initial HTML includes the substantive article `h1` and sanitized content inside `data-article-body`.
+- [x] The initial browser article fetch and mock-capable merged-feed fallback are removed.
+- [x] Related articles are published-only, same-category first, destination-deduplicated, current-article-excluding, and capped at 20.
+- [x] Four related links render initially and each load-more action reveals four more.
+- [x] `data-related-articles` scopes crawlable-link smoke checks to the genuine related section.
+- [x] Missing and non-public articles retain the existing soft-unavailable page and noindex behavior.
+- [x] MongoDB and file-store related results use the same public mapping and ordering contract.
+- [x] Client interactions remain hydrated: reading progress, AI summary, listen/audio, bookmarks, sharing, analytics, language, images, and load more.
+- [x] Focused Phase 2 and regression tests pass (110 tests across 8 files).
+- [x] Typecheck passes locally.
+- [x] Lint passes locally with only existing unrelated warnings.
+- [x] Production CI build passes locally; the article route is emitted as dynamic SSR.
+- [ ] The exact full test command is clean under parallel load (675/676 pass; the one unrelated recovery test passes in isolation but exceeds its five-second timeout in the full run).
+- [ ] Live crawl/indexing acceptance is recorded separately; local tests are not production indexing evidence.
 
 ## Non-negotiable safeguards
 

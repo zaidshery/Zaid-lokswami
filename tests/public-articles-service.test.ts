@@ -1,18 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const connectDBMock = vi.fn();
+const isMongoAvailableMock = vi.fn();
 const listAllStoredArticlesMock = vi.fn();
 const getStoredArticleByIdOrSlugMock = vi.fn();
+const articleFindMock = vi.fn();
+const articleFindByIdMock = vi.fn();
+const articleFindOneMock = vi.fn();
 
 vi.mock('@/lib/db/mongoose', () => ({
   default: connectDBMock,
 }));
 
+vi.mock('@/lib/db/mongoAvailability', () => ({
+  isMongoAvailable: isMongoAvailableMock,
+}));
+
 vi.mock('@/lib/models/Article', () => ({
   default: {
-    find: vi.fn(),
-    findById: vi.fn(),
-    findOne: vi.fn(),
+    find: articleFindMock,
+    findById: articleFindByIdMock,
+    findOne: articleFindOneMock,
   },
 }));
 
@@ -35,6 +43,7 @@ describe('public articles service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.MONGODB_URI;
+    isMongoAvailableMock.mockResolvedValue(false);
   });
 
   it('lists published articles with category, city, and cursor filters from the file store', async () => {
@@ -232,4 +241,170 @@ describe('public articles service', () => {
     );
     expect(result?.article).not.toHaveProperty('workflow');
   });
+
+  it('keeps related articles same-category first, excludes the current destination, deduplicates, and caps at twenty', async () => {
+    const current = {
+      ...publishedBase,
+      _id: 'current',
+      slug: 'current-story',
+      title: 'Current Story',
+      category: 'Politics',
+      publishedAt: '2026-08-12T10:00:00.000Z',
+      updatedAt: '2026-08-12T10:00:00.000Z',
+    };
+    const sameCategory = Array.from({ length: 14 }, (_, index) => ({
+      ...publishedBase,
+      _id: `politics-${index + 1}`,
+      slug: `politics-${index + 1}`,
+      title: `Politics ${index + 1}`,
+      category: index % 2 === 0 ? 'Politics' : 'politics',
+      publishedAt: `2026-08-${String(11 - Math.min(index, 9)).padStart(2, '0')}T10:00:00.000Z`,
+      updatedAt: '2026-08-12T10:00:00.000Z',
+    }));
+    const fallback = Array.from({ length: 12 }, (_, index) => ({
+      ...publishedBase,
+      _id: `sports-${index + 1}`,
+      slug: `sports-${index + 1}`,
+      title: `Sports ${index + 1}`,
+      category: 'Sports',
+      publishedAt: `2026-07-${String(28 - index).padStart(2, '0')}T10:00:00.000Z`,
+      updatedAt: '2026-08-12T10:00:00.000Z',
+    }));
+    listAllStoredArticlesMock.mockResolvedValue([
+      current,
+      { ...sameCategory[0], _id: 'duplicate-destination' },
+      ...fallback,
+      ...sameCategory,
+    ]);
+
+    const { getPublicArticleBySlug, listRelatedPublicArticles } = await import(
+      '@/lib/server/publicArticles'
+    );
+    getStoredArticleByIdOrSlugMock.mockResolvedValue(current);
+    const currentResult = await getPublicArticleBySlug('current-story');
+    const result = await listRelatedPublicArticles(currentResult!.article, {
+      limit: 200,
+      source: 'file',
+    });
+
+    expect(result.limit).toBe(20);
+    expect(result.items).toHaveLength(20);
+    expect(result.items.every((item) => item.id !== 'current')).toBe(true);
+    expect(new Set(result.items.map((item) => item.href)).size).toBe(20);
+    expect(result.items.slice(0, 14).every((item) => item.category.toLowerCase() === 'politics')).toBe(true);
+    expect(result.items.slice(14).every((item) => item.category === 'Sports')).toBe(true);
+  });
+
+  it('filters every non-public workflow state from related results and strips private fields', async () => {
+    const eligible = {
+      ...publishedBase,
+      _id: 'published-related',
+      slug: 'published-related',
+      title: 'Published Related',
+      content: '<p>Published body</p>',
+      category: 'Politics',
+      publishedAt: '2026-08-12T09:00:00.000Z',
+      updatedAt: '2026-08-12T09:00:00.000Z',
+      editorial: { internalNote: 'private' },
+      reporterMeta: { locationTag: 'Indore', privateNote: 'private' },
+      revisions: [{ body: 'private' }],
+      assignment: { desk: 'private' },
+      moderation: { note: 'private' },
+    };
+    const nonPublic = ['draft', 'scheduled', 'rejected', 'approved', 'archived'].map(
+      (status) => ({
+        ...eligible,
+        _id: `${status}-related`,
+        slug: `${status}-related`,
+        title: `${status} related`,
+        workflow: { status },
+      })
+    );
+    listAllStoredArticlesMock.mockResolvedValue([eligible, ...nonPublic]);
+
+    const { listRelatedPublicArticles } = await import('@/lib/server/publicArticles');
+    const result = await listRelatedPublicArticles(
+      { id: 'current', href: '/main/article/current', category: 'Politics' },
+      { source: 'file' }
+    );
+
+    expect(result.items.map((item) => item.id)).toEqual(['published-related']);
+    expect(result.items[0]).not.toHaveProperty('workflow');
+    expect(result.items[0]).not.toHaveProperty('editorial');
+    expect(result.items[0]).not.toHaveProperty('reporterMeta');
+    expect(result.items[0]).not.toHaveProperty('revisions');
+    expect(result.items[0]).not.toHaveProperty('assignment');
+    expect(result.items[0]).not.toHaveProperty('moderation');
+    expect(result.items[0]).not.toHaveProperty('content');
+  });
+
+  it('returns equivalent bounded related output from Mongo and the file store', async () => {
+    const fixtures = [
+      {
+        ...publishedBase,
+        _id: 'same-category',
+        slug: 'same-category',
+        title: 'Same Category',
+        category: 'Politics',
+        publishedAt: '2026-08-12T09:00:00.000Z',
+        updatedAt: '2026-08-12T09:00:00.000Z',
+      },
+      {
+        ...publishedBase,
+        _id: 'fallback',
+        slug: 'fallback',
+        title: 'Fallback',
+        category: 'Sports',
+        publishedAt: '2026-08-12T10:00:00.000Z',
+        updatedAt: '2026-08-12T10:00:00.000Z',
+      },
+    ];
+    listAllStoredArticlesMock.mockResolvedValue(fixtures);
+    articleFindMock.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          limit: vi.fn().mockReturnValue({
+            lean: vi.fn().mockResolvedValue(fixtures),
+          }),
+        }),
+      }),
+    });
+
+    const { listRelatedPublicArticles } = await import('@/lib/server/publicArticles');
+    const current = { id: 'current', href: '/main/article/current', category: 'Politics' };
+    const fileResult = await listRelatedPublicArticles(current, { source: 'file' });
+    const mongoResult = await listRelatedPublicArticles(current, { source: 'mongo' });
+
+    expect(mongoResult.items).toEqual(fileResult.items);
+    expect(mongoResult.items.map((item) => item.id)).toEqual(['same-category', 'fallback']);
+  });
+
+  it.each(['current-story', '507f1f77bcf86cd799439011', 'previous-story'])(
+    'preserves published detail resolution for token %s',
+    async (token) => {
+      getStoredArticleByIdOrSlugMock.mockResolvedValue({
+        ...publishedBase,
+        _id: '507f1f77bcf86cd799439011',
+        slug: 'current-story',
+        previousSlugs: ['previous-story'],
+        title: 'Current Story',
+        content: 'Full story body',
+        category: 'Politics',
+        publishedAt: '2026-08-12T10:00:00.000Z',
+        updatedAt: '2026-08-12T10:30:00.000Z',
+      });
+
+      const { getPublicArticleBySlug } = await import('@/lib/server/publicArticles');
+      const result = await getPublicArticleBySlug(token);
+
+      expect(getStoredArticleByIdOrSlugMock).toHaveBeenCalledWith(token);
+      expect(result?.article).toEqual(
+        expect.objectContaining({
+          id: '507f1f77bcf86cd799439011',
+          slug: 'current-story',
+          previousSlugs: ['previous-story'],
+        })
+      );
+    }
+  );
 });

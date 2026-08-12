@@ -80,9 +80,16 @@ export type PublicArticleDetailResult = {
   source: PublicArticleSource;
 };
 
+export type PublicRelatedArticlesResult = {
+  items: PublicArticleItem[];
+  source: PublicArticleSource;
+  limit: number;
+};
+
 const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 200;
+const MAX_RELATED_LIMIT = 20;
 const USE_REMOTE_DEMO_MEDIA =
   process.env.NEXT_PUBLIC_USE_REMOTE_DEMO_MEDIA === 'true';
 const UNSPLASH_IMAGE_HOST = /^https:\/\/images\.unsplash\.com\//i;
@@ -468,6 +475,52 @@ export async function listPublicArticles(
   const source = await resolveSource();
   const items = source === 'mongo' ? await listMongoArticles(options) : await listFileArticles();
   return buildListResult(items, source, options);
+}
+
+function buildRelatedPublicArticles(
+  items: PublicArticleItem[],
+  current: Pick<PublicArticleDetail, 'id' | 'href' | 'category'>,
+  limit: number
+) {
+  const currentCategory = normalizeComparable(current.category);
+  const seenDestinations = new Set<string>();
+  const sameCategory: PublicArticleItem[] = [];
+  const fallback: PublicArticleItem[] = [];
+
+  for (const item of items.sort(compareArticles)) {
+    if (item.id === current.id || item.href === current.href) continue;
+    if (seenDestinations.has(item.href)) continue;
+    seenDestinations.add(item.href);
+
+    if (normalizeComparable(item.category) === currentCategory) {
+      sameCategory.push(item);
+    } else {
+      fallback.push(item);
+    }
+  }
+
+  return [...sameCategory, ...fallback].slice(0, limit);
+}
+
+export async function listRelatedPublicArticles(
+  current: Pick<PublicArticleDetail, 'id' | 'href' | 'category'>,
+  options: { limit?: number; source?: PublicArticleSource } = {}
+): Promise<PublicRelatedArticlesResult> {
+  const limit = Math.min(
+    MAX_RELATED_LIMIT,
+    Math.max(MIN_LIMIT, normalizePublicArticleLimit(options.limit))
+  );
+  const source = options.source || (await resolveSource());
+  const items =
+    source === 'mongo'
+      ? await listMongoArticles({ limit: MAX_LIMIT })
+      : await listFileArticles();
+
+  return {
+    items: buildRelatedPublicArticles(items, current, limit),
+    source,
+    limit,
+  };
 }
 
 async function getMongoArticleByToken(token: string) {
