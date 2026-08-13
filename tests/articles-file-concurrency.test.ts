@@ -22,6 +22,43 @@ import {
   restoreStoredArticleRevision,
   updateStoredArticle,
 } from '@/lib/storage/articlesFile';
+import { resolveArticleCanonicalUrl } from '@/lib/seo/articleSeo';
+
+const CURRENT_CANONICAL = 'https://example.com/historical-story';
+
+function rawRevision(overrides: Record<string, unknown> = {}) {
+  return {
+    _id: 'revision-1',
+    title: 'Restored title',
+    summary: 'Restored summary',
+    content: '<p>Restored content</p>',
+    image: '/restored.jpg',
+    category: 'Politics',
+    author: 'Revision Author',
+    slug: 'restored-title',
+    previousSlugs: ['legacy-title'],
+    savedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function rawArticleWithRevision(revision: Record<string, unknown>) {
+  return {
+    _id: 'article-1',
+    version: 7,
+    title: 'Current title',
+    summary: 'Current summary',
+    content: '<p>Current content</p>',
+    image: '/current.jpg',
+    category: 'News',
+    author: 'Current Author',
+    slug: 'current-title',
+    previousSlugs: [],
+    seo: { canonicalUrl: CURRENT_CANONICAL },
+    workflow: { status: 'draft' },
+    revisions: [revision],
+  };
+}
 
 describe('articles file mutation serialization', () => {
   beforeEach(() => {
@@ -203,4 +240,84 @@ describe('articles file mutation serialization', () => {
     ).rejects.toBeInstanceOf(ArticleRevisionCanonicalValidationError);
     expect(mockedFs.writeFile).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['seo omitted', {}, CURRENT_CANONICAL],
+    ['canonical omitted', { seo: {} }, CURRENT_CANONICAL],
+    ['explicit clear', { seo: { canonicalUrl: '' } }, ''],
+    [
+      'explicit unchanged',
+      { seo: { canonicalUrl: `  ${CURRENT_CANONICAL}  ` } },
+      CURRENT_CANONICAL,
+    ],
+    [
+      'explicit changed valid',
+      { seo: { canonicalUrl: 'https://lokswami.com/main/article/restored-title' } },
+      'https://lokswami.com/main/article/restored-title',
+    ],
+  ])(
+    'restores raw file revision canonical state: %s',
+    async (_label, revisionOverrides, expectedCanonical) => {
+      mockedFs.state.contents = JSON.stringify([
+        rawArticleWithRevision(rawRevision(revisionOverrides)),
+      ]);
+
+      const restored = await restoreStoredArticleRevision('article-1', 'revision-1');
+
+      expect(restored).toMatchObject({
+        title: 'Restored title',
+        summary: 'Restored summary',
+        content: '<p>Restored content</p>',
+        image: '/restored.jpg',
+        category: 'Politics',
+        author: 'Revision Author',
+        slug: 'restored-title',
+        previousSlugs: expect.arrayContaining(['current-title', 'legacy-title']),
+        seo: expect.objectContaining({ canonicalUrl: expectedCanonical }),
+        version: 8,
+      });
+      const stored = JSON.parse(mockedFs.state.contents)[0];
+      expect(stored.seo.canonicalUrl).toBe(expectedCanonical);
+      expect(stored).not.toHaveProperty('canonicalUrlPresent');
+      expect(stored.revisions[0]).not.toHaveProperty('canonicalUrlPresent');
+      expect(
+        resolveArticleCanonicalUrl(
+          {
+            id: 'article-1',
+            slug: 'restored-title',
+            canonicalUrl: stored.seo.canonicalUrl,
+          },
+          'https://lokswami.com'
+        )
+      ).toBe('https://lokswami.com/main/article/restored-title');
+    }
+  );
+
+  it.each([
+    ['external', 'https://example.com/restored-title', /public site origin/i],
+    [
+      'cross-article',
+      'https://lokswami.com/main/article/another-article',
+      /current public slug/i,
+    ],
+    [
+      'query-bearing',
+      'https://lokswami.com/main/article/restored-title?ref=legacy',
+      /clean, queryless/i,
+    ],
+  ])(
+    'rejects a raw file revision with a changed %s canonical without writing',
+    async (_label, canonicalUrl, errorPattern) => {
+      mockedFs.state.contents = JSON.stringify([
+        rawArticleWithRevision(rawRevision({ seo: { canonicalUrl } })),
+      ]);
+      const originalContents = mockedFs.state.contents;
+
+      await expect(
+        restoreStoredArticleRevision('article-1', 'revision-1')
+      ).rejects.toThrow(errorPattern);
+      expect(mockedFs.writeFile).not.toHaveBeenCalled();
+      expect(mockedFs.state.contents).toBe(originalContents);
+    }
+  );
 });

@@ -481,16 +481,29 @@ function createRevisionSnapshot(article: StoredArticle): StoredArticleRevision {
   };
 }
 
-async function readAllArticles(options: { failOnReadError?: boolean } = {}): Promise<StoredArticle[]> {
+type ArticleStoreSnapshot = {
+  articles: StoredArticle[];
+  rawArticles: Record<string, unknown>[];
+};
+
+async function readArticleStore(
+  options: { failOnReadError?: boolean } = {}
+): Promise<ArticleStoreSnapshot> {
   try {
     const raw = await fs.readFile(dataPath, 'utf-8');
     const parsed = JSON.parse(raw || '[]');
-    const normalized = Array.isArray(parsed)
-      ? parsed
-          .map((item) => normalizeStoredArticle(item))
-          .filter((item): item is StoredArticle => Boolean(item))
+    const rawArticles = Array.isArray(parsed)
+      ? parsed.filter(
+          (item): item is Record<string, unknown> =>
+            typeof item === 'object' && item !== null
+        )
       : [];
-    return normalized;
+    return {
+      articles: rawArticles
+        .map((item) => normalizeStoredArticle(item))
+        .filter((item): item is StoredArticle => Boolean(item)),
+      rawArticles,
+    };
   } catch (error) {
     if (
       options.failOnReadError &&
@@ -498,8 +511,12 @@ async function readAllArticles(options: { failOnReadError?: boolean } = {}): Pro
     ) {
       throw error;
     }
-    return [];
+    return { articles: [], rawArticles: [] };
   }
+}
+
+async function readAllArticles(options: { failOnReadError?: boolean } = {}) {
+  return (await readArticleStore(options)).articles;
 }
 
 async function writeAllArticles(articles: StoredArticle[]) {
@@ -812,13 +829,25 @@ async function restoreStoredArticleRevisionUnlocked(
   id: string,
   revisionId: string
 ) {
-  const all = await readAllArticles();
+  const store = await readArticleStore();
+  const all = store.articles;
   const index = all.findIndex((item) => item._id === id);
   if (index === -1) return null;
 
   const current = all[index];
   const revision = current.revisions.find((item) => item._id === revisionId);
   if (!revision) return null;
+
+  const rawCurrent = store.rawArticles.find((item) => String(item._id || '') === id);
+  const rawRevision = Array.isArray(rawCurrent?.revisions)
+    ? rawCurrent.revisions.find(
+        (item): item is Record<string, unknown> =>
+          typeof item === 'object' &&
+          item !== null &&
+          String((item as Record<string, unknown>)._id || '') === revisionId
+      )
+    : undefined;
+  if (!rawRevision) return null;
 
   const snapshot = createRevisionSnapshot(current);
   const revisionSlug = normalizeArticleSlug(revision.slug);
@@ -838,7 +867,7 @@ async function restoreStoredArticleRevisionUnlocked(
     }
   }
   restoredPreviousSlugs.delete(restoredSlug);
-  const canonicalEdit = readArticleCanonicalEdit(revision.seo);
+  const canonicalEdit = readArticleCanonicalEdit(rawRevision.seo);
   const canonicalError = validateEditedArticleCanonicalOverride(
     canonicalEdit,
     current.seo.canonicalUrl,
