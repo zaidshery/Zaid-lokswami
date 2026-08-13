@@ -43,6 +43,8 @@ import {
   defaultArticleSeo,
   normalizeArticleSeo,
   normalizeArticleSlug,
+  readArticleCanonicalEdit,
+  validateEditedArticleCanonicalOverride,
   type ArticleSeoFields,
 } from '@/lib/seo/articleSeo';
 
@@ -177,6 +179,13 @@ export class ArticleVersionConflictError extends Error {
     super('This article was updated in another session.');
     this.name = 'ArticleVersionConflictError';
     this.currentVersion = currentVersion;
+  }
+}
+
+export class ArticleRevisionCanonicalValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ArticleRevisionCanonicalValidationError';
   }
 }
 
@@ -829,6 +838,17 @@ async function restoreStoredArticleRevisionUnlocked(
     }
   }
   restoredPreviousSlugs.delete(restoredSlug);
+  const canonicalEdit = readArticleCanonicalEdit(revision.seo);
+  const canonicalError = validateEditedArticleCanonicalOverride(
+    canonicalEdit,
+    current.seo.canonicalUrl,
+    { id, slug: restoredSlug }
+  );
+  if (canonicalError) throw new ArticleRevisionCanonicalValidationError(canonicalError);
+  const restoredSeo = normalizeSeo(revision.seo);
+  if (canonicalEdit.kind === 'omitted') {
+    restoredSeo.canonicalUrl = current.seo.canonicalUrl;
+  }
   const restored: StoredArticle = {
     ...current,
     version: current.version + 1,
@@ -843,7 +863,7 @@ async function restoreStoredArticleRevisionUnlocked(
     previousSlugs: Array.from(restoredPreviousSlugs),
     isBreaking: revision.isBreaking,
     isTrending: revision.isTrending,
-    seo: normalizeSeo(revision.seo),
+    seo: restoredSeo,
     reporterMeta: normalizeReporterMeta(revision.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(revision.copyEditorMeta),
     editorial: normalizeArticleEditorialMeta(revision.editorial),

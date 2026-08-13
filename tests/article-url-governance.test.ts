@@ -108,6 +108,61 @@ describe('Phase 3A article URL governance helpers', () => {
         'https://lokswami.com'
       )
     ).toBe(canonical);
+    expect(
+      resolveArticleCanonicalUrl(
+        {
+          ...article,
+          slug: 'renamed-story',
+          canonicalUrl: 'https://lokswami.com/main/article/current-story',
+        },
+        'https://lokswami.com'
+      )
+    ).toBe('https://lokswami.com/main/article/renamed-story');
+  });
+
+  it('distinguishes omitted, cleared, unchanged, and changed canonical edits', async () => {
+    const {
+      readArticleCanonicalEdit,
+      validateEditedArticleCanonicalOverride,
+    } = await import('@/lib/seo/articleSeo');
+    const article = { id: published._id, slug: published.slug };
+    const historical = 'https://example.com/historical-story';
+
+    expect(readArticleCanonicalEdit({ metaTitle: 'No canonical edit' })).toEqual({
+      kind: 'omitted',
+    });
+    expect(
+      validateEditedArticleCanonicalOverride(
+        readArticleCanonicalEdit({ canonicalUrl: '' }),
+        historical,
+        article,
+        'https://lokswami.com'
+      )
+    ).toBeNull();
+    expect(
+      validateEditedArticleCanonicalOverride(
+        readArticleCanonicalEdit({ canonicalUrl: `  ${historical}  ` }),
+        historical,
+        article,
+        'https://lokswami.com'
+      )
+    ).toBeNull();
+    expect(
+      validateEditedArticleCanonicalOverride(
+        readArticleCanonicalEdit({ canonicalUrl: 'https://example.com/changed' }),
+        historical,
+        article,
+        'https://lokswami.com'
+      )
+    ).toMatch(/public site origin/i);
+    expect(
+      validateEditedArticleCanonicalOverride(
+        readArticleCanonicalEdit({ canonicalUrl: { value: historical } }),
+        historical,
+        article,
+        'https://lokswami.com'
+      )
+    ).toMatch(/valid absolute URL/i);
   });
 });
 
@@ -135,6 +190,96 @@ describe('central public article resolver', () => {
         isExactAuthority,
       })
     );
+  });
+
+  it.each([
+    ['', 'Desk', 'General', 'Desk'],
+    ['City', '', 'City', 'Editor'],
+    ['', '', 'General', 'Editor'],
+  ])(
+    'keeps published file authority when category=%j and author=%j',
+    async (category, author, expectedCategory, expectedAuthor) => {
+      const legacyPublished = { ...published, category, author };
+      mocks.listResolutionRecords.mockResolvedValue([legacyPublished]);
+      mocks.getStoredByIdStrict.mockResolvedValue(legacyPublished);
+      const {
+        getPublicArticleByResolution,
+        resolvePublicArticleToken,
+      } = await import('@/lib/server/publicArticles');
+
+      const resolution = await resolvePublicArticleToken('current-story');
+      expect(resolution).toEqual(expect.objectContaining({
+        kind: 'current',
+        article: expect.objectContaining({
+          category: expectedCategory,
+          author: expectedAuthor,
+        }),
+      }));
+      if (resolution.kind === 'current' || resolution.kind === 'previous' || resolution.kind === 'legacyId') {
+        await expect(getPublicArticleByResolution(resolution)).resolves.toEqual(
+          expect.objectContaining({
+            article: expect.objectContaining({
+              category: expectedCategory,
+              author: expectedAuthor,
+            }),
+          })
+        );
+      }
+    }
+  );
+
+  it.each([
+    ['previous-story', 'previous'],
+    ['507f1f77bcf86cd799439011', 'legacyId'],
+  ] as const)('preserves %s authority redirects with blank display fields', async (token, kind) => {
+    mocks.listResolutionRecords.mockResolvedValue([{ ...published, category: '', author: '' }]);
+    const { resolvePublicArticleToken } = await import('@/lib/server/publicArticles');
+    await expect(resolvePublicArticleToken(token)).resolves.toEqual(
+      expect.objectContaining({
+        kind,
+        authoritativePath: '/main/article/current-story',
+        article: expect.objectContaining({ category: 'General', author: 'Editor' }),
+      })
+    );
+  });
+
+  it('keeps Mongo and metadata authority aligned for blank display fields', async () => {
+    const legacyPublished = { ...published, category: '', author: '' };
+    mocks.isMongoAvailable.mockResolvedValue(true);
+    mocks.articleFind.mockReturnValue({
+      select: vi.fn(() => ({
+        limit: vi.fn(() => ({ lean: vi.fn().mockResolvedValue([legacyPublished]) })),
+      })),
+    });
+    const { resolvePublicArticleToken } = await import('@/lib/server/publicArticles');
+    const { getArticleForMetadata } = await import('@/lib/content/serverArticles');
+
+    await expect(resolvePublicArticleToken('current-story')).resolves.toEqual(
+      expect.objectContaining({
+        kind: 'current',
+        source: 'mongo',
+        article: expect.objectContaining({ category: 'General', author: 'Editor' }),
+      })
+    );
+    await expect(getArticleForMetadata('current-story')).resolves.toEqual(
+      expect.objectContaining({
+        id: published._id,
+        title: 'Current Story',
+        category: 'General',
+        author: 'Editor',
+      })
+    );
+  });
+
+  it('still hides a non-public article when both display fields are blank', async () => {
+    mocks.listResolutionRecords.mockResolvedValue([{
+      ...published,
+      category: '',
+      author: '',
+      workflow: { status: 'draft' },
+    }]);
+    const { resolvePublicArticleToken } = await import('@/lib/server/publicArticles');
+    await expect(resolvePublicArticleToken('current-story')).resolves.toEqual({ kind: 'missing' });
   });
 
   it('decodes a Hindi token once and resolves it deterministically', async () => {

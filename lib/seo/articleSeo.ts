@@ -33,6 +33,11 @@ export type ArticlePublicRef = {
   slug?: string;
 };
 
+export type ArticleCanonicalEdit =
+  | { kind: 'omitted' }
+  | { kind: 'invalid' }
+  | { kind: 'value'; value: string };
+
 const FALLBACK_SITE_URL = 'https://lokswami.com';
 const ARTICLE_SLUG_PATTERN = /^[\p{L}\p{M}\p{N}]+(?:-[\p{L}\p{M}\p{N}]+)*$/u;
 const INTERNAL_ARTICLE_QUERY_KEYS = new Set([
@@ -276,6 +281,33 @@ export function validateArticleCanonicalOverride(
   } catch {
     return 'Canonical URL must be a valid absolute URL';
   }
+}
+
+export function readArticleCanonicalEdit(input: unknown): ArticleCanonicalEdit {
+  const source = typeof input === 'object' && input
+    ? (input as Record<string, unknown>)
+    : null;
+  if (!source || !Object.prototype.hasOwnProperty.call(source, 'canonicalUrl')) {
+    return { kind: 'omitted' };
+  }
+  if (typeof source.canonicalUrl !== 'string') return { kind: 'invalid' };
+  return { kind: 'value', value: source.canonicalUrl.trim() };
+}
+
+export function validateEditedArticleCanonicalOverride(
+  edit: ArticleCanonicalEdit,
+  currentCanonicalUrl: unknown,
+  article: ArticlePublicRef,
+  siteUrl = getSiteUrl()
+) {
+  if (edit.kind === 'omitted') return null;
+  if (edit.kind === 'invalid') return 'Canonical URL must be a valid absolute URL';
+
+  const current = typeof currentCanonicalUrl === 'string'
+    ? currentCanonicalUrl.trim()
+    : '';
+  if (edit.value === current) return null;
+  return validateArticleCanonicalOverride(edit.value, article, siteUrl);
 }
 
 export function stripArticleHtml(value: string) {

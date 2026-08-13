@@ -16,6 +16,7 @@ vi.mock('fs/promises', () => ({
 }));
 
 import {
+  ArticleRevisionCanonicalValidationError,
   ArticleVersionConflictError,
   deleteStoredArticle,
   restoreStoredArticleRevision,
@@ -119,6 +120,7 @@ describe('articles file mutation serialization', () => {
         author: 'Current Author',
         slug: 'current-title',
         previousSlugs: [],
+        seo: { canonicalUrl: 'https://example.com/historical-story' },
         workflow: { status: 'draft' },
         revisions: [
           {
@@ -131,6 +133,7 @@ describe('articles file mutation serialization', () => {
             author: 'Revision Author',
             slug: 'restored-title',
             previousSlugs: ['legacy-title'],
+            seo: { canonicalUrl: 'https://example.com/historical-story' },
             savedAt: '2026-01-01T00:00:00.000Z',
           },
         ],
@@ -143,6 +146,9 @@ describe('articles file mutation serialization', () => {
       title: 'Restored title',
       slug: 'restored-title',
       previousSlugs: expect.arrayContaining(['current-title', 'legacy-title']),
+      seo: expect.objectContaining({
+        canonicalUrl: 'https://example.com/historical-story',
+      }),
       version: 8,
     });
     const stored = JSON.parse(mockedFs.state.contents) as Array<{
@@ -157,5 +163,44 @@ describe('articles file mutation serialization', () => {
       previousSlugs: expect.arrayContaining(['current-title', 'legacy-title']),
       version: 8,
     });
+  });
+
+  it('rejects a file revision that changes the canonical to an unsupported value', async () => {
+    mockedFs.state.contents = JSON.stringify([
+      {
+        _id: 'article-1',
+        version: 7,
+        title: 'Current title',
+        summary: 'Current summary',
+        content: '<p>Current content</p>',
+        image: '/current.jpg',
+        category: 'News',
+        author: 'Current Author',
+        slug: 'current-title',
+        previousSlugs: [],
+        seo: { canonicalUrl: '' },
+        workflow: { status: 'draft' },
+        revisions: [
+          {
+            _id: 'revision-1',
+            title: 'Restored title',
+            summary: 'Restored summary',
+            content: '<p>Restored content</p>',
+            image: '/restored.jpg',
+            category: 'Politics',
+            author: 'Revision Author',
+            slug: 'restored-title',
+            previousSlugs: [],
+            seo: { canonicalUrl: 'https://example.com/restored-title' },
+            savedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      restoreStoredArticleRevision('article-1', 'revision-1')
+    ).rejects.toBeInstanceOf(ArticleRevisionCanonicalValidationError);
+    expect(mockedFs.writeFile).not.toHaveBeenCalled();
   });
 });

@@ -692,9 +692,9 @@ function toPublicArticleAuthority(raw: unknown): PublicArticleAuthority | null {
   const title = toText(source.title);
   const summary = toText(source.summary);
   const image = normalizeMediaUrl(source.image);
-  const category = toText(source.category);
-  const author = toText(source.author);
-  if (!id || !title || !summary || !category || !author) return null;
+  const category = toText(source.category) || 'General';
+  const author = toText(source.author) || 'Editor';
+  if (!id || !title || !summary) return null;
   const previousSlugs = Array.isArray(source.previousSlugs)
     ? source.previousSlugs.map(toText).filter(Boolean)
     : [];

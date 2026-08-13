@@ -76,8 +76,9 @@ import {
   isValidArticleSlug,
   normalizeArticleSeo,
   normalizeArticleSlug,
+  readArticleCanonicalEdit,
   resolveUniqueArticleSlug,
-  validateArticleCanonicalOverride,
+  validateEditedArticleCanonicalOverride,
   type ArticleSeoFields,
 } from '@/lib/seo/articleSeo';
 import {
@@ -629,17 +630,6 @@ function validateLengths(input: Record<string, unknown>) {
   }
 
   return null;
-}
-
-function validateEditedCanonical(
-  input: Record<string, unknown>,
-  article: { id: string; slug: string }
-) {
-  const seo = typeof input.seo === 'object' && input.seo
-    ? (input.seo as Record<string, unknown>)
-    : null;
-  if (!seo || !Object.prototype.hasOwnProperty.call(seo, 'canonicalUrl')) return null;
-  return validateArticleCanonicalOverride(String(seo.canonicalUrl || ''), article);
 }
 
 function normalizeFullInput(body: unknown) {
@@ -1534,8 +1524,9 @@ export async function PATCH(
         updates.previousSlugs = Array.from(previousSlugs).filter((item) => item !== resolvedSlug);
       }
 
-      const canonicalError = validateEditedCanonical(
-        updates as Record<string, unknown>,
+      const canonicalError = validateEditedArticleCanonicalOverride(
+        readArticleCanonicalEdit(bodyRecord.seo),
+        currentArticle.seo?.canonicalUrl,
         { id, slug: String(updates.slug || currentArticle.slug || '') }
       );
       if (canonicalError) {
@@ -1665,8 +1656,9 @@ export async function PATCH(
       updates.previousSlugs = Array.from(previousSlugs).filter((item) => item && item !== resolvedSlug);
     }
 
-    const canonicalError = validateEditedCanonical(
-      updates as Record<string, unknown>,
+    const canonicalError = validateEditedArticleCanonicalOverride(
+      readArticleCanonicalEdit(bodyRecord.seo),
+      normalizeSeo(current.seo).canonicalUrl,
       { id, slug: String(updates.slug || current.slug || '') }
     );
     if (canonicalError) {
@@ -1844,8 +1836,13 @@ export async function PUT(
         input.previousSlugs = Array.from(previousSlugs).filter((item) => item !== resolvedSlug);
       }
 
-      const canonicalError = validateEditedCanonical(
-        input as unknown as Record<string, unknown>,
+      const canonicalEdit = readArticleCanonicalEdit(bodyRecord.seo);
+      if (canonicalEdit.kind === 'omitted') {
+        input.seo.canonicalUrl = currentArticle.seo?.canonicalUrl || '';
+      }
+      const canonicalError = validateEditedArticleCanonicalOverride(
+        canonicalEdit,
+        currentArticle.seo?.canonicalUrl,
         { id, slug: input.slug }
       );
       if (canonicalError) {
@@ -1954,8 +1951,14 @@ export async function PUT(
       input.previousSlugs = Array.from(previousSlugs).filter((item) => item && item !== resolvedSlug);
     }
 
-    const canonicalError = validateEditedCanonical(
-      input as unknown as Record<string, unknown>,
+    const canonicalEdit = readArticleCanonicalEdit(bodyRecord.seo);
+    const currentCanonicalUrl = normalizeSeo(current.seo).canonicalUrl;
+    if (canonicalEdit.kind === 'omitted') {
+      input.seo.canonicalUrl = currentCanonicalUrl;
+    }
+    const canonicalError = validateEditedArticleCanonicalOverride(
+      canonicalEdit,
+      currentCanonicalUrl,
       { id, slug: input.slug }
     );
     if (canonicalError) {
