@@ -771,10 +771,10 @@ export async function resolvePublicArticleToken(
       (token.objectId && article.id.toLowerCase() === token.objectId.toLowerCase())
   );
   const hasSlugAuthority = isValidArticleSlug(article.slug);
-  const kind: ResolvedPublicArticleToken['kind'] = idMatch && hasSlugAuthority
-    ? 'legacyId'
-    : token.normalizedSlug === normalizedCurrent
-      ? 'current'
+  const kind: ResolvedPublicArticleToken['kind'] = token.normalizedSlug === normalizedCurrent
+    ? 'current'
+    : idMatch && hasSlugAuthority
+      ? 'legacyId'
       : idMatch
         ? 'current'
         : 'previous';

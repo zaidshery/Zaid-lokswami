@@ -192,6 +192,91 @@ describe('central public article resolver', () => {
     );
   });
 
+  it('treats a Mongo Object ID that is also the current slug as exact current authority', async () => {
+    const sameIdArticle = {
+      ...published,
+      slug: published._id,
+      previousSlugs: [],
+    };
+    mocks.isMongoAvailable.mockResolvedValue(true);
+    mocks.articleFind.mockReturnValue({
+      select: vi.fn(() => ({
+        limit: vi.fn(() => ({ lean: vi.fn().mockResolvedValue([sameIdArticle]) })),
+      })),
+    });
+    const { resolvePublicArticleToken } = await import('@/lib/server/publicArticles');
+
+    await expect(resolvePublicArticleToken(published._id)).resolves.toEqual(
+      expect.objectContaining({
+        kind: 'current',
+        source: 'mongo',
+        authoritativePath: `/main/article/${published._id}`,
+        isExactAuthority: true,
+      })
+    );
+    await expect(resolvePublicArticleToken(published._id.toUpperCase())).resolves.toEqual(
+      expect.objectContaining({
+        kind: 'current',
+        source: 'mongo',
+        authoritativePath: `/main/article/${published._id}`,
+        isExactAuthority: false,
+      })
+    );
+
+    const { getArticleForMetadata } = await import('@/lib/content/serverArticles');
+    const { buildArticlePageMetadata } = await import('@/lib/seo/articleMetadata');
+    const article = await getArticleForMetadata(published._id);
+    expect(article).not.toBeNull();
+    expect(
+      buildArticlePageMetadata({
+        article,
+        siteUrl: 'https://lokswami.com',
+      })
+    ).toEqual(
+      expect.objectContaining({
+        alternates: {
+          canonical: `https://lokswami.com/main/article/${published._id}`,
+        },
+      })
+    );
+  });
+
+  it('treats a file-store UUID that is also the current slug as exact current authority', async () => {
+    const fileId = '7fd15de2-1111-4222-8333-9a1111111111';
+    mocks.listResolutionRecords.mockResolvedValue([
+      { ...published, _id: fileId, slug: fileId, previousSlugs: [] },
+    ]);
+    const { resolvePublicArticleToken } = await import('@/lib/server/publicArticles');
+
+    await expect(resolvePublicArticleToken(fileId)).resolves.toEqual(
+      expect.objectContaining({
+        kind: 'current',
+        source: 'file',
+        authoritativePath: `/main/article/${fileId}`,
+        isExactAuthority: true,
+      })
+    );
+  });
+
+  it('keeps a distinct published Mongo Object ID classified as legacy authority', async () => {
+    mocks.isMongoAvailable.mockResolvedValue(true);
+    mocks.articleFind.mockReturnValue({
+      select: vi.fn(() => ({
+        limit: vi.fn(() => ({ lean: vi.fn().mockResolvedValue([published]) })),
+      })),
+    });
+    const { resolvePublicArticleToken } = await import('@/lib/server/publicArticles');
+
+    await expect(resolvePublicArticleToken(published._id)).resolves.toEqual(
+      expect.objectContaining({
+        kind: 'legacyId',
+        source: 'mongo',
+        authoritativePath: '/main/article/current-story',
+        isExactAuthority: false,
+      })
+    );
+  });
+
   it.each([
     ['', 'Desk', 'General', 'Desk'],
     ['City', '', 'City', 'Editor'],
@@ -327,6 +412,20 @@ describe('central public article resolver', () => {
       await expect(resolvePublicArticleToken('current-story')).resolves.toEqual({ kind: 'missing' });
     }
   );
+
+  it('keeps a non-public same-ID/current-slug record unavailable', async () => {
+    mocks.listResolutionRecords.mockResolvedValue([
+      {
+        ...published,
+        slug: published._id,
+        previousSlugs: [],
+        workflow: { status: 'draft' },
+      },
+    ]);
+    const { resolvePublicArticleToken } = await import('@/lib/server/publicArticles');
+
+    await expect(resolvePublicArticleToken(published._id)).resolves.toEqual({ kind: 'missing' });
+  });
 
   it('fails closed when current and historical ownership are ambiguous', async () => {
     mocks.listResolutionRecords.mockResolvedValue([

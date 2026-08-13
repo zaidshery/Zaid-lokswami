@@ -93,6 +93,71 @@ describe('reader redirect governance', () => {
     }
   });
 
+  it('renders an exact same-ID/current-slug authority without redirecting to itself', async () => {
+    const sameIdArticle = {
+      ...resolved.article,
+      slug: resolved.article.id,
+      previousSlugs: [],
+      href: `/main/article/${resolved.article.id}`,
+      content: '<p>Same-ID article body</p>',
+    };
+    const sameIdResolution = {
+      ...resolved,
+      kind: 'current' as const,
+      article: sameIdArticle,
+      authoritativePath: sameIdArticle.href,
+      isExactAuthority: true,
+    };
+    mocks.resolvePublicArticleToken.mockResolvedValue(sameIdResolution);
+    mocks.getPublicArticleByResolution.mockResolvedValue({
+      article: sameIdArticle,
+      source: 'file',
+    });
+    mocks.listRelatedPublicArticles.mockResolvedValue({ items: [], source: 'file', limit: 20 });
+    const ArticlePage = (await import('@/app/(reader)/main/article/[id]/page')).default;
+
+    const element = await ArticlePage({
+      params: Promise.resolve({ id: sameIdArticle.id }),
+    });
+
+    expect(element).toBeTruthy();
+    expect(mocks.permanentRedirect).not.toHaveBeenCalled();
+    expect(mocks.getPublicArticleByResolution).toHaveBeenCalledWith(sameIdResolution);
+  });
+
+  it('redirects a same-ID/current-slug case variant once to different authoritative casing', async () => {
+    const sameIdArticle = {
+      ...resolved.article,
+      slug: resolved.article.id,
+      previousSlugs: [],
+      href: `/main/article/${resolved.article.id}`,
+    };
+    mocks.resolvePublicArticleToken.mockResolvedValue({
+      ...resolved,
+      kind: 'current',
+      article: sameIdArticle,
+      authoritativePath: sameIdArticle.href,
+      isExactAuthority: false,
+    });
+    const incomingToken = sameIdArticle.id.toUpperCase();
+    const ArticlePage = (await import('@/app/(reader)/main/article/[id]/page')).default;
+
+    await expect(
+      ArticlePage({
+        params: Promise.resolve({ id: incomingToken }),
+        searchParams: Promise.resolve({ ref: 'case-test', _rsc: 'internal' }),
+      })
+    ).rejects.toThrow('NEXT_REDIRECT_308');
+
+    expect(mocks.permanentRedirect).toHaveBeenCalledTimes(1);
+    expect(mocks.permanentRedirect).toHaveBeenCalledWith(
+      `${sameIdArticle.href}?ref=case-test`
+    );
+    expect(mocks.permanentRedirect).not.toHaveBeenCalledWith(
+      `/main/article/${incomingToken}?ref=case-test`
+    );
+  });
+
   it('makes the legacy route one permanent redirect to final authority', async () => {
     const LegacyPage = (await import('@/app/(reader)/article/[id]/page')).default;
     await expect(

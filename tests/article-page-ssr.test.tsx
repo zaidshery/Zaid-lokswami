@@ -158,6 +158,44 @@ describe('article page server rendering', () => {
     ]);
   });
 
+  it('renders same-ID/current-slug SSR content and reader actions without redirecting', async () => {
+    const sameId = '507f1f77bcf86cd799439011';
+    const sameIdArticle = {
+      ...publicArticle,
+      _id: sameId,
+      id: sameId,
+      slug: sameId,
+      previousSlugs: [],
+      href: `/main/article/${sameId}`,
+      seo: {
+        ...publicArticle.seo,
+        canonicalUrl: `https://lokswami.com/main/article/${sameId}`,
+      },
+    };
+    mocks.resolvePublicArticleToken.mockResolvedValue({
+      kind: 'current',
+      source: 'mongo',
+      article: sameIdArticle,
+      authoritativePath: sameIdArticle.href,
+      isExactAuthority: true,
+    });
+    mocks.getPublicArticleByResolution.mockResolvedValue({
+      article: sameIdArticle,
+      source: 'mongo',
+    });
+
+    const { html } = await renderArticlePage(sameId);
+    const container = document.createElement('div');
+    container.innerHTML = html;
+
+    expect(container.querySelector('h1')?.textContent).toBe('Published story headline');
+    expect(container.querySelector('[data-article-body]')?.textContent).toContain(
+      'Substantive published article body text.'
+    );
+    expect(container.querySelector('button[aria-label="Save article"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Share article"]')).not.toBeNull();
+  });
+
   it('renders a published article safely when no related article is eligible', async () => {
     mocks.listRelatedPublicArticles.mockResolvedValue({ items: [], source: 'file', limit: 20 });
 
