@@ -3,7 +3,6 @@ import {
   getMetricRating,
   normalizeVitalMetric,
   sanitizeMetricPath,
-  WEB_VITALS_THRESHOLDS,
 } from '@/lib/analytics/webVitals';
 import { POST as handleVitalPost } from '@/app/api/v1/public/analytics/vitals/route';
 
