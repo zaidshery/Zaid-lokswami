@@ -527,28 +527,44 @@ export default function ArticlesManagement() {
     }
 
     try {
-      const params = new URLSearchParams({
-        sourceType: 'article',
-        sourceIds: nextArticles.map((article) => article._id).join(','),
-        limit: 'all',
-      });
-      const response = await fetch(`/api/admin/tts/assets?${params.toString()}`, {
-        cache: 'no-store',
-      });
-      const data = (await response.json().catch(() => ({}))) as TtsAssetsResponse;
-      if (!response.ok || !data.success || !Array.isArray(data.data?.assets)) {
-        return;
+      // Chunk IDs into batches of up to 30 to prevent oversized query strings that cause ERR_CONNECTION_CLOSED
+      const targetArticles = nextArticles.slice(0, 60);
+      const chunkSize = 30;
+      const chunks: Article[][] = [];
+      for (let i = 0; i < targetArticles.length; i += chunkSize) {
+        chunks.push(targetArticles.slice(i, i + chunkSize));
       }
 
       const nextMap: Record<string, Partial<Record<TtsVariant, TtsAssetRecord>>> = {};
-      for (const asset of data.data.assets) {
-        if (!nextMap[asset.sourceId]) {
-          nextMap[asset.sourceId] = {};
-        }
-        if (!nextMap[asset.sourceId][asset.variant]) {
-          nextMap[asset.sourceId][asset.variant] = asset;
-        }
-      }
+
+      await Promise.all(
+        chunks.map(async (chunk) => {
+          try {
+            const params = new URLSearchParams({
+              sourceType: 'article',
+              sourceIds: chunk.map((article) => article._id).join(','),
+              limit: String(chunk.length),
+            });
+            const response = await fetch(`/api/admin/tts/assets?${params.toString()}`, {
+              cache: 'no-store',
+            });
+            if (!response.ok) return;
+            const data = (await response.json().catch(() => ({}))) as TtsAssetsResponse;
+            if (!data.success || !Array.isArray(data.data?.assets)) return;
+
+            for (const asset of data.data.assets) {
+              if (!nextMap[asset.sourceId]) {
+                nextMap[asset.sourceId] = {};
+              }
+              if (!nextMap[asset.sourceId][asset.variant]) {
+                nextMap[asset.sourceId][asset.variant] = asset;
+              }
+            }
+          } catch {
+            // Ignore single chunk failure
+          }
+        })
+      );
 
       setArticleTtsById(nextMap);
     } catch {

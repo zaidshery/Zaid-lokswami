@@ -69,6 +69,7 @@ type ArticleLike = {
   _id?: string;
   id?: string;
   author?: string;
+  version?: number;
   publishedAt?: string | Date;
   updatedAt?: string | Date;
   workflow?: unknown;
@@ -534,7 +535,7 @@ export async function GET(req: NextRequest) {
     try {
       const mongoArticles = (await Article.find(query)
         .select(
-          '_id id title slug previousSlugs category author image views isBreaking isTrending publishedAt updatedAt workflow sourceType sourceStoryId sourceStoryTitle breakingTts'
+          '_id id title slug previousSlugs version category author image views isBreaking isTrending publishedAt updatedAt workflow sourceType sourceStoryId sourceStoryTitle breakingTts'
         )
         .sort({ updatedAt: -1, publishedAt: -1, _id: -1 })
         .maxTimeMS(8000)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSessionFromReq } from '@/lib/auth/admin';
-import { canRunGlobalAiOps } from '@/lib/auth/permissions';
+import { canEditEpaper, canRunGlobalAiOps, canViewPage } from '@/lib/auth/permissions';
 import connectDB from '@/lib/db/mongoose';
 import TtsAsset from '@/lib/models/TtsAsset';
 import TtsAuditEvent from '@/lib/models/TtsAuditEvent';
@@ -65,7 +65,12 @@ export async function GET(req: NextRequest) {
         { status: 401 }
       );
     }
-    if (!canRunGlobalAiOps(admin.role)) {
+    const canReadTts =
+      canRunGlobalAiOps(admin.role) ||
+      canViewPage(admin.role, 'articles') ||
+      canViewPage(admin.role, 'epapers') ||
+      canEditEpaper(admin.role);
+    if (!canReadTts) {
       return NextResponse.json(
         { success: false, error: 'Forbidden' },
         { status: 403 }
