@@ -492,8 +492,18 @@ async function main() {
     `Hostinger proxy listening on port ${publicPort} and forwarding to internal port ${internalPort}`
   );
 
+  const safeCloseProxy = () => {
+    try {
+      if (proxyServer.listening) {
+        proxyServer.close(() => {});
+      }
+    } catch {
+      // Server already closed or not listening
+    }
+  };
+
   const forwardSignal = (signal) => {
-    proxyServer.close();
+    safeCloseProxy();
     if (!child.killed) {
       child.kill(signal);
     }
@@ -503,7 +513,7 @@ async function main() {
   process.on('SIGTERM', forwardSignal);
 
   child.on('exit', (code, signal) => {
-    proxyServer.close();
+    safeCloseProxy();
     if (signal) {
       process.kill(process.pid, signal);
       return;
@@ -513,7 +523,7 @@ async function main() {
   });
 
   child.on('error', (error) => {
-    proxyServer.close();
+    safeCloseProxy();
     console.error('Failed to start Hostinger release:', error);
     process.exit(1);
   });

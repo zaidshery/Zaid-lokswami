@@ -251,10 +251,10 @@ export async function listPublicEpaperFeed(
   }
 
   try {
-    const queryTimeoutMs = parsePositiveEnvInt(
-      'MONGODB_PUBLIC_QUERY_TIMEOUT_MS',
-      DEFAULT_QUERY_TIMEOUT_MS
-    );
+    const queryTimeoutMs =
+      parsePositiveEnvInt('MONGODB_PUBLIC_QUERY_TIMEOUT_MS', 0) ||
+      parsePositiveEnvInt('MONGODB_QUERY_TIMEOUT_MS', 0) ||
+      DEFAULT_QUERY_TIMEOUT_MS;
     return await withTimeout(
       cursorPage<PublicEpaperFeedItem>({
         model: EPaper,
