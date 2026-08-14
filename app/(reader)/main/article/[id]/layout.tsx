@@ -5,7 +5,11 @@ import {
   buildArticlePageMetadata,
   normalizeMetadataSiteUrl,
 } from '@/lib/seo/articleMetadata';
-import { buildNewsArticleJsonLd } from '@/lib/seo/articleSeo';
+import {
+  buildArticlePublicPath,
+  buildBreadcrumbListJsonLd,
+  buildNewsArticleJsonLd,
+} from '@/lib/seo/articleSeo';
 
 type LayoutContext = {
   params: Promise<{ id: string }>;
@@ -40,34 +44,47 @@ async function ArticleStructuredData({
   const siteUrl = normalizeMetadataSiteUrl();
   const article = await getArticleForMetadata(id);
 
-  const jsonLd = article
-    ? buildNewsArticleJsonLd({
-        id: article.id,
-        slug: article.slug,
-        title: article.title,
-        summary: article.summary,
-        image: resolveArticleOgImageUrl({
-          ogImage: article.seo.ogImage,
-          image: article.image,
-        }),
-        category: article.category,
-        author: article.author,
-        publishedAt: article.publishedAt,
-        updatedAt: article.updatedAt,
-        seo: article.seo,
-        siteUrl,
-      })
-    : null;
+  if (!article) {
+    return <>{children}</>;
+  }
+
+  const newsArticleJsonLd = buildNewsArticleJsonLd({
+    id: article.id,
+    slug: article.slug,
+    title: article.title,
+    summary: article.summary,
+    image: resolveArticleOgImageUrl({
+      ogImage: article.seo.ogImage,
+      image: article.image,
+    }),
+    category: article.category,
+    author: article.author,
+    publishedAt: article.publishedAt,
+    updatedAt: article.updatedAt,
+    seo: article.seo,
+    siteUrl,
+  });
+
+  const articlePath = buildArticlePublicPath({ id: article.id, slug: article.slug });
+  const breadcrumbJsonLd = buildBreadcrumbListJsonLd({
+    category: article.category,
+    title: article.title,
+    articleUrl: articlePath,
+    siteUrl,
+  });
 
   return (
     <>
-      {jsonLd ? (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      ) : null}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(newsArticleJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {children}
     </>
   );
 }
+

@@ -1,3 +1,5 @@
+import { resolveNewsCategory } from '@/lib/constants/newsCategories';
+
 export type ArticleSeoFields = {
   metaTitle: string;
   metaDescription: string;
@@ -470,6 +472,7 @@ export function buildNewsArticleJsonLd(input: {
   return {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
+    inLanguage: 'hi',
     headline: seo.metaTitle || input.title,
     description: seo.metaDescription || input.summary,
     image: imageUrl ? [imageUrl] : [],
@@ -480,6 +483,7 @@ export function buildNewsArticleJsonLd(input: {
     publisher: {
       '@type': 'Organization',
       name: 'Lokswami',
+      url: siteUrl,
       logo: {
         '@type': 'ImageObject',
         url: toAbsoluteArticleUrl('/logo-app-512.png', siteUrl),
@@ -488,6 +492,109 @@ export function buildNewsArticleJsonLd(input: {
     mainEntityOfPage: {
       '@type': 'WebPage',
       '@id': articleUrl,
+    },
+  };
+}
+
+export function buildBreadcrumbListJsonLd(input: {
+  category: string;
+  title: string;
+  articleUrl?: string;
+  siteUrl?: string;
+}) {
+  const siteUrl = getSiteUrl(input.siteUrl);
+  const matchedCategory = resolveNewsCategory(input.category);
+  const categoryName = matchedCategory ? matchedCategory.name : input.category || 'समाचार';
+  const categorySlug = matchedCategory ? matchedCategory.slug : 'general';
+  const homeUrl = toAbsoluteArticleUrl('/main', siteUrl);
+  const categoryUrl = toAbsoluteArticleUrl(`/main/category/${categorySlug}`, siteUrl);
+  const articleCanonicalUrl = input.articleUrl
+    ? toAbsoluteArticleUrl(input.articleUrl, siteUrl)
+    : '';
+
+  const items: Array<{
+    '@type': 'ListItem';
+    position: number;
+    name: string;
+    item: string;
+  }> = [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'होम',
+      item: homeUrl,
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: categoryName,
+      item: categoryUrl,
+    },
+  ];
+
+  if (input.title && articleCanonicalUrl) {
+    items.push({
+      '@type': 'ListItem',
+      position: 3,
+      name: input.title,
+      item: articleCanonicalUrl,
+    });
+  }
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items,
+  };
+}
+
+export function buildVideoObjectJsonLd(input: {
+  name: string;
+  description: string;
+  thumbnailUrl: string;
+  uploadDate: string;
+  contentUrl?: string;
+  embedUrl?: string;
+  siteUrl?: string;
+}) {
+  const siteUrl = getSiteUrl(input.siteUrl);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'VideoObject',
+    name: input.name,
+    description: input.description,
+    thumbnailUrl: toAbsoluteArticleUrl(input.thumbnailUrl, siteUrl),
+    uploadDate: input.uploadDate,
+    ...(input.contentUrl ? { contentUrl: toAbsoluteArticleUrl(input.contentUrl, siteUrl) } : {}),
+    ...(input.embedUrl ? { embedUrl: toAbsoluteArticleUrl(input.embedUrl, siteUrl) } : {}),
+  };
+}
+
+export function buildWebSiteJsonLd(siteUrl?: string) {
+  const baseUrl = getSiteUrl(siteUrl);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Lokswami',
+    url: baseUrl,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${baseUrl}/main/search?q={search_term_string}`,
+      'query-input': 'required name=search_term_string',
+    },
+  };
+}
+
+export function buildOrganizationJsonLd(siteUrl?: string) {
+  const baseUrl = getSiteUrl(siteUrl);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Lokswami',
+    url: baseUrl,
+    logo: {
+      '@type': 'ImageObject',
+      url: toAbsoluteArticleUrl('/logo-app-512.png', baseUrl),
     },
   };
 }

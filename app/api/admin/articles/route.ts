@@ -484,33 +484,33 @@ export async function GET(req: NextRequest) {
     const effectivePage = isUnbounded ? 1 : page;
     const effectiveLimit = isUnbounded ? FILE_STORE_UNBOUNDED_LIMIT : limit;
 
-    const allStoredArticles = await listAllStoredArticles();
-    const filteredStoredArticles = allStoredArticles
-      .filter((article) => (category && category !== 'all' ? article.category === category : true))
-      .map((article) => resolveArticleRecord(article))
-      .filter((article) =>
-        matchesListFilters(article, user, {
-          scope: effectiveScope,
-          workflowStatus: isWorkflowStatus(workflowStatus) ? workflowStatus : '',
-          assignedTo,
-          createdBy,
-        })
-      )
-      .sort(
-        (left, right) =>
-          new Date(String(right.updatedAt || right.publishedAt || 0)).getTime() -
-          new Date(String(left.updatedAt || left.publishedAt || 0)).getTime()
-      );
-
-    const paginatedStoredArticles = isUnbounded
-      ? filteredStoredArticles
-      : filteredStoredArticles.slice(
-          (effectivePage - 1) * effectiveLimit,
-          (effectivePage - 1) * effectiveLimit + effectiveLimit
+    const getStoredArticlesResult = async () => {
+      const allStoredArticles = await listAllStoredArticles();
+      const filteredStoredArticles = allStoredArticles
+        .filter((article) => (category && category !== 'all' ? article.category === category : true))
+        .map((article) => resolveArticleRecord(article))
+        .filter((article) =>
+          matchesListFilters(article, user, {
+            scope: effectiveScope,
+            workflowStatus: isWorkflowStatus(workflowStatus) ? workflowStatus : '',
+            assignedTo,
+            createdBy,
+          })
+        )
+        .sort(
+          (left, right) =>
+            new Date(String(right.updatedAt || right.publishedAt || 0)).getTime() -
+            new Date(String(left.updatedAt || left.publishedAt || 0)).getTime()
         );
 
-    const createFileResponse = () =>
-      NextResponse.json({
+      const paginatedStoredArticles = isUnbounded
+        ? filteredStoredArticles
+        : filteredStoredArticles.slice(
+            (effectivePage - 1) * effectiveLimit,
+            (effectivePage - 1) * effectiveLimit + effectiveLimit
+          );
+
+      return NextResponse.json({
         success: true,
         data: paginatedStoredArticles,
         pagination: {
@@ -520,9 +520,10 @@ export async function GET(req: NextRequest) {
           pages: isUnbounded ? 1 : Math.ceil(filteredStoredArticles.length / effectiveLimit),
         },
       });
+    };
 
     if (await shouldUseFileStore()) {
-      return createFileResponse();
+      return getStoredArticlesResult();
     }
 
     const query: Record<string, unknown> = {};
@@ -530,43 +531,52 @@ export async function GET(req: NextRequest) {
       query.category = category;
     }
 
-    const mongoArticles = (await Article.find(query)
-      .sort({ updatedAt: -1, publishedAt: -1, _id: -1 })
-      .lean()) as ArticleLike[];
+    try {
+      const mongoArticles = (await Article.find(query)
+        .select(
+          '_id id title slug previousSlugs category author image views isBreaking isTrending publishedAt updatedAt workflow sourceType sourceStoryId sourceStoryTitle breakingTts'
+        )
+        .sort({ updatedAt: -1, publishedAt: -1, _id: -1 })
+        .maxTimeMS(8000)
+        .lean()) as ArticleLike[];
 
-    const filteredMongoArticles = mongoArticles
-      .map((article) => resolveArticleRecord(article))
-      .filter((article) =>
-        matchesListFilters(article, user, {
-          scope: effectiveScope,
-          workflowStatus: isWorkflowStatus(workflowStatus) ? workflowStatus : '',
-          assignedTo,
-          createdBy,
-        })
-      );
-
-    const total = filteredMongoArticles.length;
-    if (total === 0 && filteredStoredArticles.length > 0) {
-      return createFileResponse();
-    }
-
-    const articles = isUnbounded
-      ? filteredMongoArticles
-      : filteredMongoArticles.slice(
-          (effectivePage - 1) * effectiveLimit,
-          (effectivePage - 1) * effectiveLimit + effectiveLimit
+      const filteredMongoArticles = mongoArticles
+        .map((article) => resolveArticleRecord(article))
+        .filter((article) =>
+          matchesListFilters(article, user, {
+            scope: effectiveScope,
+            workflowStatus: isWorkflowStatus(workflowStatus) ? workflowStatus : '',
+            assignedTo,
+            createdBy,
+          })
         );
 
-    return NextResponse.json({
-      success: true,
-      data: articles,
-      pagination: {
-        total,
-        page: effectivePage,
-        limit: isUnbounded ? total : effectiveLimit,
-        pages: isUnbounded ? 1 : Math.ceil(total / effectiveLimit),
-      },
-    });
+      const total = filteredMongoArticles.length;
+      if (total === 0) {
+        return getStoredArticlesResult();
+      }
+
+      const articles = isUnbounded
+        ? filteredMongoArticles
+        : filteredMongoArticles.slice(
+            (effectivePage - 1) * effectiveLimit,
+            (effectivePage - 1) * effectiveLimit + effectiveLimit
+          );
+
+      return NextResponse.json({
+        success: true,
+        data: articles,
+        pagination: {
+          total,
+          page: effectivePage,
+          limit: isUnbounded ? total : effectiveLimit,
+          pages: isUnbounded ? 1 : Math.ceil(total / effectiveLimit),
+        },
+      });
+    } catch (mongoError) {
+      console.error('MongoDB articles query failed or timed out, falling back to file store:', mongoError);
+      return getStoredArticlesResult();
+    }
   } catch (error) {
     console.error('Error fetching articles:', error);
     return NextResponse.json(

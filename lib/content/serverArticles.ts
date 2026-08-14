@@ -124,7 +124,7 @@ export async function listArticlesForSitemap(limit = 500) {
         .map((item) => toSitemapItem(item))
         .filter((item): item is ServerArticleSitemapItem => Boolean(item))
         .slice(0, limit);
-      if (normalized.length) return normalized;
+      return normalized;
     } catch (error) {
       console.error('Failed to load sitemap articles from MongoDB, falling back.', error);
     }
@@ -182,7 +182,7 @@ export async function listNewsArticlesForSitemap(limit = 1000, now = new Date())
         .filter((item): item is ServerNewsArticleSitemapItem => Boolean(item))
         .filter(filterRecent)
         .slice(0, limit);
-      if (normalized.length) return normalized;
+      return normalized;
     } catch (error) {
       console.error('Failed to load news sitemap articles from MongoDB, falling back.', error);
     }

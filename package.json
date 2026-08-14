@@ -44,6 +44,7 @@
     "test:smoke": "node scripts/smoke-check-deploy.js",
     "test:seo-smoke": "node scripts/seo-smoke-check.js",
     "audit:seo-indexing": "ts-node --files --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/audit-seo-indexing.ts",
+    "audit:seo-health": "node scripts/seo-health-audit.js",
     "test:tts-smoke": "node scripts/test-tts-deploy.js",
     "load:test:public": "node scripts/load-test-public.js",
     "verify:prod-env": "node scripts/validate-production-env.js",

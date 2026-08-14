@@ -43,12 +43,12 @@ type PublicEpaperFeedInput = {
   cursorId?: string | null;
 };
 
-const DEFAULT_QUERY_TIMEOUT_MS = 2000;
-
 function parsePositiveEnvInt(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
+
+const DEFAULT_QUERY_TIMEOUT_MS = parsePositiveEnvInt('MONGODB_QUERY_TIMEOUT_MS', 5000);
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   return new Promise<T>((resolve, reject) => {

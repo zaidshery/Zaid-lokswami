@@ -24,8 +24,17 @@ async function getSessionToken(request: NextRequest) {
     return null;
   }
 
+  // Next.js 15 fix: construct a minimal request object for getToken
+  // to avoid disturbing the actual request body stream.
+  const minimalReq = {
+    headers: Object.fromEntries(request.headers.entries()),
+    cookies: Object.fromEntries(
+      request.cookies.getAll().map((c) => [c.name, c.value])
+    ),
+  } as unknown as Parameters<typeof getToken>[0]['req'];
+
   return getToken({
-    req: request,
+    req: minimalReq,
     secret,
     cookieName: LOKSWAMI_SESSION_COOKIE,
   });

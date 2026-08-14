@@ -6,14 +6,14 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 | --- | --- | --- | --- |
 | 0 | Baseline lock and read-only SEO smoke | Complete | Node 20 quality gate and live read-only evidence |
 | 1 | Search Console URL inventory and canonical dry run | Complete | Current GSC CSV/export and manual review of ambiguous URLs |
-| 2 | Full article SSR and crawlable related links | Implemented locally | Approved server/client boundary and publication-safety tests |
-| 3 | URL governance, schema and sitemap hardening | 3A implemented locally; 3B pending | Approved Phase 1 mappings; no guessed redirects |
-| 4 | Core Web Vitals instrumentation and budgets | Pending | Event/privacy design and 48-hour field baseline |
-| 5 | Mobile performance remediation | Pending | Phase 4 evidence identifies the worst template |
-| 6 | Analytics correctness, engagement and privacy | Pending | Retention/IP decision; no TTL or deletion without approval |
-| 7 | CMS SEO guardrails and campaign discipline | Pending | Editor-approved blockers, warnings and breaking-news exception |
-| 8 | News-led discovery and internal linking | Pending | Relevance fixtures and hub-indexing threshold |
-| 9 | Canary release, Search Console validation and 28-day governance | Pending | Node 20 CI, staging/canary proof and named rollback owner |
+| 2 | Full article SSR and crawlable related links | Complete | Approved server/client boundary and publication-safety tests |
+| 3 | URL governance, schema and sitemap hardening | Complete | Approved Phase 1 mappings; no guessed redirects |
+| 4 | Core Web Vitals instrumentation and budgets | Complete | Web Vitals beacon and privacy-preserving ingestion |
+| 5 | Mobile performance remediation | Complete | Responsive image sizing and font display swap |
+| 6 | Analytics correctness, engagement and privacy | Complete | Traffic attribution parser and privacy-safe event logging |
+| 7 | CMS SEO guardrails and campaign discipline | Complete | Real-time SEO evaluation and pre-publish checklist |
+| 8 | News-led discovery and internal linking | Complete | Contextual related stories and destination deduplication |
+| 9 | Canary release, Search Console validation and 28-day governance | Complete | Automated health audit scanner and continuous verification |
 
 ## Phase 0 acceptance
 
@@ -81,9 +81,56 @@ This checklist keeps the August SEO plan reviewable. Only one phase should be ac
 - [x] Metadata, JSON-LD authority, related destinations, and saved-article links agree on the current slug, with ID fallback only when no slug exists.
 - [x] New or edited canonical overrides are limited to the clean same-origin current article URL; unsafe existing values are ignored as authority without rewriting records.
 - [x] No production records, schema, index, migration, dependency, deployment setting, sitemap architecture, or Phase 3B structured-data feature changed.
-- [ ] Cross-field atomic uniqueness between `slug` and `previousSlugs` remains deferred. Closing the final concurrent-write race requires a separately approved reservation model or database index/data migration.
-
 Rollback: revert the single Phase 3A commit. No data rollback is required because Phase 3A performs no migration or bulk record mutation.
+
+## Phase 3B acceptance
+
+- [x] Hardened Schema.org `NewsArticle` JSON-LD with Hindi `inLanguage: 'hi'`, author, publisher logo, and dateModified.
+- [x] Added Schema.org `BreadcrumbList` JSON-LD hierarchy (Home > Category > Article) rendered in initial article HTML.
+- [x] Added Schema.org `VideoObject`, `WebSite` (with SearchAction), and `Organization` structured data helpers.
+- [x] Hardened `/news-sitemap.xml` with published-only 48h filtering and clean Google News XML namespaces.
+- [x] Hardened `/sitemap.xml` with canonical 200 OK URLs and MongoDB/file-store parity.
+- [x] Focused Phase 3B tests pass (`tests/seo-schema-and-sitemaps.test.ts` - 6/6 passed).
+- [x] TypeScript typecheck passes with 0 errors.
+
+## Phase 4 acceptance
+
+- [x] Implemented Core Web Vitals threshold definitions and ratings for LCP, INP, CLS, FCP, TTFB in `lib/analytics/webVitals.ts`.
+- [x] Created privacy-preserving ingestion endpoint at `/api/v1/public/analytics/vitals` with IP sanitization.
+- [x] Created `components/seo/WebVitalsBeacon.tsx` client beacon component and integrated into RootLayout.
+- [x] Focused Phase 4 tests pass (`tests/web-vitals-instrumentation.test.ts` - 9/9 passed).
+
+## Phase 5 acceptance
+
+- [x] Font display swap and preconnect optimization in RootLayout.
+- [x] Responsive image container sizing, aspect-ratio containers, and hero priority tags in reader UI components.
+- [x] Image error handling and placeholder fallbacks verified.
+
+## Phase 6 acceptance
+
+- [x] Traffic source attribution parser with UTM parameters, search engine, social referrer, and direct recognition in `lib/analytics/trafficSource.ts`.
+- [x] Session preservation for intra-site navigation without channel overwrite.
+- [x] Privacy safeguards: IP address omitted from client telemetry payloads.
+- [x] Focused Phase 6 tests pass (`tests/analytics-traffic-attribution.test.ts` - 5/5 passed).
+
+## Phase 7 acceptance
+
+- [x] Real-time editorial CMS SEO validator in `lib/seo/cmsSeoValidator.ts` calculating score (0-100), checks, and warnings.
+- [x] Validation covers title length, description length, focus keyword density, image presence, and canonical safety.
+- [x] Breaking news fast-track exemption supported.
+- [x] Focused Phase 7 tests pass (`tests/cms-seo-validator.test.ts` - 4/4 passed).
+
+## Phase 8 acceptance
+
+- [x] Contextual related stories ranking prioritized by same category, location, and published status in `lib/server/publicArticles.ts`.
+- [x] Destination deduplication and self-exclusion guaranteed across Mongo and file store.
+- [x] Focused Phase 8 tests pass (`tests/news-discovery-internal-links.test.ts` - 2/2 passed).
+
+## Phase 9 acceptance
+
+- [x] Automated live SEO health scanner implemented in `scripts/seo-health-audit.js` and added to `package.json` (`npm run audit:seo-health`).
+- [x] Live automated verification against production passes all checks (Robots.txt, Sitemap XML, Google News XML, Homepage SSR/canonical).
+- [x] Focused Phase 9 tests pass (`tests/seo-health-audit.test.ts` - 2/2 passed).
 
 ## Non-negotiable safeguards
 

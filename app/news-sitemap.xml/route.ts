@@ -20,7 +20,7 @@ function absoluteUrl(baseUrl: string, path: string) {
 export async function GET() {
   const siteUrl = getSiteUrl();
   const articles = await listNewsArticlesForSitemap(1000);
-  const urls = articles
+  const urlNodes = articles
     .map((article) => {
       const loc = absoluteUrl(siteUrl, getServerArticlePath(article));
       return [
@@ -39,14 +39,9 @@ export async function GET() {
     })
     .join('\n');
 
-  const xml = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">',
-    urls,
-    '</urlset>',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const xml = urlNodes
+    ? `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">\n${urlNodes}\n</urlset>`
+    : `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">\n</urlset>`;
 
   return new NextResponse(xml, {
     headers: {

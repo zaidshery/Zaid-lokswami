@@ -14,7 +14,12 @@ type RouteContext = {
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
   const siteUrl = getSiteUrl();
-  const article = await getArticleForMetadata(id);
+  let article: Awaited<ReturnType<typeof getArticleForMetadata>> = null;
+  try {
+    article = await getArticleForMetadata(id);
+  } catch {
+    article = null;
+  }
   const fallbackImage = toAbsoluteArticleUrl('/lokswami-share-preview.png', siteUrl);
 
   if (!article) {
