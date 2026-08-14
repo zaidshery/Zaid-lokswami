@@ -510,22 +510,28 @@ function buildMongoFilter(options: PublicArticleListOptions) {
 async function listMongoArticles(options: PublicArticleListOptions) {
   const requestedLimit = normalizePublicArticleLimit(options.limit);
   const candidateLimit = Math.min(
-    1000,
-    Math.max(requestedLimit * 5, requestedLimit + 50)
+    500,
+    Math.max(requestedLimit * 3, requestedLimit + 30)
   );
 
-  const docs = await Article.find(buildMongoFilter(options))
-    .select(
-      '_id slug previousSlugs title summary image category author publishedAt updatedAt views isBreaking isTrending editorial workflow reporterMeta city cityName locationTag seo content'
-    )
-    .sort({ publishedAt: -1, _id: -1 })
-    .limit(candidateLimit)
-    .lean();
+  try {
+    const docs = await Article.find(buildMongoFilter(options))
+      .select(
+        '_id slug previousSlugs title summary image category author publishedAt updatedAt views isBreaking isTrending editorial workflow reporterMeta city cityName locationTag seo'
+      )
+      .sort({ publishedAt: -1, _id: -1 })
+      .limit(candidateLimit)
+      .maxTimeMS(5000)
+      .lean();
 
-  return docs
-    .filter((item) => isPubliclyPublishedArticle(item))
-    .map((item) => toPublicArticleItem(item))
-    .filter((item): item is PublicArticleItem => Boolean(item));
+    return docs
+      .filter((item) => isPubliclyPublishedArticle(item))
+      .map((item) => toPublicArticleItem(item))
+      .filter((item): item is PublicArticleItem => Boolean(item));
+  } catch (error) {
+    console.warn('[MongoDB] Public articles query timed out or failed, falling back to file store:', error);
+    return listFileArticles();
+  }
 }
 
 async function listFileArticles() {

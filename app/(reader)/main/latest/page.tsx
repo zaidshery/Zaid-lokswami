@@ -1,50 +1,42 @@
 import type { Metadata } from 'next';
+import { unstable_cache } from 'next/cache';
 import { buildLatestPageMetadata } from '@/lib/seo/readerPageMetadata';
-import { parsePublicArticlesPayload } from '@/lib/content/publicArticles';
-import { resolveRequestOrigin } from '@/lib/server/requestOrigin';
-import LatestFeedClient, { type LatestFeedApiItem, type LatestFeedCursor } from './LatestFeedClient';
+import { listPublicArticles } from '@/lib/server/publicArticles';
+import type { LatestFeedApiItem, LatestFeedCursor } from './LatestFeedClient';
+import LatestFeedClient from './LatestFeedClient';
 
 const LATEST_PAGE_LIMIT = 20;
 
 export const metadata: Metadata = buildLatestPageMetadata();
 
-async function fetchInitialLatestFeed() {
-  const empty = {
-    items: [] as LatestFeedApiItem[],
-    limit: LATEST_PAGE_LIMIT,
-    hasMore: false,
-    nextCursor: null as LatestFeedCursor | null,
-  };
+const getCachedLatestFeed = unstable_cache(
+  async () => {
+    try {
+      const result = await listPublicArticles({
+        limit: LATEST_PAGE_LIMIT,
+      });
 
-  try {
-    const origin = await resolveRequestOrigin();
-    const fetchFeed = async (path: string) => {
-      const response = await fetch(path, { next: { revalidate: 60 } });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) return null;
-      return parsePublicArticlesPayload(payload, LATEST_PAGE_LIMIT);
-    };
-
-    const v1Feed = await fetchFeed(
-      `${origin}/api/v1/public/articles?limit=${LATEST_PAGE_LIMIT}`
-    );
-
-    if (v1Feed?.items.length || v1Feed?.hasMore) {
-      return v1Feed;
+      return {
+        items: (result.items || []) as unknown as LatestFeedApiItem[],
+        limit: result.limit || LATEST_PAGE_LIMIT,
+        hasMore: Boolean(result.hasMore),
+        nextCursor: (result.nextCursor || null) as LatestFeedCursor | null,
+      };
+    } catch {
+      return {
+        items: [] as LatestFeedApiItem[],
+        limit: LATEST_PAGE_LIMIT,
+        hasMore: false,
+        nextCursor: null as LatestFeedCursor | null,
+      };
     }
-
-    const legacyFeed = await fetchFeed(
-      `${origin}/api/articles/latest?limit=${LATEST_PAGE_LIMIT}`
-    );
-
-    return legacyFeed || empty;
-  } catch {
-    return empty;
-  }
-}
+  },
+  ['reader-latest-feed'],
+  { revalidate: 60, tags: ['articles', 'latest-feed'] }
+);
 
 export default async function LatestNewsPage() {
-  const initial = await fetchInitialLatestFeed();
+  const initial = await getCachedLatestFeed();
 
   return (
     <LatestFeedClient
