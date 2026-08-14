@@ -4,14 +4,17 @@ import { hydrateRoot, type Root } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getPublicArticleBySlug: vi.fn(),
+  getPublicArticleByResolution: vi.fn(),
+  resolvePublicArticleToken: vi.fn(),
   listRelatedPublicArticles: vi.fn(),
   requestArticleTtsAudio: vi.fn(),
   routerPush: vi.fn(),
 }));
 
 vi.mock('@/lib/server/publicArticles', () => ({
-  getPublicArticleBySlug: mocks.getPublicArticleBySlug,
+  getPublicArticleByResolution: mocks.getPublicArticleByResolution,
+  resolvePublicArticleToken: mocks.resolvePublicArticleToken,
+  PublicArticleResolutionError: class PublicArticleResolutionError extends Error {},
   listRelatedPublicArticles: mocks.listRelatedPublicArticles,
 }));
 
@@ -114,7 +117,14 @@ async function renderArticlePage(token = 'published-story') {
 describe('article page server rendering', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getPublicArticleBySlug.mockResolvedValue({
+    mocks.resolvePublicArticleToken.mockResolvedValue({
+      kind: 'current',
+      source: 'file',
+      article: publicArticle,
+      authoritativePath: '/main/article/published-story',
+      isExactAuthority: true,
+    });
+    mocks.getPublicArticleByResolution.mockResolvedValue({
       article: publicArticle,
       source: 'file',
     });
@@ -146,6 +156,44 @@ describe('article page server rendering', () => {
       '/main/article/related-story-3',
       '/main/article/related-story-4',
     ]);
+  });
+
+  it('renders same-ID/current-slug SSR content and reader actions without redirecting', async () => {
+    const sameId = '507f1f77bcf86cd799439011';
+    const sameIdArticle = {
+      ...publicArticle,
+      _id: sameId,
+      id: sameId,
+      slug: sameId,
+      previousSlugs: [],
+      href: `/main/article/${sameId}`,
+      seo: {
+        ...publicArticle.seo,
+        canonicalUrl: `https://lokswami.com/main/article/${sameId}`,
+      },
+    };
+    mocks.resolvePublicArticleToken.mockResolvedValue({
+      kind: 'current',
+      source: 'mongo',
+      article: sameIdArticle,
+      authoritativePath: sameIdArticle.href,
+      isExactAuthority: true,
+    });
+    mocks.getPublicArticleByResolution.mockResolvedValue({
+      article: sameIdArticle,
+      source: 'mongo',
+    });
+
+    const { html } = await renderArticlePage(sameId);
+    const container = document.createElement('div');
+    container.innerHTML = html;
+
+    expect(container.querySelector('h1')?.textContent).toBe('Published story headline');
+    expect(container.querySelector('[data-article-body]')?.textContent).toContain(
+      'Substantive published article body text.'
+    );
+    expect(container.querySelector('button[aria-label="Save article"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Share article"]')).not.toBeNull();
   });
 
   it('renders a published article safely when no related article is eligible', async () => {
@@ -187,26 +235,25 @@ describe('article page server rendering', () => {
   it.each(['draft', 'scheduled', 'rejected', 'approved', 'archived'])(
     'exposes neither body nor related links for a %s article',
     async () => {
-      mocks.getPublicArticleBySlug.mockResolvedValue(null);
-
-      const { html } = await renderArticlePage();
-
-      expect(html).not.toContain('Published story headline');
-      expect(html).not.toContain('data-article-body');
-      expect(html).not.toContain('data-related-articles');
+      mocks.resolvePublicArticleToken.mockResolvedValue({ kind: 'missing' });
+      const { loadArticleDetailPageData } = await import(
+        '@/app/(reader)/main/article/[id]/page'
+      );
+      await expect(loadArticleDetailPageData('hidden-story')).resolves.toEqual({
+        article: null,
+        relatedArticles: [],
+      });
       expect(mocks.listRelatedPublicArticles).not.toHaveBeenCalled();
     }
   );
 
   it('fails closed without rendering mock content when the public service errors', async () => {
-    mocks.getPublicArticleBySlug.mockRejectedValue(new Error('storage unavailable'));
-
-    const { html } = await renderArticlePage();
-
-    expect(html).toContain('Article not found');
-    expect(html).not.toContain('data-article-body');
-    expect(html).not.toContain('data-related-articles');
-    expect(html).not.toMatch(/IPL 2024|G20 Summit/);
+    mocks.resolvePublicArticleToken.mockResolvedValue({ kind: 'unavailable' });
+    const { loadArticleDetailPageData } = await import(
+      '@/app/(reader)/main/article/[id]/page'
+    );
+    await expect(loadArticleDetailPageData('published-story')).rejects.toThrow();
+    expect(mocks.getPublicArticleByResolution).not.toHaveBeenCalled();
   });
 
   it('hydrates the same server markup without warnings and does not request audio', async () => {

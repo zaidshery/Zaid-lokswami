@@ -5,6 +5,7 @@ import connectDB from '@/lib/db/mongoose';
 import User from '@/lib/models/User';
 import Article from '@/lib/models/Article';
 import { resolveArticleEditorialFlags } from '@/lib/content/articleEditorial';
+import { isPubliclyPublishedArticle } from '@/lib/content/articlePublication';
 
 type SessionIdentity = {
   userId: string;
@@ -18,6 +19,7 @@ type LeanSavedUser = {
 
 type LeanSavedArticle = {
   _id: Types.ObjectId;
+  slug?: string;
   title?: string;
   summary?: string;
   image?: string;
@@ -27,6 +29,7 @@ type LeanSavedArticle = {
   isBreaking?: boolean;
   isTrending?: boolean;
   editorial?: unknown;
+  workflow?: unknown;
 };
 
 function getSessionIdentity() {
@@ -79,6 +82,7 @@ function toSavedArticleDTO(article: LeanSavedArticle) {
   const activeFlags = resolveArticleEditorialFlags(article);
   return {
     id: article._id.toString(),
+    slug: String(article.slug || '').trim(),
     title: String(article.title || '').trim(),
     summary: String(article.summary || '').trim(),
     image: String(article.image || '').trim(),
@@ -129,7 +133,7 @@ export async function GET() {
       _id: { $in: savedArticleIds.map((id) => new Types.ObjectId(id)) },
     })
       .select(
-        '_id title summary image category author publishedAt isBreaking isTrending editorial'
+        '_id slug title summary image category author publishedAt isBreaking isTrending editorial workflow.status workflow.publishedAt'
       )
       .lean<LeanSavedArticle[]>();
 
@@ -139,13 +143,17 @@ export async function GET() {
 
     const savedArticles = savedArticleIds
       .map((id) => articleById.get(id))
-      .filter((article): article is LeanSavedArticle => Boolean(article))
+      .filter(
+        (article): article is LeanSavedArticle =>
+          Boolean(article) && isPubliclyPublishedArticle(article)
+      )
       .map((article) => toSavedArticleDTO(article));
+    const publicSavedArticleIds = savedArticles.map((article) => article.id);
 
     return NextResponse.json({
       success: true,
       data: {
-        savedArticleIds,
+        savedArticleIds: publicSavedArticleIds,
         savedArticles,
         count: savedArticles.length,
       },

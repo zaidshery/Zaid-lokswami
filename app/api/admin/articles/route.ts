@@ -54,6 +54,7 @@ import {
   isValidArticleSlug,
   normalizeArticleSeo,
   resolveUniqueArticleSlug,
+  validateArticleCanonicalOverride,
 } from '@/lib/seo/articleSeo';
 import {
   resolveArticleWorkflow,
@@ -729,7 +730,22 @@ export async function POST(req: NextRequest) {
     } else {
       resolvedSlug = await resolveUniqueArticleSlug(
         input.slug || input.seo.metaTitle || input.title,
-        async (candidate) => Boolean(await Article.exists({ slug: candidate }))
+        async (candidate) => Boolean(
+          await Article.exists({
+            $or: [{ slug: candidate }, { previousSlugs: candidate }],
+          })
+        )
+      );
+    }
+
+    const canonicalError = validateArticleCanonicalOverride(
+      input.seo.canonicalUrl,
+      { id: 'new-article', slug: resolvedSlug }
+    );
+    if (canonicalError) {
+      return NextResponse.json(
+        { success: false, error: canonicalError },
+        { status: 400 }
       );
     }
 

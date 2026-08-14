@@ -14,7 +14,11 @@ type PageContext = {
 };
 
 function decodeShareToken(value: string) {
-  return decodeURIComponent(value || '').trim();
+  try {
+    return decodeURIComponent(value || '').trim();
+  } catch {
+    return '';
+  }
 }
 
 export function resolveShortArticleTargetPath(token: string, article: ServerArticle | null) {
@@ -27,9 +31,8 @@ export function resolveShortArticleTargetPath(token: string, article: ServerArti
 
 export async function generateMetadata(context: PageContext): Promise<Metadata> {
   const { id } = await context.params;
-  const token = decodeShareToken(id);
   const siteUrl = normalizeMetadataSiteUrl();
-  const article = token ? await getArticleForMetadata(token) : null;
+  const article = id ? await getArticleForMetadata(id) : null;
 
   return buildArticlePageMetadata({
     article,
@@ -41,7 +44,7 @@ export async function generateMetadata(context: PageContext): Promise<Metadata> 
 export default async function ShortArticleSharePage(context: PageContext) {
   const { id } = await context.params;
   const token = decodeShareToken(id);
-  const article = token ? await getArticleForMetadata(token) : null;
+  const article = id ? await getArticleForMetadata(id) : null;
   const targetPath = resolveShortArticleTargetPath(token, article);
   const title = article?.title || COMPANY_INFO.name;
 

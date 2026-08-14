@@ -43,6 +43,8 @@ import {
   defaultArticleSeo,
   normalizeArticleSeo,
   normalizeArticleSlug,
+  readArticleCanonicalEdit,
+  validateEditedArticleCanonicalOverride,
   type ArticleSeoFields,
 } from '@/lib/seo/articleSeo';
 
@@ -177,6 +179,13 @@ export class ArticleVersionConflictError extends Error {
     super('This article was updated in another session.');
     this.name = 'ArticleVersionConflictError';
     this.currentVersion = currentVersion;
+  }
+}
+
+export class ArticleRevisionCanonicalValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ArticleRevisionCanonicalValidationError';
   }
 }
 
@@ -472,19 +481,42 @@ function createRevisionSnapshot(article: StoredArticle): StoredArticleRevision {
   };
 }
 
-async function readAllArticles(): Promise<StoredArticle[]> {
+type ArticleStoreSnapshot = {
+  articles: StoredArticle[];
+  rawArticles: Record<string, unknown>[];
+};
+
+async function readArticleStore(
+  options: { failOnReadError?: boolean } = {}
+): Promise<ArticleStoreSnapshot> {
   try {
     const raw = await fs.readFile(dataPath, 'utf-8');
     const parsed = JSON.parse(raw || '[]');
-    const normalized = Array.isArray(parsed)
-      ? parsed
-          .map((item) => normalizeStoredArticle(item))
-          .filter((item): item is StoredArticle => Boolean(item))
+    const rawArticles = Array.isArray(parsed)
+      ? parsed.filter(
+          (item): item is Record<string, unknown> =>
+            typeof item === 'object' && item !== null
+        )
       : [];
-    return normalized;
-  } catch {
-    return [];
+    return {
+      articles: rawArticles
+        .map((item) => normalizeStoredArticle(item))
+        .filter((item): item is StoredArticle => Boolean(item)),
+      rawArticles,
+    };
+  } catch (error) {
+    if (
+      options.failOnReadError &&
+      !(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+    ) {
+      throw error;
+    }
+    return { articles: [], rawArticles: [] };
   }
+}
+
+async function readAllArticles(options: { failOnReadError?: boolean } = {}) {
+  return (await readArticleStore(options)).articles;
 }
 
 async function writeAllArticles(articles: StoredArticle[]) {
@@ -523,6 +555,29 @@ export async function listAllStoredArticles() {
 export async function getStoredArticleById(id: string) {
   const all = await readAllArticles();
   return all.find((item) => item._id === id) || null;
+}
+
+export async function getStoredArticleByIdStrict(id: string) {
+  const all = await readAllArticles({ failOnReadError: true });
+  return all.find((item) => item._id === id) || null;
+}
+
+export async function listStoredArticleResolutionRecords() {
+  const all = await readAllArticles({ failOnReadError: true });
+  return all.map((article) => ({
+    _id: article._id,
+    slug: article.slug,
+    previousSlugs: article.previousSlugs,
+    title: article.title,
+    summary: article.summary,
+    image: article.image,
+    category: article.category,
+    author: article.author,
+    publishedAt: article.publishedAt,
+    updatedAt: article.updatedAt,
+    seo: article.seo,
+    workflow: article.workflow,
+  }));
 }
 
 export async function getStoredArticleByIdOrSlug(token: string) {
@@ -774,13 +829,25 @@ async function restoreStoredArticleRevisionUnlocked(
   id: string,
   revisionId: string
 ) {
-  const all = await readAllArticles();
+  const store = await readArticleStore();
+  const all = store.articles;
   const index = all.findIndex((item) => item._id === id);
   if (index === -1) return null;
 
   const current = all[index];
   const revision = current.revisions.find((item) => item._id === revisionId);
   if (!revision) return null;
+
+  const rawCurrent = store.rawArticles.find((item) => String(item._id || '') === id);
+  const rawRevision = Array.isArray(rawCurrent?.revisions)
+    ? rawCurrent.revisions.find(
+        (item): item is Record<string, unknown> =>
+          typeof item === 'object' &&
+          item !== null &&
+          String((item as Record<string, unknown>)._id || '') === revisionId
+      )
+    : undefined;
+  if (!rawRevision) return null;
 
   const snapshot = createRevisionSnapshot(current);
   const revisionSlug = normalizeArticleSlug(revision.slug);
@@ -800,6 +867,17 @@ async function restoreStoredArticleRevisionUnlocked(
     }
   }
   restoredPreviousSlugs.delete(restoredSlug);
+  const canonicalEdit = readArticleCanonicalEdit(rawRevision.seo);
+  const canonicalError = validateEditedArticleCanonicalOverride(
+    canonicalEdit,
+    current.seo.canonicalUrl,
+    { id, slug: restoredSlug }
+  );
+  if (canonicalError) throw new ArticleRevisionCanonicalValidationError(canonicalError);
+  const restoredSeo = normalizeSeo(revision.seo);
+  if (canonicalEdit.kind === 'omitted') {
+    restoredSeo.canonicalUrl = current.seo.canonicalUrl;
+  }
   const restored: StoredArticle = {
     ...current,
     version: current.version + 1,
@@ -814,7 +892,7 @@ async function restoreStoredArticleRevisionUnlocked(
     previousSlugs: Array.from(restoredPreviousSlugs),
     isBreaking: revision.isBreaking,
     isTrending: revision.isTrending,
-    seo: normalizeSeo(revision.seo),
+    seo: restoredSeo,
     reporterMeta: normalizeReporterMeta(revision.reporterMeta),
     copyEditorMeta: normalizeCopyEditorMeta(revision.copyEditorMeta),
     editorial: normalizeArticleEditorialMeta(revision.editorial),

@@ -4,6 +4,8 @@ const connectDBMock = vi.fn();
 const isMongoAvailableMock = vi.fn();
 const listAllStoredArticlesMock = vi.fn();
 const getStoredArticleByIdOrSlugMock = vi.fn();
+const getStoredArticleByIdStrictMock = vi.fn();
+const listStoredArticleResolutionRecordsMock = vi.fn();
 const articleFindMock = vi.fn();
 const articleFindByIdMock = vi.fn();
 const articleFindOneMock = vi.fn();
@@ -26,7 +28,9 @@ vi.mock('@/lib/models/Article', () => ({
 
 vi.mock('@/lib/storage/articlesFile', () => ({
   getStoredArticleByIdOrSlug: getStoredArticleByIdOrSlugMock,
+  getStoredArticleByIdStrict: getStoredArticleByIdStrictMock,
   listAllStoredArticles: listAllStoredArticlesMock,
+  listStoredArticleResolutionRecords: listStoredArticleResolutionRecordsMock,
 }));
 
 const publishedBase = {
@@ -210,7 +214,7 @@ describe('public articles service', () => {
   });
 
   it('returns public article detail by slug without leaking workflow metadata', async () => {
-    getStoredArticleByIdOrSlugMock.mockResolvedValue({
+    const fixture = {
       ...publishedBase,
       _id: 'article-1',
       slug: 'lead-story',
@@ -225,7 +229,9 @@ describe('public articles service', () => {
         metaTitle: 'Lead Story SEO',
         metaDescription: 'SEO description',
       },
-    });
+    };
+    listStoredArticleResolutionRecordsMock.mockResolvedValue([fixture]);
+    getStoredArticleByIdStrictMock.mockResolvedValue(fixture);
 
     const { getPublicArticleBySlug } = await import('@/lib/server/publicArticles');
     const result = await getPublicArticleBySlug('lead-story');
@@ -280,7 +286,8 @@ describe('public articles service', () => {
     const { getPublicArticleBySlug, listRelatedPublicArticles } = await import(
       '@/lib/server/publicArticles'
     );
-    getStoredArticleByIdOrSlugMock.mockResolvedValue(current);
+    listStoredArticleResolutionRecordsMock.mockResolvedValue([current]);
+    getStoredArticleByIdStrictMock.mockResolvedValue(current);
     const currentResult = await getPublicArticleBySlug('current-story');
     const result = await listRelatedPublicArticles(currentResult!.article, {
       limit: 200,
@@ -449,7 +456,7 @@ describe('public articles service', () => {
   it.each(['current-story', '507f1f77bcf86cd799439011', 'previous-story'])(
     'preserves published detail resolution for token %s',
     async (token) => {
-      getStoredArticleByIdOrSlugMock.mockResolvedValue({
+      const fixture = {
         ...publishedBase,
         _id: '507f1f77bcf86cd799439011',
         slug: 'current-story',
@@ -459,12 +466,14 @@ describe('public articles service', () => {
         category: 'Politics',
         publishedAt: '2026-08-12T10:00:00.000Z',
         updatedAt: '2026-08-12T10:30:00.000Z',
-      });
+      };
+      listStoredArticleResolutionRecordsMock.mockResolvedValue([fixture]);
+      getStoredArticleByIdStrictMock.mockResolvedValue(fixture);
 
       const { getPublicArticleBySlug } = await import('@/lib/server/publicArticles');
       const result = await getPublicArticleBySlug(token);
 
-      expect(getStoredArticleByIdOrSlugMock).toHaveBeenCalledWith(token);
+      expect(listStoredArticleResolutionRecordsMock).toHaveBeenCalledTimes(1);
       expect(result?.article).toEqual(
         expect.objectContaining({
           id: '507f1f77bcf86cd799439011',

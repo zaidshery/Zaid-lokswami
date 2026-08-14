@@ -104,6 +104,19 @@ function createJsonRequest(
 
 const MONGO_ARTICLE_ID = '507f1f77bcf86cd799439011';
 
+function createFullArticleInput(overrides: Record<string, unknown> = {}) {
+  return {
+    title: 'Updated title',
+    slug: 'updated-title',
+    summary: 'Updated summary',
+    content: '<p>Updated content</p>',
+    image: 'https://cdn.example.com/updated.jpg',
+    category: 'General',
+    author: 'Desk',
+    ...overrides,
+  };
+}
+
 function createMongoArticleDocument(overrides: Record<string, unknown> = {}) {
   const data = {
     _id: MONGO_ARTICLE_ID,
@@ -1094,5 +1107,219 @@ describe('/api/admin/articles/[id] route', () => {
         previousSlugs: ['old-title'],
       })
     );
+  });
+
+  it('allows a file-store full save carrying an unchanged historical external canonical', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1', email: 'desk@example.com', name: 'Desk', role: 'admin',
+    });
+    const historicalCanonical = 'https://example.com/historical-story';
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      ...createFullArticleInput(),
+      seo: { canonicalUrl: historicalCanonical },
+      workflow: { status: 'published' },
+    });
+    updateStoredArticleMock.mockResolvedValue({
+      _id: 'article-1',
+      slug: 'updated-title',
+      seo: { canonicalUrl: historicalCanonical },
+      workflow: { status: 'published' },
+    });
+
+    const { PUT } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await PUT(
+      createJsonRequest('PUT', createFullArticleInput({
+        summary: 'Unrelated summary edit',
+        seo: { canonicalUrl: `  ${historicalCanonical}  ` },
+      })),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateStoredArticleMock).toHaveBeenCalledWith(
+      'article-1',
+      expect.objectContaining({
+        summary: 'Unrelated summary edit',
+        seo: expect.objectContaining({ canonicalUrl: historicalCanonical }),
+      })
+    );
+  });
+
+  it('allows a Mongo full save carrying an unchanged historical external canonical', async () => {
+    process.env.MONGODB_URI = 'mongodb://localhost:27017/lokswami-test';
+    connectDBMock.mockResolvedValue(undefined);
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1', email: 'desk@example.com', name: 'Desk', role: 'admin',
+    });
+    const historicalCanonical = 'https://example.com/historical-story';
+    articleFindByIdMock.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({
+        _id: MONGO_ARTICLE_ID,
+        ...createFullArticleInput(),
+        seo: { canonicalUrl: historicalCanonical },
+        workflow: { status: 'published' },
+      }),
+    });
+    articleFindByIdAndUpdateMock.mockResolvedValue(createMongoArticleDocument({
+      seo: { canonicalUrl: historicalCanonical },
+      workflow: { status: 'published' },
+    }));
+
+    const { PUT } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await PUT(
+      createJsonRequest('PUT', createFullArticleInput({
+        seo: { canonicalUrl: historicalCanonical },
+      })),
+      { params: Promise.resolve({ id: MONGO_ARTICLE_ID }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(articleFindByIdAndUpdateMock).toHaveBeenCalledWith(
+      MONGO_ARTICLE_ID,
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          seo: expect.objectContaining({ canonicalUrl: historicalCanonical }),
+        }),
+      }),
+      { new: true, runValidators: true }
+    );
+  });
+
+  it('allows a slug change when the carried canonical still names the old slug', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1', email: 'desk@example.com', name: 'Desk', role: 'admin',
+    });
+    const oldCanonical = 'https://lokswami.com/main/article/old-title';
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      ...createFullArticleInput({ slug: 'old-title' }),
+      previousSlugs: [],
+      seo: { canonicalUrl: oldCanonical },
+      workflow: { status: 'published' },
+    });
+    updateStoredArticleMock.mockResolvedValue({
+      _id: 'article-1',
+      slug: 'new-title',
+      previousSlugs: ['old-title'],
+      seo: { canonicalUrl: oldCanonical },
+      workflow: { status: 'published' },
+    });
+
+    const { PUT } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await PUT(
+      createJsonRequest('PUT', createFullArticleInput({
+        slug: 'new-title',
+        seo: { canonicalUrl: oldCanonical },
+      })),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateStoredArticleMock).toHaveBeenCalledWith(
+      'article-1',
+      expect.objectContaining({
+        slug: 'new-title',
+        previousSlugs: ['old-title'],
+        seo: expect.objectContaining({ canonicalUrl: oldCanonical }),
+      })
+    );
+  });
+
+  it.each([
+    ['https://example.com/updated-title', /public site origin/i],
+    ['https://lokswami.com/main/article/another-article', /current public slug/i],
+    ['https://lokswami.com/main/article/updated-title?ref=other', /clean, queryless/i],
+  ])('rejects a newly changed invalid canonical %s', async (canonicalUrl, errorPattern) => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1', email: 'desk@example.com', name: 'Desk', role: 'admin',
+    });
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      ...createFullArticleInput(),
+      seo: { canonicalUrl: 'https://example.com/historical-story' },
+      workflow: { status: 'published' },
+    });
+
+    const { PUT } = await import('@/app/api/admin/articles/[id]/route');
+    const response = await PUT(
+      createJsonRequest('PUT', createFullArticleInput({ seo: { canonicalUrl } })),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toMatch(errorPattern);
+    expect(updateStoredArticleMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves omission and allows explicit clearing as distinct full-save operations', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1', email: 'desk@example.com', name: 'Desk', role: 'admin',
+    });
+    const historicalCanonical = 'https://example.com/historical-story';
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      ...createFullArticleInput(),
+      seo: { canonicalUrl: historicalCanonical },
+      workflow: { status: 'published' },
+    });
+    updateStoredArticleMock.mockResolvedValue({
+      _id: 'article-1', slug: 'updated-title', workflow: { status: 'published' },
+    });
+
+    const { PUT } = await import('@/app/api/admin/articles/[id]/route');
+    const omittedResponse = await PUT(
+      createJsonRequest('PUT', createFullArticleInput({ seo: { metaTitle: 'Updated SEO' } })),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+    expect(omittedResponse.status).toBe(200);
+    expect(updateStoredArticleMock).toHaveBeenLastCalledWith(
+      'article-1',
+      expect.objectContaining({
+        seo: expect.objectContaining({ canonicalUrl: historicalCanonical }),
+      })
+    );
+
+    const clearedResponse = await PUT(
+      createJsonRequest('PUT', createFullArticleInput({ seo: { canonicalUrl: '' } })),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+    expect(clearedResponse.status).toBe(200);
+    expect(updateStoredArticleMock).toHaveBeenLastCalledWith(
+      'article-1',
+      expect.objectContaining({ seo: expect.objectContaining({ canonicalUrl: '' }) })
+    );
+  });
+
+  it('allows an unchanged historical canonical through PATCH but validates a changed value', async () => {
+    getAdminSessionMock.mockResolvedValue({
+      id: 'admin-1', email: 'desk@example.com', name: 'Desk', role: 'admin',
+    });
+    const historicalCanonical = 'https://example.com/historical-story';
+    getStoredArticleByIdMock.mockResolvedValue({
+      _id: 'article-1',
+      title: 'Current title',
+      slug: 'current-title',
+      previousSlugs: [],
+      seo: { canonicalUrl: historicalCanonical },
+      workflow: { status: 'published' },
+    });
+    updateStoredArticleMock.mockResolvedValue({
+      _id: 'article-1', slug: 'current-title', workflow: { status: 'published' },
+    });
+
+    const { PATCH } = await import('@/app/api/admin/articles/[id]/route');
+    const unchanged = await PATCH(
+      createJsonRequest('PATCH', { seo: { canonicalUrl: historicalCanonical } }),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+    expect(unchanged.status).toBe(200);
+
+    const changed = await PATCH(
+      createJsonRequest('PATCH', { seo: { canonicalUrl: 'https://example.com/changed' } }),
+      { params: Promise.resolve({ id: 'article-1' }) }
+    );
+    expect(changed.status).toBe(400);
   });
 });

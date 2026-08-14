@@ -11,12 +11,18 @@ import {
 import { normalizeArticleDocument } from '@/lib/content/articleDocument';
 import { normalizeArticleEditorialMeta } from '@/lib/content/articleEditorial';
 import { normalizeArticleMediaMetadata } from '@/lib/content/articleMediaMetadata';
-import { normalizeArticleSeo, normalizeArticleSlug } from '@/lib/seo/articleSeo';
+import {
+  normalizeArticleSeo,
+  normalizeArticleSlug,
+  readArticleCanonicalEdit,
+  validateEditedArticleCanonicalOverride,
+} from '@/lib/seo/articleSeo';
 import {
   buildArticleActivityMessage,
   recordArticleActivity,
 } from '@/lib/server/articleActivity';
 import {
+  ArticleRevisionCanonicalValidationError,
   getStoredArticleById,
   restoreStoredArticleRevision,
 } from '@/lib/storage/articlesFile';
@@ -220,6 +226,21 @@ export async function POST(req: NextRequest, context: RouteContext) {
       }
     }
 
+    const canonicalEdit = readArticleCanonicalEdit(targetRevision.seo);
+    const currentCanonicalUrl = normalizeSeo(article.seo).canonicalUrl;
+    const canonicalError = validateEditedArticleCanonicalOverride(
+      canonicalEdit,
+      currentCanonicalUrl,
+      { id, slug: restoredSlug }
+    );
+    if (canonicalError) {
+      return NextResponse.json({ success: false, error: canonicalError }, { status: 400 });
+    }
+    const restoredSeo = normalizeSeo(targetRevision.seo);
+    if (canonicalEdit.kind === 'omitted') {
+      restoredSeo.canonicalUrl = currentCanonicalUrl;
+    }
+
     const hasStoredVersion =
       typeof article.version === 'number' &&
       Number.isInteger(article.version) &&
@@ -243,7 +264,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
           previousSlugs: restoredPreviousSlugs,
           isBreaking: Boolean(targetRevision.isBreaking),
           isTrending: Boolean(targetRevision.isTrending),
-          seo: normalizeSeo(targetRevision.seo),
+          seo: restoredSeo,
           reporterMeta: normalizeReporterMeta(targetRevision.reporterMeta),
           copyEditorMeta: normalizeCopyEditorMeta(targetRevision.copyEditorMeta),
           editorial: normalizeArticleEditorialMeta(targetRevision.editorial),
@@ -288,6 +309,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
       message: 'Revision restored successfully',
     });
   } catch (error) {
+    if (error instanceof ArticleRevisionCanonicalValidationError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 400 }
+      );
+    }
     console.error('Error restoring article revision:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to restore revision' },
