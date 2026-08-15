@@ -77,10 +77,10 @@ export default function BreakingNews({
     }, 0);
 
     if (Number.isFinite(speedSeconds) && typeof speedSeconds === 'number') {
-      return Math.max(12, Math.min(120, speedSeconds));
+      return Math.max(20, Math.min(150, speedSeconds));
     }
 
-    return Math.max(14, Math.min(42, Math.round(totalCharacters * 0.14)));
+    return Math.max(28, Math.min(80, Math.round(totalCharacters * 0.28)));
   }, [marqueeItems, speedSeconds]);
 
   const buttonTitle = isPreparingAudio
@@ -125,7 +125,7 @@ export default function BreakingNews({
 
   return (
     <div
-      className="fixed left-0 right-0 top-0 z-[60] w-full border-b border-red-950/50 bg-gradient-to-r from-[#7f1116] via-[#97131a] to-[#7f1116] shadow-[inset_0_-1px_0_rgba(255,255,255,0.08),inset_0_1px_0_rgba(0,0,0,0.28),0_8px_24px_rgba(0,0,0,0.22)]"
+      className="fixed left-0 right-0 top-0 z-[60] w-full bg-gradient-to-r from-[#7f1116] via-[#97131a] to-[#7f1116] shadow-[inset_0_-1px_0_rgba(255,255,255,0.08),inset_0_1px_0_rgba(0,0,0,0.28),0_8px_24px_rgba(0,0,0,0.22)]"
       role="region"
       aria-label={language === 'hi' ? 'Breaking news' : 'Breaking News'}
     >
@@ -139,11 +139,7 @@ export default function BreakingNews({
           </div>
 
           <div className="min-w-0 flex-1">
-            {isLoading && !visibleItem ? (
-              <div className={styles.loadingShell} aria-hidden="true">
-                <div className={styles.loadingPulse} />
-              </div>
-            ) : marqueeItems.length ? (
+            {marqueeItems.length > 0 ? (
               <div className={styles.inlineShell}>
                 <span className="sr-only" aria-live="polite" aria-atomic="true">
                   {visibleItem ? `${visibleItem.city ? `${visibleItem.city}: ` : ''}${visibleItem.title}` : ''}
@@ -152,28 +148,38 @@ export default function BreakingNews({
                   className={`${styles.marqueeViewport} ${pauseOnHover ? styles.pausable : ''}`}
                   style={{ ['--marquee-duration' as string]: `${computedDurationSeconds}s` }}
                 >
-                  {marqueeItems.length > 1 ? (
-                    <div className={`${styles.marqueeTrack} ${styles.marqueeAnimate}`}>
-                      <div className={styles.marqueeSequence}>{renderMarqueeSequence('primary')}</div>
-                      <div className={styles.marqueeSequence} aria-hidden="true">
-                        {renderMarqueeSequence('repeat', true)}
-                      </div>
+                  <div className={`${styles.marqueeTrack} ${styles.marqueeAnimate}`}>
+                    <div className={styles.marqueeSequence}>{renderMarqueeSequence('primary')}</div>
+                    <div className={styles.marqueeSequence} aria-hidden="true">
+                      {renderMarqueeSequence('repeat', true)}
                     </div>
-                  ) : (
-                    <div className={styles.marqueeStatic}>{renderMarqueeSequence('static')}</div>
-                  )}
+                  </div>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className={styles.inlineShell}>
+                <div className={styles.marqueeStatic}>
+                  <span className={styles.marqueeEntry}>
+                    <span className={styles.marqueeTitle}>
+                      {language === 'hi' ? 'ताज़ा समाचार लोड हो रहे हैं...' : 'Loading latest updates...'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {queueProgressLabel ? <span className={styles.countPill}>{queueProgressLabel}</span> : null}
+          {queueProgressLabel ? (
+            <span className="hidden text-[11px] font-semibold text-white/70 sm:inline">
+              {queueProgressLabel}
+            </span>
+          ) : null}
 
           <button
             type="button"
             onClick={toggleSound}
-            disabled={ttsAvailable === false}
-            className={`${styles.toggleButton} ${soundEnabled ? styles.toggleButtonActive : ''} ${isPreparingAudio ? styles.toggleButtonLoading : ''}`}
+            className="reader-touch-button reader-focus-ring flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={ttsAvailable === false || isPreparingAudio}
             aria-label={buttonTitle}
             aria-pressed={soundEnabled}
             aria-busy={isPreparingAudio}
@@ -198,6 +204,8 @@ export default function BreakingNews({
           </button>
         </div>
       </Container>
+      {/* 🇮🇳 3-Color Running Line between Breaking News and Header */}
+      <div className="tiranga-top-ribbon" aria-hidden="true" />
     </div>
   );
 }

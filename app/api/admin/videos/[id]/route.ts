@@ -66,22 +66,11 @@ const WORKFLOW_ACTIONS = new Set<ContentTransitionAction>([
   'archive',
 ]);
 
-function getYouTubeId(value: string) {
-  try {
-    const url = new URL(value.trim());
-    const host = url.hostname.replace('www.', '').toLowerCase();
-
-    if (host === 'youtu.be') return url.pathname.slice(1) || null;
-    if (host === 'youtube.com' || host === 'm.youtube.com') {
-      if (url.pathname === '/watch') return url.searchParams.get('v');
-      if (url.pathname.startsWith('/shorts/')) return url.pathname.split('/')[2] || null;
-      if (url.pathname.startsWith('/embed/')) return url.pathname.split('/')[2] || null;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+import {
+  extractYouTubeVideoId,
+  getYouTubeThumbnail,
+  isYouTubeLiveUrl,
+} from '@/lib/utils/youtube';
 
 function normalizeVideoUpdate(body: unknown) {
   const source = typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
@@ -92,10 +81,13 @@ function normalizeVideoUpdate(body: unknown) {
   if (typeof source.thumbnail === 'string') updates.thumbnail = source.thumbnail.trim();
   if (typeof source.videoUrl === 'string') {
     const videoUrl = source.videoUrl.trim();
-    if (!videoUrl || !getYouTubeId(videoUrl)) {
-      return { updates: null, error: 'Video URL must be a valid YouTube URL' };
+    if (!videoUrl || !extractYouTubeVideoId(videoUrl)) {
+      return { updates: null, error: 'Video URL must be a valid YouTube or YouTube Live URL' };
     }
     updates.videoUrl = videoUrl;
+    if (!updates.thumbnail) {
+      updates.thumbnail = getYouTubeThumbnail(videoUrl) || '';
+    }
   }
 
   if (typeof source.category === 'string') {
@@ -104,7 +96,7 @@ function normalizeVideoUpdate(body: unknown) {
 
   if (source.duration !== undefined) {
     const duration = Number.parseInt(String(source.duration), 10);
-    if (!Number.isFinite(duration) || duration < 1) {
+    if (!Number.isFinite(duration) || duration < 0) {
       return { updates: null, error: 'Invalid duration' };
     }
     updates.duration = duration;
@@ -166,9 +158,9 @@ function applyAutoThumbnail(updates: Record<string, unknown>) {
     typeof updates.videoUrl === 'string' &&
     (updates.thumbnail === undefined || String(updates.thumbnail).trim() === '')
   ) {
-    const youtubeId = getYouTubeId(updates.videoUrl);
-    if (youtubeId) {
-      updates.thumbnail = `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+    const youtubeThumbnail = getYouTubeThumbnail(updates.videoUrl);
+    if (youtubeThumbnail) {
+      updates.thumbnail = youtubeThumbnail;
     }
   }
 }

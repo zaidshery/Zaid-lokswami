@@ -12,6 +12,13 @@ function applyThemeToDom(theme: 'dark' | 'light') {
   root.style.colorScheme = theme;
 }
 
+function applyFestiveToDom(isFestive: boolean) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.classList.toggle('theme-tiranga', isFestive);
+  root.dataset.festive = isFestive ? 'independence' : 'none';
+}
+
 function readSystemTheme(): 'dark' | 'light' {
   if (typeof window === 'undefined') return 'dark';
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -41,6 +48,11 @@ interface AppState {
   theme: 'dark' | 'light';
   toggleTheme: () => void;
   setTheme: (theme: 'dark' | 'light') => void;
+
+  // 15 August Independence Day Festive Mode
+  isFestiveMode: boolean;
+  toggleFestiveMode: () => void;
+  setFestiveMode: (active: boolean) => void;
   
   // Language
   language: 'hi' | 'en';
@@ -51,13 +63,13 @@ interface AppState {
   isMobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
-    // Device
+
+  // Device
   isMobile: boolean;
   isTablet: boolean;
   setIsMobile: (value: boolean) => void;
   setIsTablet: (value: boolean) => void;
 
-  
   // Search
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -103,13 +115,27 @@ export const useAppStore = create<AppState>()(
           applyThemeToDom(theme);
           return { theme };
         }),
-            // Device
+
+      // 15 August Independence Day Festive Mode
+      isFestiveMode: true,
+      toggleFestiveMode: () =>
+        set((state) => {
+          const next = !state.isFestiveMode;
+          applyFestiveToDom(next);
+          return { isFestiveMode: next };
+        }),
+      setFestiveMode: (isFestive) =>
+        set(() => {
+          applyFestiveToDom(isFestive);
+          return { isFestiveMode: isFestive };
+        }),
+
+      // Device
       isMobile: false,
       isTablet: false,
       setIsMobile: (isMobile) => set({ isMobile }),
       setIsTablet: (isTablet) => set({ isTablet }),
 
-      
       // Language
       language: 'hi',
       toggleLanguage: () => set((state) => ({ 
@@ -177,10 +203,12 @@ export const useAppStore = create<AppState>()(
       name: 'lokswami-storage',
       partialize: (state) => ({ 
         theme: state.theme, 
-        language: state.language
+        language: state.language,
+        isFestiveMode: state.isFestiveMode
       }),
       onRehydrateStorage: () => (state) => {
         applyThemeToDom(resolveTheme(state?.theme));
+        applyFestiveToDom(state?.isFestiveMode !== false);
       },
     }
   )

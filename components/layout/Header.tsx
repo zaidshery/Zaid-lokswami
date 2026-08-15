@@ -9,14 +9,14 @@ import {
   Bookmark,
   LogOut,
   Moon,
-  Newspaper,
   Settings,
   Sun,
   User,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import DesktopNav from './DesktopNav';
-import Logo from '@/components/layout/Logo';
+import Logo, { LogoIcon, LogoWordmark } from '@/components/layout/Logo';
+import { AshokaChakraIcon } from '@/components/ui/IndependenceThemeBadge';
 
 /** Renders the main site header with reader auth actions. */
 export default function Header() {
@@ -83,9 +83,10 @@ export default function Header() {
         className="fixed left-0 right-0 top-11 z-50 border-b border-zinc-200/85 bg-white/95 shadow-[var(--shadow-soft)] backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:top-12"
       >
         <div className="flex h-12 items-center justify-between px-1.5 sm:h-[3.45rem] sm:px-5 md:px-8">
-          <div className="sm:hidden"><Logo size="headerCompact" href="/main" /></div>
+          <div className="sm:hidden"><LogoIcon size="headerCompact" /></div>
           <div className="hidden sm:block lg:hidden"><Logo size="headerMobile" href="/main" /></div>
           <div className="hidden lg:block"><Logo size="headerDesktop" href="/main" /></div>
+          <div className="flex flex-1 items-center justify-center sm:hidden"><LogoWordmark size="headerCompact" /></div>
           <div aria-hidden="true" className="flex items-center gap-2">
             <span className="h-10 w-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
             <span className="h-10 w-10 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
@@ -102,11 +103,14 @@ export default function Header() {
 
   return (
     <header className="fixed left-0 right-0 top-11 z-50 border-b border-zinc-200/85 bg-white/95 shadow-[var(--shadow-soft)] backdrop-blur-md transition-all duration-500 dark:border-zinc-800 dark:bg-zinc-950/95 md:top-12">
-      <div className="w-full px-1.5 sm:px-5 md:px-8">
-        <div className="flex h-12 items-center justify-between gap-1 sm:h-[3.45rem] sm:gap-3">
-          <div className="flex min-w-0 items-center">
+      <div className="relative w-full px-1.5 sm:px-5 md:px-8">
+        <div className="flex h-12 items-center justify-between gap-2 sm:h-[3.45rem] sm:gap-3">
+          {/* Left: Logo Emblem on mobile, full logo on tablet/desktop */}
+          <div className="relative z-10 flex min-w-0 shrink-0 items-center">
             <div className="min-w-0 sm:hidden">
-              <Logo size="headerCompact" href="/main" />
+              <Link href="/main" className="inline-flex items-center" aria-label="Lokswami Home">
+                <LogoIcon size="headerCompact" />
+              </Link>
             </div>
             <div className="hidden min-w-0 sm:block lg:hidden">
               <Logo size="headerMobile" href="/main" />
@@ -116,7 +120,21 @@ export default function Header() {
             </div>
           </div>
 
-          <div className="ml-0.5 flex min-w-0 flex-shrink-0 items-center justify-end sm:ml-2">
+          {/* 🇮🇳 Exact Screen Center (The Red Marked Area): 'लोकस्वामी' Hindi Wordmark + Centered Rotating Chakra */}
+          <div className="pointer-events-none absolute inset-x-0 inset-y-0 flex items-center justify-center sm:hidden">
+            {/* Ashoka Chakra centered exactly at the center of the navbar */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-28 w-28 opacity-[0.09] dark:opacity-[0.20] text-blue-900 dark:text-blue-300"
+            >
+              <AshokaChakraIcon className="h-full w-full animate-ashoka-slow" />
+            </div>
+            <Link href="/main" className="pointer-events-auto relative z-10 inline-flex items-center justify-center" aria-label="Lokswami Home">
+              <LogoWordmark size="headerCompact" />
+            </Link>
+          </div>
+
+          <div className="relative z-10 ml-auto flex min-w-0 flex-shrink-0 items-center justify-end sm:ml-2">
             <div className="inline-flex max-w-full items-center gap-0.5 rounded-2xl border border-zinc-200/90 bg-gradient-to-b from-white to-zinc-100/80 p-0.5 shadow-[0_8px_18px_rgba(15,23,42,0.08)] dark:border-zinc-700/80 dark:from-zinc-900 dark:to-zinc-900/75 sm:gap-2 sm:p-1.5">
               <motion.button
                 onClick={toggleLanguage}
@@ -133,7 +151,7 @@ export default function Header() {
                         : 'text-zinc-500 dark:text-zinc-400'
                     }`}
                   >
-                    {'\u0939\u093f'}
+                    हि
                   </span>
                   <span className="mx-0.5 h-3 w-px bg-zinc-200 dark:bg-zinc-700 sm:mx-1 sm:h-3.5" aria-hidden="true" />
                   <span
@@ -148,36 +166,6 @@ export default function Header() {
                 </span>
               </motion.button>
 
-              <motion.div
-                style={{ perspective: 900 }}
-                whileHover={{ y: -1.5, rotateX: 5, rotateY: -5 }}
-                whileTap={{ scale: 0.98, rotateX: 2, rotateY: -2 }}
-                transition={{ type: 'spring', stiffness: 360, damping: 24, mass: 0.6 }}
-                className="relative"
-              >
-                <Link
-                  href="/main/epaper"
-                  className="group cnp-motion reader-touch-link reader-focus-ring relative inline-flex h-10 shrink-0 items-center gap-1 overflow-hidden whitespace-nowrap rounded-xl border border-orange-300/70 bg-gradient-to-r from-orange-50 via-white to-red-50 px-1.5 text-[9px] font-bold text-zinc-900 shadow-[0_8px_18px_rgba(249,115,22,0.22)] hover:shadow-[0_11px_24px_rgba(239,68,68,0.24)] dark:border-orange-500/35 dark:bg-gradient-to-r dark:from-zinc-800 dark:via-zinc-900 dark:to-zinc-800 dark:text-zinc-50 dark:shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:gap-1.5 sm:px-3 sm:text-xs"
-                  aria-label={language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -right-6 -top-6 h-14 w-14 rounded-full bg-orange-300/45 blur-lg dark:bg-red-500/20"
-                  />
-                  <span className="attention-pulsate-bck relative z-10 inline-flex items-center gap-1 sm:gap-1.5">
-                    <span
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/90 text-orange-700 shadow-sm dark:bg-zinc-900/80 dark:text-orange-300 sm:h-6 sm:w-6"
-                      aria-hidden="true"
-                    >
-                      <Newspaper size={13} className="transition-transform duration-200 group-hover:rotate-[-10deg] group-hover:scale-110 sm:h-[14px] sm:w-[14px]" />
-                    </span>
-                    <span className="hidden min-[430px]:inline">
-                      {language === 'hi' ? '\u0908-\u092a\u0947\u092a\u0930' : 'E-Paper'}
-                    </span>
-                  </span>
-                </Link>
-              </motion.div>
-
               <div className="relative hidden lg:block" ref={userMenuRef}>
                 {status === 'loading' ? (
                   <div className="h-10 w-10 animate-pulse rounded-full border border-zinc-200/80 bg-zinc-200/80 dark:border-zinc-700 dark:bg-zinc-700" />
@@ -189,7 +177,7 @@ export default function Header() {
                       whileTap={{ scale: 0.97 }}
                       onClick={() => setIsUserMenuOpen((open) => !open)}
                       className="relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-zinc-200/80 bg-white text-zinc-800 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                      aria-label={language === 'hi' ? '\u0930\u0940\u0921\u0930 \u092e\u0947\u0928\u0942' : 'Reader menu'}
+                      aria-label={language === 'hi' ? 'रीडर मेनू' : 'Reader menu'}
                     >
                       {userImage ? (
                         <Image
@@ -250,16 +238,16 @@ export default function Header() {
                             </Link>
                           </div>
 
-                          <div className="my-2 h-px bg-zinc-200 dark:bg-zinc-700" />
-
-                          <button
-                            type="button"
-                            onClick={() => void handleReaderSignOut()}
-                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-                          >
-                            <LogOut size={16} />
-                            <span>Sign Out</span>
-                          </button>
+                          <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                            <button
+                              type="button"
+                              onClick={handleReaderSignOut}
+                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                            >
+                              <LogOut size={16} />
+                              <span>Sign Out</span>
+                            </button>
+                          </div>
                         </motion.div>
                       ) : null}
                     </AnimatePresence>
@@ -269,7 +257,7 @@ export default function Header() {
                     <Link
                       href="/signin"
                       className="cnp-motion inline-flex h-10 items-center gap-1 rounded-xl border border-zinc-200/80 bg-white px-3 text-xs font-semibold text-zinc-800 shadow-sm hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-red-500/40 dark:hover:bg-red-500/15 dark:hover:text-red-300"
-                      aria-label={language === 'hi' ? '\u0938\u093e\u0907\u0928 \u0907\u0928' : 'Sign In'}
+                      aria-label={language === 'hi' ? 'साइन इन' : 'Sign In'}
                     >
                       <User size={16} />
                       <span>Sign In</span>

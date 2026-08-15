@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { trackClientEvent } from '@/lib/analytics/trackClient';
+import WebVitalsBeacon from '@/components/seo/WebVitalsBeacon';
 
 type PageTrackingPayload = {
   source: string;
@@ -105,5 +106,5 @@ export default function SitePageTracker() {
     });
   }, [pathname]);
 
-  return null;
+  return <WebVitalsBeacon />;
 }

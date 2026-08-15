@@ -108,6 +108,8 @@ export async function fetchMergedLiveArticles(limit = 100): Promise<Article[]> {
       .filter((item): item is Article => Boolean(item));
 
     if (!live.length) return mockArticles;
+
+    if (!live.length) return mockArticles;
     return mergeUnique(live, mockArticles);
   } catch {
     return mockArticles;
@@ -115,31 +117,34 @@ export async function fetchMergedLiveArticles(limit = 100): Promise<Article[]> {
 }
 
 export function categoryMatches(
-  articleCategory: string,
-  selected: string,
+  articleCategory: string | undefined | null,
+  selected: string | undefined | null,
   categoryDefs: Array<{ name: string; nameEn: string; slug: string; aliases?: string[] }>
 ) {
-  const normalize = (value: string) => value.trim().toLowerCase();
+  const normalize = (value: unknown) => String(value || '').trim().toLowerCase();
   const selectedValue = normalize(selected);
-  if (selectedValue === 'all' || selectedValue === 'latest') return true;
+  if (!selectedValue || selectedValue === 'all' || selectedValue === 'latest') return true;
 
   const articleValue = normalize(articleCategory);
+  if (!articleValue) return false;
+
   const categoryValues = (category: {
-    name: string;
-    nameEn: string;
-    slug: string;
+    name?: string;
+    nameEn?: string;
+    slug?: string;
     aliases?: string[];
   }) => {
     const output = new Set<string>();
-    [category.slug, category.name, category.nameEn, ...(category.aliases || [])].forEach((item) => {
+    [category?.slug, category?.name, category?.nameEn, ...(category?.aliases || [])].forEach((item) => {
       const normalized = normalize(item);
       if (normalized) output.add(normalized);
     });
     return output;
   };
 
-  const matchedCategory = categoryDefs.find(
-    (cat) => categoryValues(cat).has(selectedValue)
+  const safeCategoryDefs = Array.isArray(categoryDefs) ? categoryDefs : [];
+  const matchedCategory = safeCategoryDefs.find(
+    (cat) => cat && categoryValues(cat).has(selectedValue)
   );
 
   if (!matchedCategory) {

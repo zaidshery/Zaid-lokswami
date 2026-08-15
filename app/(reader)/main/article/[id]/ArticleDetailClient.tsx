@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Bookmark, Newspaper, Sparkles, Volume2, PauseCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, Newspaper, Sparkles, Volume2, PauseCircle, Loader2, X } from 'lucide-react';
 import NewsCard from '@/components/ui/NewsCard';
 import ShareMenu from '@/components/ui/ShareMenu';
 import type { Article } from '@/lib/mock/data';
@@ -98,6 +98,7 @@ export default function ArticleDetailClient({
   const [aiBullets, setAiBullets] = useState<string[]>([]);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [, setAiSummaryError] = useState('');
+  const [isAuthorImageModalOpen, setIsAuthorImageModalOpen] = useState(false);
   const [listenLanguageCode, setListenLanguageCode] = useState('hi-IN');
   const [listenVoiceId, setListenVoiceId] = useState('');
   const [isPreparingListen, setIsPreparingListen] = useState(false);
@@ -131,6 +132,17 @@ export default function ArticleDetailClient({
       preparedListenAudio.voice === currentListenVoice
   );
   const listenButtonTitle = language === 'hi' ? 'Lekh sunein' : 'Listen to article';
+
+  useEffect(() => {
+    if (!isAuthorImageModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsAuthorImageModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAuthorImageModalOpen]);
 
   useEffect(() => {
     const updateReadingProgress = () => {
@@ -692,7 +704,21 @@ export default function ArticleDetailClient({
           </h1>
 
           <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 sm:gap-2 sm:text-sm">
-            <span className="relative flex h-7 w-7 shrink-0 overflow-hidden rounded-full border border-zinc-300 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 sm:h-8 sm:w-8">
+            <button
+              type="button"
+              onClick={() => setIsAuthorImageModalOpen(true)}
+              className="group relative flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-300 bg-zinc-200 transition-all duration-200 hover:scale-110 hover:border-orange-500 hover:ring-2 hover:ring-orange-500/50 active:scale-95 dark:border-zinc-700 dark:bg-zinc-800 sm:h-8 sm:w-8"
+              aria-label={
+                language === 'hi'
+                  ? `${article.author.name || 'लेखक'} की प्रोफाइल फोटो देखें`
+                  : `View profile picture of ${article.author.name || 'author'}`
+              }
+              title={
+                language === 'hi'
+                  ? `${article.author.name || 'लेखक'} की प्रोफाइल फोटो देखें`
+                  : `View profile picture of ${article.author.name || 'author'}`
+              }
+            >
               {article.author.avatar ? (
                 <Image
                   src={article.author.avatar}
@@ -700,14 +726,14 @@ export default function ArticleDetailClient({
                   fill
                   sizes="32px"
                   unoptimized
-                  className="object-cover"
+                  className="object-cover transition-transform duration-200 group-hover:scale-105"
                 />
               ) : (
-                <span className="flex h-full w-full items-center justify-center bg-red-700 text-[11px] font-black text-white uppercase">
+                <span className="flex h-full w-full items-center justify-center bg-red-700 text-[11px] font-black uppercase text-white">
                   {(article.author.name || 'A').charAt(0)}
                 </span>
               )}
-            </span>
+            </button>
             {article.author.name ? <span className="font-bold text-zinc-900 dark:text-zinc-100">{article.author.name}</span> : null}
             {article.author.programName ? (
               <>
@@ -859,6 +885,59 @@ export default function ArticleDetailClient({
             </div>
           ) : null}
         </section>
+      ) : null}
+      {isAuthorImageModalOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={article.author.name || 'Author Profile'}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={() => setIsAuthorImageModalOpen(false)}
+        >
+          <div
+            className="relative flex w-full max-w-sm flex-col items-center rounded-3xl border border-zinc-700/80 bg-zinc-900/95 p-6 text-center shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setIsAuthorImageModalOpen(false)}
+              className="absolute right-4 top-4 rounded-full border border-zinc-700 bg-zinc-800 p-1.5 text-zinc-400 transition hover:bg-zinc-700 hover:text-white"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="relative mt-2 h-44 w-44 overflow-hidden rounded-full border-4 border-orange-500/30 bg-zinc-950 shadow-xl ring-4 ring-orange-500/10 sm:h-52 sm:w-52">
+              {article.author.avatar ? (
+                <Image
+                  src={article.author.avatar}
+                  alt={article.author.name || 'Author profile'}
+                  fill
+                  sizes="208px"
+                  unoptimized
+                  className="object-cover"
+                  priority
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-red-700 text-5xl font-black uppercase text-white">
+                  {(article.author.name || 'A').charAt(0)}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-5 space-y-1">
+              <h3 className="text-xl font-black tracking-tight text-white sm:text-2xl">
+                {article.author.name || 'Digital News Desk'}
+              </h3>
+              {article.author.programName ? (
+                <p className="text-sm font-semibold text-orange-400">
+                  {article.author.programName}
+                </p>
+              ) : null}
+              <p className="text-xs text-zinc-400">Lokswami Editorial Desk</p>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

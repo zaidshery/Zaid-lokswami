@@ -161,3 +161,5 @@ export default function WebVitalsBeacon() {
 
   return null;
 }
+
+export { WebVitalsBeacon };

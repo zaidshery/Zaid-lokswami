@@ -416,6 +416,16 @@ export default function Footer() {
           </div>
         </div>
 
+        {/* 🇮🇳 15 August Independence Day Tribute */}
+        <div className="my-6 rounded-2xl border border-orange-400/40 bg-gradient-to-r from-orange-500/10 via-white/5 to-green-500/10 p-4 text-center shadow-sm dark:border-orange-500/30 dark:from-orange-950/20 dark:via-zinc-900/40 dark:to-green-950/20">
+          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 sm:text-base">
+            🇮🇳 {language === 'hi' ? '79वें स्वतंत्रता दिवस की समस्त देशवासियों को हार्दिक शुभकामनाएं!' : 'Warm greetings to all on the 79th Independence Day!'}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
+            वंदे मातरम् • जय हिन्द • Bharat Mata Ki Jai
+          </p>
+        </div>
+
         <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-800">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="space-y-1">

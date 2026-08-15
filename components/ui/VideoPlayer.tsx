@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { extractYouTubeVideoId } from '@/lib/utils/youtube';
+import {
+  buildYouTubeEmbedUrl,
+  extractYouTubeVideoId,
+  isYouTubeLiveUrl,
+} from '@/lib/utils/youtube';
 
 const LOCAL_PROGRESS_PREFIX = 'lokswami.video.progress.v1';
 const YOUTUBE_IFRAME_API_SRC = 'https://www.youtube.com/iframe_api';
@@ -111,21 +115,6 @@ function loadYouTubeIframeApi(): Promise<YouTubeNamespace> {
   return youtubeApiPromise;
 }
 
-function buildYouTubeEmbedUrl(videoId: string) {
-  const params = new URLSearchParams({
-    enablejsapi: '1',
-    playsinline: '1',
-    controls: '1',
-    rel: '0',
-    modestbranding: '1',
-    iv_load_policy: '3',
-    autoplay: '0',
-    cc_load_policy: '1',
-  });
-
-  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
-}
-
 export interface VideoPlayerProps {
   videoId: string;
   title: string;
@@ -141,6 +130,7 @@ export interface VideoPlayerProps {
   captionsEnabled: boolean;
   shouldPersistProgress?: boolean;
   startTime?: number;
+  isLive?: boolean;
   className?: string;
   onPausedChange: (paused: boolean) => void;
   onMutedChange: (muted: boolean) => void;
@@ -165,6 +155,7 @@ export default function VideoPlayer({
   captionsEnabled,
   shouldPersistProgress = false,
   startTime = 0,
+  isLive,
   className = '',
   onPausedChange,
   onMutedChange,
@@ -194,12 +185,18 @@ export default function VideoPlayer({
     startTime,
   });
   const youtubeId = useMemo(() => extractYouTubeVideoId(src), [src]);
+  const isLiveStream = Boolean(isLive || isYouTubeLiveUrl(src));
   const isYouTube = Boolean(youtubeId);
   const progressKey = useMemo(() => `${LOCAL_PROGRESS_PREFIX}:${videoId}`, [videoId]);
   const embedUrl = useMemo(() => {
     if (!youtubeId) return '';
-    return buildYouTubeEmbedUrl(youtubeId);
-  }, [youtubeId]);
+    return buildYouTubeEmbedUrl(youtubeId, {
+      autoplay: isActive && !isPaused,
+      isLive: isLiveStream,
+      playsinline: true,
+      enablejsapi: true,
+    });
+  }, [youtubeId, isActive, isPaused, isLiveStream]);
 
   callbacksRef.current = {
     onCaptionsChange,
@@ -451,12 +448,18 @@ export default function VideoPlayer({
   if (isYouTube && embedUrl) {
     return (
       <div className={`relative aspect-video w-full overflow-hidden rounded-xl bg-black ${className}`}>
+        {isLiveStream && (
+          <div className="pointer-events-none absolute top-3 left-3 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-lg backdrop-blur">
+            <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+            <span>LIVE</span>
+          </div>
+        )}
         <iframe
           ref={youtubeIframeRef}
           src={embedUrl}
           title={title}
           className="h-full w-full border-0"
-          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
           allowFullScreen
         />
       </div>

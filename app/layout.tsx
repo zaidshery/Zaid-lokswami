@@ -3,7 +3,6 @@ import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import './globals.css';
 import SitePageTracker from '@/components/analytics/SitePageTracker';
-import WebVitalsBeacon from '@/components/seo/WebVitalsBeacon';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import AuthSync from '@/components/providers/AuthSync';
 import AuthSessionProvider from '@/components/providers/SessionProvider';
@@ -31,27 +30,27 @@ const THEME_INIT_SCRIPT = `
       : 'light';
   }
 
-  function applyTheme(theme) {
+  function applyTheme(theme, isFestive) {
     root.classList.toggle('dark', theme === 'dark');
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
+    root.classList.toggle('theme-tiranga', isFestive !== false);
+    root.dataset.festive = isFestive !== false ? 'independence' : 'none';
   }
 
   try {
     var raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      applyTheme(getSystemTheme());
+      applyTheme(getSystemTheme(), true);
       return;
     }
     var parsed = JSON.parse(raw);
     var storedTheme = parsed && parsed.state && parsed.state.theme;
-    if (storedTheme === 'dark' || storedTheme === 'light') {
-      applyTheme(storedTheme);
-      return;
-    }
-    applyTheme(getSystemTheme());
+    var storedFestive = parsed && parsed.state && parsed.state.isFestiveMode;
+    var finalTheme = (storedTheme === 'dark' || storedTheme === 'light') ? storedTheme : getSystemTheme();
+    applyTheme(finalTheme, storedFestive !== false);
   } catch (error) {
-    applyTheme(getSystemTheme());
+    applyTheme(getSystemTheme(), true);
   }
 })();
 `;
@@ -370,7 +369,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <AuthSync />
             <FullscreenFix />
             <SitePageTracker />
-            <WebVitalsBeacon />
             {children}
             <InstallAppPrompt />
           </ThemeProvider>

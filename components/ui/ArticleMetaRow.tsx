@@ -88,10 +88,10 @@ export default function ArticleMetaRow({
     ? 'border-orange-200/55 bg-orange-500/18 text-orange-100 hover:bg-orange-500/28'
     : 'border-orange-300/80 bg-white text-orange-700 hover:border-orange-400 hover:bg-orange-50 dark:border-orange-500/55 dark:bg-zinc-900 dark:text-orange-300 dark:hover:bg-orange-500/15';
   const shareTone = inverted && readPriority
-    ? 'border-white/20 bg-white/[0.08] text-white/[0.88] hover:bg-white/[0.14]'
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
     : inverted
-    ? 'border-sky-200/55 bg-sky-500/18 text-sky-100 hover:bg-sky-500/28'
-    : 'border-sky-300/85 bg-white text-sky-700 hover:border-sky-400 hover:bg-sky-50 dark:border-sky-700/75 dark:bg-zinc-900 dark:text-sky-300 dark:hover:bg-sky-900/30';
+    ? 'border-emerald-200/55 bg-emerald-500/18 text-emerald-100 hover:bg-emerald-500/28'
+    : 'border-emerald-500/60 bg-white text-emerald-700 hover:border-emerald-500 hover:bg-emerald-50 dark:border-emerald-500/60 dark:bg-zinc-900/90 dark:text-emerald-400 dark:hover:bg-emerald-950/40';
   const useTightCompactActions =
     compact && actionLayout === 'three-columns' && compactDensity === 'tight';
   const ctaSize = compact
@@ -163,14 +163,14 @@ export default function ArticleMetaRow({
               data-reader-action="true"
             >
               <span className="min-w-0 truncate">
-                {language === 'hi' ? '\u092a\u0942\u0930\u0940 \u0916\u092c\u0930' : 'Read Story'}
+                {language === 'hi' ? 'पूरा खबर' : 'Read Story'}
               </span>
               <ArrowUpRight className={iconSize} />
             </Link>
           ) : (
             <span className={`${ctaBase} ${ctaSize} ${readTone}`} data-reader-action="true">
               <span className="min-w-0 truncate">
-                {language === 'hi' ? '\u092a\u0942\u0930\u0940 \u0916\u092c\u0930' : 'Read Story'}
+                {language === 'hi' ? 'पूरा खबर' : 'Read Story'}
               </span>
               <ArrowUpRight className={iconSize} />
             </span>

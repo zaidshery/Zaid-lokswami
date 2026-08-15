@@ -12,6 +12,8 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
+  Play,
+  Radio,
   Save,
 } from 'lucide-react';
 import { getAuthHeader } from '@/lib/auth/clientToken';
@@ -23,6 +25,12 @@ import {
 import { isAdminRole, type AdminRole } from '@/lib/auth/roles';
 import { NEWS_CATEGORIES } from '@/lib/constants/newsCategories';
 import { formatUiDateTime } from '@/lib/utils/dateFormat';
+import {
+  buildYouTubeEmbedUrl,
+  extractYouTubeVideoId,
+  getYouTubeThumbnail,
+  isYouTubeLiveUrl,
+} from '@/lib/utils/youtube';
 import { getAllowedWorkflowTransitions } from '@/lib/workflow/transitions';
 import type { WorkflowPriority, WorkflowStatus } from '@/lib/workflow/types';
 import {
@@ -218,27 +226,6 @@ function formatDateTime(value: string | null | undefined) {
   return value ? formatUiDateTime(value, '') : '';
 }
 
-function getYouTubeId(value: string) {
-  try {
-    const url = new URL(value.trim());
-    const host = url.hostname.replace('www.', '').toLowerCase();
-    if (host === 'youtu.be') return url.pathname.slice(1) || null;
-    if (host === 'youtube.com' || host === 'm.youtube.com') {
-      if (url.pathname === '/watch') return url.searchParams.get('v');
-      if (url.pathname.startsWith('/shorts/')) return url.pathname.split('/')[2] || null;
-      if (url.pathname.startsWith('/embed/')) return url.pathname.split('/')[2] || null;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function getYouTubeThumbnail(value: string) {
-  const id = getYouTubeId(value);
-  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
-}
-
 function isPdfThumbnail(value: string) {
   const normalized = value.trim().toLowerCase();
   return normalized.startsWith('data:application/pdf') || normalized.endsWith('.pdf');
@@ -291,10 +278,21 @@ export default function EditVideoPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const previewThumbnail = useMemo(
-    () => thumbnailPreview || formData.thumbnail.trim(),
-    [formData.thumbnail, thumbnailPreview]
+  const detectedYouTubeId = useMemo(
+    () => extractYouTubeVideoId(formData.videoUrl),
+    [formData.videoUrl]
   );
+  const isLiveStream = useMemo(
+    () => isYouTubeLiveUrl(formData.videoUrl),
+    [formData.videoUrl]
+  );
+
+  const previewThumbnail = useMemo(() => {
+    if (thumbnailPreview) return thumbnailPreview;
+    if (formData.thumbnail.trim()) return formData.thumbnail.trim();
+    if (detectedYouTubeId) return getYouTubeThumbnail(formData.videoUrl);
+    return '';
+  }, [formData.thumbnail, thumbnailPreview, detectedYouTubeId, formData.videoUrl]);
 
   const permissionUser = useMemo(() => {
     const sessionUser = session?.user;
@@ -494,13 +492,18 @@ export default function EditVideoPage() {
         throw new Error('Please fill in all required fields');
       }
 
-      const duration = Number.parseInt(formData.duration, 10);
+      const isLive = isYouTubeLiveUrl(formData.videoUrl);
+      const parsedDuration = Number.parseInt(formData.duration || '0', 10);
+      const duration = Number.isFinite(parsedDuration) && parsedDuration >= 0
+        ? parsedDuration
+        : isLive ? 0 : 60;
       const shortsRank = Number.parseInt(formData.shortsRank || '0', 10);
       const views = Number.parseInt(formData.views || '0', 10);
-      if (!Number.isFinite(duration) || duration < 1) throw new Error('Duration must be valid');
       if (!Number.isFinite(shortsRank)) throw new Error('Shorts rank must be valid');
       if (!Number.isFinite(views) || views < 0) throw new Error('Views must be valid');
-      if (!getYouTubeId(formData.videoUrl)) throw new Error('Please enter a valid YouTube URL');
+
+      const youtubeId = extractYouTubeVideoId(formData.videoUrl);
+      if (!youtubeId) throw new Error('Please enter a valid YouTube or YouTube Live stream URL');
 
       let thumbnail = await uploadThumbnail();
       if (!thumbnail.trim()) thumbnail = getYouTubeThumbnail(formData.videoUrl);
@@ -731,16 +734,32 @@ export default function EditVideoPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Video URL (YouTube) <span className="text-red-500">*</span>
+                  Video / Live Stream URL (YouTube) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="url"
                   name="videoUrl"
                   value={formData.videoUrl}
                   onChange={handleInputChange}
+                  placeholder="https://www.youtube.com/live/... or watch?v=..."
                   className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary-600 focus:outline-none"
                   required
                 />
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {detectedYouTubeId ? (
+                    isLiveStream ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                        <Radio className="h-3 w-3 animate-pulse" />
+                        🔴 YouTube Live Stream Detected ({detectedYouTubeId})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                        <Play className="h-3 w-3" />
+                        ▶️ YouTube Video Detected ({detectedYouTubeId})
+                      </span>
+                    )
+                  ) : null}
+                </div>
               </div>
             </div>
 
@@ -841,6 +860,41 @@ export default function EditVideoPage() {
               </CmsEditorMain>
 
               <CmsEditorSidebar>
+            {/* 📺 Live In-Editor Video Stream Preview */}
+            {detectedYouTubeId ? (
+              <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-950 shadow-md">
+                <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">
+                  <span className="flex items-center gap-1.5">
+                    {isLiveStream ? (
+                      <span className="flex items-center gap-1 text-red-400">
+                        <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                        LIVE STREAM PREVIEW
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-zinc-200">
+                        <Play className="h-3.5 w-3.5 text-red-500 fill-red-500" />
+                        YOUTUBE VIDEO PREVIEW
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-mono">{detectedYouTubeId}</span>
+                </div>
+                <div className="relative aspect-video w-full">
+                  <iframe
+                    src={buildYouTubeEmbedUrl(detectedYouTubeId, {
+                      playsinline: true,
+                      controls: true,
+                      isLive: isLiveStream,
+                    })}
+                    title="CMS Live Video Preview"
+                    className="h-full w-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            ) : null}
+
             <div id="workflow-actions" className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>

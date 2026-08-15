@@ -62,10 +62,10 @@ export default function BottomNav({
   const inactiveTone = isOverlayDark
     ? 'text-zinc-300 hover:text-white'
     : 'text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100';
-  const activeTone = isOverlayDark ? 'text-red-400' : 'text-red-600 dark:text-red-400';
+  const activeTone = isOverlayDark ? 'text-orange-400' : 'text-orange-600 dark:text-orange-400';
   const activeBackgroundTone = isOverlayDark
     ? 'bg-white/10'
-    : 'bg-red-50 dark:bg-red-500/10';
+    : 'bg-orange-50 dark:bg-orange-500/10';
 
   return (
     <nav
@@ -73,6 +73,11 @@ export default function BottomNav({
       aria-label="Bottom Navigation"
       className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur xl:hidden ${shellTone}`}
     >
+      {/* 🇮🇳 15 August 3-Color (Tricolor) Top Line */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 -top-[1.5px] h-[2.5px] bg-gradient-to-r from-[#FF9933] via-[#FFFFFF] to-[#138808] shadow-[0_0_8px_rgba(255,153,51,0.45)]"
+      />
       <div className="mx-auto grid min-h-[var(--bottom-nav-height)] w-full max-w-xl grid-cols-6 items-center gap-x-0.5 px-1.5 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1 sm:gap-x-1 sm:px-3">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -101,7 +106,7 @@ export default function BottomNav({
                 type="button"
               >
                 <Icon size={22} strokeWidth={2} />
-                <span className="max-w-full truncate text-[9px] font-semibold leading-none min-[380px]:text-[10px] sm:text-[11px]">{label}</span>
+                <span className="max-w-full truncate text-[9px] font-semibold leading-normal pb-0.5 min-[380px]:text-[10px] sm:text-[11px]">{label}</span>
               </motion.button>
             );
           }
@@ -112,7 +117,7 @@ export default function BottomNav({
               href={href}
               aria-label={explicitAriaLabel}
               aria-current={isActive ? 'page' : undefined}
-              className="reader-touch-link reader-focus-ring touch-target-compact relative flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5"
+              className="reader-touch-link reader-focus-ring touch-target-compact relative flex w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1"
             >
               {isActive ? (
                 <motion.div
@@ -128,7 +133,7 @@ export default function BottomNav({
                 className={`cnp-motion relative z-10 ${isActive ? activeTone : inactiveTone}`}
               />
               <span
-                className={`cnp-motion relative z-10 max-w-full truncate text-[9px] font-semibold leading-none min-[380px]:text-[10px] sm:text-[11px] ${
+                className={`cnp-motion relative z-10 max-w-full truncate text-[9px] font-semibold leading-normal pb-0.5 min-[380px]:text-[10px] sm:text-[11px] ${
                   isActive ? activeTone : inactiveTone
                 }`}
               >

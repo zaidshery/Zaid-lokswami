@@ -21,6 +21,12 @@ import {
 } from '@/lib/workflow/video';
 import { isWorkflowStatus } from '@/lib/workflow/types';
 
+import {
+  extractYouTubeVideoId,
+  getYouTubeThumbnail,
+  isYouTubeLiveUrl,
+} from '@/lib/utils/youtube';
+
 const VIDEO_CATEGORIES = NEWS_CATEGORIES.map((category) => category.nameEn);
 const FILE_STORE_UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
 
@@ -73,24 +79,6 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function getYouTubeId(value: string) {
-  try {
-    const url = new URL(value.trim());
-    const host = url.hostname.replace('www.', '').toLowerCase();
-
-    if (host === 'youtu.be') return url.pathname.slice(1) || null;
-    if (host === 'youtube.com' || host === 'm.youtube.com') {
-      if (url.pathname === '/watch') return url.searchParams.get('v');
-      if (url.pathname.startsWith('/shorts/')) return url.pathname.split('/')[2] || null;
-      if (url.pathname.startsWith('/embed/')) return url.pathname.split('/')[2] || null;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '';
 }
@@ -108,10 +96,19 @@ function normalizeVideoInput(body: unknown) {
 
   const title = typeof source.title === 'string' ? source.title.trim() : '';
   const description = typeof source.description === 'string' ? source.description.trim() : '';
-  const thumbnail = typeof source.thumbnail === 'string' ? source.thumbnail.trim() : '';
   const videoUrl = typeof source.videoUrl === 'string' ? source.videoUrl.trim() : '';
+  let thumbnail = typeof source.thumbnail === 'string' ? source.thumbnail.trim() : '';
+  if (!thumbnail && videoUrl) {
+    thumbnail = getYouTubeThumbnail(videoUrl) || '';
+  }
+
   const category = typeof source.category === 'string' ? source.category.trim() : '';
-  const duration = Number.parseInt(String(source.duration ?? ''), 10);
+  const isLive = isYouTubeLiveUrl(videoUrl);
+  const parsedDuration = Number.parseInt(String(source.duration ?? ''), 10);
+  const duration = Number.isFinite(parsedDuration) && parsedDuration >= 0
+    ? parsedDuration
+    : isLive ? 0 : 60;
+
   const shortsRank = Number.isFinite(Number(source.shortsRank))
     ? Number.parseInt(String(source.shortsRank), 10)
     : 0;
@@ -147,13 +144,13 @@ function validateVideoInput(input: ReturnType<typeof normalizeVideoInput>) {
     return 'Invalid category';
   }
 
-  if (!Number.isFinite(input.duration) || input.duration < 1) {
+  if (!Number.isFinite(input.duration) || input.duration < 0) {
     return 'Invalid duration';
   }
 
-  const youtubeId = getYouTubeId(input.videoUrl);
+  const youtubeId = extractYouTubeVideoId(input.videoUrl);
   if (!youtubeId) {
-    return 'Video URL must be a valid YouTube URL';
+    return 'Video URL must be a valid YouTube or YouTube Live URL';
   }
 
   return null;
@@ -456,9 +453,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const youtubeId = getYouTubeId(input.videoUrl);
+    const youtubeId = extractYouTubeVideoId(input.videoUrl);
     const resolvedThumbnail =
-      input.thumbnail || `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+      input.thumbnail || getYouTubeThumbnail(input.videoUrl);
 
     if (await shouldUseFileStore()) {
       const stored = await createStoredVideo({

@@ -60,7 +60,7 @@ export default function HeroCard({ article, parallax = { x: 0, y: 0 }, variant =
           className={`relative overflow-hidden ${
             variant === 'editorial'
               ? 'bg-[var(--newsroom-image-bg)] h-[clamp(156px,25vh,210px)] min-[420px]:h-[clamp(172px,27vh,226px)] sm:h-[clamp(210px,30vh,265px)] md:flex-1 md:min-h-0 md:aspect-auto rounded-t-lg rounded-b-none ring-1 ring-zinc-200/70 shadow-lg shadow-zinc-300/25 dark:ring-zinc-800 dark:shadow-black/30'
-              : 'flex h-full flex-col rounded-[30px] border border-zinc-200/80 bg-[var(--newsroom-hero-surface)] shadow-[0_22px_52px_rgba(15,23,42,0.12)] dark:border-zinc-800 dark:bg-[var(--newsroom-hero-surface)] dark:shadow-black/30'
+              : 'flex h-full flex-col rounded-[26.5px] bg-[var(--newsroom-hero-surface)] dark:bg-zinc-950'
           }`}
         >
           {variant === 'modern' ? (

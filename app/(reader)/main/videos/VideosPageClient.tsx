@@ -18,6 +18,7 @@ import {
   VolumeX,
   Zap,
   SlidersHorizontal,
+  Radio,
 } from 'lucide-react';
 import ReaderImage from '@/components/ui/ReaderImage';
 import ShareMenu from '@/components/ui/ShareMenu';
@@ -27,7 +28,7 @@ import { resolveNewsCategory } from '@/lib/constants/newsCategories';
 import { useAppStore } from '@/lib/store/appStore';
 import formatNumber from '@/lib/utils/formatNumber';
 import { buildVideoReaderPath } from '@/lib/utils/readerContentPaths';
-import { extractYouTubeVideoId } from '@/lib/utils/youtube';
+import { extractYouTubeVideoId, isYouTubeLiveUrl } from '@/lib/utils/youtube';
 
 const FALLBACK_VIDEO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
 const FALLBACK_THUMBNAIL = '/lokswami-share-preview.png';
@@ -186,6 +187,11 @@ function getYouTubeThumbnail(videoUrl: string) {
   return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 }
 
+function isLiveVideo(item?: { videoUrl?: string; duration?: number } | null): boolean {
+  if (!item || !item.videoUrl) return false;
+  return isYouTubeLiveUrl(item.videoUrl) || item.duration === 0;
+}
+
 function resolveThumbnail(item: Pick<PublicVideoFeedItem, 'thumbnail' | 'videoUrl'>) {
   const thumbnail = safeString(item.thumbnail);
   if (thumbnail && !isPdfThumbnail(thumbnail)) {
@@ -202,7 +208,7 @@ function mapApiVideo(item: PublicVideoFeedItem): VideoItem {
     description: safeString(item.description),
     thumbnail: resolveThumbnail(item),
     videoUrl: safeString(item.videoUrl, FALLBACK_VIDEO_URL),
-    duration: Math.max(1, Math.floor(safeNumber(item.duration, 1))),
+    duration: Math.max(0, Math.floor(safeNumber(item.duration, 0))),
     category: safeString(item.category, 'regional'),
     views: Math.max(0, Math.floor(safeNumber(item.views, 0))),
     publishedAt: safeString(item.publishedAt, new Date().toISOString()),
@@ -864,6 +870,8 @@ export default function VideosPageClient({
           watchNow: 'अभी देखें',
           hidePlayer: 'प्लेयर छुपाएँ',
           shortPicks: 'शॉर्ट पिक्स',
+          liveNow: 'लाइव',
+          liveStream: 'लाइव स्ट्रीमिंग',
         }
       : {
           eyebrow: 'Lokswami video desk',
@@ -897,11 +905,13 @@ export default function VideosPageClient({
           captions: 'CC',
           soundOn: 'Sound on',
           muted: 'Muted',
-  resume: 'Resume',
+          resume: 'Resume',
           backToFeed: 'Back to feed',
           shortsNote: 'Quick vertical updates pulled from the same feed.',
           openShorts: 'Open',
           watchNow: 'Watch now',
+          liveNow: 'LIVE',
+          liveStream: 'Live Stream',
         };
 
   if (isCompactShortsMode) {
@@ -1103,6 +1113,7 @@ export default function VideosPageClient({
                   poster={mobileFeaturedVideo.thumbnail}
                   fallbackDuration={mobileFeaturedVideo.duration}
                   isActive
+                  isLive={isLiveVideo(mobileFeaturedVideo)}
                   isPaused={isPaused}
                   isMuted={isMuted}
                   autoAdvance={autoAdvance}
@@ -1145,6 +1156,17 @@ export default function VideosPageClient({
             {mobileFeaturedVideo && (isMobileFeaturedPlayerOpen || viewMode === 'feed') && (
               <div className={`${isMobileFeaturedPlayerOpen ? 'block' : 'hidden'} bg-white dark:bg-[#0f0f0f]`}>
                 <div className="px-4 pt-3.5">
+                  {isLiveVideo(mobileFeaturedVideo) && (
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white shadow-md">
+                        <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                        {copy.liveNow}
+                      </span>
+                      <span className="text-xs font-semibold text-red-600 dark:text-red-400">
+                        {copy.liveStream}
+                      </span>
+                    </div>
+                  )}
                   <h1 className="break-words text-lg font-bold leading-snug text-zinc-950 dark:text-white">
                     {mobileFeaturedVideo.title}
                   </h1>
@@ -1337,9 +1359,16 @@ export default function VideosPageClient({
                                   sizes="130px"
                                   className="object-cover group-hover:scale-105 transition duration-200"
                                 />
-                                <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 py-0.5 text-[10px] font-bold text-white">
-                                  {formatDurationLabel(video.duration)}
-                                </span>
+                                {isLiveVideo(video) ? (
+                                  <span className="absolute bottom-1 right-1 flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-extrabold text-white shadow">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                                    {copy.liveNow}
+                                  </span>
+                                ) : (
+                                  <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 py-0.5 text-[10px] font-bold text-white">
+                                    {formatDurationLabel(video.duration)}
+                                  </span>
+                                )}
                               </div>
 
                               <div className="min-w-0 flex-1 flex flex-col justify-center">
@@ -1398,9 +1427,16 @@ export default function VideosPageClient({
                                   sizes="(max-width: 480px) 100vw, 480px"
                                   className="object-cover group-hover:scale-[1.02] transition-transform duration-300"
                                 />
-                                <span className="absolute bottom-2.5 right-2.5 rounded bg-black/80 px-2 py-0.5 text-xs font-bold text-white tracking-wider">
-                                  {formatDurationLabel(video.duration)}
-                                </span>
+                                {isLiveVideo(video) ? (
+                                  <span className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 rounded bg-red-600 px-2.5 py-1 text-xs font-extrabold uppercase tracking-wider text-white shadow-lg">
+                                    <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                                    {copy.liveNow}
+                                  </span>
+                                ) : (
+                                  <span className="absolute bottom-2.5 right-2.5 rounded bg-black/80 px-2 py-0.5 text-xs font-bold text-white tracking-wider">
+                                    {formatDurationLabel(video.duration)}
+                                  </span>
+                                )}
 
                                 {savedPercent > 0 && (
                                   <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
@@ -1678,6 +1714,7 @@ export default function VideosPageClient({
                 poster={selectedVideo.thumbnail}
                 fallbackDuration={selectedVideo.duration}
                 isActive
+                isLive={isLiveVideo(selectedVideo)}
                 isPaused={isPaused}
                 isMuted={isMuted}
                 autoAdvance={autoAdvance}
@@ -1707,9 +1744,16 @@ export default function VideosPageClient({
 
               <div className="space-y-4 px-4 pb-4 pt-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-[#ff6257]/16 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ff877e]">
-                    {copy.nowPlaying}
-                  </span>
+                  {isLiveVideo(selectedVideo) ? (
+                    <span className="flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white shadow-md">
+                      <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                      {copy.liveNow}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-[#ff6257]/16 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ff877e]">
+                      {copy.nowPlaying}
+                    </span>
+                  )}
                   <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 dark:bg-white/7 dark:text-white/72">
                     {getCategoryLabel(selectedVideo.category, language)}
                   </span>
@@ -1729,7 +1773,7 @@ export default function VideosPageClient({
                     <span className="h-1 w-1 rounded-full bg-zinc-300 dark:bg-white/24" />
                     <span>{formatRelativeTime(selectedVideo.publishedAt, language)}</span>
                     <span className="h-1 w-1 rounded-full bg-zinc-300 dark:bg-white/24" />
-                    <span>{formatDurationLabel(progressDuration || selectedVideo.duration)}</span>
+                    <span>{isLiveVideo(selectedVideo) ? copy.liveStream : formatDurationLabel(progressDuration || selectedVideo.duration)}</span>
                   </p>
                 </div>
 
@@ -1922,9 +1966,16 @@ export default function VideosPageClient({
                           className="object-cover"
                         />
                       </div>
-                      <span className="absolute bottom-2 right-2 rounded-md bg-black/76 px-1.5 py-1 text-[10px] font-semibold text-white">
-                        {formatDurationLabel(video.duration)}
-                      </span>
+                      {isLiveVideo(video) ? (
+                        <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-extrabold uppercase text-white shadow">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                          {copy.liveNow}
+                        </span>
+                      ) : (
+                        <span className="absolute bottom-2 right-2 rounded-md bg-black/76 px-1.5 py-1 text-[10px] font-semibold text-white">
+                          {formatDurationLabel(video.duration)}
+                        </span>
+                      )}
                     </div>
 
                     <div className="min-w-0 flex-1 py-1">
