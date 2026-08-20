@@ -27,18 +27,17 @@ export const LOGO_SIZES: Record<LogoSize, LogoSizeConfig> = {
 
 export interface LogoIconProps {
   size?: LogoSize;
-  variant?: 'tricolor' | 'standard';
+  variant?: 'standard';
   className?: string;
 }
 
 /** Standalone targetable 'लो' Logo Emblem component */
 export function LogoIcon({
   size = 'md',
-  variant = 'tricolor',
+  variant = 'standard',
   className = '',
 }: LogoIconProps) {
   const sizeConfig = LOGO_SIZES[size];
-  const reduceMotion = useReducedMotion();
 
   return (
     <span
@@ -50,27 +49,12 @@ export function LogoIcon({
         height: `${sizeConfig.icon}px`,
       }}
     >
-      {variant === 'tricolor' ? (
-        <motion.span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-r from-[#FF9933]/30 via-white/20 to-[#138808]/30 blur-[2px]"
-          animate={reduceMotion ? { opacity: 0.4, scale: 1 } : { opacity: [0.3, 0.6, 0.3], scale: [0.95, 1.08, 0.95] }}
-          transition={
-            reduceMotion
-              ? undefined
-              : { duration: 4.8, ease: 'easeInOut', repeat: Infinity, delay: 0.8 }
-          }
-        />
-      ) : null}
-
       <Image
         src="/logo-header-cutout.png"
         alt="Lokswami Emblem"
         width={sizeConfig.icon}
         height={sizeConfig.icon}
-        className={`relative z-[1] block h-auto w-full object-contain transition-transform duration-300 motion-safe:group-hover/logo:rotate-[2deg] motion-safe:group-hover/logo:scale-[1.06] ${
-          variant === 'tricolor' ? 'drop-shadow-[0_0_8px_rgba(255,153,51,0.35)]' : ''
-        }`}
+        className="relative z-[1] block h-auto w-full object-contain transition-transform duration-300 motion-safe:group-hover/logo:rotate-[2deg] motion-safe:group-hover/logo:scale-[1.06]"
         priority={size === 'headerCompact' || size === 'headerMobile' || size === 'headerDesktop'}
         sizes="(max-width: 639px) 38px, (max-width: 1023px) 44px, 54px"
       />
@@ -80,14 +64,14 @@ export function LogoIcon({
 
 export interface LogoWordmarkProps {
   size?: LogoSize;
-  variant?: 'tricolor' | 'standard' | 'white' | 'dark';
+  variant?: 'standard' | 'white' | 'dark';
   className?: string;
 }
 
 /** Standalone targetable 'लोकस्वामी' Wordmark component */
 export function LogoWordmark({
   size = 'md',
-  variant = 'tricolor',
+  variant = 'standard',
   className = '',
 }: LogoWordmarkProps) {
   const sizeConfig = LOGO_SIZES[size];
@@ -118,36 +102,15 @@ export function LogoWordmark({
           width={sizeConfig.wordmarkW}
           height={sizeConfig.wordmarkH}
           className={`block h-full w-full object-contain ${
-            variant === 'tricolor'
-              ? 'opacity-0'
-              : variant === 'white'
-                ? 'brightness-0 invert'
-                : variant === 'dark'
-                  ? 'brightness-0'
-                  : 'drop-shadow-[0_1px_1px_rgba(0,0,0,0.18)] dark:brightness-0 dark:invert'
+            variant === 'white'
+              ? 'brightness-0 invert'
+              : variant === 'dark'
+                ? 'brightness-0'
+                : 'drop-shadow-[0_1px_1px_rgba(0,0,0,0.18)] dark:brightness-0 dark:invert'
           }`}
           priority={size === 'headerCompact' || size === 'headerMobile' || size === 'headerDesktop'}
           sizes="(max-width: 639px) 136px, (max-width: 1023px) 156px, 192px"
         />
-
-        {variant === 'tricolor' ? (
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(180deg, #FF9933 0%, #FF9933 34%, #FFFFFF 46%, #FFFFFF 54%, #138808 66%, #138808 100%)',
-              WebkitMaskImage: 'url(/logo-wordmark-final.png)',
-              maskImage: 'url(/logo-wordmark-final.png)',
-              WebkitMaskSize: 'contain',
-              maskSize: 'contain',
-              WebkitMaskRepeat: 'no-repeat',
-              maskRepeat: 'no-repeat',
-              WebkitMaskPosition: 'center',
-              maskPosition: 'center',
-              filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.6)) drop-shadow(0 0 10px rgba(255,153,51,0.3))',
-            }}
-          />
-        ) : null}
       </div>
 
       <span
@@ -164,8 +127,8 @@ export interface LogoProps {
   className?: string;
   iconClassName?: string;
   wordmarkClassName?: string;
-  iconVariant?: 'tricolor' | 'standard';
-  wordmarkVariant?: 'tricolor' | 'standard' | 'white' | 'dark';
+  iconVariant?: 'standard';
+  wordmarkVariant?: 'standard' | 'white' | 'dark';
   showIcon?: boolean;
   showWordmark?: boolean;
 }
@@ -177,8 +140,8 @@ export default function Logo({
   className = '',
   iconClassName = '',
   wordmarkClassName = '',
-  iconVariant = 'tricolor',
-  wordmarkVariant = 'tricolor',
+  iconVariant = 'standard',
+  wordmarkVariant = 'standard',
   showIcon = true,
   showWordmark = true,
 }: LogoProps) {

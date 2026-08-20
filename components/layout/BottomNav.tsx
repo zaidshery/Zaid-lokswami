@@ -73,10 +73,10 @@ export default function BottomNav({
       aria-label="Bottom Navigation"
       className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur xl:hidden ${shellTone}`}
     >
-      {/* 🇮🇳 15 August 3-Color (Tricolor) Top Line */}
+      {/* Signature Lokswami Brand Gradient Top Line */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 -top-[1.5px] h-[2.5px] bg-gradient-to-r from-[#FF9933] via-[#FFFFFF] to-[#138808] shadow-[0_0_8px_rgba(255,153,51,0.45)]"
+        className="pointer-events-none absolute inset-x-0 -top-[1px] h-[2px] bg-gradient-to-r from-red-600 via-rose-500 to-orange-500 shadow-[0_0_8px_rgba(225,29,72,0.35)]"
       />
       <div className="mx-auto grid min-h-[var(--bottom-nav-height)] w-full max-w-xl grid-cols-6 items-center gap-x-0.5 px-1.5 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1 sm:gap-x-1 sm:px-3">
         {navItems.map((item) => {

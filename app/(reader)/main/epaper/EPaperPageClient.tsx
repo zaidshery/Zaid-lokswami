@@ -2758,8 +2758,8 @@ export default function EPaperPageClient({
         </div>
       ) : null}
 
-      <section className="cnp-surface relative overflow-hidden rounded-2xl border border-orange-500/25 p-3.5 shadow-[0_8px_28px_-8px_rgba(255,153,51,0.18)] sm:p-4 md:p-5">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px] bg-[linear-gradient(90deg,#FF9933_0%,#FFFFFF_50%,#138808_100%)]" />
+      <section className="cnp-surface relative overflow-hidden rounded-2xl border border-zinc-200/80 p-3.5 shadow-sm dark:border-zinc-800 sm:p-4 md:p-5">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 shadow-[0_1px_8px_rgba(225,29,72,0.35)]" />
         <div className="mb-4 border-b border-zinc-200/80 pb-4 dark:border-zinc-800">
           <div
             className={`grid gap-2 sm:gap-2.5 ${

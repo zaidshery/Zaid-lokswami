@@ -36,21 +36,10 @@ function applyTheme(theme: 'dark' | 'light') {
   root.style.colorScheme = theme;
 }
 
-function applyFestive(isFestive: boolean) {
-  const root = document.documentElement;
-  root.classList.toggle('theme-tiranga', isFestive);
-  root.dataset.festive = isFestive ? 'independence' : 'none';
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useAppStore((state) => state.theme);
   const setTheme = useAppStore((state) => state.setTheme);
-  const isFestiveMode = useAppStore((state) => state.isFestiveMode);
   const initialized = useRef(false);
-
-  useEffect(() => {
-    applyFestive(isFestiveMode !== false);
-  }, [isFestiveMode]);
 
   useEffect(() => {
     if (initialized.current) return;

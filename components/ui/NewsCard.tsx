@@ -168,7 +168,7 @@ export default function NewsCard({ article, variant = 'default', size = 'default
   if (variant === 'horizontal') {
     return (
       <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover relative overflow-hidden p-0" data-reader-card="true">
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] bg-gradient-to-r from-[#FF9933] via-white to-[#138808] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         <Link href={articleHref} className="reader-touch-link reader-focus-ring flex gap-2.5 rounded-xl p-3 transition-all duration-300 hover:bg-gray-100 dark:hover:bg-gray-800 sm:gap-4 sm:p-4">
           <div className="relative h-[72px] w-[88px] flex-shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-950 sm:h-24 sm:w-28 md:h-28 md:w-36">
             <ReaderImage
@@ -209,7 +209,7 @@ export default function NewsCard({ article, variant = 'default', size = 'default
   if (variant === 'compact') {
     return (
       <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover relative overflow-hidden p-0" data-reader-card="true">
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] bg-gradient-to-r from-[#FF9933] via-white to-[#138808] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         <Link href={articleHref} className="reader-touch-link reader-focus-ring block rounded-xl p-3.5 transition-all duration-300 sm:p-4">
           <div className="flex items-start gap-3 sm:gap-4">
             <div className="relative h-[64px] w-[82px] flex-shrink-0 overflow-hidden rounded-xl bg-zinc-100 shadow-sm dark:bg-zinc-800 sm:h-[72px] sm:w-[96px]">
@@ -256,8 +256,8 @@ export default function NewsCard({ article, variant = 'default', size = 'default
 
   if (variant === 'featured') {
     return (
-      <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group relative card-hover overflow-hidden rounded-xl border border-orange-500/25 transition-all duration-300 hover:border-orange-500/60 hover:shadow-[0_12px_32px_-8px_rgba(255,153,51,0.3),0_0_16px_rgba(19,136,8,0.2)]" data-reader-card="true">
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2.5px] bg-gradient-to-r from-[#FF9933] via-white to-[#138808]" />
+      <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group relative card-hover overflow-hidden rounded-xl border border-zinc-200/80 transition-all duration-300 hover:border-red-500/60 hover:shadow-[0_12px_32px_-8px_rgba(220,38,38,0.28)] dark:border-zinc-800" data-reader-card="true">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2.5px] bg-gradient-to-r from-red-600 via-rose-500 to-amber-500" />
         <Link href={articleHref} className="reader-touch-link reader-focus-ring block">
           <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-zinc-950 md:rounded-xl">
             <ReaderImage
@@ -298,7 +298,7 @@ export default function NewsCard({ article, variant = 'default', size = 'default
 
   return (
     <motion.article variants={cardVariants} initial="hidden" animate="visible" className="group cnp-card cnp-card-hover relative overflow-hidden p-0" data-reader-card="true">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] bg-gradient-to-r from-[#FF9933] via-white to-[#138808] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       <Link href={articleHref} className="reader-touch-link reader-focus-ring flex h-full flex-col">
         <div className={`relative overflow-hidden bg-zinc-100 dark:bg-zinc-950 ${isSmall ? 'aspect-[16/9]' : 'aspect-[16/10]'}`}>
           <ReaderImage

@@ -53,7 +53,7 @@ export default function DesktopHeroEpaperCard({
     <article
       className="epaper-premium-card group relative block h-full overflow-hidden rounded-[24px] border px-3 py-3 text-zinc-900 transition-all duration-300 hover:-translate-y-0.5 dark:text-white"
     >
-      <div className="absolute inset-x-0 top-0 h-[2.5px] bg-[linear-gradient(90deg,#FF9933_0%,#FFFFFF_50%,#138808_100%)]" />
+      <div className="absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 shadow-[0_1px_8px_rgba(225,29,72,0.4)]" />
 
       <div className="relative grid h-full min-h-0 grid-cols-[128px_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[156px_minmax(0,1fr)] xl:flex xl:flex-col xl:justify-center xl:gap-3.5">
         <Link

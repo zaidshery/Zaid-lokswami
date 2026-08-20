@@ -16,7 +16,6 @@ import {
 import { useAppStore } from '@/lib/store/appStore';
 import DesktopNav from './DesktopNav';
 import Logo, { LogoIcon, LogoWordmark } from '@/components/layout/Logo';
-import { AshokaChakraIcon } from '@/components/ui/IndependenceThemeBadge';
 
 /** Renders the main site header with reader auth actions. */
 export default function Header() {
@@ -105,12 +104,10 @@ export default function Header() {
     <header className="fixed left-0 right-0 top-11 z-50 border-b border-zinc-200/85 bg-white/95 shadow-[var(--shadow-soft)] backdrop-blur-md transition-all duration-500 dark:border-zinc-800 dark:bg-zinc-950/95 md:top-12">
       <div className="relative w-full px-1.5 sm:px-5 md:px-8">
         <div className="flex h-12 items-center justify-between gap-2 sm:h-[3.45rem] sm:gap-3">
-          {/* Left: Logo Emblem on mobile, full logo on tablet/desktop */}
+          {/* Left: Logo */}
           <div className="relative z-10 flex min-w-0 shrink-0 items-center">
             <div className="min-w-0 sm:hidden">
-              <Link href="/main" className="inline-flex items-center" aria-label="Lokswami Home">
-                <LogoIcon size="headerCompact" />
-              </Link>
+              <Logo size="headerCompact" href="/main" />
             </div>
             <div className="hidden min-w-0 sm:block lg:hidden">
               <Logo size="headerMobile" href="/main" />
@@ -118,20 +115,6 @@ export default function Header() {
             <div className="hidden min-w-0 lg:block">
               <Logo size="headerDesktop" href="/main" />
             </div>
-          </div>
-
-          {/* 🇮🇳 Exact Screen Center (The Red Marked Area): 'लोकस्वामी' Hindi Wordmark + Centered Rotating Chakra */}
-          <div className="pointer-events-none absolute inset-x-0 inset-y-0 flex items-center justify-center sm:hidden">
-            {/* Ashoka Chakra centered exactly at the center of the navbar */}
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-28 w-28 opacity-[0.09] dark:opacity-[0.20] text-blue-900 dark:text-blue-300"
-            >
-              <AshokaChakraIcon className="h-full w-full animate-ashoka-slow" />
-            </div>
-            <Link href="/main" className="pointer-events-auto relative z-10 inline-flex items-center justify-center" aria-label="Lokswami Home">
-              <LogoWordmark size="headerCompact" />
-            </Link>
           </div>
 
           <div className="relative z-10 ml-auto flex min-w-0 flex-shrink-0 items-center justify-end sm:ml-2">

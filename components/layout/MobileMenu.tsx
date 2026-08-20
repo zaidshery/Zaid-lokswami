@@ -10,7 +10,6 @@ import Logo from '@/components/layout/Logo';
 import { COMPANY_INFO } from '@/lib/constants/company';
 import { NEWS_CATEGORIES, getNewsCategoryHref } from '@/lib/constants/newsCategories';
 import { READER_NAVIGATION } from '@/lib/constants/readerNavigation';
-import IndependenceThemeBadge from '@/components/ui/IndependenceThemeBadge';
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -152,13 +151,11 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             className="fixed bottom-0 left-0 top-0 z-[70] w-[84vw] max-w-[340px] overflow-y-auto border-r border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950"
           >
             <div className="flex min-h-full flex-col">
-              <div className="tiranga-top-ribbon" aria-hidden="true" />
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-black tracking-tight text-zinc-900 dark:text-zinc-100">
                     {language === 'hi' ? '\u092e\u0947\u0928\u0942' : 'Menu'}
                   </span>
-                  <IndependenceThemeBadge compact />
                 </div>
                 <button
                   onClick={onClose}

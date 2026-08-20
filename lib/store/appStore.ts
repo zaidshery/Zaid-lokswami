@@ -12,13 +12,6 @@ function applyThemeToDom(theme: 'dark' | 'light') {
   root.style.colorScheme = theme;
 }
 
-function applyFestiveToDom(isFestive: boolean) {
-  if (typeof document === 'undefined') return;
-  const root = document.documentElement;
-  root.classList.toggle('theme-tiranga', isFestive);
-  root.dataset.festive = isFestive ? 'independence' : 'none';
-}
-
 function readSystemTheme(): 'dark' | 'light' {
   if (typeof window === 'undefined') return 'dark';
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -48,11 +41,6 @@ interface AppState {
   theme: 'dark' | 'light';
   toggleTheme: () => void;
   setTheme: (theme: 'dark' | 'light') => void;
-
-  // 15 August Independence Day Festive Mode
-  isFestiveMode: boolean;
-  toggleFestiveMode: () => void;
-  setFestiveMode: (active: boolean) => void;
   
   // Language
   language: 'hi' | 'en';
@@ -114,20 +102,6 @@ export const useAppStore = create<AppState>()(
         set(() => {
           applyThemeToDom(theme);
           return { theme };
-        }),
-
-      // 15 August Independence Day Festive Mode
-      isFestiveMode: true,
-      toggleFestiveMode: () =>
-        set((state) => {
-          const next = !state.isFestiveMode;
-          applyFestiveToDom(next);
-          return { isFestiveMode: next };
-        }),
-      setFestiveMode: (isFestive) =>
-        set(() => {
-          applyFestiveToDom(isFestive);
-          return { isFestiveMode: isFestive };
         }),
 
       // Device
@@ -203,12 +177,10 @@ export const useAppStore = create<AppState>()(
       name: 'lokswami-storage',
       partialize: (state) => ({ 
         theme: state.theme, 
-        language: state.language,
-        isFestiveMode: state.isFestiveMode
+        language: state.language
       }),
       onRehydrateStorage: () => (state) => {
         applyThemeToDom(resolveTheme(state?.theme));
-        applyFestiveToDom(state?.isFestiveMode !== false);
       },
     }
   )

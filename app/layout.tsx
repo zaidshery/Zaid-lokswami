@@ -30,27 +30,24 @@ const THEME_INIT_SCRIPT = `
       : 'light';
   }
 
-  function applyTheme(theme, isFestive) {
+  function applyTheme(theme) {
     root.classList.toggle('dark', theme === 'dark');
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
-    root.classList.toggle('theme-tiranga', isFestive !== false);
-    root.dataset.festive = isFestive !== false ? 'independence' : 'none';
   }
 
   try {
     var raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      applyTheme(getSystemTheme(), true);
+      applyTheme(getSystemTheme());
       return;
     }
     var parsed = JSON.parse(raw);
     var storedTheme = parsed && parsed.state && parsed.state.theme;
-    var storedFestive = parsed && parsed.state && parsed.state.isFestiveMode;
     var finalTheme = (storedTheme === 'dark' || storedTheme === 'light') ? storedTheme : getSystemTheme();
-    applyTheme(finalTheme, storedFestive !== false);
+    applyTheme(finalTheme);
   } catch (error) {
-    applyTheme(getSystemTheme(), true);
+    applyTheme(getSystemTheme());
   }
 })();
 `;

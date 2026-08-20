@@ -108,8 +108,8 @@ export default function HeroCarousel({
 
   return (
     <div className={`relative group w-full ${className}`}>
-      {/* 🇮🇳 3-Color (Tricolor) Card Frame: Saffron -> White -> Green */}
-      <div className="relative rounded-[28px] p-[1.5px] bg-gradient-to-br from-[#FF9933] via-[#FFFFFF] to-[#138808] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.5),0_0_18px_-4px_rgba(255,153,51,0.25)]">
+      {/* Signature Lokswami Brand Gradient Card Frame */}
+      <div className="relative rounded-[28px] p-[1.5px] bg-gradient-to-br from-red-600/90 via-rose-500/70 to-amber-500/80 shadow-[0_18px_48px_-12px_rgba(0,0,0,0.5),0_0_24px_-4px_rgba(225,29,72,0.25)]">
         <div
           ref={containerRef}
           className={`relative h-full overflow-hidden select-none ${

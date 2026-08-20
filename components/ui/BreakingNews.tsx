@@ -204,8 +204,6 @@ export default function BreakingNews({
           </button>
         </div>
       </Container>
-      {/* 🇮🇳 3-Color Running Line between Breaking News and Header */}
-      <div className="tiranga-top-ribbon" aria-hidden="true" />
     </div>
   );
 }
