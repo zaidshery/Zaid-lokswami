@@ -34,7 +34,7 @@ export interface LogoIconProps {
 /** Standalone targetable 'लो' Logo Emblem component */
 export function LogoIcon({
   size = 'md',
-  variant = 'standard',
+  variant: _variant = 'standard',
   className = '',
 }: LogoIconProps) {
   const sizeConfig = LOGO_SIZES[size];
