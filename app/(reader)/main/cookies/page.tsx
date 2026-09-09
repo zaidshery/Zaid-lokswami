@@ -15,7 +15,7 @@ import LegalPageLayout, {
 } from '@/components/ui/LegalPageLayout';
 import { useAppStore } from '@/lib/store/appStore';
 
-const EFFECTIVE_DATE = 'March 17, 2026';
+const EFFECTIVE_DATE = 'September 9, 2026';
 
 const COPY = {
   en: {
@@ -26,7 +26,7 @@ const COPY = {
     legalNote:
       'Cookies help the website remain secure, remember preferences, improve functionality, analyse usage patterns, and support relevant content delivery.',
     consentNote:
-      'By accessing or using the Website, you consent to the placement and use of cookies in accordance with this Policy. On your first visit, a consent banner may appear for non-essential cookies.',
+      'Strictly necessary storage is used to operate the Website. Optional Google Analytics storage is enabled only when you select “Allow analytics” in the consent banner.',
     highlightsTitle: 'Cookie Categories',
     highlights: [
       { label: 'Strictly Necessary', icon: ShieldCheck },
@@ -40,7 +40,7 @@ const COPY = {
         icon: Cookie,
         body: [
           'This Cookie Policy explains how Lokswami.com, operated by Lokswami Newspaper, uses cookies and similar tracking technologies on the Website.',
-          'By accessing or using the Website, you consent to the placement and use of cookies in accordance with this Policy.',
+          'Optional analytics storage is not enabled merely because you access or continue using the Website.',
         ],
       },
       {
@@ -76,8 +76,8 @@ const COPY = {
         title: '5. Consent',
         icon: ShieldCheck,
         body: [
-          'On your first visit, a cookie consent banner may be displayed for non-essential cookies.',
-          'Users may withdraw consent at any time through browser settings or other available controls.',
+          'On your first visit, a consent banner lets you allow or reject optional Google Analytics.',
+          'You may change or withdraw that choice at any time by selecting the Cookie settings control on the Website.',
         ],
       },
       {
@@ -119,7 +119,7 @@ const COPY = {
     legalNote:
       'कुकीज़ वेबसाइट को सुरक्षित रखने, उपयोगकर्ता की पसंद याद रखने, कार्यक्षमता सुधारने, उपयोग पैटर्न समझने और प्रासंगिक सामग्री उपलब्ध कराने में मदद करती हैं।',
     consentNote:
-      'वेबसाइट का उपयोग करके आप इस नीति के अनुसार कुकीज़ के उपयोग के लिए सहमति देते हैं। पहली बार विज़िट पर गैर-आवश्यक कुकीज़ के लिए सहमति बैनर दिखाया जा सकता है।',
+      'वेबसाइट चलाने के लिए आवश्यक स्टोरेज का उपयोग होता है। वैकल्पिक Google Analytics स्टोरेज केवल तभी चालू होता है जब आप सहमति बैनर में “एनालिटिक्स की अनुमति दें” चुनते हैं।',
     highlightsTitle: 'कुकी श्रेणियां',
     highlights: [
       { label: 'आवश्यक कुकीज़', icon: ShieldCheck },
@@ -133,7 +133,7 @@ const COPY = {
         icon: Cookie,
         body: [
           'यह कुकी नीति बताती है कि Lokswami Newspaper द्वारा संचालित Lokswami.com वेबसाइट पर कुकीज़ और समान ट्रैकिंग तकनीकों का उपयोग कैसे किया जाता है।',
-          'वेबसाइट का उपयोग करके आप इस नीति के अनुसार कुकीज़ के उपयोग के लिए सहमति देते हैं।',
+          'केवल वेबसाइट खोलने या उसका उपयोग जारी रखने से वैकल्पिक एनालिटिक्स स्टोरेज चालू नहीं होता है।',
         ],
       },
       {
@@ -169,8 +169,8 @@ const COPY = {
         title: '5. सहमति',
         icon: ShieldCheck,
         body: [
-          'पहली विज़िट पर गैर-आवश्यक कुकीज़ के लिए कुकी सहमति बैनर दिखाया जा सकता है।',
-          'उपयोगकर्ता ब्राउज़र सेटिंग्स या उपलब्ध नियंत्रणों के माध्यम से किसी भी समय अपनी सहमति वापस ले सकते हैं।',
+          'पहली विज़िट पर सहमति बैनर से आप वैकल्पिक Google Analytics को स्वीकार या अस्वीकार कर सकते हैं।',
+          'वेबसाइट पर उपलब्ध कुकी सेटिंग नियंत्रण से आप किसी भी समय अपनी पसंद बदल सकते हैं या सहमति वापस ले सकते हैं।',
         ],
       },
       {

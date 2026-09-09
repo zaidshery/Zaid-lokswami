@@ -12,7 +12,7 @@ This avoids downloading duplicate Google tag loaders and avoids duplicate page-v
 1. In GA4, create or select the Lokswami web data stream and copy its `G-...` measurement ID.
 2. In Google Tag Manager, copy the web container's `GTM-...` ID.
 3. Set `NEXT_PUBLIC_GTM_ID=GTM-...` in the production environment. Leave `NEXT_PUBLIC_GA4_MEASUREMENT_ID` empty in this preferred mode.
-4. In the GTM container, create a **Google tag**, enter the GA4 `G-...` ID, and use **Initialization - All Pages** as its trigger.
+4. In the GTM container, create a **Google tag**, enter the GA4 `G-...` ID, add the configuration parameter `send_page_view=false`, and use **Initialization - All Pages** as its trigger. The app sends the initial and subsequent Next.js route page views itself.
 5. Preview the container, confirm a single Google tag/page view, then publish it.
 6. Verify the production hostname and SPA navigation in GTM Preview and GA4 Realtime. Google notes that initial data collection can take up to 30 minutes.
 
@@ -36,6 +36,7 @@ The app disables GA4's automatic page view and sends route-aware page views thro
 - The Google payload contains page/category/device/campaign dimensions needed for aggregate reporting.
 - The app's internal pseudonymous session ID is not sent to Google.
 - Do not place names, email addresses, phone numbers, article draft text, or other personal data in analytics metadata.
-- Before enabling production analytics, connect the site's consent choice to Google Consent Mode v2 or an approved consent-management platform. Set defaults before measurement fires and update consent on the same page where the reader makes a choice.
+- The root layout sets Google Consent Mode v2 defaults before GTM or direct GA4 loads. Analytics storage defaults to denied until the reader allows it; advertising storage, advertising user data, and advertising personalization remain denied.
+- The consent banner persists the reader's choice, applies updates on the same page, and leaves a Cookie settings control available so consent can be changed or withdrawn later.
 
 Consent Mode reference: https://developers.google.com/tag-platform/security/guides/consent
