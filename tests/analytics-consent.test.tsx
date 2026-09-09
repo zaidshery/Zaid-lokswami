@@ -60,9 +60,9 @@ describe('AnalyticsConsent', () => {
       ad_user_data: 'denied',
       ad_personalization: 'denied',
     });
-    expect(gtag).toHaveBeenCalledWith('event', 'page_view', {
-      page_path: '/main',
-      content_group: 'consent_grant',
+    expect(gtag).toHaveBeenCalledWith('event', 'analytics_consent_update', {
+      consent_state: 'granted',
     });
+    expect(gtag).not.toHaveBeenCalledWith('event', 'page_view', expect.anything());
   });
 });

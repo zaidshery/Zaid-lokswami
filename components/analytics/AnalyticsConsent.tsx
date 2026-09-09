@@ -54,12 +54,9 @@ function updateGoogleConsent(choice: ConsentChoice) {
     ad_personalization: 'denied',
   });
 
-  if (choice === 'granted') {
-    gtag('event', 'page_view', {
-      page_path: window.location.pathname,
-      content_group: 'consent_grant',
-    });
-  }
+  gtag('event', 'analytics_consent_update', {
+    consent_state: choice,
+  });
 }
 
 export default function AnalyticsConsent() {
