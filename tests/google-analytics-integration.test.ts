@@ -21,4 +21,22 @@ describe('Google analytics integration', () => {
     expect(tracker).not.toContain('lokswami_session_id');
     expect(tracker).toContain("window.gtag('event'");
   });
+
+  it('sets Consent Mode v2 defaults before loading GTM and exposes a persistent choice UI', () => {
+    const layout = read('app/layout.tsx');
+    const consent = read('components/analytics/AnalyticsConsent.tsx');
+    const consentDefaultsIndex = layout.indexOf('lokswami-google-consent-defaults');
+    const tagManagerIndex = layout.indexOf('lokswami-google-tag-manager');
+
+    expect(consentDefaultsIndex).toBeGreaterThan(-1);
+    expect(tagManagerIndex).toBeGreaterThan(consentDefaultsIndex);
+    expect(layout).toContain("analytics_storage: analyticsConsent");
+    expect(layout).toContain("ad_user_data: 'denied'");
+    expect(layout).toContain("ad_personalization: 'denied'");
+    expect(consent).toContain('lokswami_google_analytics_consent_v1');
+    expect(consent).toContain("gtag('consent', 'update'");
+    expect(consent).toContain('Reject optional analytics');
+    expect(consent).toContain('Allow analytics');
+    expect(consent).toContain('Cookie settings');
+  });
 });

@@ -2,6 +2,7 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import './globals.css';
+import AnalyticsConsent from '@/components/analytics/AnalyticsConsent';
 import SitePageTracker from '@/components/analytics/SitePageTracker';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import AuthSync from '@/components/providers/AuthSync';
@@ -271,6 +272,37 @@ const googleAnalyticsMeasurementId = readPublicAnalyticsId(
 const loadDirectGoogleAnalytics = Boolean(
   googleAnalyticsMeasurementId && !googleTagManagerId
 );
+const GOOGLE_CONSENT_INIT_SCRIPT = `
+(function () {
+  var STORAGE_KEY = 'lokswami_google_analytics_consent_v1';
+  var storedChoice = '';
+
+  try {
+    storedChoice = window.localStorage.getItem(STORAGE_KEY) || '';
+  } catch (error) {}
+
+  var analyticsConsent = storedChoice === 'granted' ? 'granted' : 'denied';
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
+
+  var consentDefaults = {
+    analytics_storage: analyticsConsent,
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+    functionality_storage: 'granted',
+    security_storage: 'granted'
+  };
+
+  if (storedChoice !== 'granted' && storedChoice !== 'denied') {
+    consentDefaults.wait_for_update = 500;
+  }
+
+  window.gtag('consent', 'default', consentDefaults);
+  window.gtag('set', 'ads_data_redaction', true);
+  window.gtag('set', 'url_passthrough', false);
+})();
+`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -353,6 +385,12 @@ export default function RootLayout({
           id="lokswami-asset-recovery"
           dangerouslySetInnerHTML={{ __html: ASSET_RECOVERY_SCRIPT }}
         />
+        {(googleTagManagerId || loadDirectGoogleAnalytics) ? (
+          <script
+            id="lokswami-google-consent-defaults"
+            dangerouslySetInnerHTML={{ __html: GOOGLE_CONSENT_INIT_SCRIPT }}
+          />
+        ) : null}
         {googleTagManagerId ? (
           <Script id="lokswami-google-tag-manager" strategy="afterInteractive">
             {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -401,6 +439,7 @@ window.gtag('config','${googleAnalyticsMeasurementId}',{
               <AuthSync />
               <FullscreenFix />
               <SitePageTracker />
+              {(googleTagManagerId || loadDirectGoogleAnalytics) ? <AnalyticsConsent /> : null}
               {children}
               <InstallAppPrompt />
             </ToastProvider>
