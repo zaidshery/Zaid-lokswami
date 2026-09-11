@@ -9,8 +9,10 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle,
+  Film,
   FileText,
   Image as ImageIcon,
+  Instagram,
   Loader2,
   Play,
   Radio,
@@ -31,6 +33,13 @@ import {
   getYouTubeThumbnail,
   isYouTubeLiveUrl,
 } from '@/lib/utils/youtube';
+import {
+  type ExtractedVideoMetadata,
+  formatStoryVideoSize,
+  generateVideoSlug,
+  uploadFileToSignedUrl,
+  validateStoryVideoFile,
+} from '@/lib/utils/storyVideoUploadClient';
 import { getAllowedWorkflowTransitions } from '@/lib/workflow/transitions';
 import type { WorkflowPriority, WorkflowStatus } from '@/lib/workflow/types';
 import {
@@ -41,6 +50,7 @@ import {
 } from '@/components/admin/CmsEditorLayout';
 import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 import SwipeReadinessChecklist from '@/components/admin/SwipeReadinessChecklist';
+import CmsVideoUploader from '@/components/admin/CmsVideoUploader';
 import { CmsWorkflowActivityTimeline } from '@/components/admin/CmsWorkflowActivityTimeline';
 import WorkflowRail from '@/components/admin/WorkflowRail';
 import { CmsWorkflowPriorityBadge, CmsWorkflowStatusBadge } from '@/components/admin/CmsWorkflowStatusBadge';
@@ -277,6 +287,9 @@ export default function EditVideoPage() {
   const [workflow, setWorkflow] = useState<WorkflowState>(EMPTY_WORKFLOW);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [localVideoUrl, setLocalVideoUrl] = useState('');
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [videoActivity, setVideoActivity] = useState<VideoActivityItem[]>([]);
   const [assignableUsers, setAssignableUsers] = useState<AssignableUserOption[]>([]);
@@ -294,6 +307,94 @@ export default function EditVideoPage() {
   const [runningWorkflowAction, setRunningWorkflowAction] = useState<ContentTransitionAction | ''>('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Keep a client-side object URL for instant live preview of replaced MP4
+  useEffect(() => {
+    if (!videoFile) {
+      setLocalVideoUrl('');
+      return;
+    }
+    const url = URL.createObjectURL(videoFile);
+    setLocalVideoUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [videoFile]);
+
+  const uploadDirectVideo = async (): Promise<string> => {
+    if (!videoFile) return formData.videoUrl.trim();
+    const validationError = validateStoryVideoFile(videoFile);
+    if (validationError) throw new Error(validationError);
+
+    const initResponse = await fetch('/api/admin/uploads/story-video/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({
+        fileName: videoFile.name,
+        fileType: videoFile.type || 'video/mp4',
+        fileSize: videoFile.size,
+        storyId: formData.slug.trim() || 'swipe-news',
+      }),
+    });
+    const initPayload = await initResponse.json();
+    if (!initResponse.ok || !initPayload.success) {
+      throw new Error(initPayload.error || 'Failed to initialize direct video upload');
+    }
+
+    await uploadFileToSignedUrl({
+      file: videoFile,
+      uploadUrl: String(initPayload.data.uploadUrl),
+      uploadHeaders: initPayload.data.uploadHeaders || { 'Content-Type': 'video/mp4' },
+      onProgress: setVideoUploadProgress,
+    });
+
+    const completeResponse = await fetch('/api/admin/uploads/story-video/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({
+        mediaKey: initPayload.data.mediaKey,
+        expectedSize: videoFile.size,
+        expectedFileType: videoFile.type || 'video/mp4',
+        expectedFileName: videoFile.name,
+      }),
+    });
+    const completePayload = await completeResponse.json();
+    if (!completeResponse.ok || !completePayload.success) {
+      throw new Error(completePayload.error || 'Failed to verify direct video upload');
+    }
+    return String(completePayload.data.mediaUrl || initPayload.data.mediaUrl || '').trim();
+  };
+
+  const handleVideoMetadataExtracted = (extracted: ExtractedVideoMetadata) => {
+    setFormData((prev) => {
+      const next = { ...prev };
+
+      // 1. Auto-fill duration if empty or zero
+      if (extracted.duration > 0 && (!prev.duration || prev.duration === '0')) {
+        next.duration = String(extracted.duration);
+      }
+
+      // 2. Auto-configure Shorts / Swipe mode if vertical (9:16)
+      if (extracted.isShort) {
+        next.isShort = true;
+        next.aspectRatio = '9:16';
+        if (!next.shortsRank || next.shortsRank === '0') {
+          next.shortsRank = '1';
+        }
+      } else if (extracted.aspectRatio === '16:9') {
+        next.aspectRatio = '16:9';
+      }
+
+      return next;
+    });
+
+    // 3. Auto-assign poster thumbnail if none was selected
+    if (extracted.posterFile && !thumbnailFile && !formData.thumbnail) {
+      setThumbnailFile(extracted.posterFile);
+      setThumbnailPreview(extracted.posterDataUrl);
+      setFormData((prev) => ({ ...prev, thumbnail: '' }));
+    }
+  };
 
   const detectedYouTubeId = useMemo(
     () => extractYouTubeVideoId(formData.videoUrl),
@@ -325,7 +426,7 @@ export default function EditVideoPage() {
   }, [session]);
 
   const hasUnsavedChanges =
-    Boolean(thumbnailFile) || buildSnapshot(formData, previewThumbnail) !== savedSnapshot;
+    Boolean(videoFile) || Boolean(thumbnailFile) || buildSnapshot(formData, previewThumbnail) !== savedSnapshot;
   const canSaveVideo = Boolean(permissionUser);
   const canUseWorkflowDesk = canManageWorkflowAssignments(permissionUser?.role);
 
@@ -510,14 +611,15 @@ export default function EditVideoPage() {
       if (
         !formData.title.trim() ||
         !formData.description.trim() ||
-        !formData.videoUrl.trim() ||
+        (!formData.videoUrl.trim() && !videoFile) ||
         !formData.duration ||
         !formData.category
       ) {
         throw new Error('Please fill in all required fields');
       }
 
-      const isLive = isYouTubeLiveUrl(formData.videoUrl);
+      const resolvedVideoUrl = await uploadDirectVideo();
+      const isLive = isYouTubeLiveUrl(resolvedVideoUrl);
       const parsedDuration = Number.parseInt(formData.duration || '0', 10);
       const duration = Number.isFinite(parsedDuration) && parsedDuration >= 0
         ? parsedDuration
@@ -527,12 +629,12 @@ export default function EditVideoPage() {
       if (!Number.isFinite(shortsRank)) throw new Error('Shorts rank must be valid');
       if (!Number.isFinite(views) || views < 0) throw new Error('Views must be valid');
 
-      const youtubeId = extractYouTubeVideoId(formData.videoUrl);
-      const isDirectMp4 = /^https:\/\/[^\s]+\.mp4(?:[?#].*)?$/i.test(formData.videoUrl);
+      const youtubeId = extractYouTubeVideoId(resolvedVideoUrl);
+      const isDirectMp4 = /^https:\/\/[^\s]+\.mp4(?:[?#].*)?$/i.test(resolvedVideoUrl);
       if (!youtubeId && !isDirectMp4) throw new Error('Please enter a valid YouTube URL or HTTPS MP4 playback URL');
 
       let thumbnail = await uploadThumbnail();
-      if (!thumbnail.trim()) thumbnail = getYouTubeThumbnail(formData.videoUrl);
+      if (!thumbnail.trim()) thumbnail = getYouTubeThumbnail(resolvedVideoUrl);
       if (!thumbnail.trim()) throw new Error('Please provide a thumbnail');
 
       const response = await fetch(`/api/admin/videos/${encodeURIComponent(videoId)}`, {
@@ -545,7 +647,7 @@ export default function EditVideoPage() {
           title: formData.title.trim(),
           description: formData.description.trim(),
           thumbnail: thumbnail.trim(),
-          videoUrl: formData.videoUrl.trim(),
+          videoUrl: resolvedVideoUrl,
           duration,
           category: formData.category,
           isShort: formData.isShort,
@@ -554,7 +656,7 @@ export default function EditVideoPage() {
           slug: formData.slug.trim(),
           articleId: formData.articleId.trim(),
           posterUrl: thumbnail.trim(),
-          playbackUrl: formData.videoUrl.trim(),
+          playbackUrl: resolvedVideoUrl,
           aspectRatio: formData.aspectRatio,
           captionUrl: formData.captionUrl.trim(),
           transcript: formData.transcript.trim(),
@@ -764,30 +866,51 @@ export default function EditVideoPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-900">Thumbnail URL (optional)</label>
-                <input
-                  type="url"
-                  name="thumbnail"
-                  value={formData.thumbnail}
-                  onChange={handleInputChange}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary-600 focus:outline-none"
-                />
+            {/* Smart Video Uploader (Primary for MP4, Instagram Reels & Vertical Shorts) */}
+            <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-5 shadow-2xs">
+              <CmsVideoUploader
+                selectedFile={videoFile}
+                onFileSelect={(file) => {
+                  setVideoFile(file);
+                  setError('');
+                  if (file) {
+                    setFormData((prev) => ({ ...prev, videoUrl: '' }));
+                  }
+                }}
+                onMetadataExtracted={handleVideoMetadataExtracted}
+                uploadProgress={videoUploadProgress}
+                isUploading={isSaving}
+                onError={(msg) => setError(msg)}
+              />
+
+              {/* Divider with 'Or' */}
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-gray-50 px-3 font-bold text-gray-500">
+                    Or update external YouTube / MP4 URL
+                  </span>
+                </div>
               </div>
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-900">
-                  Video / Live Stream URL (YouTube) <span className="text-red-500">*</span>
+                  External Video URL (YouTube, Shorts, or Direct MP4)
                 </label>
                 <input
                   type="url"
                   name="videoUrl"
                   value={formData.videoUrl}
-                  onChange={handleInputChange}
-                  placeholder="https://www.youtube.com/live/... or watch?v=..."
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary-600 focus:outline-none"
-                  required
+                  onChange={(e) => {
+                    handleInputChange(e);
+                    if (e.target.value.trim() && videoFile) {
+                      setVideoFile(null);
+                    }
+                  }}
+                  placeholder="https://youtube.com/shorts/... or https://www.youtube.com/watch?v=..."
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-primary-600 focus:outline-none"
                 />
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {detectedYouTubeId ? (
@@ -802,28 +925,49 @@ export default function EditVideoPage() {
                         ▶️ YouTube Video Detected ({detectedYouTubeId})
                       </span>
                     )
-                  ) : null}
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Supports YouTube Live streams, standard videos, Shorts, and direct HTTPS MP4 URLs.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-900">
-                Replace Thumbnail File (JPG/JPEG/PNG/PDF)
-              </label>
-              <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-4 py-5 transition-colors hover:border-primary-600 hover:bg-gray-50">
-                <span className="flex flex-col items-center gap-1 text-center">
-                  <ImageIcon className="h-5 w-5 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">Click to upload thumbnail file</span>
-                  <span className="text-xs text-gray-500">JPG/JPEG/PNG/PDF up to 10MB</span>
-                </span>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-900">Thumbnail URL (optional)</label>
                 <input
-                  type="file"
-                  accept={THUMBNAIL_ACCEPT}
-                  onChange={handleThumbnailFileChange}
-                  className="hidden"
+                  type="url"
+                  name="thumbnail"
+                  value={formData.thumbnail}
+                  onChange={handleInputChange}
+                  placeholder="https://example.com/thumbnail.jpg"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary-600 focus:outline-none"
                 />
-              </label>
+                <p className="mt-1 text-xs text-gray-500">
+                  Auto-extracted from video frame or YouTube if empty.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-900">
+                  Replace Thumbnail File (JPG/JPEG/PNG/PDF)
+                </label>
+                <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-4 py-5 transition-colors hover:border-primary-600 hover:bg-gray-50">
+                  <span className="flex flex-col items-center gap-1 text-center">
+                    <ImageIcon className="h-5 w-5 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">Click to upload thumbnail file</span>
+                    <span className="text-xs text-gray-500">JPG/JPEG/PNG/PDF up to 10MB</span>
+                  </span>
+                  <input
+                    type="file"
+                    accept={THUMBNAIL_ACCEPT}
+                    onChange={handleThumbnailFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
 
             {previewThumbnail ? (
@@ -904,7 +1048,7 @@ export default function EditVideoPage() {
               </CmsEditorMain>
 
               <CmsEditorSidebar>
-            {/* 📺 Live In-Editor Video Stream Preview */}
+            {/* 📺 Live In-Editor Video Stream / MP4 Preview */}
             {detectedYouTubeId ? (
               <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-950 shadow-md">
                 <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">
@@ -936,6 +1080,41 @@ export default function EditVideoPage() {
                     allowFullScreen
                   />
                 </div>
+              </div>
+            ) : localVideoUrl || formData.videoUrl.endsWith('.mp4') ? (
+              <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-950 shadow-md">
+                <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <Film className="h-3.5 w-3.5" />
+                    {formData.isShort ? '9:16 VERTICAL SHORTS PREVIEW' : 'MP4 VIDEO PREVIEW'}
+                  </span>
+                  {videoFile ? (
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {formatStoryVideoSize(videoFile.size)}
+                    </span>
+                  ) : null}
+                </div>
+                <div
+                  className={`relative w-full bg-black flex items-center justify-center ${
+                    formData.isShort ? 'aspect-[9/16] max-h-[360px] mx-auto' : 'aspect-video'
+                  }`}
+                >
+                  <video
+                    src={localVideoUrl || formData.videoUrl}
+                    controls
+                    playsInline
+                    className="h-full w-full object-contain"
+                    poster={previewThumbnail}
+                  />
+                </div>
+              </div>
+            ) : previewThumbnail ? (
+              <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                <AdminMediaImage
+                  src={previewThumbnail}
+                  alt="Thumbnail preview"
+                  className="h-48 w-full object-cover"
+                />
               </div>
             ) : null}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -9,8 +9,10 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle,
+  Film,
   FileText,
   Image as ImageIcon,
+  Instagram,
   Loader2,
   Play,
   Radio,
@@ -28,13 +30,20 @@ import {
 } from '@/components/admin/CmsEditorLayout';
 import { AdminMediaImage } from '@/components/admin/AdminMediaImage';
 import SwipeReadinessChecklist from '@/components/admin/SwipeReadinessChecklist';
+import CmsVideoUploader from '@/components/admin/CmsVideoUploader';
 import {
   buildYouTubeEmbedUrl,
   extractYouTubeVideoId,
   getYouTubeThumbnail,
   isYouTubeLiveUrl,
 } from '@/lib/utils/youtube';
-import { uploadFileToSignedUrl, validateStoryVideoFile } from '@/lib/utils/storyVideoUploadClient';
+import {
+  type ExtractedVideoMetadata,
+  formatStoryVideoSize,
+  generateVideoSlug,
+  uploadFileToSignedUrl,
+  validateStoryVideoFile,
+} from '@/lib/utils/storyVideoUploadClient';
 
 const categories = NEWS_CATEGORIES.map((category) => category.nameEn);
 const THUMBNAIL_MAX_SIZE = 10 * 1024 * 1024;
@@ -105,12 +114,26 @@ export default function CreateVideoPage() {
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [localVideoUrl, setLocalVideoUrl] = useState('');
   const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [runningIntent, setRunningIntent] = useState<VideoCreateIntent | ''>('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Keep a client-side object URL for instant live preview of uploaded MP4
+  useEffect(() => {
+    if (!videoFile) {
+      setLocalVideoUrl('');
+      return;
+    }
+    const url = URL.createObjectURL(videoFile);
+    setLocalVideoUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [videoFile]);
 
   const detectedYouTubeId = useMemo(
     () => extractYouTubeVideoId(formData.videoUrl),
@@ -142,6 +165,37 @@ export default function CreateVideoPage() {
   const canPublishNow = role === 'admin' || role === 'super_admin';
   const canUseDesk = isAdminRole(role);
 
+  const handleVideoMetadataExtracted = (extracted: ExtractedVideoMetadata) => {
+    setFormData((prev) => {
+      const next = { ...prev };
+
+      // 1. Auto-fill duration if empty or zero or default 60
+      if (extracted.duration > 0 && (!prev.duration || prev.duration === '60' || prev.duration === '0')) {
+        next.duration = String(extracted.duration);
+      }
+
+      // 2. Auto-configure Shorts / Swipe mode if vertical (9:16)
+      if (extracted.isShort) {
+        next.isShort = true;
+        next.aspectRatio = '9:16';
+        if (!next.shortsRank || next.shortsRank === '0') {
+          next.shortsRank = '1';
+        }
+      } else if (extracted.aspectRatio === '16:9') {
+        next.aspectRatio = '16:9';
+      }
+
+      return next;
+    });
+
+    // 3. Auto-assign generated poster frame as thumbnail if none was manually chosen
+    if (extracted.posterFile && !thumbnailFile) {
+      setThumbnailFile(extracted.posterFile);
+      setThumbnailPreview(extracted.posterDataUrl);
+      setFormData((prev) => ({ ...prev, thumbnail: '' }));
+    }
+  };
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -154,6 +208,14 @@ export default function CreateVideoPage() {
             ? (e.target as HTMLInputElement).checked
             : value,
       };
+
+      // Auto-generate slug from title if slug was not manually customized
+      if (name === 'title') {
+        const oldAutoSlug = generateVideoSlug(prev.title);
+        if (!prev.slug || prev.slug === oldAutoSlug) {
+          next.slug = generateVideoSlug(value);
+        }
+      }
 
       if (name === 'videoUrl') {
         const live = isYouTubeLiveUrl(value);
@@ -456,46 +518,53 @@ export default function CreateVideoPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* Smart Video Uploader (Primary for MP4, Instagram Reels & Vertical Shorts) */}
+                  <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-5 shadow-2xs">
+                    <CmsVideoUploader
+                      selectedFile={videoFile}
+                      onFileSelect={(file) => {
+                        setVideoFile(file);
+                        setError('');
+                        if (file) {
+                          // Clear external video URL when a file is explicitly selected
+                          setFormData((prev) => ({ ...prev, videoUrl: '' }));
+                        }
+                      }}
+                      onMetadataExtracted={handleVideoMetadataExtracted}
+                      uploadProgress={videoUploadProgress}
+                      isUploading={isLoading}
+                      onError={(msg) => setError(msg)}
+                    />
+
+                    {/* Divider with 'Or' */}
+                    <div className="relative my-5">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-300" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-gray-50 px-3 font-bold text-gray-500">
+                          Or enter external YouTube URL
+                        </span>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="mb-2 block text-sm font-medium text-gray-900">
-                        Video URL (YouTube or HTTPS MP4)
+                        External Video URL (YouTube, Shorts, or Live Stream)
                       </label>
                       <input
                         type="url"
                         name="videoUrl"
                         value={formData.videoUrl}
-                        onChange={handleInputChange}
-                        placeholder="https://youtube.com/shorts/... or https://cdn.example.com/video.mp4"
-                        className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                        onChange={(e) => {
+                          handleInputChange(e);
+                          if (e.target.value.trim() && videoFile) {
+                            setVideoFile(null);
+                          }
+                        }}
+                        placeholder="https://youtube.com/shorts/... or https://www.youtube.com/watch?v=..."
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
                       />
-                      <label className="mt-3 flex min-h-12 cursor-pointer items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 text-sm font-medium text-gray-700">
-                        {videoFile ? videoFile.name : 'Or upload an MP4 directly to DigitalOcean Spaces'}
-                        <input
-                          type="file"
-                          accept="video/mp4,.mp4"
-                          className="sr-only"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0] || null;
-                            if (file) {
-                              const validationError = validateStoryVideoFile(file);
-                              if (validationError) {
-                                setError(validationError);
-                                return;
-                              }
-                            }
-                            setError('');
-                            setVideoFile(file);
-                            setVideoUploadProgress(0);
-                          }}
-                        />
-                      </label>
-                      {videoUploadProgress > 0 ? (
-                        <div className="mt-2" aria-live="polite">
-                          <div className="h-2 overflow-hidden rounded-full bg-gray-200"><div className="h-full bg-red-600" style={{ width: `${videoUploadProgress}%` }} /></div>
-                          <p className="mt-1 text-xs text-gray-600">Video upload {videoUploadProgress}%</p>
-                        </div>
-                      ) : null}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {detectedYouTubeId ? (
                           isLiveStream ? (
@@ -511,28 +580,28 @@ export default function CreateVideoPage() {
                           )
                         ) : (
                           <p className="text-xs text-gray-500">
-                            Supports YouTube Live streams (`youtube.com/live/...`), standard videos (`watch?v=...`, `youtu.be/...`), and Shorts (`youtube.com/shorts/...`).
+                            Supports YouTube Live streams (`youtube.com/live/...`), standard videos (`watch?v=...`), and Shorts (`youtube.com/shorts/...`).
                           </p>
                         )}
                       </div>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-900">
-                        Thumbnail URL (optional)
-                      </label>
-                      <input
-                        type="url"
-                        name="thumbnail"
-                        value={formData.thumbnail}
-                        onChange={handleInputChange}
-                        placeholder="https://example.com/thumbnail.jpg"
-                        className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Leave empty to auto-extract YouTube thumbnail.
-                      </p>
-                    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">
+                      Thumbnail URL (optional)
+                    </label>
+                    <input
+                      type="url"
+                      name="thumbnail"
+                      value={formData.thumbnail}
+                      onChange={handleInputChange}
+                      placeholder="https://example.com/thumbnail.jpg"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:border-primary-600 focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Auto-extracted from video frame or YouTube if left empty.
+                    </p>
                   </div>
 
                   <div>
@@ -615,7 +684,7 @@ export default function CreateVideoPage() {
                     </div>
                   ) : null}
 
-                  {/* 📺 Live In-Editor Video Stream Preview */}
+                  {/* 📺 Live In-Editor Video Stream / MP4 Preview */}
                   {detectedYouTubeId ? (
                     <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-950 shadow-md">
                       <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">
@@ -645,6 +714,33 @@ export default function CreateVideoPage() {
                           className="h-full w-full border-0"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                           allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  ) : localVideoUrl || formData.videoUrl.endsWith('.mp4') ? (
+                    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-950 shadow-md">
+                      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">
+                        <span className="flex items-center gap-1.5 text-emerald-400">
+                          <Film className="h-3.5 w-3.5" />
+                          {formData.isShort ? '9:16 VERTICAL SHORTS PREVIEW' : 'MP4 VIDEO PREVIEW'}
+                        </span>
+                        {videoFile ? (
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            {formatStoryVideoSize(videoFile.size)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div
+                        className={`relative w-full bg-black flex items-center justify-center ${
+                          formData.isShort ? 'aspect-[9/16] max-h-[360px] mx-auto' : 'aspect-video'
+                        }`}
+                      >
+                        <video
+                          src={localVideoUrl || formData.videoUrl}
+                          controls
+                          playsInline
+                          className="h-full w-full object-contain"
+                          poster={previewThumbnailSrc}
                         />
                       </div>
                     </div>
