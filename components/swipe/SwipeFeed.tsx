@@ -244,10 +244,6 @@ export default function SwipeFeed({
     }
   }, [activeItem, trackEvent]);
 
-  if (!activeItem) {
-    return <SwipeEmptyState />;
-  }
-
   const wheelTimeoutRef = useRef<number | null>(null);
   const handleWheel = useCallback(
     (event: React.WheelEvent) => {
@@ -266,6 +262,10 @@ export default function SwipeFeed({
     },
     [activeIndex, moveTo, settingsOpen, sheetOpen]
   );
+
+  if (!activeItem) {
+    return <SwipeEmptyState />;
+  }
 
   return (
     <section
