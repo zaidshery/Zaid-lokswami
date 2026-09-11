@@ -67,17 +67,17 @@ export default function QuickArticleSheet({
   const whatsappHref = `https://wa.me/?text=${encodeURIComponent(`${article.title}\n${shareUrl}`)}`;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end bg-black/65" role="presentation" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4 backdrop-blur-sm" role="presentation" onMouseDown={onClose}>
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-article-title"
         aria-describedby="quick-article-summary"
-        className="max-h-[82dvh] w-full overflow-y-auto rounded-t-[28px] bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 text-zinc-950 shadow-2xl dark:bg-zinc-950 dark:text-white"
+        className="max-h-[85dvh] w-full sm:max-w-xl overflow-y-auto rounded-t-[28px] sm:rounded-3xl bg-white px-5 sm:px-7 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:pb-7 pt-4 sm:pt-6 text-zinc-950 shadow-2xl dark:bg-zinc-950 dark:text-white"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-zinc-300 dark:bg-zinc-700 sm:hidden" />
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-600">

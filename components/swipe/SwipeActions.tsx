@@ -31,7 +31,7 @@ export default function SwipeActions({
 }: SwipeActionsProps) {
   return (
     <>
-      <div className="absolute bottom-[calc(var(--reader-bottom-nav-space)+7.5rem)] right-3 z-30 flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/40 p-2 backdrop-blur-md">
+      <div className="absolute bottom-[calc(var(--reader-bottom-nav-space)+7.5rem)] md:bottom-20 right-3 md:right-4 z-30 flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/40 p-2 backdrop-blur-md shadow-lg">
         <button type="button" className={actionClass} onClick={onToggleMuted} aria-label={muted ? 'Unmute video' : 'Mute video'}>
           {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
         </button>
@@ -54,7 +54,7 @@ export default function SwipeActions({
           ref={articleButtonRef}
           type="button"
           onClick={onOpenArticle}
-          className="reader-focus-ring absolute bottom-[calc(var(--reader-bottom-nav-space)+1rem)] left-4 z-30 flex min-h-[40px] items-center gap-2 rounded-full bg-red-600 hover:bg-red-700 px-4 py-2 text-xs font-semibold text-white shadow-lg"
+          className="reader-focus-ring absolute bottom-[calc(var(--reader-bottom-nav-space)+1rem)] md:bottom-4 left-4 z-30 flex min-h-[40px] items-center gap-2 rounded-full bg-red-600 hover:bg-red-700 px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:scale-105 active:scale-95"
         >
           <BookOpen className="h-4 w-4" />
           पूरी खबर पढ़ें

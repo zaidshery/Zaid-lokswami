@@ -64,7 +64,7 @@ export default function SwipeSettingsSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end bg-black/65"
+      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4 backdrop-blur-sm"
       role="presentation"
       onMouseDown={onClose}
     >
@@ -73,10 +73,10 @@ export default function SwipeSettingsSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby="swipe-settings-title"
-        className="w-full rounded-t-[28px] bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 text-zinc-950 shadow-2xl dark:bg-zinc-950 dark:text-white"
+        className="w-full sm:max-w-md rounded-t-[28px] sm:rounded-3xl bg-white px-5 sm:px-7 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:pb-7 pt-4 sm:pt-6 text-zinc-950 shadow-2xl dark:bg-zinc-950 dark:text-white"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-zinc-300 dark:bg-zinc-700 sm:hidden" />
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 id="swipe-settings-title" className="text-xl font-extrabold">
