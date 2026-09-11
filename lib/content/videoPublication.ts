@@ -91,7 +91,13 @@ function toIsoDate(value: unknown, fallback = new Date()) {
 }
 
 export function normalizeVideoSlug(value: unknown) {
-  return text(value)
+  let raw = text(value);
+  try {
+    raw = decodeURIComponent(raw);
+  } catch {
+    // Keep raw if invalid URI encoding
+  }
+  return raw
     .normalize('NFKC')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}]+/gu, '-')

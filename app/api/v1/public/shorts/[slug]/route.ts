@@ -16,7 +16,12 @@ const NO_STORE_HEADERS = {
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
-    const { slug } = await context.params;
+    let { slug } = await context.params;
+    try {
+      slug = decodeURIComponent(slug);
+    } catch {
+      // Keep
+    }
     const story = await getPublicSwipeStory(slug);
     if (!story) {
       return NextResponse.json(
