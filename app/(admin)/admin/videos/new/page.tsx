@@ -360,9 +360,9 @@ export default function CreateVideoPage() {
       if (
         intent === 'publish' &&
         formData.isShort &&
-        (!formData.articleId.trim() || formData.aspectRatio !== '9:16')
+        formData.aspectRatio !== '9:16'
       ) {
-        setError('Publishing Swipe News requires a related article and 9:16 vertical media.');
+        setError('Publishing Swipe News requires 9:16 vertical media.');
         return;
       }
 
@@ -797,9 +797,9 @@ export default function CreateVideoPage() {
                         <input name="slug" value={formData.slug} onChange={handleInputChange} placeholder="indore-breaking-news" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2" />
                       </label>
                       <label className="block text-sm font-medium text-gray-900">
-                        Related published article ID or slug
-                        <input name="articleId" value={formData.articleId} onChange={handleInputChange} placeholder="article-id-or-slug" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2" />
-                        <span className="mt-1 block text-xs text-gray-600">This opens “पूरी खबर पढ़ें” on the public Swipe screen.</span>
+                        Related published article ID or slug (Optional)
+                        <input name="articleId" value={formData.articleId} onChange={handleInputChange} placeholder="article-id-or-slug (optional)" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2" />
+                        <span className="mt-1 block text-xs text-gray-600">Optional. Leave empty for standalone Reel/Short, or enter slug to enable “पूरी खबर पढ़ें”.</span>
                       </label>
                       <label className="block text-sm font-medium text-gray-900">
                         Media aspect ratio

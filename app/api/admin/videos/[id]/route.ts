@@ -172,8 +172,9 @@ function validateSwipeReadiness(record: Record<string, unknown>, action?: string
 async function validatePublishedSwipeArticle(record: Record<string, unknown>) {
   if (!record.isShort) return null;
   const articleId = String(record.articleId || '').trim();
-  if (!articleId || !(await getPublicArticleBySlug(articleId))) {
-    return 'Swipe News requires a related article that is already published.';
+  if (!articleId) return null;
+  if (!(await getPublicArticleBySlug(articleId))) {
+    return 'The specified related article for Swipe News could not be found or is not published.';
   }
   return null;
 }

@@ -94,7 +94,11 @@ describe('Swipe video publication contract', () => {
       aspectRatio: '9:16',
     });
     expect(validateSwipePublishFields(ready)).toBeNull();
-    expect(validateSwipePublishFields({ ...ready, articleId: '' })).toMatch(/related published article/i);
+    // Standalone shorts/reels without a related article are valid
+    expect(validateSwipePublishFields({ ...ready, articleId: '' })).toBeNull();
+    expect(validateSwipePublishFields({ ...ready, slug: '' })).toMatch(/slug/i);
+    expect(validateSwipePublishFields({ ...ready, posterUrl: '', thumbnail: '' })).toMatch(/poster/i);
+    expect(validateSwipePublishFields({ ...ready, playbackUrl: '', videoUrl: '' })).toMatch(/media/i);
     expect(validateSwipePublishFields({ ...ready, processingStatus: 'failed' })).toMatch(/ready/i);
     expect(validateSwipePublishFields({ ...ready, aspectRatio: '16:9' })).toMatch(/9:16/i);
   });

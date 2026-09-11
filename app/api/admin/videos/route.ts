@@ -491,7 +491,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (intent === 'publish' && input.isShort && !(await getPublicArticleBySlug(input.articleId))) {
+    if (
+      intent === 'publish' &&
+      input.isShort &&
+      input.articleId &&
+      input.articleId.trim() &&
+      !(await getPublicArticleBySlug(input.articleId.trim()))
+    ) {
       return NextResponse.json(
         { success: false, error: 'Swipe News requires a related article that is already published.' },
         { status: 400 }

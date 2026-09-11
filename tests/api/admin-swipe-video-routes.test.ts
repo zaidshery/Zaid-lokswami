@@ -167,7 +167,7 @@ describe('admin Swipe video routes', () => {
 
   it('blocks an incomplete workflow publish but schedules and publishes a ready record', async () => {
     const { PATCH } = await import('@/app/api/admin/videos/[id]/route');
-    getStoredVideoByIdMock.mockResolvedValueOnce(readySwipe({ articleId: '' }));
+    getStoredVideoByIdMock.mockResolvedValueOnce(readySwipe({ aspectRatio: '16:9' }));
     const blocked = await PATCH(request('/api/admin/videos/video-1', 'PATCH', { action: 'publish' }), {
       params: Promise.resolve({ id: 'video-1' }),
     });

@@ -20,8 +20,10 @@ export default function SwipeReadinessChecklist({
   const checks = [
     { label: 'Unique Swipe slug provided', ready: Boolean(slug.trim()) },
     {
-      label: 'Related article reference provided; publication is verified by the server',
-      ready: Boolean(articleId.trim()),
+      label: articleId.trim()
+        ? 'Related article linked (enables “पूरी खबर पढ़ें”)'
+        : 'Related article (optional — leave empty for standalone Short)',
+      ready: true,
     },
     { label: 'Poster provided', ready: posterReady },
     { label: 'Video source provided', ready: mediaReady },

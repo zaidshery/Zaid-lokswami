@@ -171,7 +171,7 @@ export function isSwipeFeedEligibleVideo(source: PublicVideoSource, now = new Da
 export function validateSwipePublishFields(source: PublicVideoSource) {
   if (!source.isShort) return null;
   if (!normalizeVideoSlug(source.slug)) return 'Swipe News requires a unique slug before publishing.';
-  if (!toId(source.articleId)) return 'Swipe News requires a related published article before publishing.';
+  // Related article is optional; if provided, public reader displays "पूरी खबर पढ़ें"
   if (!text(source.posterUrl) && !text(source.thumbnail)) return 'Swipe News requires a poster before publishing.';
   if (!text(source.playbackUrl) && !text(source.videoUrl)) return 'Swipe News requires ready media before publishing.';
   if (normalizeVideoProcessingStatus(source.processingStatus) !== 'ready') {
