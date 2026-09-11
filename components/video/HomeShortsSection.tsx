@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Zap, Play, ArrowRight } from 'lucide-react';
+import { Play, ArrowRight } from 'lucide-react';
 import ReaderImage from '@/components/ui/ReaderImage';
 import { buildVideoReaderPath } from '@/lib/utils/readerContentPaths';
 import type { HomePageShortItem } from '@/lib/content/homeFeed';
@@ -104,6 +104,7 @@ export default function HomeShortsSection({
   const displayShorts = activeShorts.length ? activeShorts : FALLBACK_SHORTS;
   // We take the top 3 shorts to fulfill: 2 on mobile, 3 on tablet, 3 on desktop
   const items = displayShorts.slice(0, 3);
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
 
   return (
     <section
@@ -132,17 +133,21 @@ export default function HomeShortsSection({
           - Tablet (640px - 1024px): 3 columns, exactly 3 items visible
           - Desktop (>= 1024px): 3 columns, exactly 3 items visible
       */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-2.5 sm:gap-3.5">
         {items.map((short, index) => {
           const isThirdItem = index === 2;
           const href = buildVideoReaderPath(short.id, short.slug);
+          const isHovered = hoveredCardId === short.id;
+          const isMp4 = Boolean(short.videoUrl && /\.mp4(?:[?#].*)?$/i.test(short.videoUrl));
 
           return (
             <Link
               key={short.id}
               href={href}
               data-testid="home-short-card"
-              className={`group relative block w-full aspect-[3/4] overflow-hidden rounded-xl border border-zinc-200/80 bg-black shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md dark:border-white/10 ${
+              onMouseEnter={() => setHoveredCardId(short.id)}
+              onMouseLeave={() => setHoveredCardId(null)}
+              className={`group relative block w-full aspect-[9/16] overflow-hidden rounded-2xl border border-zinc-200/80 bg-black shadow-md transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-red-950/20 hover:border-red-500/40 dark:border-white/10 ${
                 isThirdItem ? 'hidden sm:block' : ''
               }`}
               aria-label={short.title}
@@ -153,30 +158,38 @@ export default function HomeShortsSection({
                 alt={short.title}
                 fill
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 300px"
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                className={`object-cover transition-transform duration-500 group-hover:scale-105 ${
+                  isHovered && isMp4 ? 'opacity-0' : 'opacity-100'
+                }`}
               />
 
-              {/* Ambient Dark Gradient for Contrast */}
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/20" />
+              {/* Muted Desktop Video Sneak-Peek on Hover */}
+              {isHovered && isMp4 && short.videoUrl ? (
+                <video
+                  src={short.videoUrl}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="absolute inset-0 h-full w-full object-cover z-10 animate-fade-in"
+                />
+              ) : null}
 
-              {/* Top Badge: Shorts */}
-              <div className="absolute top-2 left-2 pointer-events-none">
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-600/90 px-1.5 py-0.5 text-[8.5px] sm:text-[9px] font-black uppercase text-white shadow-sm backdrop-blur-sm">
-                  <Zap className="h-2.5 w-2.5 fill-current" />
-                  <span>{language === 'hi' ? 'शॉर्ट्स' : 'Shorts'}</span>
-                </span>
-              </div>
+              {/* Ambient Dark Gradient for Contrast */}
+              <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-black/95 via-black/30 to-black/10" />
 
               {/* Hover Center Play Button */}
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/20">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-white shadow-xl shadow-red-600/40 transform transition duration-200 group-hover:scale-110">
+              <div className={`pointer-events-none absolute inset-0 z-20 flex items-center justify-center transition-opacity duration-200 ${
+                isHovered && isMp4 ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 bg-black/20'
+              }`}>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-600 text-white shadow-xl shadow-red-600/50 transform transition duration-200 group-hover:scale-110">
                   <Play className="ml-0.5 h-4 w-4 fill-current" />
                 </div>
               </div>
 
-              {/* Bottom Title (Clean, uncluttered, no categories, no dates/times, no views) */}
-              <div className="absolute bottom-2 inset-x-2 sm:bottom-2.5 sm:inset-x-2.5 pointer-events-none">
-                <h3 className="line-clamp-2 text-[11px] sm:text-xs font-bold leading-snug text-white drop-shadow-md group-hover:text-red-300 transition-colors">
+              {/* Bottom Title (Clean, uncluttered, high-legibility) */}
+              <div className="absolute bottom-2.5 inset-x-2.5 sm:bottom-3 sm:inset-x-3 pointer-events-none z-20">
+                <h3 className="line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-white drop-shadow-md group-hover:text-red-300 transition-colors">
                   {short.title}
                 </h3>
               </div>

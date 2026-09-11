@@ -801,15 +801,22 @@ export default function CreateVideoPage() {
                         <input name="articleId" value={formData.articleId} onChange={handleInputChange} placeholder="article-id-or-slug (optional)" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2" />
                         <span className="mt-1 block text-xs text-gray-600">Optional. Leave empty for standalone Reel/Short, or enter slug to enable “पूरी खबर पढ़ें”.</span>
                       </label>
-                      <label className="block text-sm font-medium text-gray-900">
-                        Media aspect ratio
-                        <select name="aspectRatio" value={formData.aspectRatio} onChange={handleInputChange} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2">
-                          <option value="9:16">9:16 vertical — Swipe ready</option>
-                          <option value="16:9">16:9 landscape — Videos library only</option>
-                          <option value="1:1">1:1 square — Videos library only</option>
-                          <option value="unknown">Unknown</option>
-                        </select>
-                      </label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block text-sm font-medium text-gray-900">
+                          Media aspect ratio
+                          <select name="aspectRatio" value={formData.aspectRatio} onChange={handleInputChange} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2">
+                            <option value="9:16">9:16 vertical — Swipe ready</option>
+                            <option value="16:9">16:9 landscape — Videos library only</option>
+                            <option value="1:1">1:1 square — Videos library only</option>
+                            <option value="unknown">Unknown</option>
+                          </select>
+                        </label>
+                        <label className="block text-sm font-medium text-gray-900">
+                          Shorts display rank
+                          <input name="shortsRank" type="number" value={formData.shortsRank} onChange={handleInputChange} placeholder="Auto-set next rank" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2" />
+                          <span className="mt-1 block text-xs text-gray-500">Leave 0 to automatically place at the top.</span>
+                        </label>
+                      </div>
                       <label className="block text-sm font-medium text-gray-900">
                         Caption file URL
                         <input name="captionUrl" value={formData.captionUrl} onChange={handleInputChange} placeholder="https://cdn.example.com/captions.vtt" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2" />

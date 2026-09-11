@@ -507,6 +507,28 @@ export async function POST(req: NextRequest) {
     const resolvedThumbnail =
       input.thumbnail || getYouTubeThumbnail(input.videoUrl);
 
+    let resolvedShortsRank = input.isShort ? input.shortsRank : 0;
+    if (input.isShort && (!resolvedShortsRank || resolvedShortsRank <= 0)) {
+      try {
+        if (await shouldUseFileStore()) {
+          const all = await listAllStoredVideos();
+          const maxRank = all
+            .filter((v) => v.isShort)
+            .reduce((max, v) => Math.max(max, Number(v.shortsRank) || 0), 0);
+          resolvedShortsRank = maxRank + 1;
+        } else {
+          await connectDB();
+          const highest = (await Video.findOne({ isShort: true })
+            .sort({ shortsRank: -1 })
+            .select({ shortsRank: 1 })
+            .lean()) as { shortsRank?: number } | null;
+          resolvedShortsRank = (Number(highest?.shortsRank) || 0) + 1;
+        }
+      } catch {
+        resolvedShortsRank = 1;
+      }
+    }
+
     if (await shouldUseFileStore()) {
       const stored = await createStoredVideo({
         title: input.title,
@@ -517,7 +539,7 @@ export async function POST(req: NextRequest) {
         category: input.category,
         isShort: input.isShort,
         isPublished: workflow.status === 'published',
-        shortsRank: input.isShort ? input.shortsRank : 0,
+        shortsRank: resolvedShortsRank,
         views: 0,
         publishedAt: input.publishedAt.toISOString(),
         workflow: {
@@ -575,7 +597,7 @@ export async function POST(req: NextRequest) {
       category: input.category,
       isShort: input.isShort,
       isPublished: workflow.status === 'published',
-      shortsRank: input.isShort ? input.shortsRank : 0,
+      shortsRank: resolvedShortsRank,
       views: 0,
       publishedAt: input.publishedAt,
       updatedAt: new Date(),

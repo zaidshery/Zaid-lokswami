@@ -195,7 +195,7 @@ export function createStoryVideoUploadTarget(input: StoryVideoUploadInitInput) {
   });
   const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`;
   const canonicalUri = buildCanonicalUri(key);
-  const signedHeaders = 'host';
+  const signedHeaders = 'host;x-amz-acl';
   const query = buildCanonicalQuery({
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
     'X-Amz-Credential': `${config.accessKey}/${credentialScope}`,
@@ -203,7 +203,7 @@ export function createStoryVideoUploadTarget(input: StoryVideoUploadInitInput) {
     'X-Amz-Expires': String(STORY_VIDEO_UPLOAD_EXPIRY_SECONDS),
     'X-Amz-SignedHeaders': signedHeaders,
   });
-  const canonicalHeaders = `host:${config.originHost}\n`;
+  const canonicalHeaders = `host:${config.originHost}\nx-amz-acl:public-read\n`;
   const canonicalRequest = [
     'PUT',
     canonicalUri,
@@ -229,6 +229,7 @@ export function createStoryVideoUploadTarget(input: StoryVideoUploadInitInput) {
     uploadUrl: `https://${config.originHost}${canonicalUri}?${query}&X-Amz-Signature=${signature}`,
     uploadHeaders: {
       'Content-Type': 'video/mp4',
+      'x-amz-acl': 'public-read',
     },
     expiresAt: new Date(now.getTime() + STORY_VIDEO_UPLOAD_EXPIRY_SECONDS * 1000).toISOString(),
   };
