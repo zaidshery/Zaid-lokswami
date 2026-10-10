@@ -6,6 +6,7 @@ import type {
   VideoAspectRatio,
   VideoMediaProvider,
   VideoProcessingStatus,
+  VideoDestination,
 } from '@/lib/content/videoPublication';
 
 const VIDEO_CATEGORY_ENUM = NEWS_CATEGORIES.map((category) => category.nameEn);
@@ -41,6 +42,7 @@ export interface IVideo {
   processingStatus?: VideoProcessingStatus;
   instagramUrl?: string;
   youtubeUrl?: string;
+  destination?: VideoDestination;
 }
 
 const VideoSchema = new mongoose.Schema<IVideo>({
@@ -73,6 +75,7 @@ const VideoSchema = new mongoose.Schema<IVideo>({
   processingStatus: { type: String, enum: ['ready', 'processing', 'failed'], default: 'ready' },
   instagramUrl: { type: String, default: '', trim: true },
   youtubeUrl: { type: String, default: '', trim: true },
+  destination: { type: String, enum: ['videos', 'pankhida-2026'], default: 'videos' },
 });
 
 VideoSchema.index({ publishedAt: -1, _id: -1 });
@@ -88,5 +91,6 @@ VideoSchema.index({ category: 1, updatedAt: -1, publishedAt: -1 });
 VideoSchema.index({ updatedAt: -1, publishedAt: -1, _id: -1 });
 VideoSchema.index({ slug: 1 }, { unique: true, sparse: true });
 VideoSchema.index({ articleId: 1, isPublished: 1, publishedAt: -1 });
+VideoSchema.index({ destination: 1, isPublished: 1, publishedAt: -1 });
 
 export default mongoose.models.Video || mongoose.model('Video', VideoSchema);

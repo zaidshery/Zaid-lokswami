@@ -31,7 +31,7 @@ describe('DesktopNav responsive visibility', () => {
     expect(emagazineLink.className).toContain('hidden lg:inline-flex');
   });
 
-  it('Home and Elections links remain visible across all viewports (inline-flex without hidden)', () => {
+  it('Pankhida takes the former Elections position and Elections moves to the end', () => {
     render(<DesktopNav />);
 
     const homeLink = screen.getByRole('link', {
@@ -49,6 +49,12 @@ describe('DesktopNav responsive visibility', () => {
     expect(electionsLink).toHaveAttribute('href', '/main/elections');
     expect(electionsLink.className).toContain('inline-flex');
     expect(electionsLink.className).not.toContain('hidden lg:inline-flex');
+    const pankhidaLink = screen.getByRole('link', { name: new RegExp(`${READER_NAVIGATION.pankhida.name}|${READER_NAVIGATION.pankhida.nameEn}`, 'i') });
+    expect(pankhidaLink).toHaveAttribute('href', '/main/pankhida-2026');
+    expect(pankhidaLink.className).not.toContain('hidden lg:inline-flex');
+    const links = screen.getAllByRole('link');
+    expect(links[1]).toBe(pankhidaLink);
+    expect(links[links.length - 1]).toBe(electionsLink);
   });
 
   it('Video link renders right after E-Magazine with hidden lg:inline-flex on mobile and tablet', () => {

@@ -76,6 +76,7 @@ describe('public Swipe story resolution', () => {
       isPublished: true,
       isShort: true,
       slug: 'story-one',
+      destination: { $ne: 'pankhida-2026' },
     });
     expect(findMock).not.toHaveBeenCalled();
     expect(listAllStoredVideosMock).not.toHaveBeenCalled();

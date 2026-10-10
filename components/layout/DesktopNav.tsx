@@ -9,7 +9,7 @@ import { READER_NAVIGATION, isReaderNavigationActive } from '@/lib/constants/rea
 
 const primaryLinks = [
   READER_NAVIGATION.home,
-  READER_NAVIGATION.elections,
+  READER_NAVIGATION.pankhida,
   READER_NAVIGATION.epaper,
   READER_NAVIGATION.emagazine,
   {
@@ -30,7 +30,7 @@ const utilityLinks = [
   READER_NAVIGATION.contact,
 ];
 
-const mainLinks = [...primaryLinks, ...categoryLinks, ...utilityLinks];
+const mainLinks = [...primaryLinks, ...categoryLinks, ...utilityLinks, READER_NAVIGATION.elections];
 
 interface DesktopNavProps {
   className?: string;

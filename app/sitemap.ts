@@ -114,6 +114,7 @@ export default async function sitemap(props?: {
     { path: '/main/epaper', changeFrequency: 'daily', priority: 0.85 },
     { path: '/main/e-magazine', changeFrequency: 'monthly', priority: 0.7 },
     { path: '/main/elections', changeFrequency: 'daily', priority: 0.7 },
+    { path: '/main/pankhida-2026', changeFrequency: 'daily', priority: 0.8 },
     { path: '/main/search', changeFrequency: 'weekly', priority: 0.45 },
     { path: '/main/digital-newsroom', changeFrequency: 'weekly', priority: 0.55 },
     { path: '/main/about', changeFrequency: 'monthly', priority: 0.5 },

@@ -64,6 +64,14 @@ describe('Swipe video publication contract', () => {
     expect(isSwipeFeedEligibleVideo(video({ aspectRatio: 'unknown' }), NOW)).toBe(true);
   });
 
+  it('keeps Pankhida streams out of Videos and Swipe feeds', () => {
+    const pankhida = video({ destination: 'pankhida-2026' });
+    expect(isPubliclyPublishedVideo(pankhida, NOW)).toBe(true);
+    expect(toPublicVideoItem(pankhida, { now: NOW })).toBeNull();
+    expect(isSwipeFeedEligibleVideo(pankhida, NOW)).toBe(false);
+    expect(toPublicVideoItem(video({ destination: undefined }), { now: NOW })).not.toBeNull();
+  });
+
   it('generates collision-safe migration slugs without unpublishing records', () => {
     const usedSlugs = new Set<string>();
     expect(

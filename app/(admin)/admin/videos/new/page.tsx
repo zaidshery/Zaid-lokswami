@@ -54,6 +54,7 @@ interface VideoFormData {
   description: string;
   thumbnail: string;
   videoUrl: string;
+  destination: 'videos' | 'pankhida-2026';
   duration: string;
   category: string;
   isShort: boolean;
@@ -74,6 +75,7 @@ const initialFormData: VideoFormData = {
   description: '',
   thumbnail: '',
   videoUrl: '',
+  destination: 'videos',
   duration: '',
   category: 'National',
   isShort: false,
@@ -219,6 +221,7 @@ export default function CreateVideoPage() {
 
       if (name === 'videoUrl') {
         const live = isYouTubeLiveUrl(value);
+        next.destination = live ? 'pankhida-2026' : 'videos';
         if (live && !next.duration) {
           next.duration = '0';
         }
@@ -399,6 +402,7 @@ export default function CreateVideoPage() {
           description: formData.description.trim(),
           thumbnail: thumbnail.trim(),
           videoUrl: resolvedVideoUrl,
+          destination: formData.destination,
           duration,
           category: formData.category,
           isShort: formData.isShort,
@@ -585,6 +589,15 @@ export default function CreateVideoPage() {
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="video-destination" className="mb-2 block text-sm font-medium text-gray-900">Public destination</label>
+                    <select id="video-destination" name="destination" value={formData.destination} onChange={handleInputChange} className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2">
+                      <option value="videos">Videos page</option>
+                      <option value="pankhida-2026">Pankhida 2026 page</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">YouTube Live URLs default to Pankhida 2026. A Pankhida video appears only after publication and when its scheduled time has arrived; it stays out of the Videos page. Only YouTube videos can use this destination.</p>
                   </div>
 
                   <div>

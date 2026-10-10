@@ -17,10 +17,12 @@ import {
   inferVideoMediaProvider,
   normalizeVideoAspectRatio,
   normalizeVideoProcessingStatus,
+  normalizeVideoDestination,
   normalizeVideoSlug,
   type VideoAspectRatio,
   type VideoMediaProvider,
   type VideoProcessingStatus,
+  type VideoDestination,
 } from '@/lib/content/videoPublication';
 
 export interface StoredWorkflowComment {
@@ -53,6 +55,7 @@ export interface StoredVideo {
   description: string;
   thumbnail: string;
   videoUrl: string;
+  destination: VideoDestination;
   duration: number;
   category: string;
   isShort: boolean;
@@ -82,6 +85,7 @@ export interface CreateVideoInput {
   description: string;
   thumbnail: string;
   videoUrl: string;
+  destination?: VideoDestination;
   duration: number;
   category: string;
   isShort?: boolean;
@@ -219,6 +223,7 @@ function normalizeStoredVideo(input: unknown): StoredVideo | null {
     description,
     thumbnail,
     videoUrl,
+    destination: normalizeVideoDestination(source.destination),
     duration: Number.isFinite(Number(source.duration)) ? Number(source.duration) : 0,
     category,
     isShort: Boolean(source.isShort),
@@ -383,6 +388,7 @@ export async function createStoredVideo(input: CreateVideoInput) {
     description: input.description,
     thumbnail: input.thumbnail,
     videoUrl: input.videoUrl,
+    destination: normalizeVideoDestination(input.destination),
     duration: input.duration,
     category: input.category,
     isShort: Boolean(input.isShort),
@@ -431,6 +437,7 @@ export async function updateStoredVideo(
   const next: StoredVideo = {
     ...current,
     ...updates,
+    destination: updates.destination !== undefined ? normalizeVideoDestination(updates.destination) : current.destination,
     isShort:
       updates.isShort !== undefined ? Boolean(updates.isShort) : current.isShort,
     isPublished: nextIsPublished,

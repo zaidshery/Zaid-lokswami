@@ -151,6 +151,7 @@ const ADMIN_SURFACES: SidebarItem[] = [
   { icon: Users, labelEn: 'Users & Subscribers', labelHi: 'उपयोगकर्ता एवं ग्राहक', href: '/admin/users', pageKey: 'users', section: 'governance' },
   { icon: Activity, labelEn: 'Operations Diagnostics', labelHi: HI.operationsDiagnostics, href: '/admin/operations-diagnostics', pageKey: 'operations_diagnostics', section: 'governance' },
   { icon: Activity, labelEn: 'Elections', labelHi: '\u091a\u0941\u0928\u093e\u0935', href: '/admin/settings/elections', pageKey: 'newsroom_settings', section: 'governance' },
+  { icon: Video, labelEn: 'Pankhida 2026', labelHi: '\u092a\u0902\u0916\u093f\u0921\u093c\u093e 2026', href: '/admin/settings/pankhida', pageKey: 'newsroom_settings', section: 'governance' },
   { icon: Settings2, labelEn: 'Newsroom Settings', labelHi: HI.newsroomSettings, href: '/admin/settings/newsroom', pageKey: 'newsroom_settings', section: 'governance' },
   { icon: Settings, labelEn: 'Settings', labelHi: HI.settings, href: '/admin/settings', pageKey: 'settings', section: 'governance' },
 ];

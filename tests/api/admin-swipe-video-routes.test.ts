@@ -115,6 +115,23 @@ describe('admin Swipe video routes', () => {
     expect(getPublicArticleBySlugMock).not.toHaveBeenCalled();
   });
 
+  it('routes a new YouTube Live upload to Pankhida by default', async () => {
+    const { POST } = await import('@/app/api/admin/videos/route');
+    const response = await POST(request('/api/admin/videos', 'POST', {
+      title: 'Pankhida live',
+      description: 'Live event coverage',
+      videoUrl: 'https://www.youtube.com/live/dQw4w9WgXcQ',
+      category: 'National',
+      intent: 'publish',
+    }));
+
+    expect(response.status).toBe(201);
+    expect(createStoredVideoMock).toHaveBeenCalledWith(expect.objectContaining({
+      destination: 'pankhida-2026',
+      isPublished: true,
+    }));
+  });
+
   it('blocks publication until Swipe fields and a public article are ready', async () => {
     const { POST } = await import('@/app/api/admin/videos/route');
     const incomplete = await POST(
@@ -234,5 +251,23 @@ describe('admin Swipe video routes', () => {
       'video-1',
       expect.objectContaining({ title: 'Corrected legacy title', isPublished: true })
     );
+  });
+
+  it('requires YouTube media when moving a video to Pankhida', async () => {
+    const current = readySwipe({ isShort: false, workflow: { status: 'published' }, isPublished: true });
+    getStoredVideoByIdMock.mockResolvedValue(current);
+    const { PUT } = await import('@/app/api/admin/videos/[id]/route');
+    const context = { params: Promise.resolve({ id: 'video-1' }) };
+    const invalid = await PUT(request('/api/admin/videos/video-1', 'PUT', { destination: 'pankhida-2026' }), context);
+    expect(invalid.status).toBe(400);
+    expect(updateStoredVideoMock).not.toHaveBeenCalled();
+
+    updateStoredVideoMock.mockImplementation(async (_id, updates) => ({ ...current, ...updates }));
+    const valid = await PUT(request('/api/admin/videos/video-1', 'PUT', {
+      destination: 'pankhida-2026',
+      videoUrl: 'https://www.youtube.com/live/dQw4w9WgXcQ',
+    }), context);
+    expect(valid.status).toBe(200);
+    expect(updateStoredVideoMock).toHaveBeenCalledWith('video-1', expect.objectContaining({ destination: 'pankhida-2026' }));
   });
 });

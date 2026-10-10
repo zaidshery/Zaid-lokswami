@@ -31,28 +31,28 @@ export interface LogoIconProps {
   className?: string;
 }
 
-export const MOBILE_HEADER_LOGO_SRC = '/logo-3.png';
+export const MOBILE_HEADER_LOGO_SRC = '/logo-header-cutout.png';
 
 interface MobileHeaderLogoIconProps {
   className?: string;
 }
 
-/** The supplied red-tab artwork used only by the compact mobile header. */
+/** Compact badge used beside the wordmark in the mobile header. */
 export function MobileHeaderLogoIcon({ className = '' }: MobileHeaderLogoIconProps) {
   return (
     <span
       aria-hidden="true"
       data-logo-element="mobile-header-icon"
-      className={`relative inline-flex h-12 w-[58px] shrink-0 items-center justify-center overflow-hidden ${className}`}
+      className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center ${className}`}
     >
       <Image
         src={MOBILE_HEADER_LOGO_SRC}
         alt=""
-        width={90}
-        height={60}
+        width={40}
+        height={40}
         priority
-        sizes="90px"
-        className="absolute left-1/2 top-1/2 block h-[60px] w-[90px] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain"
+        sizes="40px"
+        className="block h-10 w-10 object-contain"
       />
     </span>
   );

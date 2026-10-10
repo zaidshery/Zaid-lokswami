@@ -42,7 +42,7 @@ async function getMongoSwipeCandidates(slug: string): Promise<MongoSwipeLookup> 
   }
 
   try {
-    const exact = (await Video.findOne({ isPublished: true, isShort: true, slug })
+    const exact = (await Video.findOne({ isPublished: true, isShort: true, slug, destination: { $ne: 'pankhida-2026' } })
       .select(PUBLIC_VIDEO_PROJECTION)
       .lean()) as PublicVideoSource | null;
     if (exact) return { authoritative: true, candidates: [exact] };
@@ -50,6 +50,7 @@ async function getMongoSwipeCandidates(slug: string): Promise<MongoSwipeLookup> 
     const legacyCandidates = (await Video.find({
       isPublished: true,
       isShort: true,
+      destination: { $ne: 'pankhida-2026' },
       $or: [{ slug: { $exists: false } }, { slug: null }, { slug: '' }],
     })
       .select(PUBLIC_VIDEO_PROJECTION)
@@ -137,7 +138,7 @@ export async function getPublicVideoFeedPage(
     try {
       return await cursorPage<PublicVideoItem>({
         model: Video,
-        mongoFilter: { isPublished: true },
+        mongoFilter: { isPublished: true, destination: { $ne: 'pankhida-2026' } },
         mongoProjection: PUBLIC_VIDEO_PROJECTION,
         limit,
         dateField: 'publishedAt',
@@ -155,7 +156,7 @@ export async function getPublicVideoFeedPage(
 
   const rows = await listAllStoredVideos();
   return cursorPage<PublicVideoItem>({
-    arrayItems: rows.filter((item) => isPubliclyPublishedVideo(item)),
+    arrayItems: rows.filter((item) => item.destination !== 'pankhida-2026' && isPubliclyPublishedVideo(item)),
     limit,
     dateField: 'publishedAt',
     cursorPublishedAt,

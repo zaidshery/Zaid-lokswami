@@ -75,13 +75,14 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const pages = [
     READER_NAVIGATION.home,
     READER_NAVIGATION.latest,
-    READER_NAVIGATION.elections,
+    READER_NAVIGATION.pankhida,
     READER_NAVIGATION.videos,
     READER_NAVIGATION.epaper,
     READER_NAVIGATION.emagazine,
     READER_NAVIGATION.search,
     { name: '\u0905\u0915\u093e\u0909\u0902\u091f', nameEn: 'Account', href: accountHref },
     READER_NAVIGATION.contact,
+    READER_NAVIGATION.elections,
   ];
 
   useEffect(() => {

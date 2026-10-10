@@ -26,6 +26,7 @@ import {
   inferVideoMediaProvider,
   normalizeVideoAspectRatio,
   normalizeVideoProcessingStatus,
+  normalizeVideoDestination,
   normalizeVideoSlug,
   validateSwipePublishFields,
 } from '@/lib/content/videoPublication';
@@ -139,6 +140,9 @@ function normalizeVideoInput(body: unknown) {
     description,
     thumbnail,
     videoUrl,
+    destination: source.destination === undefined && isLive
+      ? 'pankhida-2026' as const
+      : normalizeVideoDestination(source.destination),
     category,
     duration,
     shortsRank: Number.isFinite(shortsRank) ? shortsRank : 0,
@@ -174,6 +178,10 @@ function validateVideoInput(input: ReturnType<typeof normalizeVideoInput>) {
 
   if (!Number.isFinite(input.duration) || input.duration < 0) {
     return 'Invalid duration';
+  }
+
+  if (input.destination === 'pankhida-2026' && (!extractYouTubeVideoId(input.videoUrl) || input.isShort)) {
+    return 'Pankhida 2026 requires a YouTube video or live URL and cannot be a Short';
   }
 
   const youtubeId = extractYouTubeVideoId(input.playbackUrl);
@@ -535,6 +543,7 @@ export async function POST(req: NextRequest) {
         description: input.description,
         thumbnail: resolvedThumbnail,
         videoUrl: input.videoUrl,
+        destination: input.destination,
         duration: input.duration,
         category: input.category,
         isShort: input.isShort,
@@ -593,6 +602,7 @@ export async function POST(req: NextRequest) {
       description: input.description,
       thumbnail: resolvedThumbnail,
       videoUrl: input.videoUrl,
+      destination: input.destination,
       duration: input.duration,
       category: input.category,
       isShort: input.isShort,

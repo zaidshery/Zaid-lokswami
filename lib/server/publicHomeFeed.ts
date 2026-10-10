@@ -423,14 +423,14 @@ async function loadMongoFeed(
       .limit(articleLimit)
       .lean(),
     limits.videos > 0
-      ? Video.find({ isPublished: true, isShort: { $ne: true } })
+      ? Video.find({ isPublished: true, isShort: { $ne: true }, destination: { $ne: 'pankhida-2026' } })
           .select(PUBLIC_VIDEO_PROJECTION)
           .sort({ publishedAt: -1, _id: -1 })
           .limit(limits.videos)
           .lean()
       : Promise.resolve([]),
     limits.shorts > 0
-      ? Video.find({ isPublished: true, isShort: true })
+      ? Video.find({ isPublished: true, isShort: true, destination: { $ne: 'pankhida-2026' } })
           .select(PUBLIC_VIDEO_PROJECTION)
           .sort({ createdAt: -1, _id: -1 })
           .limit(limits.shorts)

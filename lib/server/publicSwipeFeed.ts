@@ -25,6 +25,7 @@ function buildMongoFilter(now: Date) {
   return {
     isPublished: true,
     isShort: true,
+    destination: { $ne: 'pankhida-2026' },
     $and: [
       { $or: [{ 'workflow.status': 'published' }, { 'workflow.status': { $exists: false } }] },
       {

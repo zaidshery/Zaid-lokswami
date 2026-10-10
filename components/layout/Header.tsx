@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store/appStore';
 import DesktopNav from './DesktopNav';
-import Logo, { LogoWordmark } from '@/components/layout/Logo';
+import Logo, { LogoWordmark, MobileHeaderLogoIcon } from '@/components/layout/Logo';
 
 /** Renders the main site header with reader auth actions. */
 export default function Header() {
@@ -149,12 +149,13 @@ export default function Header() {
           <div className="flex min-w-0 flex-1 items-center justify-center px-1 translate-x-4 min-[375px]:translate-x-5 sm:translate-x-0 sm:hidden">
             <Link
               href="/main"
-              className="cnp-motion inline-flex h-12 max-w-full items-center justify-center transition-transform duration-200 active:scale-95"
+              className="cnp-motion inline-flex h-12 max-w-full items-center justify-center gap-0.5 transition-transform duration-200 active:scale-95"
               aria-label="Lokswami Home"
             >
+              <MobileHeaderLogoIcon />
               <LogoWordmark
                 size="headerCompact"
-                className="max-w-[120px] min-[360px]:max-w-[130px] min-[390px]:max-w-[145px]"
+                className="max-w-[72px] min-[360px]:max-w-[84px] min-[390px]:max-w-[98px]"
               />
             </Link>
           </div>

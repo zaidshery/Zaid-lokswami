@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { isMongoAvailable } from '@/lib/db/mongoAvailability';
 import Video from '@/lib/models/Video';
 import { getStoredVideoById } from '@/lib/storage/videosFile';
+import { isPubliclyPublishedVideo, normalizeVideoDestination } from '@/lib/content/videoPublication';
 
 export type PublicVideoMetadata = {
   id: string;
@@ -29,6 +30,9 @@ type PublicVideoSource = {
   isPublished?: boolean;
   views?: number;
   publishedAt?: string | Date;
+  destination?: string;
+  workflow?: unknown;
+  processingStatus?: string;
 };
 
 function getYouTubeId(value: string) {
@@ -84,7 +88,7 @@ function toPublicVideo(input: PublicVideoSource | null | undefined): PublicVideo
           : '';
   const title = String(input.title || '').trim();
 
-  if (!id || !title || input.isPublished === false) return null;
+  if (!id || !title || !isPubliclyPublishedVideo(input) || normalizeVideoDestination(input.destination) !== 'videos') return null;
 
   const videoUrl = String(input.videoUrl || '').trim();
 
@@ -110,8 +114,8 @@ async function getMongoVideo(id: string) {
   try {
     if (!Types.ObjectId.isValid(id)) return null;
 
-    const record = await Video.findOne({ _id: id, isPublished: true })
-      .select('_id title description thumbnail videoUrl duration category isShort isPublished views publishedAt')
+    const record = await Video.findOne({ _id: id, isPublished: true, destination: { $ne: 'pankhida-2026' } })
+      .select('_id title description thumbnail videoUrl duration category isShort isPublished views publishedAt destination workflow processingStatus')
       .lean<PublicVideoSource | null>();
 
     return toPublicVideo(record);

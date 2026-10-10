@@ -3,10 +3,16 @@ import { resolveVideoWorkflow } from '@/lib/workflow/video';
 export const VIDEO_MEDIA_PROVIDERS = ['youtube', 'spaces-mp4'] as const;
 export const VIDEO_ASPECT_RATIOS = ['9:16', '16:9', '1:1', 'unknown'] as const;
 export const VIDEO_PROCESSING_STATUSES = ['ready', 'processing', 'failed'] as const;
+export const VIDEO_DESTINATIONS = ['videos', 'pankhida-2026'] as const;
 
 export type VideoMediaProvider = (typeof VIDEO_MEDIA_PROVIDERS)[number];
 export type VideoAspectRatio = (typeof VIDEO_ASPECT_RATIOS)[number];
 export type VideoProcessingStatus = (typeof VIDEO_PROCESSING_STATUSES)[number];
+export type VideoDestination = (typeof VIDEO_DESTINATIONS)[number];
+
+export function normalizeVideoDestination(value: unknown): VideoDestination {
+  return value === 'pankhida-2026' ? 'pankhida-2026' : 'videos';
+}
 
 export type PublicVideoSource = Record<string, unknown> & {
   _id?: unknown;
@@ -37,6 +43,7 @@ export type PublicVideoSource = Record<string, unknown> & {
   processingStatus?: unknown;
   instagramUrl?: unknown;
   youtubeUrl?: unknown;
+  destination?: unknown;
 };
 
 export type PublicVideoItem = {
@@ -168,6 +175,7 @@ export function isPubliclyPublishedVideo(source: PublicVideoSource, now = new Da
 
 export function isSwipeFeedEligibleVideo(source: PublicVideoSource, now = new Date()) {
   return (
+    normalizeVideoDestination(source.destination) === 'videos' &&
     Boolean(source.isShort) &&
     isPubliclyPublishedVideo(source, now) &&
     normalizeVideoAspectRatio(source.aspectRatio) !== '16:9'
@@ -194,6 +202,7 @@ export function toPublicVideoItem(
   options: { requireShort?: boolean; now?: Date } = {}
 ): PublicVideoItem | null {
   if (!isPubliclyPublishedVideo(source, options.now)) return null;
+  if (normalizeVideoDestination(source.destination) !== 'videos') return null;
   if (options.requireShort && !source.isShort) return null;
   if (options.requireShort && normalizeVideoAspectRatio(source.aspectRatio) === '16:9') return null;
 
@@ -257,6 +266,7 @@ export const PUBLIC_VIDEO_PROJECTION = [
   'processingStatus',
   'instagramUrl',
   'youtubeUrl',
+  'destination',
   'duration',
   'category',
   'isShort',

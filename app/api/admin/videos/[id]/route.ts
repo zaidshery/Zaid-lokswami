@@ -75,6 +75,7 @@ import {
   inferVideoMediaProvider,
   normalizeVideoAspectRatio,
   normalizeVideoProcessingStatus,
+  normalizeVideoDestination,
   normalizeVideoSlug,
   validateSwipePublishFields,
 } from '@/lib/content/videoPublication';
@@ -107,6 +108,7 @@ function normalizeVideoUpdate(body: unknown) {
   if (typeof source.transcript === 'string') updates.transcript = source.transcript.trim();
   if (typeof source.instagramUrl === 'string') updates.instagramUrl = source.instagramUrl.trim();
   if (typeof source.youtubeUrl === 'string') updates.youtubeUrl = source.youtubeUrl.trim();
+  if (source.destination !== undefined) updates.destination = normalizeVideoDestination(source.destination);
   if (source.mediaProvider !== undefined) {
     updates.mediaProvider = inferVideoMediaProvider(source.mediaProvider);
   }
@@ -162,6 +164,14 @@ function normalizeVideoUpdate(body: unknown) {
   }
 
   return { updates, error: null };
+}
+
+function validatePankhidaDestination(record: Record<string, unknown>) {
+  if (record.destination !== 'pankhida-2026') return null;
+  if (record.isShort || !extractYouTubeVideoId(String(record.videoUrl || ''))) {
+    return 'Pankhida 2026 requires a YouTube video or live URL and cannot be a Short';
+  }
+  return null;
 }
 
 function validateSwipeReadiness(record: Record<string, unknown>, action?: string) {
@@ -770,6 +780,8 @@ export async function PUT(
           { status: 403 }
         );
       }
+      const destinationError = validatePankhidaDestination({ ...currentVideo, ...updates });
+      if (destinationError) return NextResponse.json({ success: false, error: destinationError }, { status: 400 });
 
       const publishedState =
         typeof updates.isPublished === 'boolean' ? Boolean(updates.isPublished) : undefined;
@@ -857,6 +869,8 @@ export async function PUT(
         { status: 403 }
       );
     }
+    const destinationError = validatePankhidaDestination({ ...current, ...updates });
+    if (destinationError) return NextResponse.json({ success: false, error: destinationError }, { status: 400 });
 
     const publishedState =
       typeof updates.isPublished === 'boolean' ? Boolean(updates.isPublished) : undefined;

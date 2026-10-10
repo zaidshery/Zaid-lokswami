@@ -23,9 +23,9 @@ describe('MobileHeaderLogoIcon', () => {
 
     expect(existsSync(path.join(process.cwd(), 'public', MOBILE_HEADER_LOGO_SRC.slice(1)))).toBe(true);
     expect(logoFrame).toHaveAttribute('data-logo-element', 'mobile-header-icon');
-    expect(logoFrame).toHaveClass('h-12', 'w-[58px]');
+    expect(logoFrame).toHaveClass('h-10', 'w-10');
     expect(logoImage).toHaveAttribute('src', MOBILE_HEADER_LOGO_SRC);
-    expect(logoImage).toHaveAttribute('width', '90');
-    expect(logoImage).toHaveAttribute('height', '60');
+    expect(logoImage).toHaveAttribute('width', '40');
+    expect(logoImage).toHaveAttribute('height', '40');
   });
 });
